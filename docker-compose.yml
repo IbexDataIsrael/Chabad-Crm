@@ -1,0 +1,40 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8001:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      # Server-side geocoding fallback. Reuses the Maps key by default; for
+      # production prefer a separate key restricted to the Geocoding API (no
+      # HTTP-referrer restriction, since server calls have no referrer).
+      - GEOCODING_API_KEY=${GEOCODING_API_KEY:-${GOOGLE_MAPS_API_KEY:-}}
+      # Google Sign-In (token verification). Set in root .env.
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+    volumes:
+      - ./backend:/app
+      - backend_data:/app/data
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3001:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8001
+      - NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-}
+      - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      # File-watching across the Windows→Linux bind mount doesn't deliver inotify
+      # events, so Next's dev server misses edits/new routes (serving stale code).
+      # Force polling so HMR + route discovery work reliably.
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  backend_data:

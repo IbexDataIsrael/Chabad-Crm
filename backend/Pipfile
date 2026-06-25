@@ -1,0 +1,24 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+fastapi = "*"
+uvicorn = {extras = ["standard"], version = "*"}
+sqlalchemy = "*"
+passlib = {extras = ["bcrypt"], version = "*"}
+bcrypt = "==4.0.1"  # pinned: passlib 1.7.x is incompatible with bcrypt 5.x
+python-jose = {extras = ["cryptography"], version = "*"}
+python-multipart = "*"
+pydantic-settings = "*"
+google-auth = "*"
+requests = "*"
+apscheduler = "*"
+
+[dev-packages]
+pytest = "*"
+httpx = "*"
+
+[requires]
+python_version = "3.12"

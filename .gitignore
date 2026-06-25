@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+backend/data/*.sqlite3
+
+# Node / Next.js
+node_modules/
+.next/
+npm-debug.log*
+
+# Env files (keep .env.example committed)
+.env
+backend/.env
+
+# OS / editor
+.DS_Store
+Thumbs.db

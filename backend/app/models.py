@@ -1,0 +1,516 @@
+"""SQLAlchemy ORM models for the bilingual Mini CRM (multi-tenant SaaS).
+
+Each tenant is an `Organization`. Tenant-scoped tables carry `organization_id` and
+are isolated by it in every query. `field_localization` is global (shared UI labels).
+Data is stored with English schemas; some columns hold Hebrew free text (UTF-8).
+
+Contacts are split (fixes2): the `contacts` row holds core CRM data plus a
+`contact_type` (מקורב | שליח). Type-specific data lives in `contact_mekurav` or
+`contact_shliach`. Geographic data is normalised into areas → buildings → apartments.
+"""
+import datetime
+from uuid import uuid4
+
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    Time,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import relationship
+
+from app.database import Base
+
+
+def _guid_column() -> Column:
+    """A stable, globally-unique GUID present on every table (alongside the int id)."""
+    return Column(
+        String(36),
+        unique=True,
+        index=True,
+        nullable=False,
+        default=lambda: str(uuid4()),
+    )
+
+
+class Organization(Base):
+    __tablename__ = "organizations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    name = Column(String(150), nullable=False)  # used as the app/tenant title
+    map_in_english = Column(Boolean, nullable=False, default=False)  # autocomplete language
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    users = relationship("User", back_populates="organization")
+
+
+class User(Base):
+    __tablename__ = "users"
+    # Username is unique within an organization; email is globally unique.
+    __table_args__ = (
+        UniqueConstraint("organization_id", "username", name="uq_user_org_username"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    username = Column(String(50), nullable=False, index=True)
+    full_name = Column(String(100), nullable=False)  # Hebrew display name
+    email = Column(String(255), unique=True, nullable=True, index=True)
+    first_name = Column(String(100), nullable=True)
+    last_name = Column(String(100), nullable=True)
+    phone = Column(String(50), nullable=True)
+    # Nullable: Google-only accounts have no local password.
+    password_hash = Column(String(255), nullable=True)
+    google_sub = Column(String(255), unique=True, nullable=True, index=True)
+    role = Column(String(20), nullable=False, default="staff")  # 'admin' | 'staff' | 'shliach'
+    is_active = Column(Boolean, nullable=False, default=True)
+    email_verified = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    # Relationships
+    organization = relationship("Organization", back_populates="users")
+    contacts = relationship(
+        "Contact",
+        back_populates="assigned_user",
+        foreign_keys="Contact.assigned_user_id",
+    )
+    interactions = relationship("Interaction", back_populates="author")
+
+
+class Contact(Base):
+    """Core CRM contact. Type-specific data lives in contact_mekurav / contact_shliach."""
+
+    __tablename__ = "contacts"
+    # Phone is the business key: unique within an organization.
+    __table_args__ = (
+        UniqueConstraint("organization_id", "phone", name="uq_contact_org_phone"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    name = Column(String(150), nullable=False, index=True)  # first/given name (שם פרטי)
+    last_name = Column(String(100), nullable=True, index=True)  # family name (שם משפחה)
+    phone = Column(String(50), nullable=False, index=True)  # required, unique per org
+    email = Column(String(255), nullable=True)  # אימייל
+    contact_type = Column(
+        String(20), nullable=False, default="mekurav", index=True
+    )  # picklist contact.contact_type (מקורב | שליח)
+    assigned_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    address = Column(Text, nullable=True)  # formatted address (Google Places)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    # Picklist-backed (admin-managed) CRM fields stay on the core contact:
+    area = Column(String(50), nullable=True)  # picklist contact.area (אזור)
+    pipeline_status = Column(String(50), nullable=True)
+    color_tag = Column(String(20), nullable=True)
+    priority_score = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+
+    assigned_user = relationship(
+        "User", back_populates="contacts", foreign_keys=[assigned_user_id]
+    )
+    checklist = relationship(
+        "CommunityChecklist",
+        back_populates="contact",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    interactions = relationship(
+        "Interaction",
+        back_populates="contact",
+        cascade="all, delete-orphan",
+    )
+    custom_values = relationship(
+        "CustomFieldValue",
+        back_populates="contact",
+        cascade="all, delete-orphan",
+    )
+    mekurav = relationship(
+        "ContactMekurav",
+        back_populates="contact",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    shliach = relationship(
+        "ContactShliach",
+        back_populates="contact",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+
+class ContactMekurav(Base):
+    """Kiruv-specific data for a contact of type 'mekurav' (1:1 with a contact)."""
+
+    __tablename__ = "contact_mekurav"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    contact_id = Column(
+        Integer, ForeignKey("contacts.id"), nullable=False, unique=True, index=True
+    )
+    apartment_id = Column(
+        Integer, ForeignKey("apartments.id"), nullable=True, index=True
+    )  # דירה
+    first_visit = Column(DateTime, nullable=True)  # ביקור ראשון
+    potential_next_step = Column(String(50), nullable=True)  # picklist (פוטנציאל לצעד)
+    rebbe_connection = Column(Text, nullable=True)  # קשר לרבי
+    recommendations = Column(Text, nullable=True)  # המלצות
+    background = Column(Text, nullable=True)  # רקע
+
+    contact = relationship("Contact", back_populates="mekurav")
+    apartment = relationship("Apartment", back_populates="mekuravim")
+    special_dates = relationship(
+        "ContactMekuravSpecialDate",
+        back_populates="mekurav",
+        cascade="all, delete-orphan",
+    )
+
+
+class ContactShliach(Base):
+    """Shliach-specific data for a contact of type 'shliach' (1:1 with a contact).
+
+    A shliach also gets a login `User` (role 'shliach'), linked via `user_id`.
+    """
+
+    __tablename__ = "contact_shliach"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    contact_id = Column(
+        Integer, ForeignKey("contacts.id"), nullable=False, unique=True, index=True
+    )
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    notes = Column(Text, nullable=True)  # הערות
+
+    contact = relationship("Contact", back_populates="shliach")
+    user = relationship("User")
+    apartments = relationship(
+        "ContactShliachApartment",
+        back_populates="shliach",
+        cascade="all, delete-orphan",
+    )
+
+
+class ContactShliachApartment(Base):
+    """M2M: which apartments a shliach covers."""
+
+    __tablename__ = "contact_shliach_apartment"
+    __table_args__ = (
+        UniqueConstraint(
+            "contact_shliach_id", "apartment_id", name="uq_shliach_apartment"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    contact_shliach_id = Column(
+        Integer, ForeignKey("contact_shliach.id"), nullable=False, index=True
+    )
+    apartment_id = Column(
+        Integer, ForeignKey("apartments.id"), nullable=False, index=True
+    )
+
+    shliach = relationship("ContactShliach", back_populates="apartments")
+    apartment = relationship("Apartment", back_populates="shluchim")
+
+
+class Area(Base):
+    """A geographic area (with an optional drawn polygon)."""
+
+    __tablename__ = "areas"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    area_name = Column(String(150), nullable=False)  # כותרת
+    area_notes = Column(Text, nullable=True)  # הערות
+    area_polygon = Column(Text, nullable=True)  # GeoJSON polygon (תחום פוליגון)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    buildings = relationship(
+        "Building", back_populates="area", cascade="all, delete-orphan"
+    )
+
+
+class Building(Base):
+    __tablename__ = "buildings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    area_id = Column(Integer, ForeignKey("areas.id"), nullable=False, index=True)
+    building_name = Column(String(150), nullable=False)  # שם בניין
+    building_address = Column(Text, nullable=True)  # כתובת בניין
+    longitude = Column(Float, nullable=True)
+    latitude = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    area = relationship("Area", back_populates="buildings")
+    apartments = relationship(
+        "Apartment", back_populates="building", cascade="all, delete-orphan"
+    )
+
+
+class Apartment(Base):
+    __tablename__ = "apartments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    building_id = Column(
+        Integer, ForeignKey("buildings.id"), nullable=False, index=True
+    )
+    apartment_name = Column(String(150), nullable=False)  # כותרת
+    apartment_notes = Column(Text, nullable=True)  # הערות
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    building = relationship("Building", back_populates="apartments")
+    mekuravim = relationship("ContactMekurav", back_populates="apartment")
+    shluchim = relationship("ContactShliachApartment", back_populates="apartment")
+
+
+class SignificantDate(Base):
+    """A meaningful date (birthday / yahrzeit) linked to mekuravim, with reminders."""
+
+    __tablename__ = "significant_dates"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    special_date = Column(DateTime, nullable=False)  # תאריך חשוב
+    hebrew_date = Column(String(100), nullable=True)  # תאריך עברי
+    special_date_type = Column(String(50), nullable=True)  # picklist significant_date.type
+    special_date_title = Column(String(100), nullable=True)  # picklist significant_date.title
+    is_set_reminder = Column(Boolean, nullable=False, default=False)  # האם לשלוח תזכורת
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    mekuravim = relationship(
+        "ContactMekuravSpecialDate",
+        back_populates="special_date_obj",
+        cascade="all, delete-orphan",
+    )
+    reminders = relationship(
+        "SignificantDateReminder",
+        back_populates="significant_date",
+        cascade="all, delete-orphan",
+    )
+
+
+class ContactMekuravSpecialDate(Base):
+    """M2M: significant dates attached to a mekurav."""
+
+    __tablename__ = "contact_mekurav_special_date"
+    __table_args__ = (
+        UniqueConstraint(
+            "contact_mekurav_id", "special_date_id", name="uq_mekurav_special_date"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    contact_mekurav_id = Column(
+        Integer, ForeignKey("contact_mekurav.id"), nullable=False, index=True
+    )
+    special_date_id = Column(
+        Integer, ForeignKey("significant_dates.id"), nullable=False, index=True
+    )
+
+    mekurav = relationship("ContactMekurav", back_populates="special_dates")
+    special_date_obj = relationship("SignificantDate", back_populates="mekuravim")
+
+
+class SignificantDateReminder(Base):
+    """An Android-calendar-style reminder for a significant date.
+
+    `offset_minutes` is how long *before* the date to fire; `remind_at_time` is the
+    time-of-day to send. Fired by the scheduler, which records `last_sent_at`.
+    """
+
+    __tablename__ = "significant_date_reminders"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    significant_date_id = Column(
+        Integer, ForeignKey("significant_dates.id"), nullable=False, index=True
+    )
+    offset_minutes = Column(Integer, nullable=False, default=0)  # minutes before the date
+    remind_at_time = Column(Time, nullable=True)  # time-of-day to send
+    channel = Column(String(20), nullable=False, default="email")
+    last_sent_at = Column(DateTime, nullable=True)
+
+    significant_date = relationship("SignificantDate", back_populates="reminders")
+
+
+class CommunityChecklist(Base):
+    """Mitzvot checklist — only populated for mekurav contacts (scoped via contact)."""
+
+    __tablename__ = "community_checklists"
+
+    contact_id = Column(Integer, ForeignKey("contacts.id"), primary_key=True)
+    guid = _guid_column()
+    tefillin = Column(Boolean, default=False, nullable=False)  # תפילין
+    tefillin_notes = Column(Text, nullable=True)  # הערה תפילין
+    tzedakah = Column(Boolean, default=False, nullable=False)  # צדקה
+    charity_note = Column(Text, nullable=True)  # הערה צדקה
+    shabbat_candles = Column(Boolean, default=False, nullable=False)  # נרות
+    shabbat_candles_notes = Column(Text, nullable=True)  # הערה נרות
+    torah_pamphlet = Column(Boolean, default=False, nullable=False)  # עלון
+    torah_pamphlet_notes = Column(Text, nullable=True)  # הערה עלון
+    torah_thought = Column(String(50), nullable=True)  # picklist checklist.torah_thought (דבר תורה)
+    torah_letter = Column(Boolean, default=False, nullable=False)  # אות בספר
+    letter_torah_notes = Column(Text, nullable=True)  # הערה אות בספר
+
+    contact = relationship("Contact", back_populates="checklist")
+
+
+class Interaction(Base):
+    __tablename__ = "interactions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    contact_id = Column(Integer, ForeignKey("contacts.id"), nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    category = Column(String(50), nullable=False)
+    note = Column(Text, nullable=False)  # Stored in Hebrew
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    contact = relationship("Contact", back_populates="interactions")
+    author = relationship("User", back_populates="interactions")
+
+
+class FieldLocalization(Base):
+    """Global (non-tenant) UI label metadata."""
+
+    __tablename__ = "field_localization"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    entity_type = Column(String(50), nullable=False)
+    technical_name = Column(String(100), nullable=False, unique=True)
+    hebrew_label = Column(String(100), nullable=False)
+
+
+class CustomFieldDefinition(Base):
+    """Admin-defined per-org custom checklist field (a boolean + a note)."""
+
+    __tablename__ = "custom_field_definitions"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id", "field_key", name="uq_customfield_org_key"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    field_key = Column(String(100), nullable=False)  # technical key, e.g. 'hanuka_party'
+    hebrew_label = Column(String(100), nullable=False)
+    sort_order = Column(Integer, default=0, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    values = relationship(
+        "CustomFieldValue",
+        back_populates="definition",
+        cascade="all, delete-orphan",
+    )
+
+
+class CustomFieldValue(Base):
+    """A contact's value for a custom field definition (checkbox + note)."""
+
+    __tablename__ = "custom_field_values"
+    __table_args__ = (
+        UniqueConstraint(
+            "contact_id", "definition_id", name="uq_customval_contact_def"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    contact_id = Column(Integer, ForeignKey("contacts.id"), nullable=False, index=True)
+    definition_id = Column(
+        Integer, ForeignKey("custom_field_definitions.id"), nullable=False, index=True
+    )
+    checked = Column(Boolean, default=False, nullable=False)
+    note = Column(Text, nullable=True)
+
+    contact = relationship("Contact", back_populates="custom_values")
+    definition = relationship("CustomFieldDefinition", back_populates="values")
+
+
+class PicklistValue(Base):
+    """Per-organization dropdown options for constrained fields."""
+
+    __tablename__ = "picklist_values"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id", "field_key", "value", name="uq_picklist_org_field_value"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    field_key = Column(String(100), nullable=False, index=True)
+    value = Column(String(100), nullable=False)
+    hebrew_label = Column(String(100), nullable=False)
+    color_hint = Column(String(20), nullable=True)
+    sort_order = Column(Integer, default=0, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    is_default = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )

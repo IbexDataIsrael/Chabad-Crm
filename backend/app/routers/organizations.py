@@ -1,0 +1,40 @@
+"""Organization (tenant) settings — read for any member, edit for admins."""
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from app import models
+from app.database import get_db
+from app.deps import get_current_user, require_admin
+from app.schemas import OrganizationOut, OrganizationUpdate
+
+router = APIRouter(prefix="/api/organizations", tags=["organizations"])
+
+
+@router.get("/me", response_model=OrganizationOut)
+def get_my_org(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    org = db.get(models.Organization, current_user.organization_id)
+    if not org:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Organization not found")
+    return org
+
+
+@router.put("/me", response_model=OrganizationOut)
+def update_my_org(
+    payload: OrganizationUpdate,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    org = db.get(models.Organization, admin.organization_id)
+    if not org:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Organization not found")
+    data = payload.model_dump(exclude_unset=True)
+    if data.get("name"):
+        org.name = data["name"]
+    if "map_in_english" in data and data["map_in_english"] is not None:
+        org.map_in_english = data["map_in_english"]
+    db.commit()
+    db.refresh(org)
+    return org
