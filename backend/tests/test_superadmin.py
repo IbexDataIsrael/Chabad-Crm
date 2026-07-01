@@ -132,3 +132,47 @@ def test_cannot_delete_superadmin_user(client, superadmin_headers, db_session):
     sa = db_session.query(models.User).filter_by(role="superadmin").first()
     resp = client.delete(f"/api/admin/users/{sa.id}", headers=superadmin_headers)
     assert resp.status_code == 400
+
+
+def test_superadmin_creates_org_with_working_admin(client, superadmin_headers):
+    resp = client.post(
+        "/api/admin/organizations",
+        headers=superadmin_headers,
+        json={
+            "organization_name": "Brand New",
+            "admin_email": "newadmin@brand.new",
+            "admin_full_name": "New Admin",
+            "admin_username": "newadmin",
+            "admin_password": "pw12345",
+        },
+    )
+    assert resp.status_code == 201
+    # The provisioned admin is active + verified → can log in immediately.
+    login = client.post(
+        "/api/auth/token", data={"username": "newadmin", "password": "pw12345"}
+    )
+    assert login.status_code == 200
+
+
+def test_signup_logs_in_immediately_without_email(client):
+    """Default flow: no email verification — signup returns a token and works."""
+    resp = client.post(
+        "/api/auth/signup",
+        json={
+            "organization_name": "Self Serve",
+            "first_name": "Self",
+            "last_name": "Serve",
+            "email": "self@serve.co",
+            "phone": "0521234567",
+            "username": "selfadmin",
+            "password": "pw12345",
+        },
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["status"] == "active"
+    assert body["access_token"]
+    login = client.post(
+        "/api/auth/token", data={"username": "selfadmin", "password": "pw12345"}
+    )
+    assert login.status_code == 200

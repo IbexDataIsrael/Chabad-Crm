@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
-import { resendVerification, signup } from "@/lib/api";
+import { resendVerification, setToken, signup } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { EmailInput } from "@/components/EmailInput";
@@ -81,7 +81,7 @@ export default function SignupPage() {
     }
     setBusy(true);
     try {
-      await signup({
+      const res = await signup({
         organization_name: form.organization_name,
         organization_logo_url: logoUrl,
         first_name: form.first_name,
@@ -91,6 +91,12 @@ export default function SignupPage() {
         username: form.username,
         password: form.password,
       });
+      if (res.access_token) {
+        // Old-school flow: account is active, log straight in.
+        setToken(res.access_token);
+        window.location.href = "/dashboard";
+        return;
+      }
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("signup.failed", "ההרשמה נכשלה"));

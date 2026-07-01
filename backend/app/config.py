@@ -69,6 +69,12 @@ class Settings(BaseSettings):
     superadmin_name: str = "System Administrator"
     system_org_name: str = "System"
 
+    # When False (the current default), public signup skips the email-verification
+    # round-trip: the org's admin is created already active + verified and logged
+    # in immediately ("old school" username+password). Flip to True once a real
+    # transactional-email domain is set up to re-enable the verify-by-email flow.
+    require_email_verification: bool = False
+
     # Signup email verification. Defaults to the production frontend so email
     # links are correct even if FRONTEND_URL isn't set on the host; local dev
     # overrides it via backend/.env.

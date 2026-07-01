@@ -14,6 +14,7 @@ from jose import JWTError
 from sqlalchemy.orm import Session
 
 from app import models
+from app.config import settings
 from app.core.email import send_verification_email
 from app.core.security import (
     create_access_token,
@@ -58,12 +59,19 @@ def _send_verification_safely(user, token: str) -> None:
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
 def signup(payload: SignupRequest, db: Session = Depends(get_db)) -> dict:
-    """Create an organization + pending admin, then email a verification link."""
+    """Create an organization + admin.
+
+    Default ("old school"): the admin is created active + verified and logged in
+    immediately — no email round-trip, no third-party dependency. When
+    REQUIRE_EMAIL_VERIFICATION is on, fall back to the pending-admin + verify-link
+    flow instead.
+    """
     if db.query(models.User).filter(models.User.email == payload.email).first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
         )
 
+    verify = settings.require_email_verification
     org = models.Organization(
         name=payload.organization_name, logo_url=payload.organization_logo_url
     )
@@ -81,15 +89,21 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)) -> dict:
         phone=payload.phone,
         password_hash=hash_password(payload.password),
         role="admin",
-        is_active=False,
-        email_verified=False,
+        is_active=not verify,
+        email_verified=not verify,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
 
-    _send_verification_safely(user, create_email_token(user.id))
-    return {"status": "pending_verification", "email": user.email}
+    if verify:
+        _send_verification_safely(user, create_email_token(user.id))
+        return {"status": "pending_verification", "email": user.email}
+
+    # Immediate activation: provision the org's picklists and log the admin in.
+    provision_org(db, user.organization_id)
+    token = create_access_token(subject=str(user.id), role=user.role)
+    return {"status": "active", "access_token": token, "token_type": "bearer"}
 
 
 @router.get("/verify-email")

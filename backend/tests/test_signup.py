@@ -1,5 +1,18 @@
+import pytest
+
 from app import models
+from app.config import settings
 from app.core.security import create_email_token
+
+
+@pytest.fixture(autouse=True)
+def _require_email_verification():
+    """This file exercises the email-verification signup flow, which is now
+    opt-in (default is immediate activation). Force it on for these tests."""
+    previous = settings.require_email_verification
+    settings.require_email_verification = True
+    yield
+    settings.require_email_verification = previous
 
 
 def _signup(client, username="founder", email="founder@x.com", org="Acme"):

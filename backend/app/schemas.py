@@ -104,6 +104,15 @@ class AdminOrganizationOut(BaseModel):
     admin_name: Optional[str] = None
 
 
+class AdminOrgCreate(BaseModel):
+    """Superadmin provisions an org + its (already-verified) admin directly."""
+    organization_name: str
+    admin_email: str
+    admin_full_name: str
+    admin_username: str = "admin"
+    admin_password: str
+
+
 class SignupRequest(BaseModel):
     organization_name: str
     organization_logo_url: Optional[str] = None

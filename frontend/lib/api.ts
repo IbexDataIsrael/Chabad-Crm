@@ -98,7 +98,7 @@ export interface SignupPayload {
 
 export async function signup(
   payload: SignupPayload,
-): Promise<{ status: string; email: string }> {
+): Promise<{ status: string; email?: string; access_token?: string }> {
   return apiFetch("/api/auth/signup", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -190,6 +190,20 @@ export interface AdminUser {
   created_at: string;
   organization_id: number;
 }
+
+export interface AdminOrgCreate {
+  organization_name: string;
+  admin_email: string;
+  admin_full_name: string;
+  admin_username: string;
+  admin_password: string;
+}
+
+export const adminCreateOrg = (payload: AdminOrgCreate): Promise<AdminOrganization> =>
+  apiFetch("/api/admin/organizations", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 
 export const adminListOrganizations = (): Promise<AdminOrganization[]> =>
   apiFetch("/api/admin/organizations");

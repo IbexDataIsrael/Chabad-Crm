@@ -11,10 +11,11 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app import models
-from app.core.security import create_access_token
+from app.core.security import create_access_token, hash_password
 from app.database import get_db
 from app.deps import require_superadmin
-from app.schemas import AdminOrganizationOut, AdminUserOut, Token
+from app.schemas import AdminOrgCreate, AdminOrganizationOut, AdminUserOut, Token
+from app.seed import provision_org
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -124,6 +125,41 @@ def _delete_organization_cascade(db: Session, org_id: int) -> None:
 
 
 # --- Organizations ---------------------------------------------------------
+@router.post("/organizations", response_model=AdminOrganizationOut, status_code=status.HTTP_201_CREATED)
+def create_organization(
+    payload: AdminOrgCreate,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_superadmin),
+):
+    """Provision an org + its admin directly (already active & verified).
+
+    No email verification / Google needed — the superadmin sets the credentials.
+    """
+    if db.query(models.User).filter(models.User.email == payload.admin_email).first():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email already registered")
+
+    org = models.Organization(name=payload.organization_name)
+    db.add(org)
+    db.flush()
+    db.add(
+        models.User(
+            organization_id=org.id,
+            username=payload.admin_username,
+            full_name=payload.admin_full_name,
+            email=payload.admin_email,
+            password_hash=hash_password(payload.admin_password),
+            role="admin",
+            is_active=True,
+            email_verified=True,
+        )
+    )
+    db.commit()
+    provision_org(db, org.id)
+    logger.info("superadmin %s created org '%s' (admin %s)", admin.email, org.name, payload.admin_email)
+    db.refresh(org)
+    return _org_out(db, org)
+
+
 @router.get("/organizations", response_model=list[AdminOrganizationOut])
 def list_organizations(
     db: Session = Depends(get_db),

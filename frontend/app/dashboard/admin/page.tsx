@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {
   adminActivateOrg,
   adminActivateUser,
+  adminCreateOrg,
   adminDeactivateOrg,
   adminDeactivateUser,
   adminDeleteOrg,
@@ -33,6 +34,15 @@ export default function SystemAdminPage() {
   const [busy, setBusy] = useState(false);
   const [allUsers, setAllUsers] = useState<AdminUser[]>([]);
   const [userQuery, setUserQuery] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const emptyNewOrg = {
+    organization_name: "",
+    admin_full_name: "",
+    admin_email: "",
+    admin_username: "admin",
+    admin_password: "",
+  };
+  const [newOrg, setNewOrg] = useState(emptyNewOrg);
 
   async function loadOrgs() {
     try {
@@ -155,6 +165,17 @@ export default function SystemAdminPage() {
     }, t("admin.user_deleted", "המשתמש נמחק"));
   }
 
+  async function onCreateOrg(e: React.FormEvent) {
+    e.preventDefault();
+    await run(async () => {
+      await adminCreateOrg(newOrg);
+      setNewOrg(emptyNewOrg);
+      setShowCreate(false);
+      await loadOrgs();
+      await loadAllUsers();
+    }, t("admin.org_created", "הארגון נוצר"));
+  }
+
   async function onDeleteUserGlobal(user: AdminUser) {
     if (
       !confirm(
@@ -180,12 +201,75 @@ export default function SystemAdminPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold">{t("admin.title", "ניהול מערכת")}</h1>
-        <p className="text-sm text-gray-500">
-          {t("admin.subtitle", "כל הארגונים והמשתמשים במערכת.")}
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-bold">{t("admin.title", "ניהול מערכת")}</h1>
+          <p className="text-sm text-gray-500">
+            {t("admin.subtitle", "כל הארגונים והמשתמשים במערכת.")}
+          </p>
+        </div>
+        <button
+          onClick={() => setShowCreate((v) => !v)}
+          className="rounded-md bg-status-magenta text-white px-4 py-2 text-sm font-medium hover:opacity-90"
+        >
+          {showCreate ? t("action.cancel", "ביטול") : t("admin.new_org", "+ ארגון חדש")}
+        </button>
       </div>
+
+      {/* Create an org + admin directly — no email/Google, immediately active. */}
+      {showCreate && (
+        <form onSubmit={onCreateOrg} className="bg-white rounded-xl shadow-sm p-4 grid gap-3 sm:grid-cols-2">
+          <input
+            required
+            value={newOrg.organization_name}
+            onChange={(e) => setNewOrg({ ...newOrg, organization_name: e.target.value })}
+            placeholder={t("signup.org_name", "שם הארגון")}
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+          />
+          <input
+            required
+            value={newOrg.admin_full_name}
+            onChange={(e) => setNewOrg({ ...newOrg, admin_full_name: e.target.value })}
+            placeholder={t("admin.admin_name", "שם המנהל")}
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+          />
+          <input
+            required
+            dir="ltr"
+            type="email"
+            value={newOrg.admin_email}
+            onChange={(e) => setNewOrg({ ...newOrg, admin_email: e.target.value })}
+            placeholder={t("contacts.email", "אימייל")}
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+          />
+          <input
+            required
+            dir="ltr"
+            value={newOrg.admin_username}
+            onChange={(e) => setNewOrg({ ...newOrg, admin_username: e.target.value })}
+            placeholder={t("auth.username", "שם משתמש")}
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+          />
+          <input
+            required
+            dir="ltr"
+            type="text"
+            value={newOrg.admin_password}
+            onChange={(e) => setNewOrg({ ...newOrg, admin_password: e.target.value })}
+            placeholder={t("auth.password", "סיסמה")}
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+          />
+          <div className="sm:col-span-2">
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded-md bg-status-magenta text-white px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
+            >
+              {t("admin.create_org", "צור ארגון")}
+            </button>
+          </div>
+        </form>
+      )}
 
       {/* Find a user by email/name across every organization. */}
       <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
