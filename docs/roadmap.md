@@ -1,0 +1,53 @@
+# Roadmap — deferred changes
+
+Things intentionally paused during the launch push (2026-07-01). Each entry notes
+**why** it's off and **how** to turn it back on. None of these are bugs — they are
+conscious "not now" decisions.
+
+## 1. Re-enable email verification on signup  ⏸️ PAUSED (must return)
+
+Right now signup is "old school": username + password, the org admin is created
+**active + verified immediately**, and no verification email is sent
+(`REQUIRE_EMAIL_VERIFICATION=false`, default in `backend/app/config.py`).
+
+This is **temporary**. A verification email *should* be sent — it was paused only
+because Gmail silently drops the verification mail when it's sent from a personal
+`gmail.com` sender (plain "welcome" mail arrives; link-bearing "verify" mail gets
+dropped/spam-filed). The whole verify-by-email flow is still in the code behind the
+flag (`/api/auth/verify-email`, `/api/auth/resend-verification`, `hello_tenant.html`,
+`_send_verification_safely`).
+
+**To re-enable (do this once a real sending domain exists):**
+1. Set up a transactional-email provider on a real domain (Resend / Mailgun /
+   SendGrid) with SPF + DKIM + DMARC. Point the `SMTP_*` env vars on Render at it,
+   and set `EMAIL_FROM` to `no-reply@yourdomain`.
+2. Set `REQUIRE_EMAIL_VERIFICATION=true` on Render.
+3. Signup then reverts to: create pending admin → email verify link → activate on
+   click. No code change needed.
+
+## 2. Re-add "Log in / sign up with Google"  ⏸️ PAUSED
+
+The Google Sign-In button was removed from the login (`app/page.tsx`) and signup
+(`app/signup/page.tsx`) pages because it depends on a third-party Google widget we
+couldn't fully control during launch. The `GoogleSignInButton` component and the
+backend endpoints (`/api/auth/google`, `/api/auth/google-signup`) are **kept** — only
+the button usage was removed.
+
+**To re-enable:** re-import `GoogleSignInButton` on those two pages (git history has
+the exact markup). Requires the Google OAuth consent screen to be **published** (not
+"Testing") and `https://minicrm-ibexdata.vercel.app` in Authorized JavaScript origins
+(see `docs/deployment.md`), plus matching `GOOGLE_CLIENT_ID` on Render and
+`NEXT_PUBLIC_GOOGLE_CLIENT_ID` on Vercel.
+
+## 3. Change-password option in settings  🆕 TODO
+
+Add a self-service "change password" form in the settings/config section
+(`/dashboard/settings`) so a logged-in user can update their own password.
+
+**Sketch:**
+- Backend: `POST /api/auth/change-password` (auth required) — verify the current
+  password, then set the new bcrypt hash. Reject if current password is wrong or the
+  new one fails the strength rules.
+- Frontend: a small form on the settings page (current password, new password,
+  confirm) calling that endpoint.
+- Superadmin already resets passwords via env/seed; this is for regular org users.
