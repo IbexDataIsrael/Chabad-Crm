@@ -48,7 +48,7 @@ function DashboardChrome({ children }: { children: ReactNode }) {
     { href: "/dashboard/custom-fields", label: t("nav.custom_fields", "שדות מותאמים"), admin: true },
     { href: "/dashboard/fields", label: t("page.fields_title", "ניהול שדות"), admin: true },
     { href: "/dashboard/localization", label: t("nav.localization", "תרגומים"), admin: true },
-    { href: "/dashboard/settings", label: t("nav.settings", "הגדרות"), admin: true },
+    { href: "/dashboard/settings", label: t("nav.settings", "הגדרות") },
   ]);
 
   return (

@@ -147,6 +147,11 @@ class TokenData(BaseModel):
     role: Optional[str] = None
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
 # --- Community checklist ---------------------------------------------------
 class ChecklistOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)

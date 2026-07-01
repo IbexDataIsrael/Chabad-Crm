@@ -166,6 +166,16 @@ export async function login(username: string, password: string): Promise<string>
   return data.access_token as string;
 }
 
+/** Change the logged-in user's own password. */
+export const changePassword = (
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ status: string }> =>
+  apiFetch("/api/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+
 // --- Platform superadmin (/admin dashboard) --------------------------------
 export interface AdminOrganization {
   id: number;

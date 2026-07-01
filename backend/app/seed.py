@@ -129,6 +129,12 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("admin", "admin.create_org", "צור ארגון", "Create organization"),
     ("admin", "admin.org_created", "הארגון נוצר", "Organization created"),
     ("admin", "admin.admin_name", "שם המנהל", "Admin name"),
+    # --- Settings: change password ---
+    ("settings", "settings.change_password", "שינוי סיסמה", "Change password"),
+    ("settings", "settings.current_password", "סיסמה נוכחית", "Current password"),
+    ("settings", "settings.new_password", "סיסמה חדשה", "New password"),
+    ("settings", "settings.password_changed", "הסיסמה עודכנה", "Password updated"),
+    ("settings", "settings.password_change_failed", "עדכון הסיסמה נכשל", "Password update failed"),
     # --- Visits (top-level entity) ---
     ("visit", "page.visits", "ביקורים", "Visits"),
     ("visit", "page.add_visit", "ביקור חדש", "New visit"),

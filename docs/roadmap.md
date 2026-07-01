@@ -39,15 +39,10 @@ the exact markup). Requires the Google OAuth consent screen to be **published** 
 (see `docs/deployment.md`), plus matching `GOOGLE_CLIENT_ID` on Render and
 `NEXT_PUBLIC_GOOGLE_CLIENT_ID` on Vercel.
 
-## 3. Change-password option in settings  🆕 TODO
+## 3. Change-password option in settings  ✅ DONE (2026-07-01)
 
-Add a self-service "change password" form in the settings/config section
-(`/dashboard/settings`) so a logged-in user can update their own password.
-
-**Sketch:**
-- Backend: `POST /api/auth/change-password` (auth required) — verify the current
-  password, then set the new bcrypt hash. Reject if current password is wrong or the
-  new one fails the strength rules.
-- Frontend: a small form on the settings page (current password, new password,
-  confirm) calling that endpoint.
-- Superadmin already resets passwords via env/seed; this is for regular org users.
+Self-service "change password" form on `/dashboard/settings`. Backend
+`POST /api/auth/change-password` (auth required) verifies the current password,
+enforces the strength rules, and sets the new bcrypt hash. The settings page now
+renders for all users (org-settings form stays admin-only; the change-password card
+shows for everyone), and the settings nav link is visible to non-admins.

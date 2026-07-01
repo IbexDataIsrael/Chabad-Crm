@@ -4,11 +4,12 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { LogoUpload } from "@/components/LogoUpload";
 import { MapPointPicker } from "@/components/MapPointPicker";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, changePassword } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
 import type { OrgDetails } from "@/lib/types";
+import { isMediumPassword, PASSWORD_HINT } from "@/lib/validation";
 
 export default function SettingsPage() {
   const { isAdmin, loading, refresh } = useAuth();
@@ -67,21 +68,15 @@ export default function SettingsPage() {
   }
 
   if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
-  if (!isAdmin) {
-    return (
-      <p className="text-status-darkred">
-        {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
-      </p>
-    );
-  }
 
   const inputClass =
     "w-full rounded-md border border-gray-300 px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
   return (
     <div className="space-y-5 max-w-lg">
-      <h1 className="text-2xl font-bold">{t("page.org_settings", "הגדרות ארגון")}</h1>
+      <h1 className="text-2xl font-bold">{t("nav.settings", "הגדרות")}</h1>
 
+      {isAdmin && (
       <form onSubmit={save} className="bg-white rounded-xl shadow-sm p-6 space-y-4">
         <label className="block space-y-1">
           <span className="block text-sm font-medium">{t("signup.org_name", "שם הארגון")}</span>
@@ -166,6 +161,97 @@ export default function SettingsPage() {
           {saved && <span className="text-sm text-status-green">{t("action.saved", "נשמר ✓")}</span>}
         </div>
       </form>
+      )}
+
+      <ChangePasswordCard />
     </div>
+  );
+}
+
+function ChangePasswordCard() {
+  const { t } = useLocalization();
+  const { success, error: toastError } = useToast();
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const inputClass =
+    "w-full rounded-md border border-gray-300 px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (!isMediumPassword(next)) {
+      setError(t("validation.password_hint", PASSWORD_HINT));
+      return;
+    }
+    if (next !== confirm) {
+      setError(t("signup.passwords_no_match", "הסיסמאות אינן תואמות"));
+      return;
+    }
+    setBusy(true);
+    try {
+      await changePassword(current, next);
+      setCurrent("");
+      setNext("");
+      setConfirm("");
+      success(t("settings.password_changed", "הסיסמה עודכנה"));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t("settings.password_change_failed", "עדכון הסיסמה נכשל");
+      setError(msg);
+      toastError(msg);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="bg-white rounded-xl shadow-sm p-6 space-y-4">
+      <h2 className="text-lg font-semibold">{t("settings.change_password", "שינוי סיסמה")}</h2>
+      <label className="block space-y-1">
+        <span className="block text-sm font-medium">{t("settings.current_password", "סיסמה נוכחית")}</span>
+        <input
+          type="password"
+          className={inputClass}
+          value={current}
+          onChange={(e) => setCurrent(e.target.value)}
+          autoComplete="current-password"
+          required
+        />
+      </label>
+      <label className="block space-y-1">
+        <span className="block text-sm font-medium">{t("settings.new_password", "סיסמה חדשה")}</span>
+        <input
+          type="password"
+          className={inputClass}
+          value={next}
+          onChange={(e) => setNext(e.target.value)}
+          autoComplete="new-password"
+          required
+        />
+      </label>
+      <label className="block space-y-1">
+        <span className="block text-sm font-medium">{t("signup.verify_password", "אימות סיסמה")}</span>
+        <input
+          type="password"
+          className={inputClass}
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          autoComplete="new-password"
+          required
+        />
+      </label>
+      <p className="text-xs text-gray-400">{t("validation.password_hint", PASSWORD_HINT)}</p>
+      {error && <p className="text-sm text-status-darkred">{error}</p>}
+      <button
+        type="submit"
+        disabled={busy}
+        className="rounded-md bg-status-magenta text-white px-5 py-2 font-medium hover:opacity-90 disabled:opacity-50"
+      >
+        {busy ? t("action.saving", "שומר…") : t("settings.change_password", "שינוי סיסמה")}
+      </button>
+    </form>
   );
 }

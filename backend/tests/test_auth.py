@@ -78,3 +78,47 @@ def test_require_admin_blocks_staff(client):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert r.status_code == 403
+
+
+def test_change_password_flow(client):
+    _register(client, "changer", password="pw12345")
+    headers = {"Authorization": f"Bearer {_login_token(client, 'changer')}"}
+
+    # Wrong current password is rejected.
+    r = client.post(
+        "/api/auth/change-password",
+        headers=headers,
+        json={"current_password": "nope", "new_password": "NewPass123"},
+    )
+    assert r.status_code == 400
+
+    # Weak new password is rejected.
+    r = client.post(
+        "/api/auth/change-password",
+        headers=headers,
+        json={"current_password": "pw12345", "new_password": "weak"},
+    )
+    assert r.status_code == 422
+
+    # Success.
+    r = client.post(
+        "/api/auth/change-password",
+        headers=headers,
+        json={"current_password": "pw12345", "new_password": "NewPass123"},
+    )
+    assert r.status_code == 200
+
+    # Old password no longer works; new one does.
+    assert client.post(
+        "/api/auth/token", data={"username": "changer", "password": "pw12345"}
+    ).status_code == 401
+    assert client.post(
+        "/api/auth/token", data={"username": "changer", "password": "NewPass123"}
+    ).status_code == 200
+
+
+def test_change_password_requires_auth(client):
+    assert client.post(
+        "/api/auth/change-password",
+        json={"current_password": "x", "new_password": "NewPass123"},
+    ).status_code == 401

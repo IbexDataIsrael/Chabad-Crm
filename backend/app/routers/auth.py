@@ -27,6 +27,7 @@ from app.core.security import (
 from app.database import get_db
 from app.deps import get_current_user
 from app.schemas import (
+    ChangePasswordRequest,
     GoogleLoginRequest,
     GoogleSignupRequest,
     ResendRequest,
@@ -281,3 +282,39 @@ def google_signup(payload: GoogleSignupRequest, db: Session = Depends(get_db)) -
 @router.get("/me", response_model=UserOut)
 def me(current_user: models.User = Depends(get_current_user)) -> models.User:
     return current_user
+
+
+def _is_strong_password(pw: str) -> bool:
+    """Mirror the frontend rule: >=8 chars with an upper, a lower, and a digit."""
+    import re
+
+    return (
+        len(pw) >= 8
+        and bool(re.search(r"[A-Z]", pw))
+        and bool(re.search(r"[a-z]", pw))
+        and bool(re.search(r"\d", pw))
+    )
+
+
+@router.post("/change-password")
+def change_password(
+    payload: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+) -> dict:
+    """Let a logged-in user change their own password."""
+    if not current_user.password_hash or not verify_password(
+        payload.current_password, current_user.password_hash
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+    if not _is_strong_password(payload.new_password):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Password must be at least 8 characters with an uppercase letter, a lowercase letter, and a number.",
+        )
+    current_user.password_hash = hash_password(payload.new_password)
+    db.commit()
+    return {"status": "ok"}
