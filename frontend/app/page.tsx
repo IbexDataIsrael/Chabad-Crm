@@ -7,11 +7,10 @@ import { useEffect, useState, type FormEvent } from "react";
 import { ApiError, getToken, resendVerification } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
-import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { LanguageToggle } from "@/components/LanguageToggle";
 
 export default function LoginPage() {
-  const { signIn, signInWithGoogle, user } = useAuth();
+  const { signIn, user } = useAuth();
   const { t } = useLocalization();
   const router = useRouter();
   const [username, setUsername] = useState("");
@@ -41,20 +40,6 @@ export default function LoginPage() {
       } else {
         setError(err instanceof Error ? err.message : t("auth.login_failed"));
       }
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function onGoogleCredential(credential: string) {
-    setError("");
-    setUnverified(false);
-    setBusy(true);
-    try {
-      await signInWithGoogle(credential);
-      router.replace("/dashboard");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("auth.google_failed"));
     } finally {
       setBusy(false);
     }
@@ -137,14 +122,6 @@ export default function LoginPage() {
         >
           {busy ? t("auth.logging_in") : t("auth.login")}
         </button>
-
-        <div className="flex items-center gap-3 text-xs text-gray-400">
-          <span className="h-px flex-1 bg-gray-200" />
-          {t("common.or")}
-          <span className="h-px flex-1 bg-gray-200" />
-        </div>
-
-        <GoogleSignInButton onCredential={onGoogleCredential} onError={setError} />
 
         <p className="text-center text-sm text-gray-500">
           {t("auth.no_account")}{" "}

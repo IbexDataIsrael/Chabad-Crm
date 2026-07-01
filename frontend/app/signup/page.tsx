@@ -1,14 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { resendVerification, setToken, signup } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { EmailInput } from "@/components/EmailInput";
-import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { LogoUpload } from "@/components/LogoUpload";
 import { PhoneInput } from "@/components/PhoneInput";
 import {
@@ -23,17 +20,8 @@ import {
 const inputClass =
   "w-full rounded-md border border-gray-300 px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
-type Method = null | "password" | "google";
-
 export default function SignupPage() {
-  const { signUpWithGoogle } = useAuth();
   const { t } = useLocalization();
-  const router = useRouter();
-
-  // Which signup method the user picked (chooser → one path, never both at once).
-  const [method, setMethod] = useState<Method>(null);
-  // Google credential captured at the chooser; org details collected afterwards.
-  const [googleCredential, setGoogleCredential] = useState<string | null>(null);
 
   const [done, setDone] = useState(false);
   const [email, setEmail] = useState("");
@@ -52,12 +40,6 @@ export default function SignupPage() {
 
   function set(key: keyof typeof form, v: string) {
     setForm((prev) => ({ ...prev, [key]: v }));
-  }
-
-  function reset() {
-    setMethod(null);
-    setGoogleCredential(null);
-    setError("");
   }
 
   async function onSubmit(e: FormEvent) {
@@ -105,26 +87,6 @@ export default function SignupPage() {
     }
   }
 
-  // Step 2 of the Google path: finish by creating the org with the collected details.
-  async function onGoogleFinish(e: FormEvent) {
-    e.preventDefault();
-    setError("");
-    if (!googleCredential) return;
-    if (!form.organization_name.trim()) {
-      setError(t("signup.org_required", "יש למלא שם ארגון"));
-      return;
-    }
-    setBusy(true);
-    try {
-      await signUpWithGoogle(googleCredential, form.organization_name.trim(), logoUrl);
-      router.replace("/dashboard");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("signup.google_failed", "ההרשמה עם Google נכשלה"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   // --- Success (password path): check-your-email screen --------------------
   if (done) {
     return (
@@ -152,106 +114,7 @@ export default function SignupPage() {
     );
   }
 
-  // --- Method chooser: email+password OR Google (not both) ----------------
-  if (!method) {
-    return (
-      <main className="min-h-screen flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-white rounded-xl shadow-md p-8 space-y-5">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold">{t("signup.title", "פתיחת חשבון ארגון")}</h1>
-            <p className="mt-1 text-sm text-gray-500">{t("signup.choose_method", "בחר דרך הרשמה")}</p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setMethod("password")}
-            className="w-full rounded-md bg-status-magenta text-white py-2.5 font-medium hover:opacity-90"
-          >
-            {t("signup.with_password", "הרשמה עם אימייל וסיסמה")}
-          </button>
-
-          <div className="flex items-center gap-3 text-xs text-gray-400">
-            <span className="h-px flex-1 bg-gray-200" />
-            {t("common.or", "או")}
-            <span className="h-px flex-1 bg-gray-200" />
-          </div>
-
-          <GoogleSignInButton
-            onCredential={(cred) => {
-              setGoogleCredential(cred);
-              setMethod("google");
-            }}
-            onError={setError}
-          />
-
-          {error && (
-            <p className="text-sm text-status-darkred bg-red-50 rounded-md px-3 py-2">{error}</p>
-          )}
-
-          <p className="text-center text-sm text-gray-500">
-            {t("auth.have_account", "כבר יש לך חשבון?")}{" "}
-            <Link href="/" className="text-status-magenta hover:underline">
-              {t("auth.login_link", "התחברות")}
-            </Link>
-          </p>
-        </div>
-      </main>
-    );
-  }
-
-  // --- Google path, step 2: collect org details, then create -------------
-  if (method === "google") {
-    return (
-      <main className="min-h-screen flex items-center justify-center p-6">
-        <form
-          onSubmit={onGoogleFinish}
-          className="w-full max-w-md bg-white rounded-xl shadow-md p-8 space-y-4"
-        >
-          <div className="text-center">
-            <h1 className="text-2xl font-bold">{t("signup.almost_done", "כמעט סיימנו")}</h1>
-            <p className="mt-1 text-sm text-gray-500">
-              {t("signup.google_verified_fill", "התחברת עם Google. השלם את פרטי הארגון:")}
-            </p>
-          </div>
-
-          <Field label={t("signup.org_name", "שם הארגון")}>
-            <input
-              className={inputClass}
-              value={form.organization_name}
-              onChange={(e) => set("organization_name", e.target.value)}
-              required
-              autoFocus
-            />
-          </Field>
-
-          <Field label={t("signup.org_logo", "לוגו הארגון")}>
-            <LogoUpload value={logoUrl} onChange={setLogoUrl} />
-          </Field>
-
-          {error && (
-            <p className="text-sm text-status-darkred bg-red-50 rounded-md px-3 py-2">{error}</p>
-          )}
-
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-md bg-status-magenta text-white py-2 font-medium hover:opacity-90 disabled:opacity-50"
-          >
-            {busy ? t("signup.creating", "נרשם…") : t("signup.create", "צור חשבון")}
-          </button>
-          <button
-            type="button"
-            onClick={reset}
-            className="w-full text-center text-sm text-gray-500 hover:underline"
-          >
-            {t("action.back", "← חזרה")}
-          </button>
-        </form>
-      </main>
-    );
-  }
-
-  // --- Password path: full registration form -----------------------------
+  // --- Registration form (username + password) ---------------------------
   return (
     <main className="min-h-screen flex items-center justify-center p-6">
       <form
@@ -349,13 +212,12 @@ export default function SignupPage() {
         >
           {busy ? t("signup.creating", "נרשם…") : t("signup.create", "צור חשבון")}
         </button>
-        <button
-          type="button"
-          onClick={reset}
-          className="w-full text-center text-sm text-gray-500 hover:underline"
-        >
-          {t("action.back", "← חזרה")}
-        </button>
+        <p className="text-center text-sm text-gray-500">
+          {t("auth.have_account", "כבר יש לך חשבון?")}{" "}
+          <Link href="/" className="text-status-magenta hover:underline">
+            {t("auth.login_link", "התחברות")}
+          </Link>
+        </p>
       </form>
     </main>
   );
