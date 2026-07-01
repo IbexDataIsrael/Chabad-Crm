@@ -5,12 +5,16 @@
                           email verification (Phase 8) and for the demo org.
 - `seed_all`           — global labels + a demo organization with admin + sample data.
 """
+import logging
+
 from sqlalchemy.orm import Session
 
 from app import models
 from app.config import settings
 from app.core.security import hash_password
 from app.picklist_utils import PICKLIST_FIELDS
+
+logger = logging.getLogger("app.seed")
 
 # (entity_type, technical_name, hebrew_label, english_label) — global UI strings.
 # entity_type groups them ('table'/'column'/'interaction_category'/'nav'/'action'/
@@ -684,6 +688,12 @@ def seed_superadmin(db: Session) -> None:
     data) — it exists only to reach the /api/admin/* endpoints.
     """
     if not settings.superadmin_email or not settings.superadmin_password:
+        logger.warning(
+            "Superadmin seed SKIPPED: SUPERADMIN_EMAIL and/or SUPERADMIN_PASSWORD "
+            "not set (email_set=%s, password_set=%s)",
+            bool(settings.superadmin_email),
+            bool(settings.superadmin_password),
+        )
         return
 
     existing = (
@@ -699,6 +709,11 @@ def seed_superadmin(db: Session) -> None:
         existing.is_active = True
         existing.email_verified = True
         db.commit()
+        logger.info(
+            "Superadmin present (updated role/password): %s username=%s",
+            existing.email,
+            existing.username,
+        )
         return
 
     system_org = (
@@ -724,6 +739,11 @@ def seed_superadmin(db: Session) -> None:
         )
     )
     db.commit()
+    logger.info(
+        "Superadmin CREATED: %s (username 'superadmin') in org '%s'",
+        settings.superadmin_email,
+        system_org.name,
+    )
 
 
 def seed_all(db: Session) -> None:
