@@ -123,6 +123,8 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("admin", "admin.user_verified", "המשתמש אומת", "User verified"),
     ("admin", "admin.user_disabled", "המשתמש הושבת", "User disabled"),
     ("admin", "admin.user_enabled", "המשתמש הופעל", "User enabled"),
+    ("admin", "admin.find_user", "חיפוש משתמש לפי אימייל או שם…", "Find a user by email or name…"),
+    ("admin", "admin.no_user_matches", "לא נמצאו משתמשים.", "No matching users."),
     # --- Visits (top-level entity) ---
     ("visit", "page.visits", "ביקורים", "Visits"),
     ("visit", "page.add_visit", "ביקור חדש", "New visit"),

@@ -12,6 +12,7 @@ import {
   adminImpersonateOrg,
   adminListOrgUsers,
   adminListOrganizations,
+  adminListUsers,
   adminVerifyUser,
   setToken,
   type AdminOrganization,
@@ -30,6 +31,8 @@ export default function SystemAdminPage() {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [orgUsers, setOrgUsers] = useState<Record<number, AdminUser[]>>({});
   const [busy, setBusy] = useState(false);
+  const [allUsers, setAllUsers] = useState<AdminUser[]>([]);
+  const [userQuery, setUserQuery] = useState("");
 
   async function loadOrgs() {
     try {
@@ -40,10 +43,34 @@ export default function SystemAdminPage() {
     }
   }
 
+  async function loadAllUsers() {
+    try {
+      setAllUsers(await adminListUsers());
+    } catch {
+      /* ignore */
+    }
+  }
+
   useEffect(() => {
-    if (!loading && isSuperadmin) loadOrgs();
+    if (!loading && isSuperadmin) {
+      loadOrgs();
+      loadAllUsers();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, isSuperadmin]);
+
+  const orgNameById = (id: number) => orgs?.find((o) => o.id === id)?.name ?? `#${id}`;
+  const userMatches =
+    userQuery.trim().length === 0
+      ? []
+      : allUsers.filter((u) => {
+          const q = userQuery.trim().toLowerCase();
+          return (
+            (u.email ?? "").toLowerCase().includes(q) ||
+            u.full_name.toLowerCase().includes(q) ||
+            u.username.toLowerCase().includes(q)
+          );
+        });
 
   async function toggleUsers(orgId: number) {
     if (expanded === orgId) {
@@ -128,6 +155,20 @@ export default function SystemAdminPage() {
     }, t("admin.user_deleted", "המשתמש נמחק"));
   }
 
+  async function onDeleteUserGlobal(user: AdminUser) {
+    if (
+      !confirm(
+        t("admin.confirm_delete_user", `למחוק את המשתמש ${user.email ?? user.username}?`),
+      )
+    )
+      return;
+    await run(async () => {
+      await adminDeleteUser(user.id);
+      await loadAllUsers();
+      await loadOrgs();
+    }, t("admin.user_deleted", "המשתמש נמחק"));
+  }
+
   if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
   if (!isSuperadmin) {
     return (
@@ -144,6 +185,51 @@ export default function SystemAdminPage() {
         <p className="text-sm text-gray-500">
           {t("admin.subtitle", "כל הארגונים והמשתמשים במערכת.")}
         </p>
+      </div>
+
+      {/* Find a user by email/name across every organization. */}
+      <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
+        <input
+          dir="ltr"
+          value={userQuery}
+          onChange={(e) => setUserQuery(e.target.value)}
+          placeholder={t("admin.find_user", "חיפוש משתמש לפי אימייל או שם…")}
+          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+        />
+        {userQuery.trim() && (
+          <div className="text-sm">
+            {userMatches.length === 0 ? (
+              <p className="text-gray-400">{t("admin.no_user_matches", "לא נמצאו משתמשים.")}</p>
+            ) : (
+              <table className="w-full">
+                <tbody>
+                  {userMatches.map((u) => (
+                    <tr key={u.id} className="border-b border-gray-100 last:border-0">
+                      <td className="py-2 pe-2">
+                        <span className="font-medium">{u.full_name}</span>
+                        <span className="text-gray-500 ms-2" dir="ltr">
+                          {u.email ?? u.username}
+                        </span>
+                        <span className="text-gray-400 ms-2 text-xs">
+                          {u.role} · {orgNameById(u.organization_id)}
+                        </span>
+                      </td>
+                      <td className="py-2 text-end whitespace-nowrap">
+                        <button
+                          disabled={busy}
+                          onClick={() => onDeleteUserGlobal(u)}
+                          className="text-status-darkred hover:underline disabled:opacity-50"
+                        >
+                          {t("action.delete", "מחק")}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
       </div>
 
       {orgs === null ? (
