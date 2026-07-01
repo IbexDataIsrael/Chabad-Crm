@@ -6,6 +6,8 @@
 - `register`      — legacy/dev path: creates an immediately-active user in a new org.
                     Retired in Phase 9.
 """
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError
@@ -35,6 +37,23 @@ from app.schemas import (
 from app.seed import provision_org
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+logger = logging.getLogger("app.auth")
+
+
+def _send_verification_safely(user, token: str) -> None:
+    """Email the verification link; never let a mail failure break signup.
+
+    The org + pending admin are already committed, so a raised SMTP/template
+    error here would 500 the signup while leaving an unusable account behind.
+    Instead we log the exception AND the link, so the admin can still be
+    activated and we can see *why* delivery failed in the Render logs.
+    """
+    try:
+        link = send_verification_email(user, token)
+        logger.info("Verification email dispatched to %s (link: %s)", user.email, link)
+    except Exception:  # noqa: BLE001 — mail must never break the signup flow
+        logger.exception("Failed to send verification email to %s", user.email)
 
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
@@ -69,7 +88,7 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)) -> dict:
     db.commit()
     db.refresh(user)
 
-    send_verification_email(user, create_email_token(user.id))
+    _send_verification_safely(user, create_email_token(user.id))
     return {"status": "pending_verification", "email": user.email}
 
 
@@ -101,7 +120,7 @@ def resend_verification(payload: ResendRequest, db: Session = Depends(get_db)) -
     """Re-issue a verification link. Always 200 (no email enumeration)."""
     user = db.query(models.User).filter(models.User.email == payload.email).first()
     if user and not user.email_verified:
-        send_verification_email(user, create_email_token(user.id))
+        _send_verification_safely(user, create_email_token(user.id))
     return {"status": "ok"}
 
 
