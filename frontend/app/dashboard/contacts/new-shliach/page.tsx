@@ -45,8 +45,8 @@ export default function NewShliachPage() {
 
   return (
     <div className="space-y-4">
-      <Link href="/dashboard/contacts" className="text-sm text-gray-500 hover:underline">
-        {t("page.back_to_contacts", "← חזרה לאנשי קשר")}
+      <Link href="/dashboard/shluchim" className="text-sm text-gray-500 hover:underline">
+        {t("page.back_to_shluchim", "← חזרה לפעילים")}
       </Link>
       <h1 className="text-2xl font-bold">{t("page.add_shliach", "הוסף פעיל")}</h1>
       <p className="text-sm text-gray-500">

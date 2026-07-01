@@ -229,6 +229,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("page", "page.no_contacts", "אין אנשי קשר עדיין.", "No contacts yet."),
     ("page", "page.contact_not_found", "איש הקשר לא נמצא.", "Contact not found."),
     ("page", "page.back_to_contacts", "← חזרה לאנשי קשר", "← Back to contacts"),
+    ("page", "page.back_to_shluchim", "← חזרה לפעילים", "← Back to activists"),
     ("page", "page.contact_details", "פרטי איש קשר", "Contact details"),
     ("page", "page.extra_fields", "שדות נוספים", "Additional fields"),
     ("filter", "filter.all_areas", "כל האזורים", "All areas"),

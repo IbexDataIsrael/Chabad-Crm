@@ -106,9 +106,15 @@ export default function ContactDetailPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link href="/dashboard/contacts" className="text-sm text-gray-500 hover:underline">
-          {t("page.back_to_contacts", "← חזרה לאנשי קשר")}
-        </Link>
+        {contact.contact_type === "shliach" ? (
+          <Link href="/dashboard/shluchim" className="text-sm text-gray-500 hover:underline">
+            {t("page.back_to_shluchim", "← חזרה לפעילים")}
+          </Link>
+        ) : (
+          <Link href="/dashboard/contacts" className="text-sm text-gray-500 hover:underline">
+            {t("page.back_to_contacts", "← חזרה לאנשי קשר")}
+          </Link>
+        )}
         <div className="flex items-center gap-2">
           {editing ? (
             <button
