@@ -72,24 +72,29 @@ function DashboardChrome({ children }: { children: ReactNode }) {
               <span className="text-lg font-bold">{orgName}</span>
             </Link>
             <nav className="flex flex-wrap items-center gap-x-1 gap-y-1 text-sm">
-              <NavMenu label={t("nav.group.people", "אנשים")} items={peopleItems} />
-              <NavMenu label={t("nav.group.places", "מקומות")} items={placeItems} />
-              {isAdmin && (
-                <Link
-                  href="/dashboard/donations"
-                  className="rounded-md px-2.5 py-1.5 text-gray-700 transition-colors hover:bg-gray-100"
-                >
-                  {t("nav.donations", "תרומות")}
-                </Link>
-              )}
-              <NavMenu label={t("nav.group.more", "עוד")} items={moreItems} />
-              {isSuperadmin && (
+              {isSuperadmin ? (
+                // Platform superadmin: no tenant data of its own, so the whole
+                // CRM nav is irrelevant — show only the System admin dashboard.
                 <Link
                   href="/dashboard/admin"
-                  className="rounded-md px-2.5 py-1.5 font-medium text-status-magenta transition-colors hover:bg-status-magenta/10"
+                  className="rounded-md px-3 py-1.5 font-medium text-status-magenta transition-colors hover:bg-status-magenta/10"
                 >
                   {t("nav.system_admin", "מנהל מערכת")}
                 </Link>
+              ) : (
+                <>
+                  <NavMenu label={t("nav.group.people", "אנשים")} items={peopleItems} />
+                  <NavMenu label={t("nav.group.places", "מקומות")} items={placeItems} />
+                  {isAdmin && (
+                    <Link
+                      href="/dashboard/donations"
+                      className="rounded-md px-2.5 py-1.5 text-gray-700 transition-colors hover:bg-gray-100"
+                    >
+                      {t("nav.donations", "תרומות")}
+                    </Link>
+                  )}
+                  <NavMenu label={t("nav.group.more", "עוד")} items={moreItems} />
+                </>
               )}
             </nav>
           </div>
