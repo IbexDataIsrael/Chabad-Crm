@@ -11,6 +11,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app import models
+from app.config import settings
+from app.core.email import send_email
 from app.core.security import create_access_token, hash_password
 from app.database import get_db
 from app.deps import require_superadmin
@@ -122,6 +124,38 @@ def _delete_organization_cascade(db: Session, org_id: int) -> None:
         models.Organization.id == org_id
     ).delete(synchronize_session=False)
     db.commit()
+
+
+# --- Diagnostics -----------------------------------------------------------
+@router.post("/test-email")
+def test_email(
+    to: str,
+    admin: models.User = Depends(require_superadmin),
+) -> dict:
+    """Send a real test email and report the exact outcome + SMTP config.
+
+    Lets us trigger a send on prod and see success or the precise exception,
+    instead of guessing from logs. Returns no secrets (password length only).
+    """
+    config = {
+        "smtp_host": settings.smtp_host,
+        "smtp_port": settings.smtp_port,
+        "smtp_user": settings.smtp_user,
+        "email_from": settings.email_from,
+        "smtp_password_set": bool(settings.smtp_password),
+        "smtp_password_len": len(settings.smtp_password or ""),
+    }
+    logger.info("test-email requested by %s → %s | config=%s", admin.email, to, config)
+    try:
+        send_email(to, "MiniCRM test email", "This is a test email from the admin panel.")
+        return {"sent": True, "to": to, "config": config, "error": None}
+    except Exception as e:  # noqa: BLE001 — report the failure to the caller
+        return {
+            "sent": False,
+            "to": to,
+            "config": config,
+            "error": f"{type(e).__name__}: {e}",
+        }
 
 
 # --- Organizations ---------------------------------------------------------

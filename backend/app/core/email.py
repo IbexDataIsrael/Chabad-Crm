@@ -36,10 +36,27 @@ def render_template(name: str, **vars: str) -> str:
 
 
 def send_email(to: str, subject: str, body: str, html: Optional[str] = None) -> None:
+    logger.info(
+        "send_email START to=%s subject=%r | host=%s port=%s user=%s from=%s pwd_set=%s pwd_len=%s",
+        to,
+        subject,
+        settings.smtp_host,
+        settings.smtp_port,
+        settings.smtp_user,
+        settings.email_from,
+        bool(settings.smtp_password),
+        len(settings.smtp_password or ""),
+    )
     if not settings.smtp_host or not settings.smtp_password:
         # Dev fallback: print to stdout so links are visible in `docker compose logs`.
         # Triggers when no SMTP host OR no password (so a fresh dev without an
         # app password logs instead of erroring on an unauthenticated send).
+        logger.warning(
+            "send_email DEV-FALLBACK — NOT sending (smtp_host set=%s, smtp_password set=%s). "
+            "On prod this means the SMTP_* env vars are missing on Render.",
+            bool(settings.smtp_host),
+            bool(settings.smtp_password),
+        )
         print(
             f"\n===== [DEV EMAIL — not actually sent] =====\n"
             f"To: {to}\nSubject: {subject}\n\n{body}\n"
@@ -56,11 +73,21 @@ def send_email(to: str, subject: str, body: str, html: Optional[str] = None) -> 
     msg.set_content(body)
     if html:
         msg.add_alternative(html, subtype="html")
-    with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
-        if settings.smtp_user:
+    try:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as server:
             server.starttls()
-            server.login(settings.smtp_user, settings.smtp_password)
-        server.send_message(msg)
+            if settings.smtp_user:
+                server.login(settings.smtp_user, settings.smtp_password)
+            refused = server.send_message(msg)
+        logger.info(
+            "send_email SUCCESS to=%s subject=%r (Gmail accepted; refused_recipients=%s)",
+            to,
+            subject,
+            refused or {},
+        )
+    except Exception:
+        logger.exception("send_email FAILED to=%s subject=%r", to, subject)
+        raise
 
 
 def send_verification_email(user, token: str) -> str:
