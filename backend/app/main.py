@@ -72,11 +72,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Allowed origins come from CORS_ORIGINS (local dev default; production sets the
-# deployed frontend domain). Credentialed requests can't use a "*" wildcard.
+# Allowed origins: explicit list from CORS_ORIGINS (localhost + any custom
+# domains) PLUS a regex that accepts every *.vercel.app deployment, so the
+# frontend keeps working across Vercel's per-deploy preview URLs without having
+# to update CORS on each deploy. Credentialed requests can't use a "*" wildcard,
+# hence the regex rather than allow_origins=["*"].
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
