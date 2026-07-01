@@ -20,7 +20,7 @@ export function PicklistSelect({
   emptyLabel?: string;
   id?: string;
 }) {
-  const { options } = usePicklist(fieldKey);
+  const { options, display } = usePicklist(fieldKey);
 
   return (
     <select
@@ -32,7 +32,7 @@ export function PicklistSelect({
       {includeEmpty && <option value="">{emptyLabel}</option>}
       {options.map((o) => (
         <option key={o.id} value={o.value}>
-          {o.hebrew_label}
+          {display(o)}
         </option>
       ))}
     </select>

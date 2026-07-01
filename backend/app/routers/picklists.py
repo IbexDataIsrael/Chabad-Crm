@@ -8,8 +8,10 @@ from sqlalchemy.orm import Session
 from app import models
 from app.database import get_db
 from app.deps import get_current_user, require_admin
-from app.picklist_utils import PICKLIST_FIELDS, count_usage
+from app.picklist_utils import count_usage
 from app.schemas import (
+    PicklistDefinitionCreate,
+    PicklistDefinitionUpdate,
     PicklistFieldOut,
     PicklistReorder,
     PicklistValueCreate,
@@ -18,6 +20,16 @@ from app.schemas import (
 )
 
 router = APIRouter(prefix="/api/picklists", tags=["picklists"])
+
+
+def _definitions_query(db: Session, org_id: int):
+    return (
+        db.query(models.PicklistDefinition)
+        .filter(models.PicklistDefinition.organization_id == org_id)
+        .order_by(
+            models.PicklistDefinition.sort_order, models.PicklistDefinition.id
+        )
+    )
 
 
 def _get_or_404(picklist_id: int, org_id: int, db: Session) -> models.PicklistValue:
@@ -37,14 +49,124 @@ def _get_or_404(picklist_id: int, org_id: int, db: Session) -> models.PicklistVa
 # --- Reads (any authenticated user) ----------------------------------------
 @router.get("", response_model=list[PicklistFieldOut])
 def list_field_keys(
-    _current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
-    """The full registry of managed picklists, so admins can edit every one
-    (even those with no options yet for their org)."""
+    """The org's registry of managed picklists (DB-driven definitions), so admins
+    can edit every one — system and custom alike."""
     return [
-        PicklistFieldOut(field_key=key, label=label)
-        for key, label in PICKLIST_FIELDS.items()
+        PicklistFieldOut(
+            id=d.id,
+            field_key=d.system_name,
+            label=d.hebrew_display_name,
+            english_label=d.english_display_name,
+            is_system=d.is_system,
+        )
+        for d in _definitions_query(db, current_user.organization_id).all()
     ]
+
+
+# --- Definition management (admin) -----------------------------------------
+# Declared before the value routes so the static "definition" segment isn't
+# parsed as a {field_key} / {picklist_id}.
+@router.post("/definition", response_model=PicklistFieldOut, status_code=status.HTTP_201_CREATED)
+def create_definition(
+    payload: PicklistDefinitionCreate,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    org_id = admin.organization_id
+    dup = (
+        db.query(models.PicklistDefinition)
+        .filter(
+            models.PicklistDefinition.organization_id == org_id,
+            models.PicklistDefinition.system_name == payload.system_name,
+        )
+        .first()
+    )
+    if dup:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"picklist '{payload.system_name}' already exists",
+        )
+    last = _definitions_query(db, org_id).all()
+    row = models.PicklistDefinition(
+        organization_id=org_id,
+        system_name=payload.system_name,
+        hebrew_display_name=payload.hebrew_display_name,
+        english_display_name=payload.english_display_name,
+        is_system=False,  # admin-created lists are not system lists
+        sort_order=(last[-1].sort_order + 1) if last else 0,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return PicklistFieldOut(
+        id=row.id,
+        field_key=row.system_name,
+        label=row.hebrew_display_name,
+        english_label=row.english_display_name,
+        is_system=row.is_system,
+    )
+
+
+@router.put("/definition/{def_id}", response_model=PicklistFieldOut)
+def update_definition(
+    def_id: int,
+    payload: PicklistDefinitionUpdate,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    row = (
+        db.query(models.PicklistDefinition)
+        .filter(
+            models.PicklistDefinition.id == def_id,
+            models.PicklistDefinition.organization_id == admin.organization_id,
+        )
+        .first()
+    )
+    if not row:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Picklist definition not found")
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(row, field, value)
+    db.commit()
+    db.refresh(row)
+    return PicklistFieldOut(
+        id=row.id,
+        field_key=row.system_name,
+        label=row.hebrew_display_name,
+        english_label=row.english_display_name,
+        is_system=row.is_system,
+    )
+
+
+@router.delete("/definition/{def_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_definition(
+    def_id: int,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    row = (
+        db.query(models.PicklistDefinition)
+        .filter(
+            models.PicklistDefinition.id == def_id,
+            models.PicklistDefinition.organization_id == admin.organization_id,
+        )
+        .first()
+    )
+    if not row:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Picklist definition not found")
+    if row.is_system:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "System picklists cannot be deleted"
+        )
+    # Remove the definition and its values.
+    db.query(models.PicklistValue).filter(
+        models.PicklistValue.organization_id == admin.organization_id,
+        models.PicklistValue.field_key == row.system_name,
+    ).delete(synchronize_session=False)
+    db.delete(row)
+    db.commit()
 
 
 @router.get("/{field_key}", response_model=list[PicklistValueOut])

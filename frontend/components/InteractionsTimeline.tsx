@@ -3,11 +3,13 @@
 import { useEffect, useState, type FormEvent } from "react";
 
 import { apiFetch } from "@/lib/api";
+import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
 import type { Interaction } from "@/lib/types";
 import { PicklistSelect } from "./PicklistSelect";
 
 export function InteractionsTimeline({ contactId }: { contactId: number }) {
+  const { t } = useLocalization();
   const [items, setItems] = useState<Interaction[]>([]);
   const [category, setCategory] = useState<string | null>(null);
   const [note, setNote] = useState("");
@@ -58,12 +60,12 @@ export function InteractionsTimeline({ contactId }: { contactId: number }) {
             fieldKey="interaction.category"
             value={category}
             onChange={setCategory}
-            emptyLabel="קטגוריה…"
+            emptyLabel={t("int.category_placeholder", "קטגוריה…")}
           />
         </div>
         <input
           className="flex-1 rounded-md border border-gray-300 px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
-          placeholder="הוסף הערה…"
+          placeholder={t("int.add_note_placeholder", "הוסף הערה…")}
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
@@ -72,12 +74,12 @@ export function InteractionsTimeline({ contactId }: { contactId: number }) {
           disabled={busy || !category || !note.trim()}
           className="rounded-md bg-status-magenta text-white px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
         >
-          הוסף
+          {t("action.add", "הוסף")}
         </button>
       </form>
 
       {items.length === 0 ? (
-        <p className="text-sm text-gray-400">אין אינטראקציות עדיין.</p>
+        <p className="text-sm text-gray-400">{t("int.none", "אין אינטראקציות עדיין.")}</p>
       ) : (
         <ul className="space-y-2">
           {items.map((it) =>
@@ -112,13 +114,13 @@ export function InteractionsTimeline({ contactId }: { contactId: number }) {
                     onClick={() => setEditingId(it.id)}
                     className="text-xs text-gray-500 hover:underline"
                   >
-                    עריכה
+                    {t("action.edit", "עריכה")}
                   </button>
                   <button
                     onClick={() => remove(it.id)}
                     className="text-xs text-status-darkred hover:underline"
                   >
-                    מחק
+                    {t("action.delete", "מחק")}
                   </button>
                 </div>
               </li>
@@ -139,6 +141,7 @@ function EditRow({
   onDone: () => Promise<void>;
   onCancel: () => void;
 }) {
+  const { t } = useLocalization();
   const [category, setCategory] = useState<string | null>(item.category);
   const [note, setNote] = useState(item.note);
 
@@ -172,10 +175,10 @@ function EditRow({
           onClick={save}
           className="rounded-md bg-status-magenta text-white px-3 py-1 text-xs"
         >
-          שמור
+          {t("action.save", "שמור")}
         </button>
         <button onClick={onCancel} className="text-xs text-gray-500 hover:underline">
-          ביטול
+          {t("action.cancel", "ביטול")}
         </button>
       </div>
     </li>

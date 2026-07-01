@@ -1,11 +1,29 @@
 """Pydantic request/response schemas."""
+import re
 from datetime import datetime, time
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 Role = Literal["admin", "staff", "shliach"]
 ContactType = Literal["mekurav", "shliach"]
+
+# Phone: Israeli (+972 / 0 prefix) or North-American (NANP). Mirrors the frontend
+# check in lib/validation.ts so client and server agree.
+_PHONE_RE = re.compile(
+    r"^(\+972|0)(5\d{8}|[2-489]\d{7})$|^(\+?1)?[2-9]\d{2}[2-9]\d{6}$"
+)
+
+
+def _validate_phone(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return value
+    cleaned = re.sub(r"[\s\-().]", "", value)
+    if not _PHONE_RE.match(cleaned):
+        raise ValueError(
+            "Invalid phone number — expected an Israeli or US/Canada number"
+        )
+    return value
 
 
 class UserCreate(BaseModel):
@@ -23,12 +41,20 @@ class OrganizationOut(BaseModel):
     id: int
     guid: str
     name: str
+    logo_url: Optional[str] = None
     map_in_english: bool
+    default_lat: Optional[float] = None
+    default_lng: Optional[float] = None
+    default_zoom: int = 13
 
 
 class OrganizationUpdate(BaseModel):
     name: Optional[str] = None
+    logo_url: Optional[str] = None
     map_in_english: Optional[bool] = None
+    default_lat: Optional[float] = None
+    default_lng: Optional[float] = None
+    default_zoom: Optional[int] = None
 
 
 class UserOut(BaseModel):
@@ -51,6 +77,7 @@ class Token(BaseModel):
 
 class SignupRequest(BaseModel):
     organization_name: str
+    organization_logo_url: Optional[str] = None
     first_name: str
     last_name: str
     email: str
@@ -74,6 +101,7 @@ class GoogleSignupRequest(BaseModel):
 
     credential: str
     organization_name: str
+    organization_logo_url: Optional[str] = None
 
 
 class TokenData(BaseModel):
@@ -211,7 +239,8 @@ class ApartmentBase(BaseModel):
 
 
 class ApartmentCreate(ApartmentBase):
-    pass
+    # Optionally link an existing mekurav contact to the new apartment.
+    contact_id: Optional[int] = None
 
 
 class ApartmentUpdate(BaseModel):
@@ -225,6 +254,15 @@ class ApartmentOut(ApartmentBase):
 
     id: int
     guid: str
+
+
+class ApartmentListOut(ApartmentOut):
+    """Apartment enriched with its building/area context + a linked contact (if any)."""
+
+    building_name: Optional[str] = None
+    area_name: Optional[str] = None
+    contact_id: Optional[int] = None
+    contact_name: Optional[str] = None
 
 
 # --- Significant dates + reminders -----------------------------------------
@@ -294,6 +332,7 @@ class MekuravOut(MekuravData):
 class ShliachData(BaseModel):
     notes: Optional[str] = None
     apartment_ids: list[int] = []
+    area_ids: list[int] = []
 
 
 class ShliachOut(BaseModel):
@@ -304,6 +343,7 @@ class ShliachOut(BaseModel):
     user_id: Optional[int] = None
     notes: Optional[str] = None
     apartment_ids: list[int] = []
+    area_ids: list[int] = []
 
 
 # --- Contacts --------------------------------------------------------------
@@ -317,7 +357,6 @@ class ContactBase(BaseModel):
     address: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    area: Optional[str] = None
     pipeline_status: Optional[str] = None
     color_tag: Optional[str] = None
     priority_score: Optional[int] = None
@@ -326,6 +365,15 @@ class ContactBase(BaseModel):
 class ContactCreate(ContactBase):
     mekurav: Optional[MekuravData] = None
     shliach: Optional[ShliachData] = None
+    # Dynamic picklist selections: { system_name: value | None }.
+    picklist_values: dict[str, Optional[str]] = {}
+
+    # Validate on input only (not on ContactOut) so existing rows with legacy
+    # bad numbers still read back without erroring.
+    @field_validator("phone")
+    @classmethod
+    def _check_phone(cls, v: str) -> str:
+        return _validate_phone(v)
 
 
 class ContactUpdate(BaseModel):
@@ -337,12 +385,17 @@ class ContactUpdate(BaseModel):
     address: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    area: Optional[str] = None
     pipeline_status: Optional[str] = None
     color_tag: Optional[str] = None
     priority_score: Optional[int] = None
     mekurav: Optional[MekuravData] = None
     shliach: Optional[ShliachData] = None
+    picklist_values: Optional[dict[str, Optional[str]]] = None
+
+    @field_validator("phone")
+    @classmethod
+    def _check_phone(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_phone(v)
 
 
 class ContactOut(ContactBase):
@@ -359,6 +412,8 @@ class ContactDetailOut(ContactOut):
     mekurav: Optional[MekuravOut] = None
     shliach: Optional[ShliachOut] = None
     special_dates: list[SignificantDateOut] = []
+    # Dynamic picklist selections: { system_name: value }.
+    picklist_values: dict[str, str] = {}
 
 
 # --- Interactions ----------------------------------------------------------
@@ -389,6 +444,7 @@ class InteractionOut(BaseModel):
 class PicklistValueCreate(BaseModel):
     value: str
     hebrew_label: str
+    english_value: Optional[str] = None
     color_hint: Optional[str] = None
     sort_order: int = 0
     is_active: bool = True
@@ -398,6 +454,7 @@ class PicklistValueCreate(BaseModel):
 class PicklistValueUpdate(BaseModel):
     value: Optional[str] = None
     hebrew_label: Optional[str] = None
+    english_value: Optional[str] = None
     color_hint: Optional[str] = None
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
@@ -412,6 +469,7 @@ class PicklistValueOut(BaseModel):
     field_key: str
     value: str
     hebrew_label: str
+    english_value: Optional[str] = None
     color_hint: Optional[str] = None
     sort_order: int
     is_active: bool
@@ -423,5 +481,109 @@ class PicklistReorder(BaseModel):
 
 
 class PicklistFieldOut(BaseModel):
-    field_key: str
-    label: str
+    """A picklist *definition* (registry entry), DB-driven and bilingual."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    field_key: str  # == system_name
+    label: str  # hebrew_display_name
+    english_label: Optional[str] = None
+    is_system: bool = True
+
+
+class PicklistDefinitionCreate(BaseModel):
+    system_name: str
+    hebrew_display_name: str
+    english_display_name: Optional[str] = None
+
+
+class PicklistDefinitionUpdate(BaseModel):
+    hebrew_display_name: Optional[str] = None
+    english_display_name: Optional[str] = None
+
+
+# --- Localization (UI strings) ---------------------------------------------
+class LocalizationOut(BaseModel):
+    id: int
+    entity_type: str
+    technical_name: str
+    hebrew_label: str
+    english_label: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LocalizationUpdate(BaseModel):
+    hebrew_label: Optional[str] = None
+    english_label: Optional[str] = None
+
+
+class LocalizationCreate(BaseModel):
+    entity_type: str = "custom"
+    technical_name: str
+    hebrew_label: str
+    english_label: Optional[str] = None
+
+
+# --- Visit history ---------------------------------------------------------
+class VisitCreate(BaseModel):
+    contact_id: Optional[int] = None
+    visit_date: datetime
+    visit_type: Optional[str] = None
+    location: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class VisitUpdate(BaseModel):
+    contact_id: Optional[int] = None
+    visit_date: Optional[datetime] = None
+    visit_type: Optional[str] = None
+    location: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class VisitOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    guid: str
+    contact_id: Optional[int] = None
+    contact_name: Optional[str] = None
+    visit_date: datetime
+    visit_type: Optional[str] = None
+    location: Optional[str] = None
+    notes: Optional[str] = None
+
+
+# --- Donations -------------------------------------------------------------
+class DonationCreate(BaseModel):
+    contact_id: Optional[int] = None
+    donation_date: datetime
+    amount: Optional[float] = None
+    is_ongoing: bool = False
+    number_of_payments: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class DonationUpdate(BaseModel):
+    contact_id: Optional[int] = None
+    donation_date: Optional[datetime] = None
+    amount: Optional[float] = None
+    is_ongoing: Optional[bool] = None
+    number_of_payments: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class DonationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    guid: str
+    contact_id: Optional[int] = None
+    contact_name: Optional[str] = None
+    donation_date: datetime
+    amount: Optional[float] = None
+    is_ongoing: bool
+    number_of_payments: Optional[int] = None
+    notes: Optional[str] = None

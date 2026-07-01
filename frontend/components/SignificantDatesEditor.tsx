@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
+import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
 import type { Reminder, SignificantDate } from "@/lib/types";
 import { DatePicker } from "./DatePicker";
@@ -11,12 +12,12 @@ import { PicklistSelect } from "./PicklistSelect";
 const inputClass =
   "w-full rounded-md border border-gray-300 px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
-// Android-style "remind me …" presets (minutes before the date).
-const OFFSET_PRESETS: { value: number; label: string }[] = [
-  { value: 0, label: "בזמן האירוע" },
-  { value: 60, label: "שעה לפני" },
-  { value: 1440, label: "יום לפני" },
-  { value: 10080, label: "שבוע לפני" },
+// Android-style "remind me …" presets (minutes before the date). Label via t().
+const OFFSET_PRESETS: { value: number; key: string; he: string }[] = [
+  { value: 0, key: "sd.offset_at", he: "בזמן האירוע" },
+  { value: 60, key: "sd.offset_hour", he: "שעה לפני" },
+  { value: 1440, key: "sd.offset_day", he: "יום לפני" },
+  { value: 10080, key: "sd.offset_week", he: "שבוע לפני" },
 ];
 
 interface DraftReminder {
@@ -49,11 +50,11 @@ function toDraft(sd?: SignificantDate): Draft {
 
 /** Live editor for a mekurav contact's significant dates + reminders. */
 export function SignificantDatesEditor({ contactId }: { contactId: number }) {
+  const { t } = useLocalization();
   const [dates, setDates] = useState<SignificantDate[]>([]);
   const [editing, setEditing] = useState<{ id: number | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const types = usePicklist("significant_date.type");
-  const titles = usePicklist("significant_date.title");
 
   async function reload() {
     setDates(
@@ -69,7 +70,7 @@ export function SignificantDatesEditor({ contactId }: { contactId: number }) {
   }, [contactId]);
 
   async function remove(id: number) {
-    if (!confirm("למחוק תאריך זה?")) return;
+    if (!confirm(t("msg.delete_date_confirm", "למחוק תאריך זה?"))) return;
     await apiFetch(`/api/contacts/${contactId}/special-dates/${id}`, {
       method: "DELETE",
     });
@@ -79,7 +80,7 @@ export function SignificantDatesEditor({ contactId }: { contactId: number }) {
   const editingDate =
     editing && editing.id != null ? dates.find((d) => d.id === editing.id) : undefined;
 
-  if (loading) return <p className="text-sm text-gray-400">טוען…</p>;
+  if (loading) return <p className="text-sm text-gray-400">{t("action.loading", "טוען…")}</p>;
 
   return (
     <div className="space-y-3">
@@ -93,14 +94,14 @@ export function SignificantDatesEditor({ contactId }: { contactId: number }) {
           </span>
           <span className="text-sm text-gray-600">
             {types.labelFor(d.special_date_type)}
-            {d.special_date_title ? ` · ${titles.labelFor(d.special_date_title)}` : ""}
+            {d.special_date_title ? ` · ${d.special_date_title}` : ""}
           </span>
           {d.hebrew_date && (
             <span className="text-sm text-gray-400">({d.hebrew_date})</span>
           )}
           {d.is_set_reminder && (
             <span className="rounded bg-status-orange/10 text-status-orange text-xs px-2 py-0.5">
-              {d.reminders.length} תזכורות
+              {d.reminders.length} {t("sd.reminders_count", "תזכורות")}
             </span>
           )}
           <div className="flex items-center gap-2 ms-auto">
@@ -108,19 +109,19 @@ export function SignificantDatesEditor({ contactId }: { contactId: number }) {
               onClick={() => setEditing({ id: d.id })}
               className="text-sm text-status-magenta hover:underline"
             >
-              ערוך
+              {t("action.edit", "ערוך")}
             </button>
             <button
               onClick={() => remove(d.id)}
               className="text-sm text-status-darkred hover:underline"
             >
-              מחק
+              {t("action.delete", "מחק")}
             </button>
           </div>
         </div>
       ))}
       {dates.length === 0 && !editing && (
-        <p className="text-sm text-gray-400">אין תאריכים חשובים.</p>
+        <p className="text-sm text-gray-400">{t("sd.none", "אין תאריכים חשובים.")}</p>
       )}
 
       {editing ? (
@@ -150,7 +151,7 @@ export function SignificantDatesEditor({ contactId }: { contactId: number }) {
           onClick={() => setEditing({ id: null })}
           className="text-sm text-status-magenta hover:underline"
         >
-          + הוסף תאריך חשוב
+          + {t("sd.add_date", "הוסף תאריך חשוב")}
         </button>
       )}
     </div>
@@ -166,6 +167,7 @@ function DateForm({
   onSave: (payload: Record<string, unknown>) => Promise<void>;
   onCancel: () => void;
 }) {
+  const { t } = useLocalization();
   const [draft, setDraft] = useState<Draft>(initial);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -191,7 +193,7 @@ function DateForm({
   async function save() {
     setError("");
     if (!draft.special_date) {
-      setError("יש לבחור תאריך");
+      setError(t("sd.pick_date", "יש לבחור תאריך"));
       return;
     }
     setBusy(true);
@@ -211,7 +213,7 @@ function DateForm({
           : [],
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "שמירה נכשלה");
+      setError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
     } finally {
       setBusy(false);
     }
@@ -221,7 +223,7 @@ function DateForm({
     <div className="rounded-md border border-gray-200 p-3 space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block space-y-1">
-          <span className="block text-sm font-medium">תאריך חשוב</span>
+          <span className="block text-sm font-medium">{t("significant_dates.special_date", "תאריך חשוב")}</span>
           <DatePicker
             value={draft.special_date}
             onChange={(v) => set("special_date", v)}
@@ -230,7 +232,7 @@ function DateForm({
           />
         </label>
         <label className="block space-y-1">
-          <span className="block text-sm font-medium">תאריך עברי</span>
+          <span className="block text-sm font-medium">{t("significant_dates.hebrew_date", "תאריך עברי")}</span>
           <input
             className={inputClass}
             value={draft.hebrew_date}
@@ -238,7 +240,7 @@ function DateForm({
           />
         </label>
         <label className="block space-y-1">
-          <span className="block text-sm font-medium">סוג תאריך</span>
+          <span className="block text-sm font-medium">{t("significant_dates.special_date_type", "סוג תאריך")}</span>
           <PicklistSelect
             fieldKey="significant_date.type"
             value={draft.special_date_type}
@@ -246,11 +248,11 @@ function DateForm({
           />
         </label>
         <label className="block space-y-1">
-          <span className="block text-sm font-medium">כותרת</span>
-          <PicklistSelect
-            fieldKey="significant_date.title"
-            value={draft.special_date_title}
-            onChange={(v) => set("special_date_title", v)}
+          <span className="block text-sm font-medium">{t("significant_dates.special_date_title", "כותרת")}</span>
+          <input
+            className={inputClass}
+            value={draft.special_date_title ?? ""}
+            onChange={(e) => set("special_date_title", e.target.value || null)}
           />
         </label>
       </div>
@@ -261,7 +263,7 @@ function DateForm({
           checked={draft.is_set_reminder}
           onChange={(e) => toggleReminder(e.target.checked)}
         />
-        שלח תזכורת
+        {t("sd.send_reminder", "שלח תזכורת")}
       </label>
 
       {draft.is_set_reminder && (
@@ -275,7 +277,7 @@ function DateForm({
               >
                 {OFFSET_PRESETS.map((p) => (
                   <option key={p.value} value={p.value}>
-                    {p.label}
+                    {t(p.key, p.he)}
                   </option>
                 ))}
               </select>
@@ -286,7 +288,7 @@ function DateForm({
                 value={r.remind_at_time}
                 onChange={(e) => setReminder(i, { remind_at_time: e.target.value })}
               />
-              <span className="text-xs text-gray-400">דוא״ל</span>
+              <span className="text-xs text-gray-400">{t("sd.email_channel", "אימייל")}</span>
               <button
                 type="button"
                 onClick={() =>
@@ -297,7 +299,7 @@ function DateForm({
                 }
                 className="text-sm text-status-darkred hover:underline"
               >
-                הסר
+                {t("action.remove", "הסר")}
               </button>
             </div>
           ))}
@@ -311,7 +313,7 @@ function DateForm({
             }
             className="text-sm text-status-magenta hover:underline"
           >
-            + הוסף תזכורת
+            + {t("sd.add_reminder", "הוסף תזכורת")}
           </button>
         </div>
       )}
@@ -324,14 +326,14 @@ function DateForm({
           disabled={busy}
           className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90 disabled:opacity-50"
         >
-          {busy ? "שומר…" : "שמור"}
+          {busy ? t("action.saving", "שומר…") : t("action.save", "שמור")}
         </button>
         <button
           type="button"
           onClick={onCancel}
           className="text-sm text-gray-500 hover:underline"
         >
-          ביטול
+          {t("action.cancel", "ביטול")}
         </button>
       </div>
     </div>

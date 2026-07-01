@@ -18,13 +18,25 @@ def test_all_tables_created():
         "picklist_values",
     }
     assert expected.issubset(tables)
-    assert "regions" not in tables  # replaced by the contact.area picklist
+    assert "regions" not in tables  # replaced by the areas table
 
 
 def test_contact_has_new_fields():
-    cols = {c["name"] for c in inspect(engine).get_columns("contacts")}
-    assert {"area", "first_visit", "potential_next_step", "background", "phone"}.issubset(cols)
-    assert "region_id" not in cols
+    # Core CRM fields stay on `contacts`; kiruv fields moved to `contact_mekurav`
+    # in the fixes2 split.
+    Base.metadata.create_all(bind=engine)
+    insp = inspect(engine)
+    contact_cols = {c["name"] for c in insp.get_columns("contacts")}
+    assert {"phone", "email", "contact_type"}.issubset(contact_cols)
+    assert "region_id" not in contact_cols
+
+    mekurav_cols = {c["name"] for c in insp.get_columns("contact_mekurav")}
+    assert {
+        "first_visit",
+        "potential_next_step",
+        "background",
+        "rebbe_connection",
+    }.issubset(mekurav_cols)
 
 
 def test_every_table_has_guid():

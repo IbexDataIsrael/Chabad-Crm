@@ -7,6 +7,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { AreaPolygonMap } from "@/components/AreaPolygonMap";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useLocalization } from "@/lib/localization";
 import type { Area } from "@/lib/types";
 
 const inputClass =
@@ -14,6 +15,7 @@ const inputClass =
 
 export default function EditAreaPage() {
   const { isAdmin, loading } = useAuth();
+  const { t } = useLocalization();
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const areaId = params.id;
@@ -41,7 +43,7 @@ export default function EditAreaPage() {
         setLoaded(true);
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : "טעינת האזור נכשלה");
+        setError(err instanceof Error ? err.message : t("msg.load_failed", "טעינה נכשלה"));
         setLoaded(true);
       });
   }, [areaId, loading, isAdmin]);
@@ -61,29 +63,29 @@ export default function EditAreaPage() {
       });
       router.push("/dashboard/areas");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "שמירה נכשלה");
+      setError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
     } finally {
       setBusy(false);
     }
   }
 
-  if (loading || !loaded) return <p className="text-gray-400">טוען…</p>;
+  if (loading || !loaded) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
 
   return (
     <div className="space-y-5 max-w-3xl">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">עריכת אזור</h1>
+        <h1 className="text-2xl font-bold">{t("page.edit_area", "עריכת אזור")}</h1>
         <Link
           href="/dashboard/areas"
           className="text-sm text-status-magenta hover:underline"
         >
-          ← חזרה לאזורים
+          {t("page.back_to_areas", "← חזרה לאזורים")}
         </Link>
       </div>
 
       <form onSubmit={save} className="bg-white rounded-xl shadow-sm p-4 space-y-3">
         <label className="block space-y-1">
-          <span className="block text-sm font-medium">כותרת</span>
+          <span className="block text-sm font-medium">{t("areas.area_name", "כותרת")}</span>
           <input
             className={inputClass}
             value={name}
@@ -92,7 +94,7 @@ export default function EditAreaPage() {
           />
         </label>
         <label className="block space-y-1">
-          <span className="block text-sm font-medium">הערות</span>
+          <span className="block text-sm font-medium">{t("areas.area_notes", "הערות")}</span>
           <textarea
             className={inputClass}
             rows={2}
@@ -101,7 +103,7 @@ export default function EditAreaPage() {
           />
         </label>
         <div className="space-y-1">
-          <span className="block text-sm font-medium">תחום פוליגון</span>
+          <span className="block text-sm font-medium">{t("areas.area_polygon", "תחום פוליגון")}</span>
           <AreaPolygonMap value={polygon} onChange={setPolygon} />
         </div>
         {error && <p className="text-sm text-status-darkred">{error}</p>}
@@ -111,13 +113,13 @@ export default function EditAreaPage() {
             disabled={busy}
             className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
-            {busy ? "שומר…" : "שמור"}
+            {busy ? t("action.saving", "שומר…") : t("action.save", "שמור")}
           </button>
           <Link
             href="/dashboard/areas"
             className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
           >
-            ביטול
+            {t("action.cancel", "ביטול")}
           </Link>
         </div>
       </form>

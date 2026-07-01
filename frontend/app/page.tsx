@@ -6,10 +6,13 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { ApiError, getToken, resendVerification } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useLocalization } from "@/lib/localization";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
+import { LanguageToggle } from "@/components/LanguageToggle";
 
 export default function LoginPage() {
   const { signIn, signInWithGoogle, user } = useAuth();
+  const { t } = useLocalization();
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -34,9 +37,9 @@ export default function LoginPage() {
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
         setUnverified(true);
-        setError("עליך לאמת את כתובת האימייל לפני ההתחברות.");
+        setError(t("auth.verify_email_first"));
       } else {
-        setError(err instanceof Error ? err.message : "התחברות נכשלה");
+        setError(err instanceof Error ? err.message : t("auth.login_failed"));
       }
     } finally {
       setBusy(false);
@@ -51,7 +54,7 @@ export default function LoginPage() {
       await signInWithGoogle(credential);
       router.replace("/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "התחברות עם Google נכשלה");
+      setError(err instanceof Error ? err.message : t("auth.google_failed"));
     } finally {
       setBusy(false);
     }
@@ -63,14 +66,17 @@ export default function LoginPage() {
         onSubmit={onSubmit}
         className="w-full max-w-sm bg-white rounded-xl shadow-md p-8 space-y-5"
       >
+        <div className="flex justify-end">
+          <LanguageToggle />
+        </div>
         <div className="text-center">
-          <h1 className="text-2xl font-bold">מיני CRM</h1>
-          <p className="mt-1 text-sm text-gray-500">התחברות למערכת</p>
+          <h1 className="text-2xl font-bold">{t("auth.app_title", "מיני CRM")}</h1>
+          <p className="mt-1 text-sm text-gray-500">{t("auth.login_subtitle")}</p>
         </div>
 
         <div className="space-y-1">
           <label htmlFor="username" className="block text-sm font-medium">
-            שם משתמש
+            {t("auth.username")}
           </label>
           <input
             id="username"
@@ -85,7 +91,7 @@ export default function LoginPage() {
 
         <div className="space-y-1">
           <label htmlFor="password" className="block text-sm font-medium">
-            סיסמה
+            {t("auth.password")}
           </label>
           <input
             id="password"
@@ -109,7 +115,7 @@ export default function LoginPage() {
             <input
               type="email"
               dir="ltr"
-              placeholder="האימייל שלך"
+              placeholder={t("auth.your_email")}
               value={resendEmail}
               onChange={(e) => setResendEmail(e.target.value)}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
@@ -119,7 +125,7 @@ export default function LoginPage() {
               onClick={() => resendEmail && resendVerification(resendEmail)}
               className="w-full rounded-md border border-status-magenta text-status-magenta py-2 text-sm hover:bg-status-magenta/5"
             >
-              שליחת קישור אימות מחדש
+              {t("auth.resend_verification")}
             </button>
           </div>
         )}
@@ -129,21 +135,21 @@ export default function LoginPage() {
           disabled={busy}
           className="w-full rounded-md bg-status-magenta text-white py-2 font-medium hover:opacity-90 disabled:opacity-50"
         >
-          {busy ? "מתחבר…" : "התחבר"}
+          {busy ? t("auth.logging_in") : t("auth.login")}
         </button>
 
         <div className="flex items-center gap-3 text-xs text-gray-400">
           <span className="h-px flex-1 bg-gray-200" />
-          או
+          {t("common.or")}
           <span className="h-px flex-1 bg-gray-200" />
         </div>
 
         <GoogleSignInButton onCredential={onGoogleCredential} onError={setError} />
 
         <p className="text-center text-sm text-gray-500">
-          אין לך חשבון?{" "}
+          {t("auth.no_account")}{" "}
           <Link href="/signup" className="text-status-magenta hover:underline">
-            פתיחת חשבון ארגון
+            {t("auth.open_org_account")}
           </Link>
         </p>
       </form>

@@ -1,0 +1,1 @@
+http://localhost:3001/dashboard/contacts should have separate displays for shluchim contacts and mekurav contacts 

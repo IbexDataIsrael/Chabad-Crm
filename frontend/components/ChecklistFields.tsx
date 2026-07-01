@@ -38,7 +38,7 @@ export function ChecklistFields({
             </button>
             <input
               className="flex-1 rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
-              placeholder="הערה…"
+              placeholder={t("field.note_placeholder", "הערה…")}
               value={(value[note] as string | null) ?? ""}
               onChange={(e) =>
                 setField(note, (e.target.value || null) as Checklist[typeof note])

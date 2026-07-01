@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 
 import { googleClientId, loadGoogleIdentity } from "@/lib/google";
+import { useLocalization } from "@/lib/localization";
 
 /**
  * Renders the official "Sign in with Google" button (GIS token flow). On success
@@ -16,6 +17,7 @@ export function GoogleSignInButton({
   onCredential: (credential: string) => void;
   onError?: (message: string) => void;
 }) {
+  const { t } = useLocalization();
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,7 +43,7 @@ export function GoogleSignInButton({
           locale: "he",
         });
       })
-      .catch(() => onError?.("טעינת ההתחברות עם Google נכשלה"));
+      .catch(() => onError?.(t("auth.google_load_failed", "טעינת ההתחברות עם Google נכשלה")));
     return () => {
       cancelled = true;
     };

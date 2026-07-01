@@ -8,9 +8,14 @@ import { ChecklistFields } from "@/components/ChecklistFields";
 import { ContactForm, type ContactFormValues } from "@/components/ContactForm";
 import { ContactView } from "@/components/ContactView";
 import { CustomFieldsEditor } from "@/components/CustomFieldsEditor";
+import { DonationsEditor } from "@/components/DonationsEditor";
 import { InteractionsTimeline } from "@/components/InteractionsTimeline";
 import { SignificantDatesEditor } from "@/components/SignificantDatesEditor";
+import { VisitHistoryEditor } from "@/components/VisitHistoryEditor";
 import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { useLocalization } from "@/lib/localization";
+import { useToast } from "@/lib/toast";
 import {
   contactFullName,
   emptyChecklist,
@@ -24,6 +29,9 @@ export default function ContactDetailPage() {
   const params = useParams<{ id: string }>();
   const contactId = Number(params.id);
   const router = useRouter();
+  const { t } = useLocalization();
+  const { isAdmin } = useAuth();
+  const { success } = useToast();
 
   const [contact, setContact] = useState<Contact | null>(null);
   const [users, setUsers] = useState<UserSummary[]>([]);
@@ -80,22 +88,26 @@ export default function ContactDetailPage() {
     setChecklist(fresh.checklist ?? emptyChecklist(fresh.id));
     await loadCustomFields();
     setEditing(false);
+    success(t("msg.saved", "נשמר בהצלחה"));
   }
 
   async function remove() {
-    if (!confirm("למחוק את איש הקשר? פעולה זו אינה הפיכה.")) return;
+    if (!confirm(t("msg.delete_contact_confirm", "למחוק את איש הקשר? פעולה זו אינה הפיכה.")))
+      return;
     await apiFetch(`/api/contacts/${contactId}`, { method: "DELETE" });
+    success(t("msg.deleted", "נמחק"));
     router.push("/dashboard/contacts");
   }
 
-  if (notFound) return <p className="text-gray-500">איש הקשר לא נמצא.</p>;
-  if (!contact) return <p className="text-gray-400">טוען…</p>;
+  if (notFound)
+    return <p className="text-gray-500">{t("page.contact_not_found", "איש הקשר לא נמצא.")}</p>;
+  if (!contact) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Link href="/dashboard/contacts" className="text-sm text-gray-500 hover:underline">
-          ← חזרה לאנשי קשר
+          {t("page.back_to_contacts", "← חזרה לאנשי קשר")}
         </Link>
         <div className="flex items-center gap-2">
           {editing ? (
@@ -107,21 +119,21 @@ export default function ContactDetailPage() {
               }}
               className="text-sm border border-gray-300 rounded-md px-3 py-1 hover:bg-gray-50"
             >
-              ביטול
+              {t("action.cancel", "ביטול")}
             </button>
           ) : (
             <button
               onClick={() => setEditing(true)}
               className="text-sm bg-status-magenta text-white rounded-md px-4 py-1 hover:opacity-90"
             >
-              עריכה
+              {t("action.edit", "עריכה")}
             </button>
           )}
           <button
             onClick={remove}
             className="text-sm text-status-darkred border border-status-darkred/30 rounded-md px-3 py-1 hover:bg-red-50"
           >
-            מחק
+            {t("action.delete", "מחק")}
           </button>
         </div>
       </div>
@@ -129,23 +141,23 @@ export default function ContactDetailPage() {
       <h1 className="text-2xl font-bold">{contactFullName(contact)}</h1>
 
       <section className="bg-white rounded-xl shadow-sm p-6">
-        <h2 className="font-semibold mb-4">פרטי איש קשר</h2>
+        <h2 className="font-semibold mb-4">{t("page.contact_details", "פרטי איש קשר")}</h2>
         {editing ? (
           <ContactForm
             initial={contact}
             users={users}
             onSubmit={save}
-            submitLabel="שמור שינויים"
+            submitLabel={t("action.save_changes", "שמור שינויים")}
             extra={
               contact.contact_type === "mekurav" ? (
                 <div className="space-y-6 border-t border-gray-100 pt-4">
                   <section>
-                    <h3 className="text-sm font-semibold mb-3">מצוות קהילה</h3>
+                    <h3 className="text-sm font-semibold mb-3">{t("community_checklists", "מצוות קהילה")}</h3>
                     <ChecklistFields value={checklist} onChange={setChecklist} />
                   </section>
                   {customFields.length > 0 && (
                     <section>
-                      <h3 className="text-sm font-semibold mb-3">שדות נוספים</h3>
+                      <h3 className="text-sm font-semibold mb-3">{t("page.extra_fields", "שדות נוספים")}</h3>
                       <CustomFieldsEditor items={customFields} onChange={setCustomFields} />
                     </section>
                   )}
@@ -160,13 +172,27 @@ export default function ContactDetailPage() {
 
       {contact.contact_type === "mekurav" && (
         <section className="bg-white rounded-xl shadow-sm p-6">
-          <h2 className="font-semibold mb-4">תאריכים חשובים</h2>
+          <h2 className="font-semibold mb-4">{t("significant_dates", "תאריכים חשובים")}</h2>
           <SignificantDatesEditor contactId={contact.id} />
         </section>
       )}
 
+      {contact.contact_type === "mekurav" && (
+        <section className="bg-white rounded-xl shadow-sm p-6">
+          <h2 className="font-semibold mb-4">{t("visit.history", "היסטורית ביקורים")}</h2>
+          <VisitHistoryEditor contactId={contact.id} />
+        </section>
+      )}
+
+      {isAdmin && (
+        <section className="bg-white rounded-xl shadow-sm p-6">
+          <h2 className="font-semibold mb-4">{t("donation.history", "היסטורית תרומות")}</h2>
+          <DonationsEditor contactId={contact.id} />
+        </section>
+      )}
+
       <section className="bg-white rounded-xl shadow-sm p-6">
-        <h2 className="font-semibold mb-4">אינטראקציות</h2>
+        <h2 className="font-semibold mb-4">{t("interactions", "אינטראקציות")}</h2>
         <InteractionsTimeline contactId={contact.id} />
       </section>
     </div>

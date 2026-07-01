@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useAuth } from "@/lib/auth";
+import { useLocalization } from "@/lib/localization";
 import { loadGoogleMaps, mapsKey } from "@/lib/maps";
 
 export interface PlaceResult {
@@ -36,6 +37,7 @@ export function AddressAutocomplete({
   className?: string;
 }) {
   const { user } = useAuth();
+  const { t } = useLocalization();
   const language = user?.organization?.map_in_english ? "en" : "he";
   const region = user?.organization?.map_in_english ? "us" : "il";
 
@@ -124,7 +126,7 @@ export function AddressAutocomplete({
         onChange={(e) => handleInput(e.target.value)}
         onFocus={() => suggestions.length > 0 && setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder={mapsKey ? "התחל להקליד כתובת…" : "כתובת"}
+        placeholder={mapsKey ? t("addr.start_typing", "התחל להקליד כתובת…") : t("contacts.address", "כתובת")}
         autoComplete="off"
       />
       {open && suggestions.length > 0 && (

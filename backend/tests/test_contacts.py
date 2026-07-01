@@ -45,11 +45,8 @@ def test_contact_crud_and_checklist_autocreated(client, auth_headers):
 
 
 def test_contact_list_filters(client, auth_headers):
-    _make_contact(client, auth_headers, name="א", area="center", pipeline_status="קולח")
+    _make_contact(client, auth_headers, name="א", pipeline_status="קולח")
     _make_contact(client, auth_headers, name="ב", pipeline_status="שלח")
-
-    by_area = client.get("/api/contacts?area=center", headers=auth_headers).json()
-    assert len(by_area) == 1 and by_area[0]["name"] == "א"
 
     by_status = client.get("/api/contacts?pipeline_status=שלח", headers=auth_headers).json()
     assert len(by_status) == 1 and by_status[0]["name"] == "ב"
@@ -61,14 +58,17 @@ def test_contact_invalid_assignee_fk(client, auth_headers):
 
 
 def test_contact_new_fields_roundtrip(client, auth_headers):
+    # Kiruv fields live on the nested `mekurav` object (fixes2 contact split).
     cid = _make_contact(
         client,
         auth_headers,
         last_name="ריכמן",
-        first_visit="2026-01-15T10:00:00",
-        rebbe_connection="קשר חזק",
-        recommendations="ממליץ",
-        background="רקע כללי",
+        mekurav={
+            "first_visit": "2026-01-15T10:00:00",
+            "rebbe_connection": "קשר חזק",
+            "recommendations": "ממליץ",
+            "background": "רקע כללי",
+        },
         address="דיזנגוף 100, תל אביב",
         latitude=32.0809,
         longitude=34.7738,
@@ -77,10 +77,11 @@ def test_contact_new_fields_roundtrip(client, auth_headers):
     assert body["last_name"] == "ריכמן"
     assert body["latitude"] == 32.0809
     assert body["longitude"] == 34.7738
-    assert body["rebbe_connection"] == "קשר חזק"
-    assert body["recommendations"] == "ממליץ"
-    assert body["background"] == "רקע כללי"
-    assert body["first_visit"].startswith("2026-01-15")
+    mk = body["mekurav"]
+    assert mk["rebbe_connection"] == "קשר חזק"
+    assert mk["recommendations"] == "ממליץ"
+    assert mk["background"] == "רקע כללי"
+    assert mk["first_visit"].startswith("2026-01-15")
 
 
 def test_checklist_update(client, auth_headers):
@@ -156,3 +157,59 @@ def test_delete_contact_cascades_interactions(client, auth_headers):
     client.delete(f"/api/contacts/{cid}", headers=auth_headers)
     # Interactions for the deleted contact are gone (cascade).
     assert client.get(f"/api/interactions?contact_id={cid}", headers=auth_headers).json() == []
+
+
+def test_delete_contact_cascades_visits_and_picklists_but_keeps_donations(
+    client, auth_headers, db_session
+):
+    """Deleting a contact removes its visits + picklist values (contact-specific)
+    but preserves donations (financial records), nulling their contact link.
+
+    Regression for the SQLite->Postgres move: these FKs had no cascade, so under
+    enforced foreign keys a contact delete would have failed / orphaned rows.
+    """
+    import datetime
+
+    from app import models
+
+    cid = _make_contact(client, auth_headers).json()["id"]
+    org_id = db_session.get(models.Contact, cid).organization_id
+
+    pl = models.PicklistDefinition(
+        organization_id=org_id, system_name="affiliation", hebrew_display_name="זרם"
+    )
+    db_session.add(pl)
+    db_session.flush()
+    db_session.add_all(
+        [
+            models.VisitHistory(
+                organization_id=org_id,
+                contact_id=cid,
+                visit_date=datetime.datetime.utcnow(),
+            ),
+            models.ContactPicklistValue(
+                organization_id=org_id, contact_id=cid, picklist_id=pl.id, value="haredi"
+            ),
+            models.Donation(
+                organization_id=org_id,
+                contact_id=cid,
+                donation_date=datetime.datetime.utcnow(),
+                amount=100.0,
+            ),
+        ]
+    )
+    db_session.commit()
+
+    assert client.delete(f"/api/contacts/{cid}", headers=auth_headers).status_code == 204
+
+    db_session.expire_all()
+    assert db_session.get(models.Contact, cid) is None
+    assert db_session.query(models.VisitHistory).filter_by(contact_id=cid).count() == 0
+    assert (
+        db_session.query(models.ContactPicklistValue).filter_by(contact_id=cid).count()
+        == 0
+    )
+    # Donation survives the contact, with its link nulled out.
+    donations = db_session.query(models.Donation).all()
+    assert len(donations) == 1
+    assert donations[0].contact_id is None

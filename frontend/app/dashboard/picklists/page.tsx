@@ -4,92 +4,244 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useLocalization } from "@/lib/localization";
 import type { PicklistField, PicklistValue } from "@/lib/types";
 
 export default function PicklistsPage() {
   const { isAdmin, loading } = useAuth();
+  const { t, lang } = useLocalization();
   const [fields, setFields] = useState<PicklistField[]>([]);
-  const [selected, setSelected] = useState<string>("");
-  const [options, setOptions] = useState<PicklistValue[]>([]);
+  const [optionsByKey, setOptionsByKey] = useState<Record<string, PicklistValue[]>>({});
+  const [loaded, setLoaded] = useState(false);
+
+  // Load every list + all its options, so the page shows all picklists at once.
+  async function loadAll() {
+    const list = await apiFetch<PicklistField[]>("/api/picklists");
+    const entries = await Promise.all(
+      list.map(
+        async (f) =>
+          [
+            f.field_key,
+            await apiFetch<PicklistValue[]>(
+              `/api/picklists/${f.field_key}?include_inactive=true`,
+            ),
+          ] as const,
+      ),
+    );
+    setFields(list);
+    setOptionsByKey(Object.fromEntries(entries));
+  }
 
   useEffect(() => {
-    apiFetch<PicklistField[]>("/api/picklists")
-      .then((list) => {
-        setFields(list);
-        if (list.length) setSelected((s) => s || list[0].field_key);
-      })
-      .catch(() => {});
+    loadAll()
+      .catch(() => {})
+      .finally(() => setLoaded(true));
   }, []);
 
-  async function loadOptions(key: string) {
-    if (!key) return;
-    setOptions(
-      await apiFetch<PicklistValue[]>(`/api/picklists/${key}?include_inactive=true`),
+  // A definition's display name in the current language.
+  const defLabel = (f: PicklistField) =>
+    (lang === "en" ? f.english_label || f.label : f.label) || f.field_key;
+
+  if (loading || !loaded) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (!isAdmin) {
+    return (
+      <p className="text-status-darkred">
+        {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
+      </p>
     );
   }
 
-  useEffect(() => {
-    loadOptions(selected).catch(() => {});
-  }, [selected]);
-
-  if (loading) return <p className="text-gray-400">טוען…</p>;
-  if (!isAdmin) {
-    return <p className="text-status-darkred">אין לך הרשאה לעמוד זה (מנהלים בלבד).</p>;
-  }
-
-  const reload = () => loadOptions(selected);
-
-  async function reorder(index: number, dir: -1 | 1) {
-    const ids = options.map((o) => o.id);
+  async function reorder(fieldKey: string, index: number, dir: -1 | 1) {
+    const ids = (optionsByKey[fieldKey] ?? []).map((o) => o.id);
     const target = index + dir;
     if (target < 0 || target >= ids.length) return;
     [ids[index], ids[target]] = [ids[target], ids[index]];
-    await apiFetch(`/api/picklists/${selected}/reorder`, {
+    await apiFetch(`/api/picklists/${fieldKey}/reorder`, {
       method: "PUT",
       body: JSON.stringify({ ordered_ids: ids }),
     });
-    await reload();
+    await loadAll();
   }
 
   return (
-    <div className="space-y-5">
-      <h1 className="text-2xl font-bold">רשימות בחירה</h1>
-
-      <div className="flex flex-wrap gap-2">
-        {fields.map((f) => (
-          <button
-            key={f.field_key}
-            onClick={() => setSelected(f.field_key)}
-            className={`rounded-md px-3 py-1.5 text-sm border ${
-              selected === f.field_key
-                ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
-                : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold">{t("pl.editor_title", "עריכת תיבת בחירה")}</h1>
+        <p className="mt-1 text-sm text-gray-500">
+          {t("pl.editor_intro", "ערוך תוויות בעברית ובאנגלית, סדר, צבע, והוסף רשימות חדשות.")}
+        </p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
-        {options.map((opt, i) => (
-          <OptionRow
-            key={opt.id}
-            option={opt}
-            onSaved={reload}
-            onMoveUp={() => reorder(i, -1)}
-            onMoveDown={() => reorder(i, 1)}
-            isFirst={i === 0}
-            isLast={i === options.length - 1}
-          />
-        ))}
-        {options.length === 0 && (
-          <p className="px-4 py-6 text-center text-gray-400">אין ערכים.</p>
-        )}
-      </div>
+      {fields.map((f) => {
+        const options = optionsByKey[f.field_key] ?? [];
+        return (
+          <section key={f.field_key} className="space-y-2">
+            <h2 className="text-lg font-semibold">{defLabel(f)}</h2>
+            <DefinitionEditor def={f} onChanged={loadAll} onDeleted={loadAll} />
+            <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
+              {options.map((opt, i) => (
+                <OptionRow
+                  key={opt.id}
+                  option={opt}
+                  onSaved={loadAll}
+                  onMoveUp={() => reorder(f.field_key, i, -1)}
+                  onMoveDown={() => reorder(f.field_key, i, 1)}
+                  isFirst={i === 0}
+                  isLast={i === options.length - 1}
+                />
+              ))}
+              {options.length === 0 && (
+                <p className="px-4 py-6 text-center text-gray-400">{t("pl.no_values", "אין ערכים.")}</p>
+              )}
+            </div>
+            <AddOption fieldKey={f.field_key} onAdded={loadAll} />
+          </section>
+        );
+      })}
 
-      {selected && <AddOption fieldKey={selected} onAdded={reload} />}
+      <AddPicklist onAdded={loadAll} />
     </div>
+  );
+}
+
+/** Edit a definition's bilingual display names; delete custom (non-system) lists. */
+function DefinitionEditor({
+  def,
+  onChanged,
+  onDeleted,
+}: {
+  def: PicklistField;
+  onChanged: () => Promise<void>;
+  onDeleted: () => Promise<void>;
+}) {
+  const { t } = useLocalization();
+  const [he, setHe] = useState(def.label);
+  const [en, setEn] = useState(def.english_label ?? "");
+
+  // Re-sync when switching lists.
+  useEffect(() => {
+    setHe(def.label);
+    setEn(def.english_label ?? "");
+  }, [def.id, def.label, def.english_label]);
+
+  async function save() {
+    await apiFetch(`/api/picklists/definition/${def.id}`, {
+      method: "PUT",
+      body: JSON.stringify({ hebrew_display_name: he, english_display_name: en || null }),
+    });
+    await onChanged();
+  }
+
+  async function remove() {
+    if (!confirm(t("pl.delete_list_confirm", "למחוק רשימה זו וכל הערכים שלה?"))) return;
+    await apiFetch(`/api/picklists/definition/${def.id}`, { method: "DELETE" });
+    await onDeleted();
+  }
+
+  const input = "rounded-md border border-gray-300 px-2 py-1 text-sm";
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm p-4 flex flex-wrap items-end gap-3">
+      <code className="text-xs text-gray-400" dir="ltr">
+        {def.field_key}
+      </code>
+      <label className="space-y-1">
+        <span className="block text-xs text-gray-500">עברית</span>
+        <input dir="rtl" className={input} value={he} onChange={(e) => setHe(e.target.value)} />
+      </label>
+      <label className="space-y-1">
+        <span className="block text-xs text-gray-500">English</span>
+        <input dir="ltr" className={input} value={en} onChange={(e) => setEn(e.target.value)} />
+      </label>
+      <button
+        onClick={save}
+        className="rounded-md bg-gray-800 text-white px-3 py-1.5 text-xs hover:opacity-90"
+      >
+        {t("action.save", "שמור")}
+      </button>
+      {def.is_system ? (
+        <span className="rounded bg-gray-100 text-gray-500 text-xs px-2 py-0.5">
+          {t("pl.system_list", "רשימת מערכת")}
+        </span>
+      ) : (
+        <button
+          onClick={remove}
+          className="text-xs text-status-darkred hover:underline ms-auto"
+        >
+          {t("pl.delete_list", "מחק רשימה")}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Create a brand-new (custom) picklist definition. */
+function AddPicklist({ onAdded }: { onAdded: (systemName: string) => Promise<void> }) {
+  const { t } = useLocalization();
+  const [systemName, setSystemName] = useState("");
+  const [he, setHe] = useState("");
+  const [en, setEn] = useState("");
+  const [error, setError] = useState("");
+
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    try {
+      await apiFetch("/api/picklists/definition", {
+        method: "POST",
+        body: JSON.stringify({
+          system_name: systemName,
+          hebrew_display_name: he,
+          english_display_name: en || null,
+        }),
+      });
+      setSystemName("");
+      setHe("");
+      setEn("");
+      await onAdded(systemName);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("cf.add_failed", "הוספה נכשלה"));
+    }
+  }
+
+  const input = "rounded-md border border-gray-300 px-2 py-1 text-sm";
+
+  return (
+    <form onSubmit={add} className="bg-white rounded-xl shadow-sm p-4 space-y-2">
+      <h3 className="font-medium text-sm">{t("pl.add_list", "הוספת רשימת בחירה")}</h3>
+      <div className="flex flex-wrap gap-2">
+        <input
+          className={`${input} w-44`}
+          placeholder={t("pl.system_name_placeholder", "מזהה (אנגלית) — diet")}
+          value={systemName}
+          onChange={(e) => setSystemName(e.target.value)}
+          dir="ltr"
+          required
+        />
+        <input
+          className={`${input} w-40`}
+          placeholder="עברית"
+          value={he}
+          onChange={(e) => setHe(e.target.value)}
+          dir="rtl"
+          required
+        />
+        <input
+          className={`${input} w-40`}
+          placeholder="English"
+          value={en}
+          onChange={(e) => setEn(e.target.value)}
+          dir="ltr"
+        />
+        <button
+          type="submit"
+          className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
+        >
+          {t("action.add", "הוסף")}
+        </button>
+      </div>
+      {error && <p className="text-sm text-status-darkred">{error}</p>}
+    </form>
   );
 }
 
@@ -108,13 +260,19 @@ function OptionRow({
   isFirst: boolean;
   isLast: boolean;
 }) {
+  const { t } = useLocalization();
   const [label, setLabel] = useState(option.hebrew_label);
+  const [english, setEnglish] = useState(option.english_value ?? "");
   const [color, setColor] = useState(option.color_hint ?? "");
 
   async function save() {
     await apiFetch(`/api/picklists/${option.id}`, {
       method: "PUT",
-      body: JSON.stringify({ hebrew_label: label, color_hint: color || null }),
+      body: JSON.stringify({
+        hebrew_label: label,
+        english_value: english || null,
+        color_hint: color || null,
+      }),
     });
     await onSaved();
   }
@@ -135,13 +293,16 @@ function OptionRow({
 
   // Permanent delete: only allowed when the value is unused (backend returns 409 otherwise).
   async function hardDelete() {
-    if (!confirm(`למחוק לצמיתות את '${option.value}'?`)) return;
+    if (!confirm(`${t("pl.hard_delete_confirm", "למחוק לצמיתות?")} '${option.value}'`)) return;
     try {
       await apiFetch(`/api/picklists/${option.id}?hard=true`, { method: "DELETE" });
       await onSaved();
     } catch {
       alert(
-        "לא ניתן למחוק לצמיתות — הערך בשימוש על ידי רשומות קיימות. הוא הושבת במקום.",
+        t(
+          "pl.hard_delete_in_use",
+          "לא ניתן למחוק לצמיתות — הערך בשימוש על ידי רשומות קיימות. הוא הושבת במקום.",
+        ),
       );
       await deactivate();
     }
@@ -159,9 +320,18 @@ function OptionRow({
         {option.value}
       </code>
       <input
-        className={`${input} flex-1 min-w-[8rem]`}
+        className={`${input} flex-1 min-w-[7rem]`}
+        placeholder="עברית"
+        dir="rtl"
         value={label}
         onChange={(e) => setLabel(e.target.value)}
+      />
+      <input
+        className={`${input} flex-1 min-w-[7rem]`}
+        placeholder="English"
+        dir="ltr"
+        value={english}
+        onChange={(e) => setEnglish(e.target.value)}
       />
       <input
         className={`${input} w-24`}
@@ -172,7 +342,7 @@ function OptionRow({
       />
       {!option.is_active && (
         <span className="rounded bg-gray-200 text-gray-600 text-xs px-2 py-0.5">
-          מושבת
+          {t("cf.disabled", "מושבת")}
         </span>
       )}
       <div className="flex items-center gap-1 ms-auto">
@@ -180,7 +350,7 @@ function OptionRow({
           onClick={onMoveUp}
           disabled={isFirst}
           className="px-2 text-gray-500 disabled:opacity-30"
-          title="הזז למעלה"
+          title={t("pl.move_up", "הזז למעלה")}
         >
           ↑
         </button>
@@ -188,7 +358,7 @@ function OptionRow({
           onClick={onMoveDown}
           disabled={isLast}
           className="px-2 text-gray-500 disabled:opacity-30"
-          title="הזז למטה"
+          title={t("pl.move_down", "הזז למטה")}
         >
           ↓
         </button>
@@ -196,15 +366,15 @@ function OptionRow({
           onClick={save}
           className="rounded-md bg-gray-800 text-white px-3 py-1 text-xs hover:opacity-90"
         >
-          שמור
+          {t("action.save", "שמור")}
         </button>
         {option.is_active ? (
           <button
             onClick={deactivate}
             className="rounded-md border border-status-darkred/40 text-status-darkred px-2 py-1 text-xs hover:bg-red-50"
-            title="הסר מהרשימה (השבתה)"
+            title={t("pl.deactivate_title", "הסר מהרשימה (השבתה)")}
           >
-            מחק
+            {t("action.delete", "מחק")}
           </button>
         ) : (
           <>
@@ -212,13 +382,13 @@ function OptionRow({
               onClick={reactivate}
               className="rounded-md border border-status-green/40 text-status-green px-2 py-1 text-xs hover:bg-green-50"
             >
-              הפעל
+              {t("cf.activate", "הפעל")}
             </button>
             <button
               onClick={hardDelete}
               className="text-xs text-status-darkred hover:underline"
             >
-              מחק לצמיתות
+              {t("cf.hard_delete", "מחק לצמיתות")}
             </button>
           </>
         )}
@@ -234,8 +404,10 @@ function AddOption({
   fieldKey: string;
   onAdded: () => Promise<void>;
 }) {
+  const { t } = useLocalization();
   const [value, setValue] = useState("");
   const [label, setLabel] = useState("");
+  const [english, setEnglish] = useState("");
   const [color, setColor] = useState("");
   const [error, setError] = useState("");
 
@@ -248,15 +420,17 @@ function AddOption({
         body: JSON.stringify({
           value,
           hebrew_label: label,
+          english_value: english || null,
           color_hint: color || null,
         }),
       });
       setValue("");
       setLabel("");
+      setEnglish("");
       setColor("");
       await onAdded();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "הוספה נכשלה");
+      setError(err instanceof Error ? err.message : t("cf.add_failed", "הוספה נכשלה"));
     }
   }
 
@@ -264,22 +438,30 @@ function AddOption({
 
   return (
     <form onSubmit={add} className="bg-white rounded-xl shadow-sm p-4 space-y-2">
-      <h3 className="font-medium text-sm">הוספת ערך</h3>
+      <h3 className="font-medium text-sm">{t("pl.add_value", "הוספת ערך")}</h3>
       <div className="flex flex-wrap gap-2">
         <input
           className={`${input} w-40`}
-          placeholder="value (אנגלית)"
+          placeholder={t("pl.value_placeholder", "value (אנגלית)")}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           dir="ltr"
           required
         />
         <input
-          className={`${input} flex-1 min-w-[8rem]`}
-          placeholder="תווית בעברית"
+          className={`${input} flex-1 min-w-[7rem]`}
+          placeholder="עברית"
+          dir="rtl"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           required
+        />
+        <input
+          className={`${input} flex-1 min-w-[7rem]`}
+          placeholder="English"
+          dir="ltr"
+          value={english}
+          onChange={(e) => setEnglish(e.target.value)}
         />
         <input
           className={`${input} w-24`}
@@ -292,7 +474,7 @@ function AddOption({
           type="submit"
           className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
         >
-          הוסף
+          {t("action.add", "הוסף")}
         </button>
       </div>
       {error && <p className="text-sm text-status-darkred">{error}</p>}

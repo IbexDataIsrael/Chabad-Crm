@@ -21,7 +21,11 @@ import {
 export interface Organization {
   id: number;
   name: string;
+  logo_url: string | null;
   map_in_english: boolean;
+  default_lat: number | null;
+  default_lng: number | null;
+  default_zoom: number;
 }
 
 export interface User {
@@ -41,7 +45,11 @@ interface AuthContextValue {
   isShliach: boolean;
   signIn: (username: string, password: string) => Promise<void>;
   signInWithGoogle: (credential: string) => Promise<void>;
-  signUpWithGoogle: (credential: string, organizationName: string) => Promise<void>;
+  signUpWithGoogle: (
+    credential: string,
+    organizationName: string,
+    organizationLogoUrl?: string | null,
+  ) => Promise<void>;
   signUp: (username: string, fullName: string, password: string) => Promise<void>;
   signOut: () => void;
   refresh: () => Promise<void>;
@@ -78,8 +86,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   // Google signup: create the org + admin, then sign in immediately (no email step).
-  async function signUpWithGoogle(credential: string, organizationName: string) {
-    const token = await apiGoogleSignup(credential, organizationName);
+  async function signUpWithGoogle(
+    credential: string,
+    organizationName: string,
+    organizationLogoUrl?: string | null,
+  ) {
+    const token = await apiGoogleSignup(credential, organizationName, organizationLogoUrl);
     setToken(token);
     setUser(await apiFetch<User>("/api/auth/me"));
   }

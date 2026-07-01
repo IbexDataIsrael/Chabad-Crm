@@ -1,4 +1,4 @@
-from app.seed import seed_picklists
+from app.seed import seed_picklist_definitions, seed_picklists
 
 FK = "contact.pipeline_status"
 
@@ -27,7 +27,11 @@ def test_staff_can_read_but_not_mutate(client, auth_headers, db_session):
     assert m.status_code == 403
 
 
-def test_admin_crud_and_uniqueness(client, admin_headers):
+def test_admin_crud_and_uniqueness(client, admin_headers, db_session):
+    # The picklist registry is DB-driven: seed the org's definitions so the
+    # registry lists them (values are created by the test itself, not seeded).
+    seed_picklist_definitions(db_session, _org_id(client, admin_headers))
+
     # Create
     r = client.post(
         f"/api/picklists/{FK}",
@@ -48,7 +52,7 @@ def test_admin_crud_and_uniqueness(client, admin_headers):
     # field_keys listing returns the full registry of managed picklists.
     keys = [k["field_key"] for k in client.get("/api/picklists", headers=admin_headers).json()]
     assert FK in keys
-    assert "contact.area" in keys  # registry includes empty picklists too
+    assert "contact.pipeline_status" in keys  # registry includes empty picklists too
 
     # Update label
     upd = client.put(

@@ -2,12 +2,25 @@
 
 import { useState, type FormEvent, type ReactNode } from "react";
 
+import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
-import type { Contact, ContactType, UserSummary } from "@/lib/types";
+import { isValidPhone } from "@/lib/validation";
+import {
+  formatCoords,
+  roundCoord,
+  MEKURAV_PICKLISTS,
+  type Contact,
+  type ContactType,
+  type UserSummary,
+} from "@/lib/types";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ApartmentMultiSelect } from "./ApartmentMultiSelect";
 import { ApartmentPicker } from "./ApartmentPicker";
+import { AreaMultiSelect } from "./AreaMultiSelect";
+import { BuildingMultiSelect } from "./BuildingMultiSelect";
 import { DatePicker } from "./DatePicker";
+import { EmailInput } from "./EmailInput";
+import { PhoneInput } from "./PhoneInput";
 import { PicklistSelect } from "./PicklistSelect";
 
 export interface MekuravFormValues {
@@ -22,6 +35,7 @@ export interface MekuravFormValues {
 export interface ShliachFormValues {
   notes: string | null;
   apartment_ids: number[];
+  area_ids: number[];
 }
 
 export interface ContactFormValues {
@@ -34,12 +48,13 @@ export interface ContactFormValues {
   address: string | null;
   latitude: number | null;
   longitude: number | null;
-  area: string | null;
   pipeline_status: string | null;
   color_tag: string | null;
   priority_score: number | null;
   mekurav: MekuravFormValues;
   shliach: ShliachFormValues;
+  /** Dynamic picklist selections by system_name. */
+  picklist_values: Record<string, string | null>;
 }
 
 const inputClass =
@@ -59,6 +74,7 @@ export function ContactForm({
   extra?: ReactNode;
 }) {
   const { t } = useLocalization();
+  const { isFieldVisible: vis } = useFieldSettings();
   const [values, setValues] = useState<ContactFormValues>({
     name: initial?.name ?? "",
     last_name: initial?.last_name ?? null,
@@ -69,7 +85,6 @@ export function ContactForm({
     address: initial?.address ?? null,
     latitude: initial?.latitude ?? null,
     longitude: initial?.longitude ?? null,
-    area: initial?.area ?? null,
     pipeline_status: initial?.pipeline_status ?? null,
     color_tag: initial?.color_tag ?? null,
     priority_score: initial?.priority_score ?? null,
@@ -84,10 +99,13 @@ export function ContactForm({
     shliach: {
       notes: initial?.shliach?.notes ?? null,
       apartment_ids: initial?.shliach?.apartment_ids ?? [],
+      area_ids: initial?.shliach?.area_ids ?? [],
     },
+    picklist_values: { ...(initial?.picklist_values ?? {}) },
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [phoneValid, setPhoneValid] = useState(() => isValidPhone(initial?.phone ?? ""));
 
   const isMekurav = values.contact_type === "mekurav";
   const isShliach = values.contact_type === "shliach";
@@ -104,14 +122,36 @@ export function ContactForm({
     setValues((prev) => ({ ...prev, shliach: { ...prev.shliach, [key]: v } }));
   }
 
+  // Relating a building bulk-adds all its apartments (deduped) to the shliach.
+  function addShliachApartments(ids: number[]) {
+    setValues((prev) => ({
+      ...prev,
+      shliach: {
+        ...prev.shliach,
+        apartment_ids: Array.from(new Set([...prev.shliach.apartment_ids, ...ids])),
+      },
+    }));
+  }
+
+  function setPicklistValue(systemName: string, v: string | null) {
+    setValues((prev) => ({
+      ...prev,
+      picklist_values: { ...prev.picklist_values, [systemName]: v },
+    }));
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
+    if (!phoneValid) {
+      setError(t("validation.phone_invalid", "מספר טלפון לא תקין"));
+      return;
+    }
     setBusy(true);
     try {
       await onSubmit(values);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "שמירה נכשלה");
+      setError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
     } finally {
       setBusy(false);
     }
@@ -128,227 +168,281 @@ export function ContactForm({
         />
       </Field>
 
-      <Field label={t("contacts.last_name", "שם משפחה")}>
-        <input
-          className={inputClass}
-          value={values.last_name ?? ""}
-          onChange={(e) => set("last_name", e.target.value || null)}
-        />
-      </Field>
+      {vis("contacts.last_name") && (
+        <Field label={t("contacts.last_name", "שם משפחה")}>
+          <input
+            className={inputClass}
+            value={values.last_name ?? ""}
+            onChange={(e) => set("last_name", e.target.value || null)}
+          />
+        </Field>
+      )}
 
       <Field label={t("contacts.phone", "טלפון")}>
-        <input
-          type="tel"
-          dir="ltr"
-          className={inputClass}
+        <PhoneInput
           value={values.phone}
-          onChange={(e) => set("phone", e.target.value)}
+          onChange={(v) => set("phone", v)}
+          onValidityChange={setPhoneValid}
           required
         />
       </Field>
 
-      <Field label={t("contacts.email", "דוא״ל") + (isShliach ? " (להתחברות)" : "")}>
-        <input
-          type="email"
-          dir="ltr"
-          className={inputClass}
-          value={values.email ?? ""}
-          onChange={(e) => set("email", e.target.value || null)}
-          required={isShliach}
-        />
-      </Field>
-
-      <Field label={t("contacts.area", "אזור")}>
-        <PicklistSelect
-          fieldKey="contact.area"
-          value={values.area}
-          onChange={(v) => set("area", v)}
-        />
-      </Field>
-
-      <Field label={t("contacts.assigned_user_id", "משויך ל")}>
-        <select
-          className={inputClass}
-          value={values.assigned_user_id ?? ""}
-          onChange={(e) =>
-            set(
-              "assigned_user_id",
-              e.target.value === "" ? null : Number(e.target.value),
-            )
+      {/* Email is required for a shliach (login), so it's always shown for them. */}
+      {(vis("contacts.email") || isShliach) && (
+        <Field
+          label={
+            t("contacts.email", "אימייל") +
+            (isShliach ? ` (${t("contacts.email_for_login", "להתחברות")})` : "")
           }
         >
-          <option value="">—</option>
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.full_name}
-            </option>
-          ))}
-        </select>
-      </Field>
-
-      <Field label={t("contacts.pipeline_status", "סטטוס")}>
-        <PicklistSelect
-          fieldKey="contact.pipeline_status"
-          value={values.pipeline_status}
-          onChange={(v) => set("pipeline_status", v)}
-        />
-      </Field>
-
-      <Field label={t("contacts.color_tag", "צבע")}>
-        <PicklistSelect
-          fieldKey="contact.color_tag"
-          value={values.color_tag}
-          onChange={(v) => set("color_tag", v)}
-        />
-      </Field>
-
-      <Field label={t("contacts.priority_score", "ציון עדיפות")}>
-        <input
-          type="number"
-          className={inputClass}
-          value={values.priority_score ?? ""}
-          onChange={(e) =>
-            set("priority_score", e.target.value === "" ? null : Number(e.target.value))
-          }
-        />
-      </Field>
-
-      <div className="sm:col-span-2">
-        <Field label={t("contacts.address", "כתובת")}>
-          <AddressAutocomplete
-            className={inputClass}
-            value={values.address ?? ""}
-            onChange={(address) =>
-              // Manual typing clears coords so the server geocodes on save.
-              setValues((prev) => ({
-                ...prev,
-                address: address || null,
-                latitude: null,
-                longitude: null,
-              }))
-            }
-            onPlace={(p) => {
-              setValues((prev) => ({
-                ...prev,
-                address: p.address || null,
-                latitude: p.lat,
-                longitude: p.lng,
-              }));
-            }}
+          <EmailInput
+            value={values.email ?? ""}
+            onChange={(v) => set("email", v || null)}
+            required={isShliach}
           />
         </Field>
-      </div>
+      )}
 
-      <Field label={t("contacts.latitude", "קו רוחב")}>
-        <input
-          type="number"
-          step="any"
-          className={inputClass}
-          dir="ltr"
-          value={values.latitude ?? ""}
-          onChange={(e) =>
-            set("latitude", e.target.value === "" ? null : Number(e.target.value))
-          }
-        />
-      </Field>
+      {vis("contacts.assigned_user_id") && (
+        <Field label={t("contacts.assigned_user_id", "משויך ל")}>
+          <select
+            className={inputClass}
+            value={values.assigned_user_id ?? ""}
+            onChange={(e) =>
+              set(
+                "assigned_user_id",
+                e.target.value === "" ? null : Number(e.target.value),
+              )
+            }
+          >
+            <option value="">—</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.full_name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
 
-      <Field label={t("contacts.longitude", "קו אורך")}>
-        <input
-          type="number"
-          step="any"
-          className={inputClass}
-          dir="ltr"
-          value={values.longitude ?? ""}
-          onChange={(e) =>
-            set("longitude", e.target.value === "" ? null : Number(e.target.value))
-          }
-        />
-      </Field>
+      {vis("contacts.pipeline_status") && (
+        <Field label={t("contacts.pipeline_status", "סטטוס")}>
+          <PicklistSelect
+            fieldKey="contact.pipeline_status"
+            value={values.pipeline_status}
+            onChange={(v) => set("pipeline_status", v)}
+          />
+        </Field>
+      )}
 
-      {isMekurav && (
+      {vis("contacts.color_tag") && (
+        <Field label={t("contacts.color_tag", "צבע")}>
+          <PicklistSelect
+            fieldKey="contact.color_tag"
+            value={values.color_tag}
+            onChange={(v) => set("color_tag", v)}
+          />
+        </Field>
+      )}
+
+      {vis("contacts.priority_score") && (
+        <Field label={t("contacts.priority_score", "ציון עדיפות")}>
+          <input
+            type="number"
+            className={inputClass}
+            value={values.priority_score ?? ""}
+            onChange={(e) =>
+              set("priority_score", e.target.value === "" ? null : Number(e.target.value))
+            }
+          />
+        </Field>
+      )}
+
+      {vis("contacts.address") && (
         <>
           <div className="sm:col-span-2">
-            <Field label={t("contact_mekurav.apartment_id", "דירה")}>
-              <ApartmentPicker
-                value={values.mekurav.apartment_id}
-                onChange={(id) => setMekurav("apartment_id", id)}
-              />
-            </Field>
-          </div>
-
-          <Field label={t("contact_mekurav.first_visit", "ביקור ראשון")}>
-            <DatePicker
-              value={values.mekurav.first_visit}
-              onChange={(v) => setMekurav("first_visit", v)}
-              withTime
-              className={inputClass}
-            />
-          </Field>
-
-          <Field label={t("contact_mekurav.potential_next_step", "פוטנציאל לצעד")}>
-            <PicklistSelect
-              fieldKey="contact.potential_next_step"
-              value={values.mekurav.potential_next_step}
-              onChange={(v) => setMekurav("potential_next_step", v)}
-            />
-          </Field>
-
-          <div className="sm:col-span-2">
-            <Field label={t("contact_mekurav.rebbe_connection", "קשר לרבי")}>
-              <textarea
+            <Field label={t("contacts.address", "כתובת")}>
+              <AddressAutocomplete
                 className={inputClass}
-                rows={2}
-                value={values.mekurav.rebbe_connection ?? ""}
-                onChange={(e) => setMekurav("rebbe_connection", e.target.value || null)}
+                value={values.address ?? ""}
+                onChange={(address) =>
+                  // Manual typing clears coords so the server geocodes on save.
+                  setValues((prev) => ({
+                    ...prev,
+                    address: address || null,
+                    latitude: null,
+                    longitude: null,
+                  }))
+                }
+                onPlace={(p) => {
+                  setValues((prev) => ({
+                    ...prev,
+                    address: p.address || null,
+                    latitude: roundCoord(p.lat),
+                    longitude: roundCoord(p.lng),
+                  }));
+                }}
               />
             </Field>
           </div>
 
           <div className="sm:col-span-2">
-            <Field label={t("contact_mekurav.recommendations", "המלצות")}>
-              <textarea
-                className={inputClass}
-                rows={2}
-                value={values.mekurav.recommendations ?? ""}
-                onChange={(e) => setMekurav("recommendations", e.target.value || null)}
-              />
-            </Field>
-          </div>
-
-          <div className="sm:col-span-2">
-            <Field label={t("contact_mekurav.background", "רקע")}>
-              <textarea
-                className={inputClass}
-                rows={2}
-                value={values.mekurav.background ?? ""}
-                onChange={(e) => setMekurav("background", e.target.value || null)}
-              />
+            <Field label={t("contacts.coordinates", "קואורדינטות")}>
+              {/* Read-only, minimal x,y — coords come from the address picker / geocoding. */}
+              <span
+                dir="ltr"
+                className="block rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600"
+              >
+                {formatCoords(values.latitude, values.longitude) || "—"}
+              </span>
             </Field>
           </div>
         </>
       )}
 
+      {isMekurav && (
+        <>
+          {vis("contact_mekurav.apartment_id") && (
+            <div className="sm:col-span-2">
+              <Field label={t("contact_mekurav.apartment_id", "דירה")}>
+                <ApartmentPicker
+                  value={values.mekurav.apartment_id}
+                  onChange={(id) => setMekurav("apartment_id", id)}
+                />
+              </Field>
+            </div>
+          )}
+
+          {vis("contact_mekurav.first_visit") && (
+            <Field label={t("contact_mekurav.first_visit", "ביקור ראשון")}>
+              <DatePicker
+                value={values.mekurav.first_visit}
+                onChange={(v) => setMekurav("first_visit", v)}
+                withTime
+                className={inputClass}
+              />
+            </Field>
+          )}
+
+          {vis("contact_mekurav.potential_next_step") && (
+            <Field label={t("contact_mekurav.potential_next_step", "פוטנציאל לצעד")}>
+              <PicklistSelect
+                fieldKey="contact.potential_next_step"
+                value={values.mekurav.potential_next_step}
+                onChange={(v) => setMekurav("potential_next_step", v)}
+              />
+            </Field>
+          )}
+
+          {vis("contact_mekurav.rebbe_connection") && (
+            <div className="sm:col-span-2">
+              <Field label={t("contact_mekurav.rebbe_connection", "קשר לרבי")}>
+                <textarea
+                  className={inputClass}
+                  rows={2}
+                  value={values.mekurav.rebbe_connection ?? ""}
+                  onChange={(e) => setMekurav("rebbe_connection", e.target.value || null)}
+                />
+              </Field>
+            </div>
+          )}
+
+          {vis("contact_mekurav.recommendations") && (
+            <div className="sm:col-span-2">
+              <Field label={t("contact_mekurav.recommendations", "המלצות")}>
+                <textarea
+                  className={inputClass}
+                  rows={2}
+                  value={values.mekurav.recommendations ?? ""}
+                  onChange={(e) => setMekurav("recommendations", e.target.value || null)}
+                />
+              </Field>
+            </div>
+          )}
+
+          {vis("contact_mekurav.background") && (
+            <div className="sm:col-span-2">
+              <Field label={t("contact_mekurav.background", "רקע")}>
+                <textarea
+                  className={inputClass}
+                  rows={2}
+                  value={values.mekurav.background ?? ""}
+                  onChange={(e) => setMekurav("background", e.target.value || null)}
+                />
+              </Field>
+            </div>
+          )}
+
+          {MEKURAV_PICKLISTS.filter((key) => vis(key)).map((key) => (
+            <Field key={key} label={t(`picklist.${key}`)}>
+              <PicklistSelect
+                fieldKey={key}
+                value={values.picklist_values[key] ?? null}
+                onChange={(v) => setPicklistValue(key, v)}
+              />
+            </Field>
+          ))}
+        </>
+      )}
+
       {isShliach && (
         <>
-          <div className="sm:col-span-2">
-            <Field label="דירות באחריות השליח">
-              <ApartmentMultiSelect
-                value={values.shliach.apartment_ids}
-                onChange={(ids) => setShliach("apartment_ids", ids)}
-              />
-            </Field>
-          </div>
+          {vis("contact_shliach.areas") && (
+            <div className="sm:col-span-2">
+              <Field label={t("contact_shliach.areas", "אזורים באחריות הפעיל")}>
+                <AreaMultiSelect
+                  value={values.shliach.area_ids}
+                  onChange={(ids) => setShliach("area_ids", ids)}
+                />
+              </Field>
+            </div>
+          )}
 
-          <div className="sm:col-span-2">
-            <Field label={t("contact_shliach.notes", "הערות")}>
-              <textarea
-                className={inputClass}
-                rows={2}
-                value={values.shliach.notes ?? ""}
-                onChange={(e) => setShliach("notes", e.target.value || null)}
-              />
-            </Field>
-          </div>
+          {vis("contact_shliach.apartments") && (
+            <div className="sm:col-span-2 space-y-3">
+              {values.shliach.area_ids.length === 0 ? (
+                // Buildings/apartments only become selectable after an area is
+                // chosen — and then only those within the shliach's area(s).
+                <p className="text-sm text-gray-500">
+                  {t("shliach.select_area_first", "יש לבחור אזור תחילה")}
+                </p>
+              ) : (
+                <>
+                  <Field
+                    label={t(
+                      "contact_shliach.relate_building",
+                      "שייך בניין (יוסיף את כל דירותיו)",
+                    )}
+                  >
+                    <BuildingMultiSelect
+                      areaIds={values.shliach.area_ids}
+                      onAddApartments={addShliachApartments}
+                    />
+                  </Field>
+                  <Field label={t("contact_shliach.apartments", "דירות באחריות הפעיל")}>
+                    <ApartmentMultiSelect
+                      areaIds={values.shliach.area_ids}
+                      value={values.shliach.apartment_ids}
+                      onChange={(ids) => setShliach("apartment_ids", ids)}
+                    />
+                  </Field>
+                </>
+              )}
+            </div>
+          )}
+
+          {vis("contact_shliach.notes") && (
+            <div className="sm:col-span-2">
+              <Field label={t("contact_shliach.notes", "הערות")}>
+                <textarea
+                  className={inputClass}
+                  rows={2}
+                  value={values.shliach.notes ?? ""}
+                  onChange={(e) => setShliach("notes", e.target.value || null)}
+                />
+              </Field>
+            </div>
+          )}
         </>
       )}
 
@@ -366,7 +460,7 @@ export function ContactForm({
           disabled={busy}
           className="w-full sm:w-auto rounded-md bg-status-magenta text-white px-5 py-2 font-medium hover:opacity-90 disabled:opacity-50"
         >
-          {busy ? "שומר…" : submitLabel}
+          {busy ? t("action.saving", "שומר…") : submitLabel}
         </button>
       </div>
     </form>

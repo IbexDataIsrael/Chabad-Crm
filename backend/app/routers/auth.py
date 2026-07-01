@@ -45,7 +45,9 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)) -> dict:
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
         )
 
-    org = models.Organization(name=payload.organization_name)
+    org = models.Organization(
+        name=payload.organization_name, logo_url=payload.organization_logo_url
+    )
     db.add(org)
     db.flush()
 
@@ -67,7 +69,7 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)) -> dict:
     db.commit()
     db.refresh(user)
 
-    send_verification_email(user.email, create_email_token(user.id))
+    send_verification_email(user, create_email_token(user.id))
     return {"status": "pending_verification", "email": user.email}
 
 
@@ -99,7 +101,7 @@ def resend_verification(payload: ResendRequest, db: Session = Depends(get_db)) -
     """Re-issue a verification link. Always 200 (no email enumeration)."""
     user = db.query(models.User).filter(models.User.email == payload.email).first()
     if user and not user.email_verified:
-        send_verification_email(user.email, create_email_token(user.id))
+        send_verification_email(user, create_email_token(user.id))
     return {"status": "ok"}
 
 
@@ -205,7 +207,9 @@ def google_signup(payload: GoogleSignupRequest, db: Session = Depends(get_db)) -
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
         )
 
-    org = models.Organization(name=payload.organization_name)
+    org = models.Organization(
+        name=payload.organization_name, logo_url=payload.organization_logo_url
+    )
     db.add(org)
     db.flush()
 

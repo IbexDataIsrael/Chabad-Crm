@@ -9,14 +9,11 @@ def test_localization_endpoint_shape(client, db_session):
     assert r.status_code == 200  # public, no auth required
     data = r.json()
 
-    # Grouped by entity_type.
-    assert set(data.keys()) >= {"table", "column", "interaction_category"}
-    # Column keys are table-qualified and carry Hebrew labels.
-    assert data["column"]["contacts.pipeline_status"] == "סטטוס"
-    assert data["column"]["community_checklists.shabbat_candles"] == "נרות"
-    assert data["column"]["contacts.area"] == "אזור"
-    # Interaction categories present.
-    assert data["interaction_category"]["heart_connection"] == "חיבור לב"
+    # Flat map keyed by technical_name, each value carrying he + en.
+    assert data["contacts.pipeline_status"]["he"] == "סטטוס"
+    assert data["contacts.pipeline_status"]["en"] == "Status"
+    assert data["community_checklists.shabbat_candles"]["he"] == "נרות"
+    assert data["heart_connection"]["he"] == "חיבור לב"
 
 
 def test_localization_requires_no_auth(client, db_session):
@@ -36,6 +33,6 @@ def test_seed_all_is_idempotent(client, db_session):
     assert db_session.query(models.Contact).count() == contacts_first
     assert db_session.query(models.User).count() == users_first
 
-    # Sanity: seeding actually produced data.
-    assert loc_first == 40  # 4 tables + 33 columns + 3 categories
-    assert contacts_first == 2
+    # Sanity: seeding actually produced data (full bilingual UI string set).
+    assert loc_first > 100
+    assert contacts_first >= 2

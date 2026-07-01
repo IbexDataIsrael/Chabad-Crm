@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 
 import { apiFetch } from "./api";
+import { useLocalization } from "./localization";
 import type { PicklistValue } from "./types";
 
 // Simple module-level cache so multiple selects don't refetch the same field.
 const cache: Record<string, PicklistValue[]> = {};
 
 export function usePicklist(fieldKey: string) {
+  const { lang } = useLocalization();
   const [options, setOptions] = useState<PicklistValue[]>(cache[fieldKey] ?? []);
 
   useEffect(() => {
@@ -26,8 +28,16 @@ export function usePicklist(fieldKey: string) {
     };
   }, [fieldKey]);
 
-  const labelFor = (value: string | null | undefined): string =>
-    options.find((o) => o.value === value)?.hebrew_label ?? value ?? "";
+  // Render an option in the current language (English value falls back to Hebrew).
+  const display = (o: PicklistValue): string =>
+    (lang === "en" ? o.english_value || o.hebrew_label : o.hebrew_label) ||
+    o.english_value ||
+    o.value;
 
-  return { options, labelFor };
+  const labelFor = (value: string | null | undefined): string => {
+    const o = options.find((opt) => opt.value === value);
+    return o ? display(o) : value ?? "";
+  };
+
+  return { options, labelFor, display };
 }

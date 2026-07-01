@@ -14,12 +14,15 @@ router = APIRouter(prefix="/api/metadata", tags=["metadata"])
 
 @router.get("/localization")
 def get_localization(db: Session = Depends(get_db)) -> dict[str, dict[str, str]]:
-    """Return all field_localization rows grouped by entity_type.
+    """Return every UI string keyed by technical_name, with both languages.
 
-    Shape: { entity_type: { technical_name: hebrew_label } }, where entity_type is
-    one of 'table', 'column', 'interaction_category'.
+    Shape: { technical_name: { "he": <hebrew>, "en": <english> } }. `en` is "" until
+    an admin fills it in. Public so the frontend can load labels at boot.
     """
-    grouped: dict[str, dict[str, str]] = {}
+    out: dict[str, dict[str, str]] = {}
     for row in db.query(models.FieldLocalization).all():
-        grouped.setdefault(row.entity_type, {})[row.technical_name] = row.hebrew_label
-    return grouped
+        out[row.technical_name] = {
+            "he": row.hebrew_label,
+            "en": row.english_label or "",
+        }
+    return out

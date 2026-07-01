@@ -1,0 +1,37 @@
+# Local PostgreSQL (+ pgAdmin) for testing the Postgres migration before
+# deploying to a managed production database.
+#   Start:  docker compose -f docker-compose.local-db.yml up -d
+#   Stop:   docker compose -f docker-compose.local-db.yml down
+#   Reset:  docker compose -f docker-compose.local-db.yml down -v   (drops data)
+services:
+  local_postgres:
+    image: postgres:15-alpine
+    container_name: crm_local_postgres
+    environment:
+      POSTGRES_USER: crm_admin
+      POSTGRES_PASSWORD: local_secure_password
+      POSTGRES_DB: crm_local_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_local_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm_admin -d crm_local_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: crm_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@crm.local
+      PGADMIN_DEFAULT_PASSWORD: admin_secret_password
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    depends_on:
+      - local_postgres
+
+volumes:
+  pg_local_data:

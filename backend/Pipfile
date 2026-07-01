@@ -7,6 +7,7 @@ name = "pypi"
 fastapi = "*"
 uvicorn = {extras = ["standard"], version = "*"}
 sqlalchemy = "*"
+alembic = "*"  # database schema migrations
 passlib = {extras = ["bcrypt"], version = "*"}
 bcrypt = "==4.0.1"  # pinned: passlib 1.7.x is incompatible with bcrypt 5.x
 python-jose = {extras = ["cryptography"], version = "*"}
@@ -15,6 +16,7 @@ pydantic-settings = "*"
 google-auth = "*"
 requests = "*"
 apscheduler = "*"
+psycopg2-binary = "*"  # PostgreSQL driver (production database)
 
 [dev-packages]
 pytest = "*"

@@ -25,6 +25,10 @@ services:
       - NEXT_PUBLIC_API_URL=http://localhost:8001
       - NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-}
       - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      # Cloudinary signed upload (org logo): the browser only needs the public
+      # cloud name to gate/perform the upload. The API key/secret stay in
+      # backend/.env — the backend signs each upload (see routers/uploads.py).
+      - NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME:-}
       # File-watching across the Windows→Linux bind mount doesn't deliver inotify
       # events, so Next's dev server misses edits/new routes (serving stale code).
       # Force polling so HMR + route discovery work reliably.

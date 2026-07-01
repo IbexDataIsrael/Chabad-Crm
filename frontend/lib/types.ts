@@ -49,6 +49,7 @@ export interface Shliach {
   user_id: number | null;
   notes: string | null;
   apartment_ids: number[];
+  area_ids: number[];
 }
 
 export interface Reminder {
@@ -82,7 +83,6 @@ export interface Contact {
   address: string | null;
   latitude: number | null;
   longitude: number | null;
-  area: string | null;
   pipeline_status: string | null;
   color_tag: string | null;
   priority_score: number | null;
@@ -92,7 +92,12 @@ export interface Contact {
   mekurav?: Mekurav | null;
   shliach?: Shliach | null;
   special_dates?: SignificantDate[];
+  /** Dynamic picklist selections, keyed by system_name. */
+  picklist_values?: Record<string, string>;
 }
+
+/** The dynamic (admin-managed) picklists shown on the mekurav form, by system_name. */
+export const MEKURAV_PICKLISTS = ["Jewish_status", "affiliation", "language"] as const;
 
 export interface Area {
   id: number;
@@ -120,6 +125,14 @@ export interface Apartment {
   apartment_notes: string | null;
 }
 
+/** Apartment enriched with building/area context + linked contact (apartments page). */
+export interface ApartmentListItem extends Apartment {
+  building_name: string | null;
+  area_name: string | null;
+  contact_id: number | null;
+  contact_name: string | null;
+}
+
 export interface Interaction {
   id: number;
   contact_id: number;
@@ -129,11 +142,35 @@ export interface Interaction {
   created_at: string;
 }
 
+export interface Visit {
+  id: number;
+  guid: string;
+  contact_id: number | null;
+  contact_name: string | null;
+  visit_date: string;
+  visit_type: string | null;
+  location: string | null;
+  notes: string | null;
+}
+
+export interface Donation {
+  id: number;
+  guid: string;
+  contact_id: number | null;
+  contact_name: string | null;
+  donation_date: string;
+  amount: number | null;
+  is_ongoing: boolean;
+  number_of_payments: number | null;
+  notes: string | null;
+}
+
 export interface PicklistValue {
   id: number;
   field_key: string;
   value: string;
   hebrew_label: string;
+  english_value: string | null;
   color_hint: string | null;
   sort_order: number;
   is_active: boolean;
@@ -141,14 +178,21 @@ export interface PicklistValue {
 }
 
 export interface PicklistField {
+  id: number;
   field_key: string;
-  label: string;
+  label: string; // hebrew display name
+  english_label: string | null;
+  is_system: boolean;
 }
 
 export interface OrgDetails {
   id: number;
   name: string;
+  logo_url: string | null;
   map_in_english: boolean;
+  default_lat: number | null;
+  default_lng: number | null;
+  default_zoom: number;
 }
 
 export interface UserSummary {
@@ -188,6 +232,24 @@ export const CHECKLIST_ROWS: { bool: keyof Checklist; note: keyof Checklist }[] 
 /** Composed display name: "<last> <first>" (falls back to whichever exists). */
 export function contactFullName(c: { name: string; last_name?: string | null }): string {
   return [c.last_name, c.name].filter(Boolean).join(" ");
+}
+
+/**
+ * Single source of truth for how coordinates are displayed: minimized to
+ * `longitude,latitude` (x,y order) with 5 decimals. Returns "" when either is
+ * missing so callers can fall back to a placeholder.
+ */
+export function formatCoords(
+  latitude: number | null | undefined,
+  longitude: number | null | undefined,
+): string {
+  if (latitude == null || longitude == null) return "";
+  return `${longitude.toFixed(5)},${latitude.toFixed(5)}`;
+}
+
+/** Round a raw coordinate to the 5-decimal precision we store/display (~1m). */
+export function roundCoord(n: number | null | undefined): number | null {
+  return n == null ? null : Number(n.toFixed(5));
 }
 
 /** Boolean mitzvot fields, in display order. */

@@ -4,11 +4,13 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { apiFetch } from "@/lib/api";
 import { dotStyle } from "@/lib/colors";
+import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
 import {
   CHECKLIST_ROWS,
   type Apartment,
+  type Area,
   type Contact,
   type ContactCustomField,
   type UserSummary,
@@ -26,12 +28,15 @@ export function ContactView({
   customFields: ContactCustomField[];
 }) {
   const { t } = useLocalization();
-  const area = usePicklist("contact.area");
+  const { isFieldVisible: vis } = useFieldSettings();
   const status = usePicklist("contact.pipeline_status");
   const potential = usePicklist("contact.potential_next_step");
   const color = usePicklist("contact.color_tag");
   const torah = usePicklist("checklist.torah_thought");
   const contactType = usePicklist("contact.contact_type");
+  const jewishStatus = usePicklist("Jewish_status");
+  const affiliation = usePicklist("affiliation");
+  const language = usePicklist("language");
 
   const assignee = users.find((u) => u.id === contact.assigned_user_id);
   const cl = contact.checklist ?? null;
@@ -39,16 +44,17 @@ export function ContactView({
   const isMekurav = contact.contact_type === "mekurav";
   const hasCoords = contact.latitude != null && contact.longitude != null;
 
-  const fields: [string, ReactNode][] = [
-    [t("contacts.name", "שם פרטי"), contact.name],
-    [t("contacts.last_name", "שם משפחה"), contact.last_name || "—"],
-    [t("contacts.phone", "טלפון"), <span dir="ltr" key="p">{contact.phone}</span>],
-    [t("contacts.email", "אימייל"), contact.email ? <span dir="ltr">{contact.email}</span> : "—"],
-    [t("contacts.contact_type", "סוג איש קשר"), contactType.labelFor(contact.contact_type) || "—"],
-    [t("contacts.area", "אזור"), area.labelFor(contact.area) || "—"],
-    [t("contacts.assigned_user_id", "משויך ל"), assignee?.full_name ?? "—"],
-    [t("contacts.pipeline_status", "סטטוס"), status.labelFor(contact.pipeline_status) || "—"],
+  // Each entry: [fieldKey | null, label, value]. null = always shown (required).
+  const fields: [string | null, string, ReactNode][] = [
+    [null, t("contacts.name", "שם פרטי"), contact.name],
+    ["contacts.last_name", t("contacts.last_name", "שם משפחה"), contact.last_name || "—"],
+    [null, t("contacts.phone", "טלפון"), <span dir="ltr" key="p">{contact.phone}</span>],
+    ["contacts.email", t("contacts.email", "אימייל"), contact.email ? <span dir="ltr">{contact.email}</span> : "—"],
+    [null, t("contacts.contact_type", "סוג איש קשר"), contactType.labelFor(contact.contact_type) || "—"],
+    ["contacts.assigned_user_id", t("contacts.assigned_user_id", "משויך ל"), assignee?.full_name ?? "—"],
+    ["contacts.pipeline_status", t("contacts.pipeline_status", "סטטוס"), status.labelFor(contact.pipeline_status) || "—"],
     [
+      "contacts.color_tag",
       t("contacts.color_tag", "צבע"),
       contact.color_tag ? (
         <span className="inline-flex items-center gap-2">
@@ -62,36 +68,56 @@ export function ContactView({
         "—"
       ),
     ],
-    [t("contacts.priority_score", "ציון עדיפות"), contact.priority_score ?? "—"],
-    [t("contacts.address", "כתובת"), contact.address || "—"],
+    ["contacts.priority_score", t("contacts.priority_score", "ציון עדיפות"), contact.priority_score ?? "—"],
+    ["contacts.address", t("contacts.address", "כתובת"), contact.address || "—"],
   ];
 
-  const mekuravFields: [string, ReactNode][] = mk
+  const mekuravFields: [string | null, string, ReactNode][] = mk
     ? [
         [
+          "contact_mekurav.apartment_id",
           t("contact_mekurav.apartment_id", "דירה"),
           <ApartmentLabel key="ap" id={mk.apartment_id} />,
         ],
         [
+          "contact_mekurav.first_visit",
           t("contact_mekurav.first_visit", "ביקור ראשון"),
           mk.first_visit ? new Date(mk.first_visit).toLocaleString("he-IL") : "—",
         ],
         [
+          "contact_mekurav.potential_next_step",
           t("contact_mekurav.potential_next_step", "פוטנציאל לצעד"),
           potential.labelFor(mk.potential_next_step) || "—",
         ],
-        [t("contact_mekurav.rebbe_connection", "קשר לרבי"), mk.rebbe_connection || "—"],
-        [t("contact_mekurav.recommendations", "המלצות"), mk.recommendations || "—"],
-        [t("contact_mekurav.background", "רקע"), mk.background || "—"],
+        ["contact_mekurav.rebbe_connection", t("contact_mekurav.rebbe_connection", "קשר לרבי"), mk.rebbe_connection || "—"],
+        ["contact_mekurav.recommendations", t("contact_mekurav.recommendations", "המלצות"), mk.recommendations || "—"],
+        ["contact_mekurav.background", t("contact_mekurav.background", "רקע"), mk.background || "—"],
+        [
+          "Jewish_status",
+          t("picklist.Jewish_status"),
+          jewishStatus.labelFor(contact.picklist_values?.["Jewish_status"]) || "—",
+        ],
+        [
+          "affiliation",
+          t("picklist.affiliation"),
+          affiliation.labelFor(contact.picklist_values?.["affiliation"]) || "—",
+        ],
+        [
+          "language",
+          t("picklist.language"),
+          language.labelFor(contact.picklist_values?.["language"]) || "—",
+        ],
       ]
     : [];
 
-  const allFields = [...fields, ...mekuravFields];
+  const allFields = [...fields, ...mekuravFields].filter(
+    ([key]) => key === null || vis(key),
+  );
 
   return (
     <div className="space-y-6">
       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-        {allFields.map(([label, value]) => (
+        {allFields.map(([, label, value]) => (
           <div key={label} className="flex flex-col">
             <dt className="text-xs text-gray-500">{label}</dt>
             <dd className="text-sm">{value}</dd>
@@ -99,25 +125,44 @@ export function ContactView({
         ))}
         {contact.shliach && (
           <>
-            <div className="flex flex-col">
-              <dt className="text-xs text-gray-500">דירות באחריות השליח</dt>
-              <dd className="text-sm">
-                {contact.shliach.apartment_ids.length === 0 ? (
-                  "—"
-                ) : (
-                  contact.shliach.apartment_ids.map((id, i) => (
-                    <span key={id}>
-                      {i > 0 && ", "}
-                      <ApartmentLabel id={id} />
-                    </span>
-                  ))
-                )}
-              </dd>
-            </div>
-            <div className="flex flex-col">
-              <dt className="text-xs text-gray-500">{t("contact_shliach.notes", "הערות")}</dt>
-              <dd className="text-sm">{contact.shliach.notes || "—"}</dd>
-            </div>
+            {vis("contact_shliach.areas") && (
+              <div className="flex flex-col">
+                <dt className="text-xs text-gray-500">{t("contact_shliach.areas", "אזורים באחריות הפעיל")}</dt>
+                <dd className="text-sm">
+                  {contact.shliach.area_ids.length === 0
+                    ? "—"
+                    : contact.shliach.area_ids.map((id, i) => (
+                        <span key={id}>
+                          {i > 0 && ", "}
+                          <AreaLabel id={id} />
+                        </span>
+                      ))}
+                </dd>
+              </div>
+            )}
+            {vis("contact_shliach.apartments") && (
+              <div className="flex flex-col">
+                <dt className="text-xs text-gray-500">{t("contact_shliach.apartments", "דירות באחריות הפעיל")}</dt>
+                <dd className="text-sm">
+                  {contact.shliach.apartment_ids.length === 0 ? (
+                    "—"
+                  ) : (
+                    contact.shliach.apartment_ids.map((id, i) => (
+                      <span key={id}>
+                        {i > 0 && ", "}
+                        <ApartmentLabel id={id} />
+                      </span>
+                    ))
+                  )}
+                </dd>
+              </div>
+            )}
+            {vis("contact_shliach.notes") && (
+              <div className="flex flex-col">
+                <dt className="text-xs text-gray-500">{t("contact_shliach.notes", "הערות")}</dt>
+                <dd className="text-sm">{contact.shliach.notes || "—"}</dd>
+              </div>
+            )}
           </>
         )}
       </dl>
@@ -153,7 +198,7 @@ export function ContactView({
 
       {isMekurav && customFields.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold mb-2">שדות נוספים</h3>
+          <h3 className="text-sm font-semibold mb-2">{t("page.extra_fields", "שדות נוספים")}</h3>
           <ul className="space-y-1">
             {customFields.map((f) => (
               <Row
@@ -193,6 +238,23 @@ function ApartmentLabel({ id }: { id: number | null }) {
   }, [id]);
 
   if (id == null) return <>—</>;
+  return <>{label ?? "…"}</>;
+}
+
+/** Resolves an area id to its name for display. */
+function AreaLabel({ id }: { id: number }) {
+  const [label, setLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    apiFetch<Area>(`/api/areas/${id}`)
+      .then((a) => active && setLabel(a.area_name))
+      .catch(() => active && setLabel(null));
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
   return <>{label ?? "…"}</>;
 }
 

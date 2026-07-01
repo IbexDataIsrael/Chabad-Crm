@@ -5,7 +5,7 @@ are isolated by it in every query. `field_localization` is global (shared UI lab
 Data is stored with English schemas; some columns hold Hebrew free text (UTF-8).
 
 Contacts are split (fixes2): the `contacts` row holds core CRM data plus a
-`contact_type` (מקורב | שליח). Type-specific data lives in `contact_mekurav` or
+`contact_type` (מקורב | פעיל). Type-specific data lives in `contact_mekurav` or
 `contact_shliach`. Geographic data is normalised into areas → buildings → apartments.
 """
 import datetime
@@ -45,7 +45,12 @@ class Organization(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     guid = _guid_column()
     name = Column(String(150), nullable=False)  # used as the app/tenant title
+    logo_url = Column(Text, nullable=True)  # org logo (Cloudinary secure_url)
     map_in_english = Column(Boolean, nullable=False, default=False)  # autocomplete language
+    # Default map starting point (config-editable; replaces a hardcoded center).
+    default_lat = Column(Float, nullable=True)
+    default_lng = Column(Float, nullable=True)
+    default_zoom = Column(Integer, nullable=False, default=13)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     users = relationship("User", back_populates="organization")
@@ -107,13 +112,12 @@ class Contact(Base):
     email = Column(String(255), nullable=True)  # אימייל
     contact_type = Column(
         String(20), nullable=False, default="mekurav", index=True
-    )  # picklist contact.contact_type (מקורב | שליח)
+    )  # picklist contact.contact_type (מקורב | פעיל)
     assigned_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     address = Column(Text, nullable=True)  # formatted address (Google Places)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
     # Picklist-backed (admin-managed) CRM fields stay on the core contact:
-    area = Column(String(50), nullable=True)  # picklist contact.area (אזור)
     pipeline_status = Column(String(50), nullable=True)
     color_tag = Column(String(20), nullable=True)
     priority_score = Column(Integer, nullable=True)
@@ -155,6 +159,24 @@ class Contact(Base):
         uselist=False,
         cascade="all, delete-orphan",
     )
+    # Contact-specific records: removed with the contact (FKs are enforced under
+    # PostgreSQL, so these must be cascaded or the delete fails).
+    visits = relationship(
+        "VisitHistory",
+        back_populates="contact",
+        cascade="all, delete-orphan",
+    )
+    # Named *_rows to avoid colliding with the ContactDetailOut.picklist_values
+    # schema field (a dict assembled separately in the router).
+    picklist_value_rows = relationship(
+        "ContactPicklistValue",
+        back_populates="contact",
+        cascade="all, delete-orphan",
+    )
+    # Donations are admin-managed financial records that may outlive a contact:
+    # on contact delete, SQLAlchemy nulls their (nullable) contact_id instead of
+    # deleting them. No delete cascade here on purpose.
+    donations = relationship("Donation", back_populates="contact")
 
 
 class ContactMekurav(Base):
@@ -178,6 +200,9 @@ class ContactMekurav(Base):
     rebbe_connection = Column(Text, nullable=True)  # קשר לרבי
     recommendations = Column(Text, nullable=True)  # המלצות
     background = Column(Text, nullable=True)  # רקע
+    # NOTE (fixes4): picklist-backed attributes (Jewish_status, affiliation, language,
+    # and any admin-defined picklist) are stored generically in `contact_picklist_values`
+    # — no hardcoded columns. Only pre-existing system picklists remain as columns.
 
     contact = relationship("Contact", back_populates="mekurav")
     apartment = relationship("Apartment", back_populates="mekuravim")
@@ -214,6 +239,11 @@ class ContactShliach(Base):
         back_populates="shliach",
         cascade="all, delete-orphan",
     )
+    areas = relationship(
+        "ContactShliachArea",
+        back_populates="shliach",
+        cascade="all, delete-orphan",
+    )
 
 
 class ContactShliachApartment(Base):
@@ -240,6 +270,28 @@ class ContactShliachApartment(Base):
 
     shliach = relationship("ContactShliach", back_populates="apartments")
     apartment = relationship("Apartment", back_populates="shluchim")
+
+
+class ContactShliachArea(Base):
+    """M2M: which areas a shliach (active member) covers."""
+
+    __tablename__ = "contact_shliach_area"
+    __table_args__ = (
+        UniqueConstraint("contact_shliach_id", "area_id", name="uq_shliach_area"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    contact_shliach_id = Column(
+        Integer, ForeignKey("contact_shliach.id"), nullable=False, index=True
+    )
+    area_id = Column(Integer, ForeignKey("areas.id"), nullable=False, index=True)
+
+    shliach = relationship("ContactShliach", back_populates="areas")
+    area = relationship("Area")
 
 
 class Area(Base):
@@ -316,7 +368,7 @@ class SignificantDate(Base):
     special_date = Column(DateTime, nullable=False)  # תאריך חשוב
     hebrew_date = Column(String(100), nullable=True)  # תאריך עברי
     special_date_type = Column(String(50), nullable=True)  # picklist significant_date.type
-    special_date_title = Column(String(100), nullable=True)  # picklist significant_date.title
+    special_date_title = Column(String(200), nullable=True)  # free text (fixes4)
     is_set_reminder = Column(Boolean, nullable=False, default=False)  # האם לשלוח תזכורת
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
@@ -383,6 +435,51 @@ class SignificantDateReminder(Base):
     significant_date = relationship("SignificantDate", back_populates="reminders")
 
 
+class VisitHistory(Base):
+    """A visit (היסטורית ביקורים). Many per contact; may be unlinked to a contact."""
+
+    __tablename__ = "visit_history"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    contact_id = Column(
+        Integer, ForeignKey("contacts.id"), nullable=True, index=True
+    )  # איש קשר (optional)
+    visit_date = Column(DateTime, nullable=False)  # תאריך
+    visit_type = Column(String, nullable=True)  # סוג ביקור (picklist: visit.type)
+    location = Column(Text, nullable=True)  # מיקום
+    notes = Column(Text, nullable=True)  # הערות
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    contact = relationship("Contact", back_populates="visits")
+
+
+class Donation(Base):
+    """A donation (היסטורית תרומות). Admin-managed; may be unlinked to a contact."""
+
+    __tablename__ = "donations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    contact_id = Column(
+        Integer, ForeignKey("contacts.id"), nullable=True, index=True
+    )  # איש קשר (optional)
+    donation_date = Column(DateTime, nullable=False)  # תאריך
+    amount = Column(Float, nullable=True)  # סכום
+    is_ongoing = Column(Boolean, nullable=False, default=False)  # האם הוראת קבע
+    number_of_payments = Column(Integer, nullable=True)  # מספר תשלומים
+    notes = Column(Text, nullable=True)  # הערות
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    contact = relationship("Contact", back_populates="donations")
+
+
 class CommunityChecklist(Base):
     """Mitzvot checklist — only populated for mekurav contacts (scoped via contact)."""
 
@@ -432,7 +529,35 @@ class FieldLocalization(Base):
     guid = _guid_column()
     entity_type = Column(String(50), nullable=False)
     technical_name = Column(String(100), nullable=False, unique=True)
-    hebrew_label = Column(String(100), nullable=False)
+    # UI strings can be long sentences (intros, hints) — Text avoids Postgres'
+    # enforced varchar length limits (SQLite ignores them, Postgres does not).
+    hebrew_label = Column(Text, nullable=False)
+    # English label for the bilingual UI; blank until an admin fills it in.
+    english_label = Column(Text, nullable=True)
+
+
+class FieldSetting(Base):
+    """Per-org visibility toggle for a built-in contact field (admin-managed).
+
+    Only fields in the toggleable registry (see app/field_registry.py) are stored
+    here. A row marks a field shown/hidden; absence means visible (the default),
+    so existing orgs need no backfill.
+    """
+
+    __tablename__ = "field_settings"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id", "field_key", name="uq_fieldsetting_org_key"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    field_key = Column(String(100), nullable=False)  # e.g. 'contacts.area'
+    is_visible = Column(Boolean, nullable=False, default=True)
 
 
 class CustomFieldDefinition(Base):
@@ -502,8 +627,10 @@ class PicklistValue(Base):
         Integer, ForeignKey("organizations.id"), nullable=False, index=True
     )
     field_key = Column(String(100), nullable=False, index=True)
-    value = Column(String(100), nullable=False)
-    hebrew_label = Column(String(100), nullable=False)
+    value = Column(String(100), nullable=False)  # stored technical/system token
+    hebrew_label = Column(String(100), nullable=False)  # hebrew_value
+    # English display value for the bilingual UI; blank until an admin fills it in.
+    english_value = Column(String(100), nullable=True)
     color_hint = Column(String(20), nullable=True)
     sort_order = Column(Integer, default=0, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
@@ -514,3 +641,61 @@ class PicklistValue(Base):
         default=datetime.datetime.utcnow,
         onupdate=datetime.datetime.utcnow,
     )
+
+
+class PicklistDefinition(Base):
+    """Per-organization picklist **definition** (the registry of managed picklists).
+
+    Promotes the previously hardcoded `PICKLIST_FIELDS` map into editable data so
+    admins can rename display labels (he/en). `system_name` is the stable key that
+    `picklist_values.field_key` references.
+    """
+
+    __tablename__ = "picklists"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id", "system_name", name="uq_picklist_org_system"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    system_name = Column(String(100), nullable=False, index=True)
+    hebrew_display_name = Column(String(150), nullable=False)
+    english_display_name = Column(String(150), nullable=True)
+    is_system = Column(Boolean, nullable=False, default=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class ContactPicklistValue(Base):
+    """A contact's selected option for a *dynamic* picklist (single-select).
+
+    Generic key/value store so picklist-backed attributes need no schema columns:
+    one row per (contact, picklist). `value` holds the technical token (matching
+    `picklist_values.value`).
+    """
+
+    __tablename__ = "contact_picklist_values"
+    __table_args__ = (
+        UniqueConstraint("contact_id", "picklist_id", name="uq_contact_picklist"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    contact_id = Column(
+        Integer, ForeignKey("contacts.id"), nullable=False, index=True
+    )
+    picklist_id = Column(
+        Integer, ForeignKey("picklists.id"), nullable=False, index=True
+    )
+    value = Column(String(100), nullable=False)
+
+    contact = relationship("Contact", back_populates="picklist_value_rows")
+    picklist = relationship("PicklistDefinition")

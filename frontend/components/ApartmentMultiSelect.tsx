@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
+import { useLocalization } from "@/lib/localization";
 import type { Apartment, Building } from "@/lib/types";
 
 /**
@@ -14,10 +15,15 @@ import type { Apartment, Building } from "@/lib/types";
 export function ApartmentMultiSelect({
   value,
   onChange,
+  areaIds,
 }: {
   value: number[];
   onChange: (ids: number[]) => void;
+  /** When provided (non-empty), only apartments whose building is in these areas
+   *  are offered as options. */
+  areaIds?: number[];
 }) {
+  const { t } = useLocalization();
   const [apartments, setApartments] = useState<Apartment[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [adding, setAdding] = useState(false);
@@ -41,19 +47,31 @@ export function ApartmentMultiSelect({
     return (id: number) => map.get(id) ?? "";
   }, [buildings]);
 
+  // Apartment -> its building's area, to filter options by the shliach's areas.
+  const buildingArea = useMemo(() => {
+    const map = new Map<number, number>();
+    buildings.forEach((b) => map.set(b.id, b.area_id));
+    return map;
+  }, [buildings]);
+
   const label = (a: Apartment) => {
     const bn = buildingName(a.building_id);
     return bn ? `${a.apartment_name} — ${bn}` : a.apartment_name;
   };
 
+  const inArea = (a: Apartment) =>
+    !areaIds || areaIds.length === 0
+      ? true
+      : areaIds.includes(buildingArea.get(a.building_id) ?? -1);
+
   const selected = apartments.filter((a) => value.includes(a.id));
   const q = query.trim().toLowerCase();
-  const matches = q
-    ? apartments
-        .filter((a) => !value.includes(a.id))
-        .filter((a) => label(a).toLowerCase().includes(q))
-        .slice(0, 8)
-    : [];
+  // Available options (not already selected, within the area). Shown even before
+  // the user types — they may not know an apartment's name to start searching.
+  const candidates = apartments.filter((a) => !value.includes(a.id)).filter(inArea);
+  const matches = (
+    q ? candidates.filter((a) => label(a).toLowerCase().includes(q)) : candidates
+  ).slice(0, 12);
 
   function add(id: number) {
     onChange([...value, id]);
@@ -68,11 +86,11 @@ export function ApartmentMultiSelect({
   if (apartments.length === 0) {
     return (
       <p className="text-sm text-gray-500">
-        אין דירות עדיין.{" "}
+        {t("apt.no_apartments", "אין דירות עדיין.")}{" "}
         <Link href="/dashboard/buildings" className="text-status-magenta hover:underline">
-          הוסף בניין ודירה
+          {t("apt.add_building_apartment", "הוסף בניין ודירה")}
         </Link>{" "}
-        כדי לשייך לשליח.
+        {t("apt.to_link_shliach", "כדי לשייך לפעיל.")}
       </p>
     );
   }
@@ -91,7 +109,7 @@ export function ApartmentMultiSelect({
                 type="button"
                 onClick={() => remove(a.id)}
                 className="text-status-magenta/70 hover:text-status-darkred"
-                aria-label="הסר"
+                aria-label={t("action.remove", "הסר")}
               >
                 ✕
               </button>
@@ -105,7 +123,7 @@ export function ApartmentMultiSelect({
           <input
             autoFocus
             className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
-            placeholder="חפש דירה לפי שם דירה או בניין…"
+            placeholder={t("apt.search_placeholder", "חפש דירה לפי שם דירה או בניין…")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onBlur={() => setTimeout(() => setAdding(false), 150)}
@@ -133,7 +151,7 @@ export function ApartmentMultiSelect({
           onClick={() => setAdding(true)}
           className="text-sm text-status-magenta hover:underline"
         >
-          + הוסף דירה
+          + {t("apt.add_apartment", "הוסף דירה")}
         </button>
       )}
     </div>

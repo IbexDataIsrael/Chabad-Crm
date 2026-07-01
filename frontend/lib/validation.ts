@@ -1,17 +1,24 @@
-// Phone + password validation for signup.
+// Phone + email + password validation.
 
-/** Accepts Israeli or US phone numbers (various separators allowed). */
+/** Accepts an Israeli or a North-American (USA/Canada, NANP) phone number. */
 export function isValidPhone(raw: string): boolean {
   const p = raw.replace(/[\s\-().]/g, "");
   // Israel: +972 or 0 prefix; mobile 05X######## or landline 0[2-489]#######
   const israel = /^(\+972|0)(5\d{8}|[2-489]\d{7})$/;
-  // US: optional +1 then 10 digits
-  const usa = /^(\+1)?\d{10}$/;
-  return israel.test(p) || usa.test(p);
+  // USA/Canada (NANP): optional +1, then 10 digits where area & exchange start 2-9.
+  const nanp = /^(\+?1)?[2-9]\d{2}[2-9]\d{6}$/;
+  return israel.test(p) || nanp.test(p);
 }
 
 export const PHONE_HINT =
-  "מספר טלפון ישראלי (לדוגמה 052-1234567) או אמריקאי (לדוגמה +1 415 555 0123).";
+  "מספר טלפון ישראלי (לדוגמה 052-1234567) או אמריקאי/קנדי (לדוגמה +1 415 555 0123).";
+
+/** A pragmatic email check (one @, a dot in the domain, no spaces). */
+export function isValidEmail(raw: string): boolean {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw.trim());
+}
+
+export const EMAIL_HINT = "כתובת אימייל תקינה, לדוגמה name@example.com";
 
 export interface PasswordCheck {
   length: boolean;

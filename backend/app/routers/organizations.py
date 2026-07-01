@@ -33,8 +33,13 @@ def update_my_org(
     data = payload.model_dump(exclude_unset=True)
     if data.get("name"):
         org.name = data["name"]
+    if "logo_url" in data:  # present-but-null clears the logo
+        org.logo_url = data["logo_url"]
     if "map_in_english" in data and data["map_in_english"] is not None:
         org.map_in_english = data["map_in_english"]
+    for field in ("default_lat", "default_lng", "default_zoom"):
+        if field in data:
+            setattr(org, field, data[field])
     db.commit()
     db.refresh(org)
     return org

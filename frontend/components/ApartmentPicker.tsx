@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
+import { useLocalization } from "@/lib/localization";
 import type { Apartment, Building } from "@/lib/types";
 
 const inputClass =
@@ -21,6 +22,7 @@ export function ApartmentPicker({
   value: number | null;
   onChange: (apartmentId: number | null) => void;
 }) {
+  const { t } = useLocalization();
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [buildingId, setBuildingId] = useState<number | "">("");
   const [apartments, setApartments] = useState<Apartment[]>([]);
@@ -80,18 +82,18 @@ export function ApartmentPicker({
       setNewNotes("");
       setAdding(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "הוספת דירה נכשלה");
+      setError(err instanceof Error ? err.message : t("apt.add_failed", "הוספת דירה נכשלה"));
     }
   }
 
   if (buildings.length === 0) {
     return (
       <p className="text-sm text-gray-500">
-        אין בניינים עדיין.{" "}
+        {t("apt.no_buildings", "אין בניינים עדיין.")}{" "}
         <Link href="/dashboard/buildings" className="text-status-magenta hover:underline">
-          הוסף בניין
+          {t("page.add_building", "הוסף בניין")}
         </Link>{" "}
-        כדי לשייך דירה.
+        {t("apt.to_link_apartment", "כדי לשייך דירה.")}
       </p>
     );
   }
@@ -108,7 +110,7 @@ export function ApartmentPicker({
             setAdding(false);
           }}
         >
-          <option value="">בחר בניין…</option>
+          <option value="">{t("apt.choose_building", "בחר בניין…")}</option>
           {buildings.map((b) => (
             <option key={b.id} value={b.id}>
               {b.building_name}
@@ -122,7 +124,7 @@ export function ApartmentPicker({
           disabled={buildingId === ""}
           onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
         >
-          <option value="">בחר דירה…</option>
+          <option value="">{t("apt.choose_apartment", "בחר דירה…")}</option>
           {apartments.map((a) => (
             <option key={a.id} value={a.id}>
               {a.apartment_name}
@@ -136,13 +138,13 @@ export function ApartmentPicker({
           <div className="rounded-md border border-gray-200 p-3 space-y-2">
             <input
               className={inputClass}
-              placeholder="שם דירה"
+              placeholder={t("apt.name", "שם דירה")}
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
             />
             <input
               className={inputClass}
-              placeholder="הערות (לא חובה)"
+              placeholder={t("apt.notes_optional", "הערות (לא חובה)")}
               value={newNotes}
               onChange={(e) => setNewNotes(e.target.value)}
             />
@@ -153,14 +155,14 @@ export function ApartmentPicker({
                 onClick={createApartment}
                 className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
               >
-                שמור דירה
+                {t("apt.save_apartment", "שמור דירה")}
               </button>
               <button
                 type="button"
                 onClick={() => setAdding(false)}
                 className="text-sm text-gray-500 hover:underline"
               >
-                ביטול
+                {t("action.cancel", "ביטול")}
               </button>
             </div>
           </div>
@@ -170,7 +172,7 @@ export function ApartmentPicker({
             onClick={() => setAdding(true)}
             className="text-sm text-status-magenta hover:underline"
           >
-            + הוסף דירה
+            + {t("apt.add_apartment", "הוסף דירה")}
           </button>
         ))}
     </div>

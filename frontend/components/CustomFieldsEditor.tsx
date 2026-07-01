@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocalization } from "@/lib/localization";
 import type { ContactCustomField } from "@/lib/types";
 
 /** Controlled editor for the org's custom checklist fields (boolean + note each). */
@@ -10,6 +11,7 @@ export function CustomFieldsEditor({
   items: ContactCustomField[];
   onChange: (items: ContactCustomField[]) => void;
 }) {
+  const { t } = useLocalization();
   function update(index: number, patch: Partial<ContactCustomField>) {
     onChange(items.map((it, i) => (i === index ? { ...it, ...patch } : it)));
   }
@@ -37,7 +39,7 @@ export function CustomFieldsEditor({
           </button>
           <input
             className="flex-1 rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
-            placeholder="הערה…"
+            placeholder={t("field.note_placeholder", "הערה…")}
             value={it.note ?? ""}
             onChange={(e) => update(i, { note: e.target.value || null })}
           />

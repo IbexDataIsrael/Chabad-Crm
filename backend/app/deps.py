@@ -45,3 +45,16 @@ def require_admin(
             detail="Admin privileges required",
         )
     return current_user
+
+
+def require_staff_or_admin(
+    current_user: models.User = Depends(get_current_user),
+) -> models.User:
+    """Allow admin or staff; block shliach. Shliach users manage apartments, not
+    contacts — they get read-only (scoped) contact access elsewhere."""
+    if current_user.role not in ("admin", "staff"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admin or staff can create contacts",
+        )
+    return current_user

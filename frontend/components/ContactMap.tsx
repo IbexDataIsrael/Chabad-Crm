@@ -3,9 +3,11 @@
 import { useEffect, useRef } from "react";
 
 import { loadGoogleMaps, mapsKey } from "@/lib/maps";
+import { useLocalization } from "@/lib/localization";
 
 /** Renders a Google map with a marker via the Maps JavaScript API (no Embed API). */
 export function ContactMap({ lat, lng }: { lat: number; lng: number }) {
+  const { t } = useLocalization();
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -35,7 +37,7 @@ export function ContactMap({ lat, lng }: { lat: number; lng: number }) {
         rel="noreferrer"
         className="text-sm text-status-magenta hover:underline"
       >
-        הצג מיקום במפות גוגל ›
+        {t("map.open_in_google", "הצג מיקום במפות גוגל ›")}
       </a>
     );
   }

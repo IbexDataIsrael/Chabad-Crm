@@ -61,8 +61,33 @@ export async function apiFetch<T>(
   return (await res.json()) as T;
 }
 
+export interface LocalizationRow {
+  id: number;
+  entity_type: string;
+  technical_name: string;
+  hebrew_label: string;
+  english_label: string | null;
+}
+
+/** Admin: list all UI localization strings. */
+export async function listLocalization(): Promise<LocalizationRow[]> {
+  return apiFetch("/api/localization");
+}
+
+/** Admin: update a localization string's Hebrew/English text. */
+export async function updateLocalization(
+  id: number,
+  patch: { hebrew_label?: string; english_label?: string | null },
+): Promise<LocalizationRow> {
+  return apiFetch(`/api/localization/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(patch),
+  });
+}
+
 export interface SignupPayload {
   organization_name: string;
+  organization_logo_url?: string | null;
   first_name: string;
   last_name: string;
   email: string;
@@ -106,10 +131,15 @@ export async function googleLogin(credential: string): Promise<string> {
 export async function googleSignup(
   credential: string,
   organizationName: string,
+  organizationLogoUrl?: string | null,
 ): Promise<string> {
   const data = await apiFetch<{ access_token: string }>("/api/auth/google-signup", {
     method: "POST",
-    body: JSON.stringify({ credential, organization_name: organizationName }),
+    body: JSON.stringify({
+      credential,
+      organization_name: organizationName,
+      organization_logo_url: organizationLogoUrl ?? null,
+    }),
   });
   return data.access_token;
 }

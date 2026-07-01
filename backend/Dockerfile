@@ -5,7 +5,8 @@ WORKDIR /app
 # Install pipenv and project dependencies into the system environment.
 RUN pip install --no-cache-dir pipenv
 COPY Pipfile ./
-RUN pipenv install --system --skip-lock
+# --dev installs pytest/httpx too so the test suite runs in-container.
+RUN pipenv install --dev --system --skip-lock
 
 # Copy application code.
 COPY . .

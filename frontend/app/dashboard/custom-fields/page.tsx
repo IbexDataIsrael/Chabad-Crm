@@ -4,10 +4,13 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useLocalization } from "@/lib/localization";
+import { useToast } from "@/lib/toast";
 import type { CustomFieldDefinition } from "@/lib/types";
 
 export default function CustomFieldsPage() {
   const { isAdmin, loading } = useAuth();
+  const { t } = useLocalization();
   const [defs, setDefs] = useState<CustomFieldDefinition[]>([]);
 
   async function reload() {
@@ -20,16 +23,20 @@ export default function CustomFieldsPage() {
     reload().catch(() => {});
   }, []);
 
-  if (loading) return <p className="text-gray-400">טוען…</p>;
+  if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
   if (!isAdmin) {
-    return <p className="text-status-darkred">אין לך הרשאה לעמוד זה (מנהלים בלבד).</p>;
+    return (
+      <p className="text-status-darkred">
+        {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
+      </p>
+    );
   }
 
   return (
     <div className="space-y-5 max-w-2xl">
-      <h1 className="text-2xl font-bold">שדות מותאמים אישית</h1>
+      <h1 className="text-2xl font-bold">{t("cf.title", "שדות מותאמים אישית")}</h1>
       <p className="text-sm text-gray-500">
-        כל שדה הוא תיבת סימון + הערה, ויופיע בכרטיס איש הקשר. לדוגמה: מסיבת חנוכה.
+        {t("cf.intro", "כל שדה הוא תיבת סימון + הערה, ויופיע בכרטיס איש הקשר. לדוגמה: מסיבת חנוכה.")}
       </p>
 
       <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
@@ -37,7 +44,7 @@ export default function CustomFieldsPage() {
           <DefRow key={d.id} def={d} onChanged={reload} />
         ))}
         {defs.length === 0 && (
-          <p className="px-4 py-6 text-center text-gray-400">אין שדות מותאמים עדיין.</p>
+          <p className="px-4 py-6 text-center text-gray-400">{t("cf.none", "אין שדות מותאמים עדיין.")}</p>
         )}
       </div>
 
@@ -53,33 +60,56 @@ function DefRow({
   def: CustomFieldDefinition;
   onChanged: () => Promise<void>;
 }) {
+  const { t } = useLocalization();
+  const { success, error } = useToast();
   const [label, setLabel] = useState(def.hebrew_label);
 
   async function save() {
-    await apiFetch(`/api/custom-fields/${def.id}`, {
-      method: "PUT",
-      body: JSON.stringify({ hebrew_label: label }),
-    });
-    await onChanged();
+    try {
+      await apiFetch(`/api/custom-fields/${def.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ hebrew_label: label }),
+      });
+      await onChanged();
+      success(t("msg.saved", "נשמר בהצלחה"));
+    } catch (err) {
+      error(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+    }
   }
 
   async function deactivate() {
-    await apiFetch(`/api/custom-fields/${def.id}`, { method: "DELETE" });
-    await onChanged();
+    try {
+      await apiFetch(`/api/custom-fields/${def.id}`, { method: "DELETE" });
+      await onChanged();
+      success(t("msg.hidden", "השדה הוסתר"));
+    } catch (err) {
+      error(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+    }
   }
 
   async function reactivate() {
-    await apiFetch(`/api/custom-fields/${def.id}`, {
-      method: "PUT",
-      body: JSON.stringify({ is_active: true }),
-    });
-    await onChanged();
+    try {
+      await apiFetch(`/api/custom-fields/${def.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ is_active: true }),
+      });
+      await onChanged();
+      success(t("msg.shown", "השדה הוצג"));
+    } catch (err) {
+      error(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+    }
   }
 
   async function hardDelete() {
-    if (!confirm(`למחוק לצמיתות את '${def.field_key}' וכל הערכים שלו?`)) return;
-    await apiFetch(`/api/custom-fields/${def.id}?hard=true`, { method: "DELETE" });
-    await onChanged();
+    if (!confirm(`${t("cf.hard_delete_confirm", "למחוק לצמיתות את כל הערכים?")} '${def.field_key}'`))
+      return;
+    try {
+      await apiFetch(`/api/custom-fields/${def.id}?hard=true`, { method: "DELETE" });
+      await onChanged();
+      success(t("msg.deleted", "נמחק"));
+    } catch (err) {
+      error(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+    }
   }
 
   const input = "rounded-md border border-gray-300 px-2 py-1 text-sm";
@@ -99,21 +129,21 @@ function DefRow({
         onChange={(e) => setLabel(e.target.value)}
       />
       {!def.is_active && (
-        <span className="rounded bg-gray-200 text-gray-600 text-xs px-2 py-0.5">מושבת</span>
+        <span className="rounded bg-gray-200 text-gray-600 text-xs px-2 py-0.5">{t("cf.disabled", "מושבת")}</span>
       )}
       <div className="flex items-center gap-1 ms-auto">
         <button
           onClick={save}
           className="rounded-md bg-gray-800 text-white px-3 py-1 text-xs hover:opacity-90"
         >
-          שמור
+          {t("action.save", "שמור")}
         </button>
         {def.is_active ? (
           <button
             onClick={deactivate}
             className="rounded-md border border-status-darkred/40 text-status-darkred px-2 py-1 text-xs hover:bg-red-50"
           >
-            מחק
+            {t("action.delete", "מחק")}
           </button>
         ) : (
           <>
@@ -121,13 +151,13 @@ function DefRow({
               onClick={reactivate}
               className="rounded-md border border-status-green/40 text-status-green px-2 py-1 text-xs hover:bg-green-50"
             >
-              הפעל
+              {t("cf.activate", "הפעל")}
             </button>
             <button
               onClick={hardDelete}
               className="text-xs text-status-darkred hover:underline"
             >
-              מחק לצמיתות
+              {t("cf.hard_delete", "מחק לצמיתות")}
             </button>
           </>
         )}
@@ -137,6 +167,8 @@ function DefRow({
 }
 
 function AddDef({ onAdded }: { onAdded: () => Promise<void> }) {
+  const { t } = useLocalization();
+  const { success } = useToast();
   const [fieldKey, setFieldKey] = useState("");
   const [label, setLabel] = useState("");
   const [error, setError] = useState("");
@@ -152,8 +184,9 @@ function AddDef({ onAdded }: { onAdded: () => Promise<void> }) {
       setFieldKey("");
       setLabel("");
       await onAdded();
+      success(t("msg.added", "נוסף בהצלחה"));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "הוספה נכשלה");
+      setError(err instanceof Error ? err.message : t("cf.add_failed", "הוספה נכשלה"));
     }
   }
 
@@ -161,11 +194,11 @@ function AddDef({ onAdded }: { onAdded: () => Promise<void> }) {
 
   return (
     <form onSubmit={add} className="bg-white rounded-xl shadow-sm p-4 space-y-2">
-      <h3 className="font-medium text-sm">הוספת שדה</h3>
+      <h3 className="font-medium text-sm">{t("cf.add_field", "הוספת שדה")}</h3>
       <div className="flex flex-wrap gap-2">
         <input
           className={`${input} w-44`}
-          placeholder="מפתח (אנגלית) — hanuka_party"
+          placeholder={t("cf.key_placeholder", "מפתח (אנגלית) — hanuka_party")}
           value={fieldKey}
           onChange={(e) => setFieldKey(e.target.value)}
           dir="ltr"
@@ -173,7 +206,7 @@ function AddDef({ onAdded }: { onAdded: () => Promise<void> }) {
         />
         <input
           className={`${input} flex-1 min-w-[8rem]`}
-          placeholder="תווית בעברית"
+          placeholder={t("cf.label_placeholder", "תווית בעברית")}
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           required
@@ -182,7 +215,7 @@ function AddDef({ onAdded }: { onAdded: () => Promise<void> }) {
           type="submit"
           className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
         >
-          הוסף
+          {t("action.add", "הוסף")}
         </button>
       </div>
       {error && <p className="text-sm text-status-darkred">{error}</p>}
