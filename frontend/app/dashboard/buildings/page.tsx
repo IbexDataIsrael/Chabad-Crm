@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { BuildingsMap } from "@/components/BuildingsMap";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
@@ -96,6 +97,12 @@ export default function BuildingsPage() {
             await reload();
           }}
         />
+      )}
+
+      {shown.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm p-2">
+          <BuildingsMap buildings={shown} />
+        </div>
       )}
 
       <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">

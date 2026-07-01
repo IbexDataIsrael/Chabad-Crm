@@ -110,6 +110,10 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("visit", "visit.search_ph", "חיפוש לפי איש קשר או הערות…", "Search by contact or notes…"),
     ("visit", "visit.delete_confirm", "למחוק ביקור זה?", "Delete this visit?"),
     ("visit", "visit.pick_date", "יש לבחור תאריך", "Please pick a date"),
+    # Buildings map.
+    ("map", "map.set_key", "להצגת מפה הגדר מפתח Google Maps.", "Set a Google Maps key to show the map."),
+    ("buildings", "buildings.view", "הצג בניין »", "View building »"),
+    ("buildings", "buildings.none_located", "אין בניינים עם קואורדינטות להצגה על המפה.", "No buildings with coordinates to show on the map."),
     # Header dropdown group labels.
     ("nav", "nav.group.people", "אנשים", "People"),
     ("nav", "nav.group.places", "מקומות", "Places"),
