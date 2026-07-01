@@ -61,14 +61,18 @@ class Settings(BaseSettings):
     # Reminder scheduler: how often (seconds) to scan for due significant-date reminders.
     reminder_scan_interval_seconds: int = 300
 
-    # Signup email verification.
-    frontend_url: str = "http://localhost:3001"
+    # Signup email verification. Defaults to the production frontend so email
+    # links are correct even if FRONTEND_URL isn't set on the host; local dev
+    # overrides it via backend/.env.
+    frontend_url: str = "https://minicrm-ibexdata.vercel.app"
     verification_token_expire_hours: int = 24
-    # SMTP (optional): if smtp_host is empty, verification links are logged to the console.
-    email_from: str = "no-reply@crm.local"
-    smtp_host: str = ""
+    # SMTP. Host/user/from default to the project's Gmail sender; only the app
+    # password is a secret that must be provided (via SMTP_PASSWORD env). When
+    # the password is empty, send_email falls back to logging (dev-safe).
+    email_from: str = "ibexprogrammer@gmail.com"
+    smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
-    smtp_user: str = ""
+    smtp_user: str = "ibexprogrammer@gmail.com"
     smtp_password: str = ""
 
 

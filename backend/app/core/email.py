@@ -36,8 +36,10 @@ def render_template(name: str, **vars: str) -> str:
 
 
 def send_email(to: str, subject: str, body: str, html: Optional[str] = None) -> None:
-    if not settings.smtp_host:
+    if not settings.smtp_host or not settings.smtp_password:
         # Dev fallback: print to stdout so links are visible in `docker compose logs`.
+        # Triggers when no SMTP host OR no password (so a fresh dev without an
+        # app password logs instead of erroring on an unauthenticated send).
         print(
             f"\n===== [DEV EMAIL — not actually sent] =====\n"
             f"To: {to}\nSubject: {subject}\n\n{body}\n"
