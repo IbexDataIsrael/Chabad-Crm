@@ -3,7 +3,9 @@
 Phase 1: database models are wired in and tables are created on startup. Auth
 and the CRM routers are added in subsequent phases (see docs/plan.md).
 """
+import logging
 import os
+import sys
 from contextlib import asynccontextmanager
 
 from alembic import command
@@ -15,6 +17,17 @@ from sqlalchemy import inspect
 from app import models  # noqa: F401 — ensures models register on Base.metadata
 from app.config import settings
 from app.database import SessionLocal, engine
+
+# Ensure our `app.*` loggers actually reach stdout at INFO. Uvicorn configures
+# only its own loggers, so without this our diagnostic logs (seed outcome,
+# email send result, admin actions) were silently dropped in production.
+_app_logger = logging.getLogger("app")
+if not _app_logger.handlers:
+    _handler = logging.StreamHandler(sys.stdout)
+    _handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+    _app_logger.addHandler(_handler)
+_app_logger.setLevel(logging.INFO)
+_app_logger.propagate = False
 
 
 def _run_migrations() -> None:
@@ -111,6 +124,33 @@ app.include_router(admin.router)
 def health() -> dict[str, str]:
     """Liveness probe used by smoke checks."""
     return {"status": "ok"}
+
+
+@app.get("/api/_diagnostics/superadmin", tags=["health"])
+def superadmin_status() -> dict:
+    """Whether a platform superadmin exists + its login-relevant flags.
+
+    Unauthenticated on purpose (returns no password/email) so a browser can
+    confirm the seed ran without reading Render logs. Remove once stable.
+    """
+    db = SessionLocal()
+    try:
+        user = (
+            db.query(models.User)
+            .filter(models.User.role == "superadmin")
+            .first()
+        )
+        if user is None:
+            return {"superadmin_exists": False}
+        return {
+            "superadmin_exists": True,
+            "username": user.username,
+            "is_active": user.is_active,
+            "email_verified": user.email_verified,
+            "org_active": user.organization.is_active if user.organization else None,
+        }
+    finally:
+        db.close()
 
 
 @app.get("/api/_diagnostics/tables", tags=["health"])
