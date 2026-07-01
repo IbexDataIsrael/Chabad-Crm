@@ -165,3 +165,60 @@ export async function login(username: string, password: string): Promise<string>
   const data = await res.json();
   return data.access_token as string;
 }
+
+// --- Platform superadmin (/admin dashboard) --------------------------------
+export interface AdminOrganization {
+  id: number;
+  guid: string;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+  user_count: number;
+  admin_email: string | null;
+  admin_name: string | null;
+}
+
+export interface AdminUser {
+  id: number;
+  guid: string;
+  username: string;
+  full_name: string;
+  email: string | null;
+  role: string;
+  is_active: boolean;
+  email_verified: boolean;
+  created_at: string;
+  organization_id: number;
+}
+
+export const adminListOrganizations = (): Promise<AdminOrganization[]> =>
+  apiFetch("/api/admin/organizations");
+
+export const adminListOrgUsers = (orgId: number): Promise<AdminUser[]> =>
+  apiFetch(`/api/admin/organizations/${orgId}/users`);
+
+export const adminDeactivateOrg = (orgId: number): Promise<AdminOrganization> =>
+  apiFetch(`/api/admin/organizations/${orgId}/deactivate`, { method: "POST" });
+
+export const adminActivateOrg = (orgId: number): Promise<AdminOrganization> =>
+  apiFetch(`/api/admin/organizations/${orgId}/activate`, { method: "POST" });
+
+export const adminDeleteOrg = (orgId: number): Promise<void> =>
+  apiFetch(`/api/admin/organizations/${orgId}`, { method: "DELETE" });
+
+export const adminImpersonateOrg = (orgId: number): Promise<{ access_token: string }> =>
+  apiFetch(`/api/admin/organizations/${orgId}/impersonate`, { method: "POST" });
+
+export const adminListUsers = (): Promise<AdminUser[]> => apiFetch("/api/admin/users");
+
+export const adminDeleteUser = (userId: number): Promise<void> =>
+  apiFetch(`/api/admin/users/${userId}`, { method: "DELETE" });
+
+export const adminDeactivateUser = (userId: number): Promise<AdminUser> =>
+  apiFetch(`/api/admin/users/${userId}/deactivate`, { method: "POST" });
+
+export const adminActivateUser = (userId: number): Promise<AdminUser> =>
+  apiFetch(`/api/admin/users/${userId}/activate`, { method: "POST" });
+
+export const adminVerifyUser = (userId: number): Promise<AdminUser> =>
+  apiFetch(`/api/admin/users/${userId}/verify`, { method: "POST" });

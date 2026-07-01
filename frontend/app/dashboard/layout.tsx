@@ -18,7 +18,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 }
 
 function DashboardChrome({ children }: { children: ReactNode }) {
-  const { user, isAdmin, signOut } = useAuth();
+  const { user, isAdmin, isSuperadmin, signOut } = useAuth();
   const { t } = useLocalization();
   const orgName = user?.organization?.name ?? t("auth.app_title", "מיני CRM");
   const logoUrl = user?.organization?.logo_url ?? null;
@@ -83,6 +83,14 @@ function DashboardChrome({ children }: { children: ReactNode }) {
                 </Link>
               )}
               <NavMenu label={t("nav.group.more", "עוד")} items={moreItems} />
+              {isSuperadmin && (
+                <Link
+                  href="/dashboard/admin"
+                  className="rounded-md px-2.5 py-1.5 font-medium text-status-magenta transition-colors hover:bg-status-magenta/10"
+                >
+                  {t("nav.system_admin", "מנהל מערכת")}
+                </Link>
+              )}
             </nav>
           </div>
           <div className="flex items-center gap-3 text-sm">

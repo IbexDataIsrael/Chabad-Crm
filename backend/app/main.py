@@ -29,6 +29,7 @@ def _run_migrations() -> None:
     cfg.set_main_option("script_location", os.path.join(backend_dir, "alembic"))
     command.upgrade(cfg, "head")
 from app.routers import (
+    admin,
     apartments,
     areas,
     auth,
@@ -103,6 +104,7 @@ app.include_router(visits.router)
 app.include_router(visits.all_router)
 app.include_router(donations.router)
 app.include_router(uploads.router)
+app.include_router(admin.router)
 
 
 @app.get("/api/health", tags=["health"])

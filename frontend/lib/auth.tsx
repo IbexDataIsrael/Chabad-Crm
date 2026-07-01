@@ -43,6 +43,7 @@ interface AuthContextValue {
   loading: boolean;
   isAdmin: boolean;
   isShliach: boolean;
+  isSuperadmin: boolean;
   signIn: (username: string, password: string) => Promise<void>;
   signInWithGoogle: (credential: string) => Promise<void>;
   signUpWithGoogle: (
@@ -132,6 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         isAdmin: user?.role === "admin",
         isShliach: user?.role === "shliach",
+        isSuperadmin: user?.role === "superadmin",
         signIn,
         signInWithGoogle,
         signUpWithGoogle,

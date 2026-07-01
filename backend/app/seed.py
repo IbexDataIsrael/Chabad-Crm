@@ -95,6 +95,30 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("nav", "nav.settings", "הגדרות", "Settings"),
     ("nav", "nav.donations", "תרומות", "Donations"),
     ("nav", "nav.visits", "ביקורים", "Visits"),
+    ("nav", "nav.system_admin", "מנהל מערכת", "System admin"),
+    # --- System admin (platform superadmin dashboard) ---
+    ("admin", "admin.title", "ניהול מערכת", "System administration"),
+    ("admin", "admin.subtitle", "כל הארגונים והמשתמשים במערכת.", "All organizations and users in the system."),
+    ("admin", "admin.superadmin_only", "עמוד זה מיועד למנהל המערכת בלבד.", "This page is for the system administrator only."),
+    ("admin", "admin.no_orgs", "אין ארגונים.", "No organizations."),
+    ("admin", "admin.no_users", "אין משתמשים.", "No users."),
+    ("admin", "admin.active", "פעיל", "Active"),
+    ("admin", "admin.disabled", "מושבת", "Disabled"),
+    ("admin", "admin.unverified", "לא מאומת", "Unverified"),
+    ("admin", "admin.users", "משתמשים", "users"),
+    ("admin", "admin.manage_users", "משתמשים", "Users"),
+    ("admin", "admin.hide_users", "הסתר משתמשים", "Hide users"),
+    ("admin", "admin.impersonate", "התחבר כארגון", "Sign in as org"),
+    ("admin", "admin.activate", "הפעל", "Enable"),
+    ("admin", "admin.deactivate", "השבת", "Disable"),
+    ("admin", "admin.verify", "אמת", "Verify"),
+    ("admin", "admin.org_deleted", "הארגון נמחק", "Organization deleted"),
+    ("admin", "admin.org_disabled", "הארגון הושבת", "Organization disabled"),
+    ("admin", "admin.org_enabled", "הארגון הופעל", "Organization enabled"),
+    ("admin", "admin.user_deleted", "המשתמש נמחק", "User deleted"),
+    ("admin", "admin.user_verified", "המשתמש אומת", "User verified"),
+    ("admin", "admin.user_disabled", "המשתמש הושבת", "User disabled"),
+    ("admin", "admin.user_enabled", "המשתמש הופעל", "User enabled"),
     # --- Visits (top-level entity) ---
     ("visit", "page.visits", "ביקורים", "Visits"),
     ("visit", "page.add_visit", "ביקור חדש", "New visit"),
@@ -651,12 +675,64 @@ def _seed_sample_data(db: Session, org: models.Organization, admin: models.User)
     db.commit()
 
 
+def seed_superadmin(db: Session) -> None:
+    """Seed the platform superadmin into a dedicated System organization.
+
+    Runs in every environment (independent of SEED_DEMO_DATA) but only when both
+    SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD are set. Idempotent: keyed on the
+    globally-unique email. The superadmin is a pure-platform account (no tenant
+    data) — it exists only to reach the /api/admin/* endpoints.
+    """
+    if not settings.superadmin_email or not settings.superadmin_password:
+        return
+
+    existing = (
+        db.query(models.User)
+        .filter(models.User.email == settings.superadmin_email)
+        .first()
+    )
+    if existing is not None:
+        # Keep the role/credentials in sync in case env values changed.
+        if existing.role != "superadmin":
+            existing.role = "superadmin"
+        existing.password_hash = hash_password(settings.superadmin_password)
+        existing.is_active = True
+        existing.email_verified = True
+        db.commit()
+        return
+
+    system_org = (
+        db.query(models.Organization)
+        .filter(models.Organization.name == settings.system_org_name)
+        .first()
+    )
+    if system_org is None:
+        system_org = models.Organization(name=settings.system_org_name)
+        db.add(system_org)
+        db.flush()
+
+    db.add(
+        models.User(
+            organization_id=system_org.id,
+            username="superadmin",
+            full_name=settings.superadmin_name,
+            email=settings.superadmin_email,
+            password_hash=hash_password(settings.superadmin_password),
+            role="superadmin",
+            is_active=True,
+            email_verified=True,
+        )
+    )
+    db.commit()
+
+
 def seed_all(db: Session) -> None:
     """Global labels (always) + a demo organization (admin + picklists + sample
     data) when SEED_DEMO_DATA is enabled. In production the demo block is skipped
     so no default admin/admin123 or sample contacts reach the live database.
     """
     seed_localization(db)
+    seed_superadmin(db)
 
     # Backfill system picklist *definitions* for EVERY org (idempotent). An org
     # created before a given system picklist existed would otherwise never see it

@@ -22,6 +22,7 @@ from sqlalchemy import (
     Text,
     Time,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import relationship
 
@@ -51,6 +52,8 @@ class Organization(Base):
     default_lat = Column(Float, nullable=True)
     default_lng = Column(Float, nullable=True)
     default_zoom = Column(Integer, nullable=False, default=13)
+    # Platform-level enable/disable (superadmin). A disabled org's users can't log in.
+    is_active = Column(Boolean, nullable=False, default=True, server_default=text("true"))
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     users = relationship("User", back_populates="organization")

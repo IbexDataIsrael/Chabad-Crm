@@ -75,6 +75,35 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
+# --- Platform superadmin (cross-tenant admin dashboard) --------------------
+class AdminUserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    guid: str
+    username: str
+    full_name: str
+    email: Optional[str] = None
+    role: str
+    is_active: bool
+    email_verified: bool
+    created_at: datetime
+    organization_id: int
+
+
+class AdminOrganizationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    guid: str
+    name: str
+    is_active: bool
+    created_at: datetime
+    user_count: int
+    admin_email: Optional[str] = None
+    admin_name: Optional[str] = None
+
+
 class SignupRequest(BaseModel):
     organization_name: str
     organization_logo_url: Optional[str] = None

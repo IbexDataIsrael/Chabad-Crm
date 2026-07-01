@@ -176,6 +176,11 @@ def login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Please verify your email before logging in",
         )
+    if not user.organization.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This organization has been disabled. Contact support.",
+        )
     token = create_access_token(subject=str(user.id), role=user.role)
     return Token(access_token=token)
 
@@ -196,6 +201,11 @@ def google_login(payload: GoogleLoginRequest, db: Session = Depends(get_db)) -> 
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="לא נמצא משתמש עם כתובת אימייל זו. יש להירשם או לקבל הזמנה תחילה.",
+        )
+    if not user.organization.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This organization has been disabled. Contact support.",
         )
     # First Google sign-in: bind the Google subject and activate the account.
     if not user.google_sub:

@@ -61,6 +61,14 @@ class Settings(BaseSettings):
     # Reminder scheduler: how often (seconds) to scan for due significant-date reminders.
     reminder_scan_interval_seconds: int = 300
 
+    # Platform superadmin (cross-tenant "system admin"). Seeded on startup into a
+    # dedicated System organization when BOTH email + password are provided (set
+    # them on Render). Cannot be created via public signup. Leave empty to disable.
+    superadmin_email: str = ""
+    superadmin_password: str = ""
+    superadmin_name: str = "System Administrator"
+    system_org_name: str = "System"
+
     # Signup email verification. Defaults to the production frontend so email
     # links are correct even if FRONTEND_URL isn't set on the host; local dev
     # overrides it via backend/.env.
