@@ -4,7 +4,9 @@ When `SMTP_HOST` is unset (the dev default), emails are logged to the console
 instead of sent — the link is printed so you can copy it. HTML templates live in
 the `/HTML` directory (repo `backend/HTML`); `{{placeholders}}` are substituted.
 """
+import html as htmllib
 import logging
+import re
 import smtplib
 from email.message import EmailMessage
 from pathlib import Path
@@ -60,18 +62,67 @@ def _substitute(text: str, vars: dict[str, str]) -> str:
     return text
 
 
+def _looks_like_html(text: str) -> bool:
+    """Heuristic: did the template author paste real HTML (a tag) vs plain text?"""
+    return bool(re.search(r"<[a-zA-Z!/][^>]*>", text))
+
+
+def _text_to_html(text: str) -> str:
+    """Escape plain text and turn newlines into <br> for the branded HTML shell."""
+    return htmllib.escape(text).replace("\n", "<br>")
+
+
+def _strip_tags(html_text: str) -> str:
+    """Best-effort plain-text fallback from an HTML body."""
+    text = re.sub(r"<br\s*/?>", "\n", html_text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    return htmllib.unescape(text).strip()
+
+
 def send_templated_email(db: Session, key: str, to: str, **vars: str) -> None:
     """Load an editable template by key (DB, falling back to the default),
-    substitute {{vars}}, and send the Hebrew + English bodies as one email."""
+    substitute {{vars}}, and send it as an HTML email (with a plain-text fallback).
+
+    If the template body is plain text it's wrapped in the branded shell; if the
+    author pasted their own HTML into the box, that HTML is sent verbatim.
+    """
     row = db.query(models.EmailTemplate).filter(models.EmailTemplate.key == key).first()
     default = DEFAULT_EMAIL_TEMPLATES.get(key, {})
     subject = _substitute((row.subject if row else default.get("subject", "")), vars)
     body_he = _substitute((row.body_hebrew if row else default.get("body_hebrew", "")), vars)
     body_en = _substitute((row.body if row else default.get("body", "")), vars)
-    body = body_he
-    if body_en:
-        body = f"{body_he}\n\n----------------------------------------\n\n{body_en}" if body_he else body_en
-    send_email(to, subject, body)
+
+    combined = "\n\n".join(p for p in (body_he, body_en) if p)
+    if _looks_like_html(combined):
+        # Author-provided HTML — send exactly as pasted in the template box.
+        html_body = combined
+        text_body = _strip_tags(combined)
+    else:
+        # Plain-text template — brand it with the shared HTML shell.
+        parts: list[str] = []
+        if body_he:
+            parts.append(
+                f'<div dir="rtl" style="text-align:right;font-size:15px;line-height:1.7;">'
+                f"{_text_to_html(body_he)}</div>"
+            )
+        if body_en:
+            if parts:
+                parts.append(
+                    '<hr style="border:none;border-top:1px solid #f3f4f6;margin:20px 0;">'
+                )
+            parts.append(
+                f'<div dir="ltr" style="font-size:15px;line-height:1.7;color:#374151;">'
+                f"{_text_to_html(body_en)}</div>"
+            )
+        html_body = render_template(
+            "notification.html",
+            subject=htmllib.escape(subject),
+            content_html="".join(parts),
+            logo_url=_logo_url(),
+        )
+        text_body = combined
+
+    send_email(to, subject, text_body, html=html_body)
 
 # backend/HTML  (email.py = backend/app/core/email.py → parents[2] = backend)
 HTML_DIR = Path(__file__).resolve().parents[2] / "HTML"
