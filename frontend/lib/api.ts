@@ -24,6 +24,33 @@ export function clearToken(): void {
   if (typeof window !== "undefined") window.localStorage.removeItem(TOKEN_KEY);
 }
 
+/** Upload an image to our backend, which stores it on Cloudinary and returns the
+ * secure URL. Multipart (not JSON), so it doesn't go through apiFetch. */
+export async function uploadLogo(file: File): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${API_URL}/api/uploads/logo`, {
+    method: "POST",
+    body: form,
+    headers,
+  });
+  if (!res.ok) {
+    let detail = "Logo upload failed";
+    try {
+      const data = await res.json();
+      detail = data.detail || detail;
+    } catch {
+      /* keep default */
+    }
+    throw new ApiError(res.status, detail);
+  }
+  const data = await res.json();
+  return data.url as string;
+}
+
 /** Authenticated JSON fetch. Throws ApiError on non-2xx; redirects to login on 401. */
 export async function apiFetch<T>(
   path: string,
