@@ -69,6 +69,11 @@ class Settings(BaseSettings):
     superadmin_name: str = "System Administrator"
     system_org_name: str = "System"
 
+    # Where new-organization "pending approval" notifications are sent (the
+    # platform operator's inbox). Set on Render. If empty, the admin notification
+    # is skipped (the org still lands in the superadmin dashboard as pending).
+    platform_admin_email: str = ""
+
     # When False (the current default), public signup skips the email-verification
     # round-trip: the org's admin is created already active + verified and logged
     # in immediately ("old school" username+password). Flip to True once a real

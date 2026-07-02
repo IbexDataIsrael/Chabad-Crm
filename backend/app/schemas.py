@@ -98,10 +98,27 @@ class AdminOrganizationOut(BaseModel):
     guid: str
     name: str
     is_active: bool
+    approval_status: str
     created_at: datetime
     user_count: int
     admin_email: Optional[str] = None
     admin_name: Optional[str] = None
+
+
+class EmailTemplateOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    key: str
+    subject: str
+    body: str
+    body_hebrew: str
+
+
+class EmailTemplateUpdate(BaseModel):
+    subject: Optional[str] = None
+    body: Optional[str] = None
+    body_hebrew: Optional[str] = None
 
 
 class AdminOrgCreate(BaseModel):

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {
   adminActivateOrg,
   adminActivateUser,
+  adminApproveOrg,
   adminCreateOrg,
   adminDeactivateOrg,
   adminDeactivateUser,
@@ -19,6 +20,7 @@ import {
   type AdminOrganization,
   type AdminUser,
 } from "@/lib/api";
+import { EmailTemplatesCard } from "@/components/EmailTemplatesCard";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
@@ -176,6 +178,26 @@ export default function SystemAdminPage() {
     }, t("admin.org_created", "הארגון נוצר"));
   }
 
+  async function onApprove(org: AdminOrganization) {
+    await run(async () => {
+      await adminApproveOrg(org.id);
+      await loadOrgs();
+    }, t("admin.org_approved", "הארגון אושר"));
+  }
+
+  async function onRejectOrg(org: AdminOrganization) {
+    if (
+      !confirm(
+        t("admin.confirm_reject_org", `לדחות ולמחוק את בקשת הארגון "${org.name}"?`),
+      )
+    )
+      return;
+    await run(async () => {
+      await adminDeleteOrg(org.id);
+      await loadOrgs();
+    }, t("admin.org_rejected", "הבקשה נדחתה"));
+  }
+
   async function onDeleteUserGlobal(user: AdminUser) {
     if (
       !confirm(
@@ -328,7 +350,11 @@ export default function SystemAdminPage() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold">{org.name}</span>
-                    {org.is_active ? (
+                    {org.approval_status === "pending" ? (
+                      <span className="rounded bg-status-orange/10 text-status-orange px-2 py-0.5 text-xs">
+                        {t("admin.pending", "ממתין לאישור")}
+                      </span>
+                    ) : org.is_active ? (
                       <span className="rounded bg-status-green/10 text-status-green px-2 py-0.5 text-xs">
                         {t("admin.active", "פעיל")}
                       </span>
@@ -351,47 +377,68 @@ export default function SystemAdminPage() {
                       ? t("admin.hide_users", "הסתר משתמשים")
                       : t("admin.manage_users", "משתמשים")}
                   </button>
-                  <button
-                    disabled={busy}
-                    onClick={() => onImpersonate(org)}
-                    className="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    {t("admin.impersonate", "התחבר כארגון")}
-                  </button>
-                  {org.is_active ? (
-                    <button
-                      disabled={busy}
-                      onClick={() =>
-                        run(async () => {
-                          await adminDeactivateOrg(org.id);
-                          await loadOrgs();
-                        }, t("admin.org_disabled", "הארגון הושבת"))
-                      }
-                      className="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      {t("admin.deactivate", "השבת")}
-                    </button>
+                  {org.approval_status === "pending" ? (
+                    <>
+                      <button
+                        disabled={busy}
+                        onClick={() => onApprove(org)}
+                        className="rounded-md bg-status-green text-white px-4 py-1 font-medium hover:opacity-90 disabled:opacity-50"
+                      >
+                        {t("admin.approve", "אשר")}
+                      </button>
+                      <button
+                        disabled={busy}
+                        onClick={() => onRejectOrg(org)}
+                        className="rounded-md border border-status-darkred/30 text-status-darkred px-3 py-1 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        {t("admin.reject", "דחה")}
+                      </button>
+                    </>
                   ) : (
-                    <button
-                      disabled={busy}
-                      onClick={() =>
-                        run(async () => {
-                          await adminActivateOrg(org.id);
-                          await loadOrgs();
-                        }, t("admin.org_enabled", "הארגון הופעל"))
-                      }
-                      className="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      {t("admin.activate", "הפעל")}
-                    </button>
+                    <>
+                      <button
+                        disabled={busy}
+                        onClick={() => onImpersonate(org)}
+                        className="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        {t("admin.impersonate", "התחבר כארגון")}
+                      </button>
+                      {org.is_active ? (
+                        <button
+                          disabled={busy}
+                          onClick={() =>
+                            run(async () => {
+                              await adminDeactivateOrg(org.id);
+                              await loadOrgs();
+                            }, t("admin.org_disabled", "הארגון הושבת"))
+                          }
+                          className="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          {t("admin.deactivate", "השבת")}
+                        </button>
+                      ) : (
+                        <button
+                          disabled={busy}
+                          onClick={() =>
+                            run(async () => {
+                              await adminActivateOrg(org.id);
+                              await loadOrgs();
+                            }, t("admin.org_enabled", "הארגון הופעל"))
+                          }
+                          className="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          {t("admin.activate", "הפעל")}
+                        </button>
+                      )}
+                      <button
+                        disabled={busy}
+                        onClick={() => onDeleteOrg(org)}
+                        className="rounded-md border border-status-darkred/30 text-status-darkred px-3 py-1 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        {t("action.delete", "מחק")}
+                      </button>
+                    </>
                   )}
-                  <button
-                    disabled={busy}
-                    onClick={() => onDeleteOrg(org)}
-                    className="rounded-md border border-status-darkred/30 text-status-darkred px-3 py-1 hover:bg-red-50 disabled:opacity-50"
-                  >
-                    {t("action.delete", "מחק")}
-                  </button>
                 </div>
               </div>
 
@@ -484,6 +531,8 @@ export default function SystemAdminPage() {
           ))}
         </div>
       )}
+
+      <EmailTemplatesCard />
     </div>
   );
 }

@@ -127,13 +127,13 @@ export async function googleLogin(credential: string): Promise<string> {
   return data.access_token;
 }
 
-/** Google signup: create a new org + admin from a Google identity, return our JWT. */
+/** Google signup: register a new org for approval from a Google identity (no login). */
 export async function googleSignup(
   credential: string,
   organizationName: string,
   organizationLogoUrl?: string | null,
-): Promise<string> {
-  const data = await apiFetch<{ access_token: string }>("/api/auth/google-signup", {
+): Promise<{ status: string; email?: string }> {
+  return apiFetch("/api/auth/google-signup", {
     method: "POST",
     body: JSON.stringify({
       credential,
@@ -141,7 +141,6 @@ export async function googleSignup(
       organization_logo_url: organizationLogoUrl ?? null,
     }),
   });
-  return data.access_token;
 }
 
 /** OAuth2 password-flow login. Returns the access token. */
@@ -182,6 +181,7 @@ export interface AdminOrganization {
   guid: string;
   name: string;
   is_active: boolean;
+  approval_status: string;
   created_at: string;
   user_count: number;
   admin_email: string | null;
@@ -232,6 +232,29 @@ export const adminDeleteOrg = (orgId: number): Promise<void> =>
 
 export const adminImpersonateOrg = (orgId: number): Promise<{ access_token: string }> =>
   apiFetch(`/api/admin/organizations/${orgId}/impersonate`, { method: "POST" });
+
+export const adminApproveOrg = (orgId: number): Promise<AdminOrganization> =>
+  apiFetch(`/api/admin/organizations/${orgId}/approve`, { method: "POST" });
+
+export interface EmailTemplate {
+  id: number;
+  key: string;
+  subject: string;
+  body: string;
+  body_hebrew: string;
+}
+
+export const adminListEmailTemplates = (): Promise<EmailTemplate[]> =>
+  apiFetch("/api/admin/email-templates");
+
+export const adminUpdateEmailTemplate = (
+  key: string,
+  patch: { subject?: string; body?: string; body_hebrew?: string },
+): Promise<EmailTemplate> =>
+  apiFetch(`/api/admin/email-templates/${key}`, {
+    method: "PUT",
+    body: JSON.stringify(patch),
+  });
 
 export const adminListUsers = (): Promise<AdminUser[]> => apiFetch("/api/admin/users");
 

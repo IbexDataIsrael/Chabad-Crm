@@ -39,6 +39,15 @@ def _admin_only(_user=Depends(require_admin)):
 @pytest.fixture(autouse=True)
 def _setup_db():
     Base.metadata.create_all(bind=engine)
+    # Seed the editable email templates so admin template tests + the signup
+    # emails have their rows (mirrors seed_all on startup).
+    from app.seed import seed_email_templates
+
+    db = TestingSessionLocal()
+    try:
+        seed_email_templates(db)
+    finally:
+        db.close()
     yield
     Base.metadata.drop_all(bind=engine)
 

@@ -758,6 +758,31 @@ def seed_superadmin(db: Session) -> None:
     )
 
 
+def seed_email_templates(db: Session) -> None:
+    """Insert any missing editable email templates (idempotent, never overwrites
+    an admin's edits). Defaults live in app.core.email.DEFAULT_EMAIL_TEMPLATES."""
+    from app.core.email import DEFAULT_EMAIL_TEMPLATES
+
+    existing = {
+        k for (k,) in db.query(models.EmailTemplate.key).all()
+    }
+    added = False
+    for key, tpl in DEFAULT_EMAIL_TEMPLATES.items():
+        if key in existing:
+            continue
+        db.add(
+            models.EmailTemplate(
+                key=key,
+                subject=tpl.get("subject", ""),
+                body=tpl.get("body", ""),
+                body_hebrew=tpl.get("body_hebrew", ""),
+            )
+        )
+        added = True
+    if added:
+        db.commit()
+
+
 def seed_all(db: Session) -> None:
     """Global labels (always) + a demo organization (admin + picklists + sample
     data) when SEED_DEMO_DATA is enabled. In production the demo block is skipped
@@ -765,6 +790,7 @@ def seed_all(db: Session) -> None:
     """
     seed_localization(db)
     seed_superadmin(db)
+    seed_email_templates(db)
 
     # Backfill system picklist *definitions* for EVERY org (idempotent). An org
     # created before a given system picklist existed would otherwise never see it

@@ -15,7 +15,11 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.config import settings
-from app.core.email import send_verification_email
+from app.core.email import (
+    send_org_pending_admin,
+    send_org_pending_user,
+    send_verification_email,
+)
 from app.core.security import (
     create_access_token,
     create_email_token,
@@ -43,6 +47,17 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 logger = logging.getLogger("app.auth")
 
 
+def _assert_org_active(org) -> None:
+    """Block login for a disabled or not-yet-approved organization."""
+    if org.is_active:
+        return
+    if getattr(org, "approval_status", "approved") == "pending":
+        detail = "הארגון ממתין לאישור מנהל המערכת. נעדכן אותך במייל."
+    else:
+        detail = "This organization has been disabled. Contact support."
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+
+
 def _send_verification_safely(user, token: str) -> None:
     """Email the verification link; never let a mail failure break signup.
 
@@ -58,30 +73,47 @@ def _send_verification_safely(user, token: str) -> None:
         logger.exception("Failed to send verification email to %s", user.email)
 
 
+def _create_pending_org(db: Session, org: models.Organization, user: models.User) -> None:
+    """Persist a new org+admin as pending, then fire the two signup emails
+    (both guarded — a mail failure must not fail the signup)."""
+    db.add(org)
+    db.flush()
+    user.organization_id = org.id
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    db.refresh(org)
+    try:
+        send_org_pending_user(db, user.email, user.full_name, org.name)
+    except Exception:
+        logger.exception("Failed to send pending-user email to %s", user.email)
+    try:
+        send_org_pending_admin(org.name, user.full_name, user.email or "")
+    except Exception:
+        logger.exception("Failed to send pending-admin notification for org %s", org.name)
+
+
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
 def signup(payload: SignupRequest, db: Session = Depends(get_db)) -> dict:
-    """Create an organization + admin.
+    """Register an organization for approval.
 
-    Default ("old school"): the admin is created active + verified and logged in
-    immediately — no email round-trip, no third-party dependency. When
-    REQUIRE_EMAIL_VERIFICATION is on, fall back to the pending-admin + verify-link
-    flow instead.
+    Creates a PENDING org + its admin (email+password). The org is inactive and
+    the owner can't log in until a superadmin approves it. Emails the user a
+    "received, under review" note and the platform admin a notification.
     """
     if db.query(models.User).filter(models.User.email == payload.email).first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
         )
 
-    verify = settings.require_email_verification
     org = models.Organization(
-        name=payload.organization_name, logo_url=payload.organization_logo_url
+        name=payload.organization_name,
+        logo_url=payload.organization_logo_url,
+        is_active=False,
+        approval_status="pending",
     )
-    db.add(org)
-    db.flush()
-
     full_name = f"{payload.first_name} {payload.last_name}".strip()
     user = models.User(
-        organization_id=org.id,
         username=payload.username,
         full_name=full_name,
         email=payload.email,
@@ -90,21 +122,11 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)) -> dict:
         phone=payload.phone,
         password_hash=hash_password(payload.password),
         role="admin",
-        is_active=not verify,
-        email_verified=not verify,
+        is_active=True,      # gate is the org's approval, not the user flag
+        email_verified=True,
     )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    if verify:
-        _send_verification_safely(user, create_email_token(user.id))
-        return {"status": "pending_verification", "email": user.email}
-
-    # Immediate activation: provision the org's picklists and log the admin in.
-    provision_org(db, user.organization_id)
-    token = create_access_token(subject=str(user.id), role=user.role)
-    return {"status": "active", "access_token": token, "token_type": "bearer"}
+    _create_pending_org(db, org, user)
+    return {"status": "pending_approval", "email": user.email}
 
 
 @router.get("/verify-email")
@@ -191,11 +213,7 @@ def login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Please verify your email before logging in",
         )
-    if not user.organization.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This organization has been disabled. Contact support.",
-        )
+    _assert_org_active(user.organization)
     token = create_access_token(subject=str(user.id), role=user.role)
     return Token(access_token=token)
 
@@ -217,11 +235,7 @@ def google_login(payload: GoogleLoginRequest, db: Session = Depends(get_db)) -> 
             status_code=status.HTTP_403_FORBIDDEN,
             detail="לא נמצא משתמש עם כתובת אימייל זו. יש להירשם או לקבל הזמנה תחילה.",
         )
-    if not user.organization.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This organization has been disabled. Contact support.",
-        )
+    _assert_org_active(user.organization)
     # First Google sign-in: bind the Google subject and activate the account.
     if not user.google_sub:
         user.google_sub = info.get("sub")
@@ -232,12 +246,12 @@ def google_login(payload: GoogleLoginRequest, db: Session = Depends(get_db)) -> 
     return Token(access_token=create_access_token(subject=str(user.id), role=user.role))
 
 
-@router.post("/google-signup", response_model=Token, status_code=status.HTTP_201_CREATED)
-def google_signup(payload: GoogleSignupRequest, db: Session = Depends(get_db)) -> Token:
-    """Create an organization + admin from a Google identity, then log in.
+@router.post("/google-signup", status_code=status.HTTP_201_CREATED)
+def google_signup(payload: GoogleSignupRequest, db: Session = Depends(get_db)) -> dict:
+    """Register an organization for approval from a Google identity.
 
-    Unlike the password signup, no email-verification round-trip is needed: Google has
-    already verified the email, so the account is active immediately.
+    Google verifies the email, but the org still needs superadmin approval before
+    it goes live — same pending flow as the password signup (no immediate login).
     """
     try:
         info = verify_google_token(payload.credential)
@@ -252,14 +266,13 @@ def google_signup(payload: GoogleSignupRequest, db: Session = Depends(get_db)) -
         )
 
     org = models.Organization(
-        name=payload.organization_name, logo_url=payload.organization_logo_url
+        name=payload.organization_name,
+        logo_url=payload.organization_logo_url,
+        is_active=False,
+        approval_status="pending",
     )
-    db.add(org)
-    db.flush()
-
     full_name = (info.get("name") or email.split("@")[0]).strip()
     user = models.User(
-        organization_id=org.id,
         username=email.split("@")[0],  # unique within the brand-new org
         full_name=full_name,
         email=email,
@@ -268,15 +281,11 @@ def google_signup(payload: GoogleSignupRequest, db: Session = Depends(get_db)) -
         google_sub=info.get("sub"),
         password_hash=None,  # Google-only account
         role="admin",
-        is_active=True,
+        is_active=True,      # gate is the org's approval, not the user flag
         email_verified=True,
     )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    provision_org(db, org.id)
-    return Token(access_token=create_access_token(subject=str(user.id), role=user.role))
+    _create_pending_org(db, org, user)
+    return {"status": "pending_approval", "email": user.email}
 
 
 @router.get("/me", response_model=UserOut)

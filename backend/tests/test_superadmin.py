@@ -154,8 +154,8 @@ def test_superadmin_creates_org_with_working_admin(client, superadmin_headers):
     assert login.status_code == 200
 
 
-def test_signup_logs_in_immediately_without_email(client):
-    """Default flow: no email verification — signup returns a token and works."""
+def test_signup_then_approve_enables_login(client, superadmin_headers, db_session):
+    """Full flow: signup → pending (login blocked) → superadmin approve → login works."""
     resp = client.post(
         "/api/auth/signup",
         json={
@@ -169,10 +169,45 @@ def test_signup_logs_in_immediately_without_email(client):
         },
     )
     assert resp.status_code == 201
-    body = resp.json()
-    assert body["status"] == "active"
-    assert body["access_token"]
-    login = client.post(
+    assert resp.json()["status"] == "pending_approval"
+
+    # Blocked while pending.
+    assert client.post(
         "/api/auth/token", data={"username": "selfadmin", "password": "pw12345"}
+    ).status_code == 403
+
+    org = db_session.query(models.Organization).filter_by(name="Self Serve").first()
+    ap = client.post(
+        f"/api/admin/organizations/{org.id}/approve", headers=superadmin_headers
     )
-    assert login.status_code == 200
+    assert ap.status_code == 200
+    assert ap.json()["approval_status"] == "approved"
+
+    # Login works after approval.
+    assert client.post(
+        "/api/auth/token", data={"username": "selfadmin", "password": "pw12345"}
+    ).status_code == 200
+
+
+def test_email_templates_list_and_update(client, superadmin_headers):
+    lst = client.get("/api/admin/email-templates", headers=superadmin_headers)
+    assert lst.status_code == 200
+    keys = {t["key"] for t in lst.json()}
+    assert {"aignummail1", "aignummail2"} <= keys
+
+    upd = client.put(
+        "/api/admin/email-templates/aignummail1",
+        headers=superadmin_headers,
+        json={"body_hebrew": "טקסט חדש", "body": "new text"},
+    )
+    assert upd.status_code == 200
+    assert upd.json()["body_hebrew"] == "טקסט חדש"
+
+    # Unknown template key → 404.
+    assert client.put(
+        "/api/admin/email-templates/nope", headers=superadmin_headers, json={"body": "x"}
+    ).status_code == 404
+
+
+def test_email_templates_require_superadmin(client, admin_headers):
+    assert client.get("/api/admin/email-templates", headers=admin_headers).status_code == 403

@@ -10,9 +10,68 @@ from email.message import EmailMessage
 from pathlib import Path
 from typing import Optional
 
+from sqlalchemy.orm import Session
+
+from app import models
 from app.config import settings
 
 logger = logging.getLogger("app.email")
+
+# Superadmin-editable email templates (platform-level). Seeded into the
+# email_templates table on startup; these are the fallback defaults. The sent
+# email is the Hebrew body followed by the English body; {{placeholders}} are
+# substituted from the values passed at send time.
+# Two superadmin-editable bilingual emails (keys the user chose). aignummail1 is
+# sent to the user on signup; aignummail2 when the org is approved. Placeholders:
+# {{user_name}}, {{org_name}}, and (aignummail2) {{login_link}}.
+DEFAULT_EMAIL_TEMPLATES: dict[str, dict[str, str]] = {
+    "aignummail1": {
+        "subject": "בקשתך התקבלה — מיני CRM",
+        "body_hebrew": (
+            "שלום {{user_name}},\n\n"
+            "בקשתך לפתיחת הארגון \"{{org_name}}\" נשלחה והיא נבחנת.\n"
+            "אנו נחזור אליך בהקדם האפשרי."
+        ),
+        "body": (
+            "Hello {{user_name}},\n\n"
+            "Your request to open the organization \"{{org_name}}\" has been received "
+            "and is under review.\nWe will get back to you as soon as possible."
+        ),
+    },
+    "aignummail2": {
+        "subject": "הארגון אושר — מיני CRM",
+        "body_hebrew": (
+            "שלום {{user_name}},\n\n"
+            "הארגון \"{{org_name}}\" אושר!\n"
+            "ניתן להתחבר למערכת בקישור הבא:\n{{login_link}}"
+        ),
+        "body": (
+            "Hello {{user_name}},\n\n"
+            "The organization \"{{org_name}}\" has been approved!\n"
+            "You can now log in:\n{{login_link}}"
+        ),
+    },
+}
+
+
+def _substitute(text: str, vars: dict[str, str]) -> str:
+    for key, value in vars.items():
+        text = text.replace("{{" + key + "}}", value or "")
+    return text
+
+
+def send_templated_email(db: Session, key: str, to: str, **vars: str) -> None:
+    """Load an editable template by key (DB, falling back to the default),
+    substitute {{vars}}, and send the Hebrew + English bodies as one email."""
+    row = db.query(models.EmailTemplate).filter(models.EmailTemplate.key == key).first()
+    default = DEFAULT_EMAIL_TEMPLATES.get(key, {})
+    subject = _substitute((row.subject if row else default.get("subject", "")), vars)
+    body_he = _substitute((row.body_hebrew if row else default.get("body_hebrew", "")), vars)
+    body_en = _substitute((row.body if row else default.get("body", "")), vars)
+    body = body_he
+    if body_en:
+        body = f"{body_he}\n\n----------------------------------------\n\n{body_en}" if body_he else body_en
+    send_email(to, subject, body)
 
 # backend/HTML  (email.py = backend/app/core/email.py → parents[2] = backend)
 HTML_DIR = Path(__file__).resolve().parents[2] / "HTML"
@@ -143,3 +202,37 @@ def send_shliach_welcome(
         logo_url=_logo_url(),
     )
     send_email(to, "Welcome to the system", body, html=html)
+
+
+# --- Signup approval workflow emails ---------------------------------------
+def send_org_pending_user(db: Session, to: str, user_name: str, org_name: str) -> None:
+    """aignummail1 — 'request received, under review' to the signer-up."""
+    send_templated_email(db, "aignummail1", to, user_name=user_name, org_name=org_name)
+
+
+def send_org_approved_user(
+    db: Session, to: str, user_name: str, org_name: str
+) -> None:
+    """aignummail2 — 'org approved, here's the link' to the signer-up."""
+    send_templated_email(
+        db,
+        "aignummail2",
+        to,
+        user_name=user_name,
+        org_name=org_name,
+        login_link=settings.frontend_url,
+    )
+
+
+def send_org_pending_admin(org_name: str, user_name: str, user_email: str) -> None:
+    """Notify the platform operator that a new org awaits approval (not editable)."""
+    if not settings.platform_admin_email:
+        logger.warning("platform_admin_email not set — skipping admin notification")
+        return
+    subject = f"New organization pending approval — {org_name}"
+    body = (
+        f'A new organization "{org_name}" has signed up and is pending approval.\n'
+        f"Admin: {user_name} ({user_email}).\n"
+        "Review and approve it in the system admin dashboard."
+    )
+    send_email(settings.platform_admin_email, subject, body)

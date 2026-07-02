@@ -12,11 +12,18 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.config import settings
-from app.core.email import send_email
+from app.core.email import send_email, send_org_approved_user
 from app.core.security import create_access_token, hash_password
 from app.database import get_db
 from app.deps import require_superadmin
-from app.schemas import AdminOrgCreate, AdminOrganizationOut, AdminUserOut, Token
+from app.schemas import (
+    AdminOrgCreate,
+    AdminOrganizationOut,
+    AdminUserOut,
+    EmailTemplateOut,
+    EmailTemplateUpdate,
+    Token,
+)
 from app.seed import provision_org
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -45,6 +52,7 @@ def _org_out(db: Session, org: models.Organization) -> AdminOrganizationOut:
         guid=org.guid,
         name=org.name,
         is_active=org.is_active,
+        approval_status=org.approval_status,
         created_at=org.created_at,
         user_count=user_count,
         admin_email=admin.email if admin else None,
@@ -370,3 +378,67 @@ def verify_user(
     user.is_active = True
     db.commit()
     return user
+
+
+# --- Signup approval -------------------------------------------------------
+@router.post("/organizations/{org_id}/approve", response_model=AdminOrganizationOut)
+def approve_organization(
+    org_id: int,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_superadmin),
+):
+    """Approve a pending org: activate it, provision its picklists, and email
+    the org admin the 'approved' notice with a login link."""
+    org = _get_org(db, org_id)
+    org.is_active = True
+    org.approval_status = "approved"
+    db.commit()
+    provision_org(db, org.id)
+    logger.info("superadmin %s APPROVED org %s (%s)", admin.email, org_id, org.name)
+    target = (
+        db.query(models.User)
+        .filter(models.User.organization_id == org_id, models.User.role == "admin")
+        .order_by(models.User.created_at)
+        .first()
+    )
+    if target and target.email:
+        try:
+            send_org_approved_user(db, target.email, target.full_name, org.name)
+        except Exception:
+            logger.exception("Failed to send org-approved email for org %s", org_id)
+    return _org_out(db, org)
+
+
+# --- Editable email templates ----------------------------------------------
+@router.get("/email-templates", response_model=list[EmailTemplateOut])
+def list_email_templates(
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_superadmin),
+):
+    return db.query(models.EmailTemplate).order_by(models.EmailTemplate.key).all()
+
+
+@router.put("/email-templates/{key}", response_model=EmailTemplateOut)
+def update_email_template(
+    key: str,
+    payload: EmailTemplateUpdate,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_superadmin),
+):
+    tpl = (
+        db.query(models.EmailTemplate)
+        .filter(models.EmailTemplate.key == key)
+        .first()
+    )
+    if tpl is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Email template not found")
+    if payload.subject is not None:
+        tpl.subject = payload.subject
+    if payload.body is not None:
+        tpl.body = payload.body
+    if payload.body_hebrew is not None:
+        tpl.body_hebrew = payload.body_hebrew
+    db.commit()
+    db.refresh(tpl)
+    logger.info("superadmin %s edited email template %s", admin.email, key)
+    return tpl

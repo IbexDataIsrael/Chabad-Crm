@@ -13,7 +13,6 @@ import {
   clearToken,
   getToken,
   googleLogin as apiGoogleLogin,
-  googleSignup as apiGoogleSignup,
   login as apiLogin,
   setToken,
 } from "./api";
@@ -46,11 +45,6 @@ interface AuthContextValue {
   isSuperadmin: boolean;
   signIn: (username: string, password: string) => Promise<void>;
   signInWithGoogle: (credential: string) => Promise<void>;
-  signUpWithGoogle: (
-    credential: string,
-    organizationName: string,
-    organizationLogoUrl?: string | null,
-  ) => Promise<void>;
   signUp: (username: string, fullName: string, password: string) => Promise<void>;
   signOut: () => void;
   refresh: () => Promise<void>;
@@ -82,17 +76,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signInWithGoogle(credential: string) {
     const token = await apiGoogleLogin(credential);
-    setToken(token);
-    setUser(await apiFetch<User>("/api/auth/me"));
-  }
-
-  // Google signup: create the org + admin, then sign in immediately (no email step).
-  async function signUpWithGoogle(
-    credential: string,
-    organizationName: string,
-    organizationLogoUrl?: string | null,
-  ) {
-    const token = await apiGoogleSignup(credential, organizationName, organizationLogoUrl);
     setToken(token);
     setUser(await apiFetch<User>("/api/auth/me"));
   }
@@ -136,7 +119,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isSuperadmin: user?.role === "superadmin",
         signIn,
         signInWithGoogle,
-        signUpWithGoogle,
         signUp,
         signOut,
         refresh,

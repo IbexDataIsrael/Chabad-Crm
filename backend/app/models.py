@@ -54,6 +54,12 @@ class Organization(Base):
     default_zoom = Column(Integer, nullable=False, default=13)
     # Platform-level enable/disable (superadmin). A disabled org's users can't log in.
     is_active = Column(Boolean, nullable=False, default=True, server_default=text("true"))
+    # Signup approval workflow: 'pending' (awaiting superadmin approval) | 'approved'.
+    # Self-signup orgs start 'pending' + is_active False; superadmin-created/existing
+    # orgs are 'approved'. Login is blocked until approved (via is_active).
+    approval_status = Column(
+        String(20), nullable=False, default="approved", server_default=text("'approved'")
+    )
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     users = relationship("User", back_populates="organization")
@@ -521,6 +527,26 @@ class Interaction(Base):
 
     contact = relationship("Contact", back_populates="interactions")
     author = relationship("User", back_populates="interactions")
+
+
+class EmailTemplate(Base):
+    """Platform-level, superadmin-editable email template (bilingual body).
+
+    Keyed by a stable string (e.g. 'org_pending_user'). The sent email combines
+    the Hebrew + English bodies; `{{placeholders}}` are substituted at send time.
+    """
+
+    __tablename__ = "email_templates"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    key = Column(String(60), nullable=False, unique=True, index=True)
+    subject = Column(Text, nullable=False)
+    body = Column(Text, nullable=False, default="")  # English
+    body_hebrew = Column(Text, nullable=False, default="")  # Hebrew
+    updated_at = Column(
+        DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
 
 
 class FieldLocalization(Base):
