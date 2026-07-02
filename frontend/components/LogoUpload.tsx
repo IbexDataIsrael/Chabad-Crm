@@ -2,13 +2,40 @@
 
 import { useState, type ChangeEvent } from "react";
 
-import { cloudinaryConfigured, uploadToCloudinary } from "@/lib/cloudinary";
 import { useLocalization } from "@/lib/localization";
 
+/** Read an image File and return a downscaled PNG data URL (max 256px, keeps
+ * aspect ratio + transparency). Runs entirely in the browser — no upload service
+ * needed — so the stored value is the image itself, never a pasted URL. */
+function fileToScaledDataUrl(file: File, max = 256): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("read failed"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("decode failed"));
+      img.onload = () => {
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("no canvas"));
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 /**
- * Organization logo picker. Uploads to Cloudinary (unsigned) when configured,
- * otherwise falls back to pasting an image URL so the field still works.
- * Value is the image URL (or null).
+ * Organization logo picker. Always a file **upload**: the chosen image is read
+ * and downscaled in the browser, then stored as a data URL. No external upload
+ * service, no URL pasting. Value is the image data URL (or null).
  */
 export function LogoUpload({
   value,
@@ -27,11 +54,12 @@ export function LogoUpload({
     setError("");
     setBusy(true);
     try {
-      onChange(await uploadToCloudinary(file));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("logo.upload_failed", "העלאת הלוגו נכשלה"));
+      onChange(await fileToScaledDataUrl(file));
+    } catch {
+      setError(t("logo.upload_failed", "העלאת הלוגו נכשלה"));
     } finally {
       setBusy(false);
+      e.target.value = ""; // allow re-picking the same file
     }
   }
 
@@ -51,30 +79,20 @@ export function LogoUpload({
           </div>
         )}
 
-        {cloudinaryConfigured ? (
-          <label className="cursor-pointer rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50">
-            {busy
-              ? t("action.saving", "מעלה…")
-              : value
-                ? t("logo.replace", "החלף לוגו")
-                : t("logo.upload", "העלה לוגו")}
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={onFile}
-              disabled={busy}
-            />
-          </label>
-        ) : (
+        <label className="cursor-pointer rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50">
+          {busy
+            ? t("action.saving", "מעלה…")
+            : value
+              ? t("logo.replace", "החלף לוגו")
+              : t("logo.upload", "העלה לוגו")}
           <input
-            dir="ltr"
-            className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
-            placeholder={t("logo.url_placeholder", "הדבק כתובת תמונה (URL) של הלוגו")}
-            value={value ?? ""}
-            onChange={(e) => onChange(e.target.value || null)}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={onFile}
+            disabled={busy}
           />
-        )}
+        </label>
 
         {value && (
           <button
