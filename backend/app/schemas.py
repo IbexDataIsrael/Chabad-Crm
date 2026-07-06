@@ -647,3 +647,34 @@ class DonationOut(BaseModel):
     is_ongoing: bool
     number_of_payments: Optional[int] = None
     notes: Optional[str] = None
+
+
+# --- Global search -----------------------------------------------------------
+class SearchHit(BaseModel):
+    """One result row. `type` tells the frontend which detail page to link to."""
+
+    type: str  # 'contact' | 'area' | 'building' | 'apartment'
+    id: int
+    title: str
+    subtitle: Optional[str] = None
+    # For contacts only: 'mekurav' | 'shliach' (drives the מקורב/פעיל badge).
+    contact_type: Optional[str] = None
+
+
+class SearchOut(BaseModel):
+    query: str
+    results: list[SearchHit]
+
+
+# --- AI chat (digital twin) --------------------------------------------------
+class AiChatMessage(BaseModel):
+    role: str  # 'user' | 'assistant'
+    content: str
+
+
+class AiChatRequest(BaseModel):
+    messages: list[AiChatMessage]
+
+
+class AiChatResponse(BaseModel):
+    reply: str

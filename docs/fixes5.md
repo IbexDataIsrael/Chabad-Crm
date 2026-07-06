@@ -22,7 +22,19 @@ Just give the URL, what's wrong, and what you expect. Screenshots/notes welcome 
 - [ ] **Error-messages localization** — user to provide an MD of all user-facing messages (good/bad) to wire into the `error.*` section of `/dashboard/localization` (toast/inline). First one already seeded: `error.no_areas_for_shliach`.
 - [ ] **Commit decision** — everything below is in the working tree, uncommitted, pending review.
 
+- [ ] **AI chat — prod key** — `OPENROUTER_API_KEY` is now in the local root `.env` (added by the user 2026-07-06) and the backend authenticates fine. For production, set the same var on the **Render** dashboard. Note: the `:free` model pool can return upstream 429s at busy times — the UI surfaces it as a retryable error.
+- [ ] **AI chat — career profile** — fill in `backend/career.md` (the digital twin's knowledge base; currently a template). Edits apply immediately, no restart.
+
 _(add new bugs here)_
+
+---
+
+## Done (2026-07-06 — fixes6: global search + digital-twin AI chat; plan in fixes6-plan.md)
+
+- [x] **Global search box** — header search that finds anything in the org: `GET /api/search?q=` (new `routers/search.py`) matches areas (name/notes), buildings (name/address), apartments (name/notes) and contacts (first/last name, phone, email — מקורב & פעיל), case-insensitive, ≤10 per type, org-scoped; shliach users only get results inside their coverage. New `GlobalSearch.tsx` in the dashboard header (hidden for superadmin): debounced dropdown grouped by type, rows link to each detail page, contact rows show a מקורב/פעיל badge, subtitles give context (building→area, apartment→building, contact→phone). 7 tests in `test_search.py`.
+- [x] **Digital-twin AI chat** — new `/dashboard/ai` chat page (bubbles, Enter-to-send, "חושב…" indicator, failed sends roll back into the input) + nav entry under "עוד". Backend `POST /api/ai/chat` (new `routers/ai.py`) calls **OpenRouter** model **`openai/gpt-oss-120b:free`** via httpx; system prompt = digital-twin persona + the whole of `backend/career.md` (re-read per request). 503 when the key is missing, 502 on upstream errors, history capped at 20 messages. Env: `OPENROUTER_API_KEY` root `.env` → docker-compose → `config.py`. 6 tests in `test_ai_chat.py`.
+- [x] **Localization** — 15 new seeded keys (`search.*`, `ai.*`, `nav.ai_chat`), editable at `/dashboard/localization`; verified Hebrew intact via API.
+- [x] **Verified** — full backend suite green in Docker (**93 passed**, incl. 13 new); `tsc --noEmit` clean; smoke-checked live: search returns areas/apartments/contacts from seeded data; `/dashboard/ai` + `/dashboard` render 200; and after the user added the key, a **real end-to-end completion** came back from `openai/gpt-oss-120b:free` via OpenRouter (the free pool 429s when saturated — retry succeeds; the UI shows a retryable error toast).
 
 ---
 
@@ -54,3 +66,5 @@ _(add new bugs here)_
 - [x] **Maps keys** — browser key (referrer-restricted) + server geocoding key (unrestricted) split in root `.env`.
 
 > Earlier sessions (see other docs/memory): Postgres migration (Neon prod), bilingual UI, picklists/localization engine, field visibility, toasts, map point picker, שליח→פעיל rename, new-shliach rework, phone validation, shliach name sync.
+
+lea

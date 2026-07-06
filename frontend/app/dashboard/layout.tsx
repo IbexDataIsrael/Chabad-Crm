@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, type ReactNode } from "react";
 
+import { GlobalSearch } from "@/components/GlobalSearch";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { NavMenu, type NavMenuItem } from "@/components/NavMenu";
 import { RequireAuth } from "@/components/RequireAuth";
@@ -44,6 +45,7 @@ function DashboardChrome({ children }: { children: ReactNode }) {
   ]);
   const moreItems = adminOnly([
     { href: "/dashboard", label: t("nav.home", "בית") },
+    { href: "/dashboard/ai", label: t("nav.ai_chat", "צ'אט AI") },
     { href: "/dashboard/picklists", label: t("nav.picklists", "רשימות בחירה"), admin: true },
     { href: "/dashboard/custom-fields", label: t("nav.custom_fields", "שדות מותאמים"), admin: true },
     { href: "/dashboard/fields", label: t("page.fields_title", "ניהול שדות"), admin: true },
@@ -98,6 +100,11 @@ function DashboardChrome({ children }: { children: ReactNode }) {
               )}
             </nav>
           </div>
+          {!isSuperadmin && (
+            <div className="order-last w-full md:order-none md:w-auto md:flex-1 md:px-4">
+              <GlobalSearch />
+            </div>
+          )}
           <div className="flex items-center gap-3 text-sm">
             <span className="text-gray-600">
               {user?.full_name}

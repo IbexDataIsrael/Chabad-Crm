@@ -418,6 +418,23 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("pl", "pl.delete_list", "מחק רשימה", "Delete list"),
     ("pl", "pl.add_list", "הוספת רשימת בחירה", "Add picklist"),
     ("pl", "pl.system_name_placeholder", "מזהה (אנגלית) — diet", "Identifier (English) — diet"),
+    # --- Global search (header) ---
+    ("search", "search.placeholder", "חיפוש כללי: אזור, בניין, דירה, איש קשר…", "Search: area, building, apartment, contact…"),
+    ("search", "search.no_results", "לא נמצאו תוצאות", "No results found"),
+    ("search", "search.searching", "מחפש…", "Searching…"),
+    ("search", "search.group.contacts", "אנשי קשר", "Contacts"),
+    ("search", "search.group.areas", "אזורים", "Areas"),
+    ("search", "search.group.buildings", "בניינים", "Buildings"),
+    ("search", "search.group.apartments", "דירות", "Apartments"),
+    # --- Digital-twin AI chat ---
+    ("nav", "nav.ai_chat", "צ'אט AI", "AI chat"),
+    ("ai", "ai.title", "תאום דיגיטלי", "Digital twin"),
+    ("ai", "ai.intro", "שאל את התאום הדיגיטלי שאלות על הקריירה שלי.", "Ask the digital twin questions about my career."),
+    ("ai", "ai.placeholder", "כתוב שאלה…", "Type a question…"),
+    ("ai", "ai.send", "שלח", "Send"),
+    ("ai", "ai.thinking", "חושב…", "Thinking…"),
+    ("ai", "ai.error", "השיחה נכשלה — נסה שוב", "The chat failed — try again"),
+    ("ai", "ai.empty", "עדיין אין הודעות. שאל שאלה כדי להתחיל.", "No messages yet. Ask a question to start."),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)

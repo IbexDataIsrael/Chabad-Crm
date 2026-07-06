@@ -296,3 +296,29 @@ export const adminActivateUser = (userId: number): Promise<AdminUser> =>
 
 export const adminVerifyUser = (userId: number): Promise<AdminUser> =>
   apiFetch(`/api/admin/users/${userId}/verify`, { method: "POST" });
+
+// --- Global search ----------------------------------------------------------
+export type SearchHitType = "contact" | "area" | "building" | "apartment";
+
+export interface SearchHit {
+  type: SearchHitType;
+  id: number;
+  title: string;
+  subtitle: string | null;
+  contact_type: "mekurav" | "shliach" | null;
+}
+
+export const globalSearch = (q: string): Promise<{ query: string; results: SearchHit[] }> =>
+  apiFetch(`/api/search?q=${encodeURIComponent(q)}`);
+
+// --- Digital-twin AI chat ---------------------------------------------------
+export interface AiChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export const aiChat = (messages: AiChatMessage[]): Promise<{ reply: string }> =>
+  apiFetch("/api/ai/chat", {
+    method: "POST",
+    body: JSON.stringify({ messages }),
+  });

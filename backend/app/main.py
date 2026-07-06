@@ -43,6 +43,7 @@ def _run_migrations() -> None:
     command.upgrade(cfg, "head")
 from app.routers import (
     admin,
+    ai,
     apartments,
     areas,
     auth,
@@ -56,6 +57,7 @@ from app.routers import (
     metadata,
     organizations,
     picklists,
+    search,
     uploads,
     users,
     visits,
@@ -118,6 +120,8 @@ app.include_router(visits.all_router)
 app.include_router(donations.router)
 app.include_router(uploads.router)
 app.include_router(admin.router)
+app.include_router(search.router)
+app.include_router(ai.router)
 
 
 @app.get("/api/health", tags=["health"])
