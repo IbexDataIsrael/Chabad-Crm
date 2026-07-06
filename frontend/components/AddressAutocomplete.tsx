@@ -30,11 +30,13 @@ export function AddressAutocomplete({
   onChange,
   onPlace,
   className,
+  required,
 }: {
   value: string;
   onChange: (address: string) => void;
   onPlace: (place: PlaceResult) => void;
   className?: string;
+  required?: boolean;
 }) {
   const { user } = useAuth();
   const { t } = useLocalization();
@@ -123,6 +125,7 @@ export function AddressAutocomplete({
       <input
         className={className}
         value={value}
+        required={required}
         onChange={(e) => handleInput(e.target.value)}
         onFocus={() => suggestions.length > 0 && setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}

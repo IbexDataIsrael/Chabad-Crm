@@ -37,6 +37,17 @@ def _admin_only(_user=Depends(require_admin)):
 
 
 @pytest.fixture(autouse=True)
+def _no_real_email(monkeypatch):
+    """Force send_email into its dev fallback (log, don't send). The container
+    carries real SMTP_* env vars, so without this, tests that create shliach
+    contacts or org users would send actual Gmail messages to @example.com."""
+    from app.config import settings as app_settings
+
+    monkeypatch.setattr(app_settings, "smtp_host", "")
+    monkeypatch.setattr(app_settings, "smtp_password", "")
+
+
+@pytest.fixture(autouse=True)
 def _setup_db():
     Base.metadata.create_all(bind=engine)
     # Seed the editable email templates so admin template tests + the signup

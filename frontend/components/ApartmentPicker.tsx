@@ -5,7 +5,12 @@ import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
 import { useLocalization } from "@/lib/localization";
-import type { Apartment, Building } from "@/lib/types";
+import {
+  apartmentTitle,
+  buildingDisplayName,
+  type Apartment,
+  type Building,
+} from "@/lib/types";
 
 const inputClass =
   "w-full rounded-md border border-gray-300 px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
@@ -113,7 +118,7 @@ export function ApartmentPicker({
           <option value="">{t("apt.choose_building", "בחר בניין…")}</option>
           {buildings.map((b) => (
             <option key={b.id} value={b.id}>
-              {b.building_name}
+              {buildingDisplayName(b)}
             </option>
           ))}
         </select>
@@ -127,7 +132,7 @@ export function ApartmentPicker({
           <option value="">{t("apt.choose_apartment", "בחר דירה…")}</option>
           {apartments.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.apartment_name}
+              {apartmentTitle(a)}
             </option>
           ))}
         </select>

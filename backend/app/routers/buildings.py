@@ -1,4 +1,5 @@
-"""Building CRUD (belong to an area), org-scoped. Mutations: admins only."""
+"""Building CRUD (belong to an area) + nested floor CRUD, org-scoped.
+Mutations: admins only. Creating a building can auto-create its floors (fixes7)."""
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -7,7 +8,14 @@ from sqlalchemy.orm import Session
 from app import models
 from app.database import get_db
 from app.deps import get_current_user, require_admin
-from app.schemas import BuildingCreate, BuildingOut, BuildingUpdate
+from app.schemas import (
+    BuildingCreate,
+    BuildingOut,
+    BuildingUpdate,
+    FloorCreate,
+    FloorOut,
+    FloorUpdate,
+)
 
 router = APIRouter(prefix="/api/buildings", tags=["buildings"])
 
@@ -24,6 +32,22 @@ def _get_or_404(building_id: int, org_id: int, db: Session) -> models.Building:
     if not b:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Building not found")
     return b
+
+
+def _get_floor_or_404(
+    floor_id: int, building: models.Building, db: Session
+) -> models.Floor:
+    f = (
+        db.query(models.Floor)
+        .filter(
+            models.Floor.id == floor_id,
+            models.Floor.building_id == building.id,
+        )
+        .first()
+    )
+    if not f:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Floor not found")
+    return f
 
 
 def _validate_area(area_id: int, org_id: int, db: Session) -> None:
@@ -47,7 +71,7 @@ def list_buildings(
     )
     if area_id is not None:
         query = query.filter(models.Building.area_id == area_id)
-    return query.order_by(models.Building.building_name).all()
+    return query.order_by(models.Building.building_address).all()
 
 
 @router.post("", response_model=BuildingOut, status_code=status.HTTP_201_CREATED)
@@ -57,8 +81,22 @@ def create_building(
     admin: models.User = Depends(require_admin),
 ):
     _validate_area(payload.area_id, admin.organization_id, db)
-    b = models.Building(**payload.model_dump(), organization_id=admin.organization_id)
+    data = payload.model_dump(exclude={"floors"})
+    b = models.Building(**data, organization_id=admin.organization_id)
     db.add(b)
+    db.flush()
+    # Creation hook (fixes7 §3): auto-populate the building's floor records.
+    for index, floor_name in enumerate(payload.floors):
+        if not floor_name.strip():
+            continue
+        db.add(
+            models.Floor(
+                organization_id=admin.organization_id,
+                building_id=b.id,
+                name=floor_name.strip(),
+                sort_order=index,
+            )
+        )
     db.commit()
     db.refresh(b)
     return b
@@ -99,4 +137,80 @@ def delete_building(
 ):
     b = _get_or_404(building_id, admin.organization_id, db)
     db.delete(b)
+    db.commit()
+
+
+# --- Floors (fixes7 §3) ------------------------------------------------------
+@router.get("/{building_id}/floors", response_model=list[FloorOut])
+def list_floors(
+    building_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    b = _get_or_404(building_id, current_user.organization_id, db)
+    return b.floors
+
+
+@router.post(
+    "/{building_id}/floors",
+    response_model=FloorOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_floor(
+    building_id: int,
+    payload: FloorCreate,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    b = _get_or_404(building_id, admin.organization_id, db)
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Floor name is required")
+    sort_order = payload.sort_order
+    if sort_order is None:
+        sort_order = (b.floors[-1].sort_order + 1) if b.floors else 0
+    f = models.Floor(
+        organization_id=admin.organization_id,
+        building_id=b.id,
+        name=name,
+        sort_order=sort_order,
+    )
+    db.add(f)
+    db.commit()
+    db.refresh(f)
+    return f
+
+
+@router.put("/{building_id}/floors/{floor_id}", response_model=FloorOut)
+def update_floor(
+    building_id: int,
+    floor_id: int,
+    payload: FloorUpdate,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    b = _get_or_404(building_id, admin.organization_id, db)
+    f = _get_floor_or_404(floor_id, b, db)
+    data = payload.model_dump(exclude_unset=True)
+    if "name" in data and (data["name"] is None or not data["name"].strip()):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Floor name is required")
+    for field, value in data.items():
+        setattr(f, field, value.strip() if field == "name" else value)
+    db.commit()
+    db.refresh(f)
+    return f
+
+
+@router.delete(
+    "/{building_id}/floors/{floor_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+def delete_floor(
+    building_id: int,
+    floor_id: int,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    b = _get_or_404(building_id, admin.organization_id, db)
+    f = _get_floor_or_404(floor_id, b, db)
+    db.delete(f)
     db.commit()

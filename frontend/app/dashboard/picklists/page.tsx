@@ -72,32 +72,49 @@ export default function PicklistsPage() {
         </p>
       </div>
 
-      {fields.map((f) => {
-        const options = optionsByKey[f.field_key] ?? [];
-        return (
-          <section key={f.field_key} className="space-y-2">
-            <h2 className="text-lg font-semibold">{defLabel(f)}</h2>
-            <DefinitionEditor def={f} onChanged={loadAll} onDeleted={loadAll} />
-            <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
-              {options.map((opt, i) => (
-                <OptionRow
-                  key={opt.id}
-                  option={opt}
-                  onSaved={loadAll}
-                  onMoveUp={() => reorder(f.field_key, i, -1)}
-                  onMoveDown={() => reorder(f.field_key, i, 1)}
-                  isFirst={i === 0}
-                  isLast={i === options.length - 1}
-                />
-              ))}
-              {options.length === 0 && (
-                <p className="px-4 py-6 text-center text-gray-400">{t("pl.no_values", "אין ערכים.")}</p>
-              )}
-            </div>
-            <AddOption fieldKey={f.field_key} onAdded={loadAll} />
-          </section>
-        );
-      })}
+      {/* Apartment picklists live under their own "דירה" subsection (fixes7 §4). */}
+      {[
+        {
+          heading: t("pl.group_general", "כללי"),
+          defs: fields.filter((f) => !f.field_key.startsWith("apartment.")),
+        },
+        {
+          heading: t("pl.group_apartment", "דירה"),
+          defs: fields.filter((f) => f.field_key.startsWith("apartment.")),
+        },
+      ]
+        .filter((group) => group.defs.length > 0)
+        .map((group) => (
+          <div key={group.heading} className="space-y-6">
+            <h2 className="text-xl font-bold border-b border-gray-200 pb-1">{group.heading}</h2>
+            {group.defs.map((f) => {
+              const options = optionsByKey[f.field_key] ?? [];
+              return (
+                <section key={f.field_key} className="space-y-2">
+                  <h3 className="text-lg font-semibold">{defLabel(f)}</h3>
+                  <DefinitionEditor def={f} onChanged={loadAll} onDeleted={loadAll} />
+                  <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
+                    {options.map((opt, i) => (
+                      <OptionRow
+                        key={opt.id}
+                        option={opt}
+                        onSaved={loadAll}
+                        onMoveUp={() => reorder(f.field_key, i, -1)}
+                        onMoveDown={() => reorder(f.field_key, i, 1)}
+                        isFirst={i === 0}
+                        isLast={i === options.length - 1}
+                      />
+                    ))}
+                    {options.length === 0 && (
+                      <p className="px-4 py-6 text-center text-gray-400">{t("pl.no_values", "אין ערכים.")}</p>
+                    )}
+                  </div>
+                  <AddOption fieldKey={f.field_key} onAdded={loadAll} />
+                </section>
+              );
+            })}
+          </div>
+        ))}
 
       <AddPicklist onAdded={loadAll} />
     </div>

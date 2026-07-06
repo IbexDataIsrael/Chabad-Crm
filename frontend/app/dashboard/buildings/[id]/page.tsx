@@ -6,12 +6,21 @@ import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
-import { formatCoords, type Apartment, type Area, type Building } from "@/lib/types";
+import {
+  apartmentTitle,
+  buildingDisplayName,
+  formatCoords,
+  type Apartment,
+  type Area,
+  type Building,
+} from "@/lib/types";
 
 export default function BuildingDetailPage() {
   const { loading } = useAuth();
   const { t } = useLocalization();
+  const { isFieldVisible } = useFieldSettings();
   const params = useParams<{ id: string }>();
   const buildingId = Number(params.id);
 
@@ -54,6 +63,8 @@ export default function BuildingDetailPage() {
     );
   }
 
+  const display = buildingDisplayName(building);
+
   return (
     <div className="space-y-5 max-w-3xl">
       <Link href="/dashboard/buildings" className="text-sm text-status-magenta hover:underline">
@@ -61,7 +72,7 @@ export default function BuildingDetailPage() {
       </Link>
 
       <div className="bg-white rounded-xl shadow-sm p-5 space-y-3">
-        <h1 className="text-2xl font-bold">{building.building_name}</h1>
+        <h1 className="text-2xl font-bold">{display}</h1>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <div>
             <dt className="text-gray-500">{t("buildings.area_id", "אזור")}</dt>
@@ -82,10 +93,24 @@ export default function BuildingDetailPage() {
             <dt className="text-gray-500">{t("apartments", "דירות")}</dt>
             <dd className="font-medium">{apartments.length}</dd>
           </div>
+          {isFieldVisible("buildings.building_name") && building.building_name && (
+            <div>
+              <dt className="text-gray-500">{t("buildings.building_name", "שם בניין")}</dt>
+              <dd className="font-medium">{building.building_name}</dd>
+            </div>
+          )}
           <div className="sm:col-span-2">
             <dt className="text-gray-500">{t("buildings.building_address", "כתובת בניין")}</dt>
             <dd className="font-medium">{building.building_address || "—"}</dd>
           </div>
+          {(building.floors?.length ?? 0) > 0 && (
+            <div className="sm:col-span-2">
+              <dt className="text-gray-500">{t("buildings.floors", "קומות")}</dt>
+              <dd className="font-medium">
+                {building.floors!.map((f) => f.name).join(", ")}
+              </dd>
+            </div>
+          )}
           {building.latitude != null && building.longitude != null && (
             <div className="sm:col-span-2">
               <dt className="text-gray-500">{t("buildings.coords", "קואורדינטות")}</dt>
@@ -97,7 +122,7 @@ export default function BuildingDetailPage() {
         </dl>
       </div>
 
-      {/* Apartments in this building — each name links to its detail page. */}
+      {/* Apartments in this building — each title links to its detail page. */}
       <section className="bg-white rounded-xl shadow-sm p-5 space-y-2">
         <h2 className="text-sm font-semibold text-gray-500">{t("apartments", "דירות")}</h2>
         {apartments.length === 0 ? (
@@ -112,8 +137,9 @@ export default function BuildingDetailPage() {
                   href={`/dashboard/apartments/${a.id}`}
                   className="font-medium text-status-magenta hover:underline"
                 >
-                  {a.apartment_name}
+                  {apartmentTitle(a)}
                 </Link>
+                {a.name && <span className="text-sm text-gray-600"> · {a.name}</span>}
                 {a.apartment_notes && (
                   <span className="text-sm text-gray-500"> — {a.apartment_notes}</span>
                 )}

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { AreasMap } from "@/components/AreasMap";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
@@ -37,6 +38,16 @@ export default function AreasPage() {
         )}
       </div>
       <p className="text-sm text-gray-500">{t("page.areas_intro")}</p>
+
+      {/* All the org's zone polygons on one map (fixes7 §7A). */}
+      {areas.some((a) => a.area_polygon) && (
+        <div className="bg-white rounded-xl shadow-sm p-2 space-y-1">
+          <h2 className="px-2 pt-1 text-sm font-semibold text-gray-500">
+            {t("areas.map_all", "מפת האזורים")}
+          </h2>
+          <AreasMap areas={areas} />
+        </div>
+      )}
 
       <div className="space-y-3">
         {areas.map((a) => (

@@ -107,30 +107,86 @@ export interface Area {
   area_polygon: string | null;
 }
 
+export interface Floor {
+  id: number;
+  guid: string;
+  building_id: number;
+  name: string;
+  sort_order: number;
+}
+
 export interface Building {
   id: number;
   guid: string;
   area_id: number;
-  building_name: string;
+  building_name: string | null;
   building_address: string | null;
   longitude: number | null;
   latitude: number | null;
+  floors?: Floor[];
 }
 
 export interface Apartment {
   id: number;
   guid: string;
   building_id: number;
-  apartment_name: string;
+  apartment_name: string | null;
   apartment_notes: string | null;
+  floor: string | null;
+  jewish_status: string | null;
+  campaign_status: string | null;
+  mezuzah_status: string | null;
+  name: string | null; // resident name
+  phone: string | null;
+  email: string | null;
 }
 
 /** Apartment enriched with building/area context + linked contact (apartments page). */
 export interface ApartmentListItem extends Apartment {
   building_name: string | null;
+  building_address: string | null;
   area_name: string | null;
   contact_id: number | null;
   contact_name: string | null;
+}
+
+/** The "[number] [street]" segment of a formatted address (first comma part). */
+export function streetPart(address: string | null | undefined): string | null {
+  if (!address) return null;
+  const first = address.split(",")[0].trim();
+  return first || null;
+}
+
+/**
+ * Canonical building display string (fixes7 §2): the composite address
+ * "[street number] + [street name]" (e.g. "770 Eastern Pkwy"), falling back to
+ * the legacy building name, then the id. Mirrors backend core/display.py.
+ */
+export function buildingDisplayName(b: {
+  id: number;
+  building_name?: string | null;
+  building_address?: string | null;
+}): string {
+  return (
+    streetPart(b.building_address) || (b.building_name ?? "").trim() || `#${b.id}`
+  );
+}
+
+/**
+ * Computed apartment title (fixes7 §4): label+floor — label "A" on floor "1"
+ * renders "A1" — with fallbacks to whichever part exists, then the resident
+ * name, then the id. Mirrors backend core/display.py.
+ */
+export function apartmentTitle(a: {
+  id: number;
+  apartment_name?: string | null;
+  floor?: string | null;
+  name?: string | null;
+}): string {
+  const label = (a.apartment_name ?? "").trim();
+  const floor = (a.floor ?? "").trim();
+  if (label || floor) return `${label}${floor}`;
+  return (a.name ?? "").trim() || `#${a.id}`;
 }
 
 export interface Interaction {

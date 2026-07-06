@@ -1,17 +1,22 @@
 """Apartment CRUD (belong to a building), org-scoped.
 
 Apartments are created inline from the contact forms, so create/update are open to
-any authenticated user; delete is admin-only.
+any authenticated user; delete is admin-only. The batch endpoint (fixes7 §5)
+creates the Cartesian product of selected floors × labels in one transaction.
 """
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app import models
 from app.database import get_db
 from app.deps import get_current_user, require_admin
+from app.picklist_utils import validate_picklist_value
 from app.schemas import (
+    ApartmentBatchCreate,
+    ApartmentBatchResult,
     ApartmentCreate,
     ApartmentListOut,
     ApartmentOut,
@@ -19,6 +24,19 @@ from app.schemas import (
 )
 
 router = APIRouter(prefix="/api/apartments", tags=["apartments"])
+
+# Apartment columns constrained by an org-managed picklist (fixes7 §4).
+_APARTMENT_PICKLISTS = {
+    "jewish_status": "apartment.Jewish_status",
+    "campaign_status": "apartment.campaign_status",
+    "mezuzah_status": "apartment.mezuzah_status",
+}
+
+
+def _validate_apartment_picklists(data: dict, org_id: int, db: Session) -> None:
+    for field, field_key in _APARTMENT_PICKLISTS.items():
+        if field in data and data[field] is not None:
+            validate_picklist_value(db, org_id, field_key, data[field])
 
 
 def _shliach_apartment_ids(db: Session, user: models.User) -> list[int]:
@@ -46,17 +64,13 @@ def _enrich(a: models.Apartment) -> ApartmentListOut:
     contact_name = None
     if contact:
         contact_name = f"{contact.name} {contact.last_name or ''}".strip()
-    return ApartmentListOut(
-        id=a.id,
-        guid=a.guid,
-        building_id=a.building_id,
-        apartment_name=a.apartment_name,
-        apartment_notes=a.apartment_notes,
-        building_name=building.building_name if building else None,
-        area_name=area.area_name if area else None,
-        contact_id=contact.id if contact else None,
-        contact_name=contact_name,
-    )
+    out = ApartmentListOut.model_validate(a)
+    out.building_name = building.building_name if building else None
+    out.building_address = building.building_address if building else None
+    out.area_name = area.area_name if area else None
+    out.contact_id = contact.id if contact else None
+    out.contact_name = contact_name
+    return out
 
 
 def _get_or_404(apartment_id: int, org_id: int, db: Session) -> models.Apartment:
@@ -73,8 +87,8 @@ def _get_or_404(apartment_id: int, org_id: int, db: Session) -> models.Apartment
     return a
 
 
-def _validate_building(building_id: int, org_id: int, db: Session) -> None:
-    ok = (
+def _validate_building(building_id: int, org_id: int, db: Session) -> models.Building:
+    building = (
         db.query(models.Building)
         .filter(
             models.Building.id == building_id,
@@ -82,8 +96,9 @@ def _validate_building(building_id: int, org_id: int, db: Session) -> None:
         )
         .first()
     )
-    if not ok:
+    if not building:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "building_id does not exist")
+    return building
 
 
 @router.get("", response_model=list[ApartmentOut])
@@ -107,9 +122,13 @@ def list_apartments(
 def list_apartments_enriched(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
+    building_id: Optional[int] = None,
+    q: Optional[str] = None,
 ):
     """Apartments enriched with building/area + linked contact, for the apartments
-    page. Shliach users see only the apartments they cover."""
+    page. Shliach users see only the apartments they cover. Filters (fixes7 §2):
+    `building_id` bounds the list to one building; `q` matches the street name in
+    the parent building address (plus the apartment label / resident name)."""
     query = db.query(models.Apartment).filter(
         models.Apartment.organization_id == current_user.organization_id
     )
@@ -118,6 +137,20 @@ def list_apartments_enriched(
         if not ids:
             return []
         query = query.filter(models.Apartment.id.in_(ids))
+    if building_id is not None:
+        query = query.filter(models.Apartment.building_id == building_id)
+    if q:
+        like = f"%{q.strip()}%"
+        query = query.join(
+            models.Building, models.Building.id == models.Apartment.building_id
+        ).filter(
+            or_(
+                models.Building.building_address.ilike(like),
+                models.Building.building_name.ilike(like),
+                models.Apartment.apartment_name.ilike(like),
+                models.Apartment.name.ilike(like),
+            )
+        )
     rows = query.order_by(models.Apartment.apartment_name).all()
     return [_enrich(a) for a in rows]
 
@@ -132,6 +165,7 @@ def create_apartment(
     _validate_building(payload.building_id, org_id, db)
     data = payload.model_dump()
     contact_id = data.pop("contact_id", None)
+    _validate_apartment_picklists(data, org_id, db)
     a = models.Apartment(**data, organization_id=org_id)
     db.add(a)
     db.flush()
@@ -160,6 +194,61 @@ def create_apartment(
     return a
 
 
+@router.post(
+    "/batch", response_model=ApartmentBatchResult, status_code=status.HTTP_201_CREATED
+)
+def batch_create_apartments(
+    payload: ApartmentBatchCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Bulk generator (fixes7 §5): insert the full floors × labels matrix in one
+    transaction, skipping combinations that already exist in the building."""
+    org_id = current_user.organization_id
+    building = _validate_building(payload.building_id, org_id, db)
+
+    floors_by_id = {f.id: f for f in building.floors}
+    floors = []
+    for floor_id in dict.fromkeys(payload.floor_ids):  # de-dupe, keep order
+        floor = floors_by_id.get(floor_id)
+        if floor is None:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"floor {floor_id} does not belong to this building",
+            )
+        floors.append(floor)
+    labels = [l.strip() for l in dict.fromkeys(payload.labels) if l.strip()]
+    if not floors or not labels:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Select at least one floor and one label"
+        )
+
+    existing = {
+        (ap.floor or "", ap.apartment_name or "")
+        for ap in db.query(models.Apartment)
+        .filter(models.Apartment.building_id == building.id)
+        .all()
+    }
+    created = 0
+    skipped = 0
+    for floor in floors:
+        for label in labels:
+            if (floor.name, label) in existing:
+                skipped += 1
+                continue
+            db.add(
+                models.Apartment(
+                    organization_id=org_id,
+                    building_id=building.id,
+                    apartment_name=label,
+                    floor=floor.name,
+                )
+            )
+            created += 1
+    db.commit()  # single transaction for the whole matrix
+    return ApartmentBatchResult(created=created, skipped=skipped)
+
+
 @router.get("/{apartment_id}", response_model=ApartmentOut)
 def get_apartment(
     apartment_id: int,
@@ -180,6 +269,7 @@ def update_apartment(
     data = payload.model_dump(exclude_unset=True)
     if "building_id" in data and data["building_id"] is not None:
         _validate_building(data["building_id"], current_user.organization_id, db)
+    _validate_apartment_picklists(data, current_user.organization_id, db)
     for field, value in data.items():
         setattr(a, field, value)
     db.commit()

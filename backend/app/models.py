@@ -332,8 +332,8 @@ class Building(Base):
         Integer, ForeignKey("organizations.id"), nullable=False, index=True
     )
     area_id = Column(Integer, ForeignKey("areas.id"), nullable=False, index=True)
-    building_name = Column(String(150), nullable=False)  # שם בניין
-    building_address = Column(Text, nullable=True)  # כתובת בניין
+    building_name = Column(String(150), nullable=True)  # שם בניין (optional, fixes7)
+    building_address = Column(Text, nullable=True)  # כתובת בניין (required at the API)
     longitude = Column(Float, nullable=True)
     latitude = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
@@ -342,6 +342,36 @@ class Building(Base):
     apartments = relationship(
         "Apartment", back_populates="building", cascade="all, delete-orphan"
     )
+    floors = relationship(
+        "Floor",
+        back_populates="building",
+        cascade="all, delete-orphan",
+        order_by="Floor.sort_order, Floor.id",
+    )
+
+
+class Floor(Base):
+    """A floor (קומה) within a building. Referenced by apartments as free text
+    (`apartments.floor` holds the floor name) so floors can be renamed freely."""
+
+    __tablename__ = "floors"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    building_id = Column(
+        Integer,
+        ForeignKey("buildings.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name = Column(String(50), nullable=False)  # שם קומה (e.g. "1", "קרקע")
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    building = relationship("Building", back_populates="floors")
 
 
 class Apartment(Base):
@@ -355,8 +385,16 @@ class Apartment(Base):
     building_id = Column(
         Integer, ForeignKey("buildings.id"), nullable=False, index=True
     )
-    apartment_name = Column(String(150), nullable=False)  # כותרת
+    apartment_name = Column(String(150), nullable=True)  # תווית (optional, fixes7)
     apartment_notes = Column(Text, nullable=True)  # הערות
+    # fixes7 §4 — apartment data fields:
+    floor = Column(String(50), nullable=True)  # קומה (name of a building floor)
+    jewish_status = Column(String(100), nullable=True)  # picklist apartment.Jewish_status
+    campaign_status = Column(String(100), nullable=True)  # picklist apartment.campaign_status
+    mezuzah_status = Column(String(100), nullable=True)  # picklist apartment.mezuzah_status
+    name = Column(String(150), nullable=True)  # שם דייר (resident)
+    phone = Column(String(50), nullable=True)  # טלפון (validated at the API)
+    email = Column(String(255), nullable=True)  # אימייל (validated at the API)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     building = relationship("Building", back_populates="apartments")

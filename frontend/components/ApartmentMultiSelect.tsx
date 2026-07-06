@@ -5,7 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
 import { useLocalization } from "@/lib/localization";
-import type { Apartment, Building } from "@/lib/types";
+import {
+  apartmentTitle,
+  buildingDisplayName,
+  type Apartment,
+  type Building,
+} from "@/lib/types";
 
 /**
  * Multi-select for the apartments a shliach covers. "+ הוסף דירה" opens an
@@ -43,7 +48,7 @@ export function ApartmentMultiSelect({
 
   const buildingName = useMemo(() => {
     const map = new Map<number, string>();
-    buildings.forEach((b) => map.set(b.id, b.building_name));
+    buildings.forEach((b) => map.set(b.id, buildingDisplayName(b)));
     return (id: number) => map.get(id) ?? "";
   }, [buildings]);
 
@@ -56,7 +61,8 @@ export function ApartmentMultiSelect({
 
   const label = (a: Apartment) => {
     const bn = buildingName(a.building_id);
-    return bn ? `${a.apartment_name} — ${bn}` : a.apartment_name;
+    const title = apartmentTitle(a);
+    return bn ? `${title} — ${bn}` : title;
   };
 
   const inArea = (a: Apartment) =>

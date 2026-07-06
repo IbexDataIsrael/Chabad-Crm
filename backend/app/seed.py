@@ -435,6 +435,69 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("ai", "ai.thinking", "חושב…", "Thinking…"),
     ("ai", "ai.error", "השיחה נכשלה — נסה שוב", "The chat failed — try again"),
     ("ai", "ai.empty", "עדיין אין הודעות. שאל שאלה כדי להתחיל.", "No messages yet. Ask a question to start."),
+    # --- fixes7 §1: org user management ---
+    ("nav", "nav.users", "משתמשים", "Users"),
+    ("users", "users.title", "ניהול משתמשים", "User management"),
+    ("users", "users.intro", "הוסף וערוך משתמשים בארגון. מנהל מקבל הרשאות מלאות; משתמש מוגבל רואה אנשי קשר בלבד.", "Add and edit the organization's users. An admin gets full privileges; a restricted user only sees contacts."),
+    ("users", "users.add_user", "משתמש חדש", "New user"),
+    ("users", "users.role_admin", "מנהל", "Admin"),
+    ("users", "users.role_staff", "משתמש מוגבל", "Restricted user"),
+    ("users", "users.role_shliach", "פעיל", "Activist"),
+    ("users", "users.role_label", "תפקיד", "Role"),
+    ("users", "users.password_optional", "סיסמה (לא חובה)", "Password (optional)"),
+    ("users", "users.google_only_hint", "ללא סיסמה — המשתמש יתחבר עם Google לפי כתובת האימייל המאומתת.", "Without a password the user signs in with Google using their verified email."),
+    ("users", "users.none", "אין משתמשים.", "No users."),
+    ("users", "users.created", "המשתמש נוצר ונשלח אליו מייל קבלת פנים", "User created — a welcome email was sent"),
+    ("users", "users.updated", "המשתמש עודכן", "User updated"),
+    ("users", "users.deleted", "המשתמש נמחק", "User deleted"),
+    ("users", "users.delete_confirm", "למחוק את המשתמש?", "Delete this user?"),
+    ("users", "users.self_guard", "לא ניתן לשנות או למחוק את עצמך", "You cannot change or delete yourself"),
+    ("users", "users.status_active", "פעיל", "Active"),
+    ("users", "users.status_disabled", "מושבת", "Disabled"),
+    ("users", "users.you", "אני", "me"),
+    # --- fixes7 §2/§3: buildings, floors ---
+    ("buildings", "buildings.floors", "קומות", "Floors"),
+    ("buildings", "buildings.num_floors", "מספר קומות", "Number of floors"),
+    ("buildings", "buildings.num_floors_hint", "בעת יצירת הבניין ייווצרו קומות 1 עד המספר שנבחר.", "Creating the building auto-creates floors 1 through the chosen number."),
+    ("floors", "floors.add", "הוסף קומה", "Add floor"),
+    ("floors", "floors.name", "שם קומה", "Floor name"),
+    ("floors", "floors.none", "אין קומות בבניין זה.", "No floors in this building."),
+    ("floors", "floors.delete_confirm", "למחוק קומה זו?", "Delete this floor?"),
+    ("filter", "filter.by_building", "סנן לפי בניין:", "Filter by building:"),
+    ("filter", "filter.all_buildings", "כל הבניינים", "All buildings"),
+    ("apt", "apt.street_search", "חיפוש לפי שם רחוב…", "Search by street name…"),
+    ("apt", "apt.edit_apartment", "עריכת דירה", "Edit apartment"),
+    # --- fixes7 §4: apartment fields ---
+    ("column", "apartments.floor", "קומה", "Floor"),
+    ("column", "apartments.name", "שם דייר", "Resident name"),
+    ("column", "apartments.phone", "טלפון", "Phone"),
+    ("column", "apartments.email", "אימייל", "Email"),
+    ("picklist", "picklist.apartment.Jewish_status", "יהדות", "Jewish status"),
+    ("picklist", "picklist.apartment.campaign_status", "סטטוס קמפיין", "Campaign status"),
+    ("picklist", "picklist.apartment.mezuzah_status", "מזוזה", "Mezuzah"),
+    ("table", "building", "בניין", "Building"),
+    ("table", "apartment", "דירה", "Apartment"),
+    ("pl", "pl.group_apartment", "דירה", "Apartment"),
+    ("pl", "pl.group_general", "כללי", "General"),
+    # --- fixes7 §5: bulk apartment generator ---
+    ("batch", "batch.open", "יצירה מרובה", "Bulk create"),
+    ("batch", "batch.title", "יצירת דירות מרובות", "Bulk apartment generator"),
+    ("batch", "batch.intro", "בחר בניין, קומות ותוויות דירה — כל השילובים ייווצרו בבת אחת.", "Pick a building, floors and apartment labels — every combination is created at once."),
+    ("batch", "batch.floors", "קומות", "Floors"),
+    ("batch", "batch.labels", "מספרי / אותיות דירות", "Apartment numbers / letters"),
+    ("batch", "batch.add_label", "הוסף", "Add"),
+    ("batch", "batch.label_placeholder", "לדוגמה A או 1", "e.g. A or 1"),
+    ("batch", "batch.no_floors", "לבניין זה אין קומות. הוסף קומות בעריכת הבניין.", "This building has no floors. Add floors by editing the building."),
+    ("batch", "batch.create", "צור דירות", "Create apartments"),
+    ("batch", "batch.select_all", "בחר הכל", "Select all"),
+    ("batch", "batch.result", "נוצרו {created} דירות ({skipped} דולגו — קיימות)", "Created {created} apartments ({skipped} skipped — already exist)"),
+    ("batch", "batch.pick_floor_label", "יש לבחור לפחות קומה אחת ותווית אחת", "Pick at least one floor and one label"),
+    # --- fixes7 §7: areas map + geofence ---
+    ("areas", "areas.map_all", "מפת האזורים", "Areas map"),
+    ("areas", "areas.view_area", "הצג אזור »", "View area »"),
+    ("geo", "geo.outside_area_warning", "אזהרה: הכתובת שנבחרה נמצאת מחוץ לתחום האזור שנבחר!", "Warning: the chosen address is outside the selected area's boundary!"),
+    ("geo", "geo.save_anyway", "שמור בכל זאת", "Save anyway"),
+    ("geo", "geo.check_hint", "בדוק את הכתובת או בחר אזור אחר.", "Check the address or pick a different area."),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)
@@ -484,6 +547,16 @@ PICKLISTS: list[tuple[str, str, str, str | None, int, bool]] = [
     ("language", "english", "אנגלית", None, 2, False),
     ("language", "russian", "רוסית", None, 3, False),
     ("language", "yiddish", "יידיש", None, 4, False),
+    # fixes7 §4: apartment status picklists. campaign_status is intentionally
+    # left without seeded options (admins define their own campaigns).
+    ("apartment.Jewish_status", "na", "/", None, 0, True),
+    ("apartment.Jewish_status", "jewish", "יהודי", None, 1, False),
+    ("apartment.Jewish_status", "jewish_interested", "יהודי מעוניין ביהדות", None, 2, False),
+    ("apartment.Jewish_status", "jewish_gentile", "יהודי וגוי", None, 3, False),
+    ("apartment.Jewish_status", "jewish_interested_gentile", "יהודי מעוניין וגוי", None, 4, False),
+    ("apartment.Jewish_status", "jewish_shtumtz", "יהודי שתומצ", None, 5, False),
+    ("apartment.mezuzah_status", "checked", "נבדק", None, 0, False),
+    ("apartment.mezuzah_status", "needs_check", "צריך בדיקה", None, 1, False),
 ]
 
 # Picklist definition display names (he from PICKLIST_FIELDS; en where known per spec).
@@ -492,6 +565,9 @@ PICKLIST_ENGLISH_DISPLAY: dict[str, str] = {
     "affiliation": "affiliation",
     "language": "language",
     "visit.type": "Visit type",
+    "apartment.Jewish_status": "Jewish status (apartment)",
+    "apartment.campaign_status": "Campaign status",
+    "apartment.mezuzah_status": "Mezuzah",
 }
 
 

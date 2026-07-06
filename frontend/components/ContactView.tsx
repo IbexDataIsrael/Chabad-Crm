@@ -8,6 +8,7 @@ import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
 import {
+  apartmentTitle,
   CHECKLIST_ROWS,
   type Apartment,
   type Area,
@@ -230,7 +231,7 @@ function ApartmentLabel({ id }: { id: number | null }) {
     }
     let active = true;
     apiFetch<Apartment>(`/api/apartments/${id}`)
-      .then((a) => active && setLabel(a.apartment_name))
+      .then((a) => active && setLabel(apartmentTitle(a)))
       .catch(() => active && setLabel(null));
     return () => {
       active = false;

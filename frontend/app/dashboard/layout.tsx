@@ -36,6 +36,7 @@ function DashboardChrome({ children }: { children: ReactNode }) {
   const peopleItems = adminOnly([
     { href: "/dashboard/contacts", label: t("nav.contacts", "אנשי קשר") },
     { href: "/dashboard/shluchim", label: t("nav.shluchim", "פעילים"), admin: true },
+    { href: "/dashboard/users", label: t("nav.users", "משתמשים"), admin: true },
     { href: "/dashboard/visits", label: t("nav.visits", "ביקורים"), admin: true },
   ]);
   const placeItems = adminOnly([
@@ -56,7 +57,7 @@ function DashboardChrome({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen">
       <header className="bg-white border-b border-gray-200">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-y-2">
+        <div className="w-full px-4 md:px-6 py-3 flex flex-wrap items-center justify-between gap-y-2">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <Link href="/dashboard" className="flex items-center gap-2.5">
               {logoUrl ? (
@@ -124,7 +125,9 @@ function DashboardChrome({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
-      <main className="max-w-6xl mx-auto px-4 py-6">{children}</main>
+      {/* Full-viewport width (fixes7 §8B); individual pages set their own max-w
+          where a narrower reading width helps (forms, settings). */}
+      <main className="w-full px-4 md:px-6 py-6">{children}</main>
     </div>
   );
 }

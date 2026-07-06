@@ -15,6 +15,8 @@ const ENTITY_GROUPS: { entity: string; labelKey: string; fallback: string }[] = 
   { entity: "contact", labelKey: "contacts", fallback: "אנשי קשר" },
   { entity: "contact_mekurav", labelKey: "contact_mekurav", fallback: "מקורב" },
   { entity: "contact_shliach", labelKey: "contact_shliach", fallback: "פעיל" },
+  { entity: "building", labelKey: "building", fallback: "בניין" },
+  { entity: "apartment", labelKey: "apartment", fallback: "דירה" },
 ];
 
 export default function FieldsPage() {

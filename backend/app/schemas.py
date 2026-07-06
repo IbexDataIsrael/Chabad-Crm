@@ -64,10 +64,35 @@ class UserOut(BaseModel):
     guid: str
     username: str
     full_name: str
+    email: Optional[str] = None
     role: str
+    is_active: bool = True
     created_at: datetime
     organization_id: int
     organization: Optional[OrganizationOut] = None
+
+
+# --- Org user management (fixes7 §1: admins provision admins/staff) ---------
+OrgRole = Literal["admin", "staff"]
+
+
+class OrgUserCreate(BaseModel):
+    """An admin provisions a user in their own org. Email is the identity —
+    with no password the account signs in via Google (verified email only)."""
+
+    full_name: str
+    email: str
+    role: OrgRole = "staff"
+    username: Optional[str] = None  # defaults to the email
+    password: Optional[str] = None  # omitted => Google-only account
+    phone: Optional[str] = None
+
+
+class OrgUserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    role: Optional[OrgRole] = None
+    is_active: Optional[bool] = None
+    password: Optional[str] = None
 
 
 class Token(BaseModel):
@@ -265,16 +290,45 @@ class AreaOut(AreaBase):
     guid: str
 
 
+class FloorOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    guid: str
+    building_id: int
+    name: str
+    sort_order: int
+
+
+class FloorCreate(BaseModel):
+    name: str
+    sort_order: Optional[int] = None  # appended last when omitted
+
+
+class FloorUpdate(BaseModel):
+    name: Optional[str] = None
+    sort_order: Optional[int] = None
+
+
 class BuildingBase(BaseModel):
     area_id: int
-    building_name: str
-    building_address: Optional[str] = None
+    # fixes7 §2: building_name is optional; the address is the required field.
+    building_name: Optional[str] = None
+    building_address: str
     longitude: Optional[float] = None
     latitude: Optional[float] = None
 
+    @field_validator("building_address")
+    @classmethod
+    def _check_address(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Address is required")
+        return v
+
 
 class BuildingCreate(BuildingBase):
-    pass
+    # Creation hook (fixes7 §3): floor names to auto-create with the building.
+    floors: list[str] = []
 
 
 class BuildingUpdate(BaseModel):
@@ -284,18 +338,61 @@ class BuildingUpdate(BaseModel):
     longitude: Optional[float] = None
     latitude: Optional[float] = None
 
+    @field_validator("building_address")
+    @classmethod
+    def _check_address(cls, v: Optional[str]) -> Optional[str]:
+        # An explicit empty address is rejected; omitting the field is fine.
+        if v is not None and not v.strip():
+            raise ValueError("Address is required")
+        return v
 
-class BuildingOut(BuildingBase):
+
+class BuildingOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     guid: str
+    area_id: int
+    building_name: Optional[str] = None
+    building_address: Optional[str] = None
+    longitude: Optional[float] = None
+    latitude: Optional[float] = None
+    floors: list[FloorOut] = []
+
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _validate_email(value: Optional[str]) -> Optional[str]:
+    """RFC-pragmatic email check mirroring lib/validation.ts isValidEmail."""
+    if value is None or not value.strip():
+        return None
+    if not _EMAIL_RE.match(value.strip()):
+        raise ValueError("Invalid email address")
+    return value.strip()
 
 
 class ApartmentBase(BaseModel):
     building_id: int
-    apartment_name: str
+    apartment_name: Optional[str] = None  # תווית (optional, fixes7 §4)
     apartment_notes: Optional[str] = None
+    floor: Optional[str] = None
+    jewish_status: Optional[str] = None
+    campaign_status: Optional[str] = None
+    mezuzah_status: Optional[str] = None
+    name: Optional[str] = None  # resident name
+    phone: Optional[str] = None
+    email: Optional[str] = None
+
+    @field_validator("phone")
+    @classmethod
+    def _check_phone(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_phone(v) if v else None
+
+    @field_validator("email")
+    @classmethod
+    def _check_email(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_email(v)
 
 
 class ApartmentCreate(ApartmentBase):
@@ -307,22 +404,63 @@ class ApartmentUpdate(BaseModel):
     building_id: Optional[int] = None
     apartment_name: Optional[str] = None
     apartment_notes: Optional[str] = None
+    floor: Optional[str] = None
+    jewish_status: Optional[str] = None
+    campaign_status: Optional[str] = None
+    mezuzah_status: Optional[str] = None
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+
+    @field_validator("phone")
+    @classmethod
+    def _check_phone(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_phone(v) if v else None
+
+    @field_validator("email")
+    @classmethod
+    def _check_email(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_email(v)
 
 
-class ApartmentOut(ApartmentBase):
+class ApartmentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     guid: str
+    building_id: int
+    apartment_name: Optional[str] = None
+    apartment_notes: Optional[str] = None
+    floor: Optional[str] = None
+    jewish_status: Optional[str] = None
+    campaign_status: Optional[str] = None
+    mezuzah_status: Optional[str] = None
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
 
 
 class ApartmentListOut(ApartmentOut):
     """Apartment enriched with its building/area context + a linked contact (if any)."""
 
     building_name: Optional[str] = None
+    building_address: Optional[str] = None
     area_name: Optional[str] = None
     contact_id: Optional[int] = None
     contact_name: Optional[str] = None
+
+
+class ApartmentBatchCreate(BaseModel):
+    """Bulk generator (fixes7 §5): the Cartesian product of floors × labels."""
+
+    building_id: int
+    floor_ids: list[int]
+    labels: list[str]
+
+
+class ApartmentBatchResult(BaseModel):
+    created: int
+    skipped: int
 
 
 # --- Significant dates + reminders -----------------------------------------

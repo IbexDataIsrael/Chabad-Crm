@@ -21,6 +21,10 @@ PICKLIST_FIELDS: dict[str, str] = {
     "Jewish_status": "יהדות",
     "affiliation": "השתייכות דתית",
     "language": "שפה",
+    # fixes7 §4: apartment status picklists (grouped under "דירה" in the UI).
+    "apartment.Jewish_status": "יהדות (דירה)",
+    "apartment.campaign_status": "סטטוס קמפיין",
+    "apartment.mezuzah_status": "מזוזה",
 }
 
 # field_key -> (model, column attribute name) for validation + usage counting.
@@ -36,6 +40,9 @@ FIELD_KEY_TO_COLUMN: dict[str, tuple[type, str]] = {
     "interaction.category": (models.Interaction, "category"),
     "visit.type": (models.VisitHistory, "visit_type"),
     "significant_date.type": (models.SignificantDate, "special_date_type"),
+    "apartment.Jewish_status": (models.Apartment, "jewish_status"),
+    "apartment.campaign_status": (models.Apartment, "campaign_status"),
+    "apartment.mezuzah_status": (models.Apartment, "mezuzah_status"),
 }
 
 

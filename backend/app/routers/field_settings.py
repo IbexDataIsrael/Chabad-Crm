@@ -11,7 +11,12 @@ from sqlalchemy.orm import Session
 from app import models
 from app.database import get_db
 from app.deps import get_current_user, require_admin
-from app.field_registry import TOGGLEABLE_FIELDS, TOGGLEABLE_KEYS, label_and_entity
+from app.field_registry import (
+    TOGGLEABLE_FIELDS,
+    TOGGLEABLE_KEYS,
+    default_visible,
+    label_and_entity,
+)
 
 router = APIRouter(prefix="/api/field-settings", tags=["field-settings"])
 
@@ -42,7 +47,10 @@ def list_field_settings(
     }
     return [
         FieldSettingOut(
-            field_key=fk, label_key=lk, entity=ent, is_visible=saved.get(fk, True)
+            field_key=fk,
+            label_key=lk,
+            entity=ent,
+            is_visible=saved.get(fk, default_visible(fk)),
         )
         for fk, lk, ent in TOGGLEABLE_FIELDS
     ]

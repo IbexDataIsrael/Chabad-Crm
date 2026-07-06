@@ -8,7 +8,13 @@ import { AreaPolygonView } from "@/components/AreaPolygonView";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
-import { contactFullName, type Area, type Building, type Contact } from "@/lib/types";
+import {
+  buildingDisplayName,
+  contactFullName,
+  type Area,
+  type Building,
+  type Contact,
+} from "@/lib/types";
 
 export default function AreaDetailPage() {
   const { isAdmin, loading } = useAuth();
@@ -127,7 +133,12 @@ export default function AreaDetailPage() {
           <ul className="divide-y divide-gray-100">
             {buildings.map((b) => (
               <li key={b.id} className="py-2">
-                <div className="font-medium">{b.building_name}</div>
+                <Link
+                  href={`/dashboard/buildings/${b.id}`}
+                  className="font-medium text-status-magenta hover:underline"
+                >
+                  {buildingDisplayName(b)}
+                </Link>
                 {b.building_address && (
                   <div className="text-sm text-gray-500">{b.building_address}</div>
                 )}

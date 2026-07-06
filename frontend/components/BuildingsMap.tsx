@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 
 import { loadGoogleMaps, mapsKey } from "@/lib/maps";
 import { useLocalization } from "@/lib/localization";
-import type { Building } from "@/lib/types";
+import { buildingDisplayName, type Building } from "@/lib/types";
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) =>
@@ -44,11 +44,12 @@ export function BuildingsMap({ buildings }: { buildings: Building[] }) {
         const info = new g.maps.InfoWindow();
         located.forEach((b) => {
           const pos = { lat: b.latitude as number, lng: b.longitude as number };
-          const marker = new g.maps.Marker({ position: pos, map, title: b.building_name });
+          const display = buildingDisplayName(b);
+          const marker = new g.maps.Marker({ position: pos, map, title: display });
           marker.addListener("click", () => {
             info.setContent(
               `<div style="font-size:13px;line-height:1.4">` +
-                `<strong>${escapeHtml(b.building_name)}</strong>` +
+                `<strong>${escapeHtml(display)}</strong>` +
                 (b.building_address ? `<br/>${escapeHtml(b.building_address)}` : "") +
                 `<br/><a href="/dashboard/buildings/${b.id}" style="color:#d6249f;text-decoration:none">` +
                 `${escapeHtml(t("buildings.view", "הצג בניין »"))}</a>` +

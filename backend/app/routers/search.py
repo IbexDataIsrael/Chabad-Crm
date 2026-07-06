@@ -9,6 +9,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from app import models
+from app.core.display import apartment_title, building_display_name
 from app.database import get_db
 from app.deps import get_current_user
 from app.routers.areas import _shliach_area_ids
@@ -99,12 +100,12 @@ def global_search(
         buildings = buildings.filter(
             models.Building.area_id.in_(allowed_area_ids or [-1])
         )
-    for b in buildings.order_by(models.Building.building_name).limit(MAX_PER_TYPE).all():
+    for b in buildings.order_by(models.Building.building_address).limit(MAX_PER_TYPE).all():
         results.append(
             SearchHit(
                 type="building",
                 id=b.id,
-                title=b.building_name,
+                title=building_display_name(b),
                 subtitle=b.area.area_name if b.area else None,
             )
         )
@@ -118,6 +119,8 @@ def global_search(
             or_(
                 models.Apartment.apartment_name.ilike(like),
                 models.Apartment.apartment_notes.ilike(like),
+                models.Apartment.name.ilike(like),
+                models.Apartment.phone.ilike(like),
             ),
         )
     )
@@ -132,8 +135,8 @@ def global_search(
             SearchHit(
                 type="apartment",
                 id=ap.id,
-                title=ap.apartment_name,
-                subtitle=ap.building.building_name if ap.building else None,
+                title=apartment_title(ap),
+                subtitle=building_display_name(ap.building) if ap.building else None,
             )
         )
 

@@ -7,9 +7,20 @@ import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { BuildingsMap } from "@/components/BuildingsMap";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useFieldSettings } from "@/lib/fieldSettings";
+import { pointInPolygon } from "@/lib/geo";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
-import { formatCoords, roundCoord, type Apartment, type Area, type Building } from "@/lib/types";
+import {
+  apartmentTitle,
+  buildingDisplayName,
+  formatCoords,
+  roundCoord,
+  type Apartment,
+  type Area,
+  type Building,
+  type Floor,
+} from "@/lib/types";
 
 export default function BuildingsPage() {
   const { isAdmin, loading } = useAuth();
@@ -19,7 +30,7 @@ export default function BuildingsPage() {
   const [filterArea, setFilterArea] = useState<string>("");
   // Inline editor is used only for *editing* an existing row; adding a building
   // goes to the dedicated /dashboard/buildings/add page.
-  const [editing, setEditing] = useState<Partial<Building> | null>(null);
+  const [editing, setEditing] = useState<Building | null>(null);
 
   async function reload() {
     const [a, b] = await Promise.all([
@@ -50,7 +61,7 @@ export default function BuildingsPage() {
     "rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
   return (
-    <div className="space-y-5 max-w-3xl">
+    <div className="space-y-5 max-w-4xl">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{t("buildings", "בניינים")}</h1>
         {isAdmin && !editing && areas.length > 0 && (
@@ -166,7 +177,9 @@ function BuildingRow({
   onDeleted: () => Promise<void>;
 }) {
   const { t } = useLocalization();
+  const { isFieldVisible } = useFieldSettings();
   const [open, setOpen] = useState(false);
+  const display = buildingDisplayName(building);
   return (
     <div className="px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -175,11 +188,13 @@ function BuildingRow({
             href={`/dashboard/buildings/${building.id}`}
             className="font-medium text-status-magenta hover:underline"
           >
-            {building.building_name}
+            {display}
           </Link>
-          {building.building_address && (
-            <div className="text-sm text-gray-500">{building.building_address}</div>
-          )}
+          {isFieldVisible("buildings.building_name") &&
+            building.building_name &&
+            building.building_name !== display && (
+              <div className="text-sm text-gray-500">{building.building_name}</div>
+            )}
           {building.latitude != null && building.longitude != null && (
             <div className="text-xs text-gray-400">
               <span>{t("buildings.coords", "קואורדינטות")}: </span>
@@ -188,6 +203,11 @@ function BuildingRow({
           )}
         </div>
         <span className="rounded bg-gray-100 text-gray-600 text-xs px-2 py-0.5">{areaName}</span>
+        {(building.floors?.length ?? 0) > 0 && (
+          <span className="rounded bg-gray-100 text-gray-600 text-xs px-2 py-0.5">
+            {building.floors!.length} {t("buildings.floors", "קומות")}
+          </span>
+        )}
         <div className="flex items-center gap-2 ms-auto">
           <button
             onClick={() => setOpen((o) => !o)}
@@ -203,31 +223,31 @@ function BuildingRow({
               >
                 {t("action.edit", "ערוך")}
               </button>
-              <DeleteButton id={building.id} name={building.building_name} onDone={onDeleted} />
+              <DeleteButton id={building.id} name={display} onDone={onDeleted} />
             </>
           )}
         </div>
       </div>
-      {open && <BuildingApartments buildingId={building.id} isAdmin={isAdmin} />}
+      {open && <BuildingApartments building={building} isAdmin={isAdmin} />}
     </div>
   );
 }
 
 // Apartment list + inline CRUD for a single building.
-function BuildingApartments({ buildingId, isAdmin }: { buildingId: number; isAdmin: boolean }) {
+function BuildingApartments({ building, isAdmin }: { building: Building; isAdmin: boolean }) {
   const { t } = useLocalization();
   const { success } = useToast();
   const [apts, setApts] = useState<Apartment[] | null>(null);
   const [adding, setAdding] = useState(false);
 
   async function reload() {
-    setApts(await apiFetch<Apartment[]>(`/api/apartments?building_id=${buildingId}`));
+    setApts(await apiFetch<Apartment[]>(`/api/apartments?building_id=${building.id}`));
   }
 
   useEffect(() => {
     reload().catch(() => setApts([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buildingId]);
+  }, [building.id]);
 
   return (
     <div className="mt-3 border-t border-gray-100 pt-3 space-y-2">
@@ -245,7 +265,7 @@ function BuildingApartments({ buildingId, isAdmin }: { buildingId: number; isAdm
 
       {adding && (
         <ApartmentInlineForm
-          buildingId={buildingId}
+          building={building}
           onClose={() => setAdding(false)}
           onSaved={async () => {
             setAdding(false);
@@ -262,7 +282,7 @@ function BuildingApartments({ buildingId, isAdmin }: { buildingId: number; isAdm
       ) : (
         <ul className="space-y-1">
           {apts.map((a) => (
-            <ApartmentRow key={a.id} apt={a} isAdmin={isAdmin} onChanged={reload} />
+            <ApartmentRow key={a.id} apt={a} building={building} isAdmin={isAdmin} onChanged={reload} />
           ))}
         </ul>
       )}
@@ -272,10 +292,12 @@ function BuildingApartments({ buildingId, isAdmin }: { buildingId: number; isAdm
 
 function ApartmentRow({
   apt,
+  building,
   isAdmin,
   onChanged,
 }: {
   apt: Apartment;
+  building: Building;
   isAdmin: boolean;
   onChanged: () => Promise<void>;
 }) {
@@ -287,7 +309,7 @@ function ApartmentRow({
     return (
       <li>
         <ApartmentInlineForm
-          buildingId={apt.building_id}
+          building={building}
           apt={apt}
           onClose={() => setEditing(false)}
           onSaved={async () => {
@@ -301,7 +323,7 @@ function ApartmentRow({
   }
 
   async function remove() {
-    if (!confirm(`${t("apt.delete_confirm", "למחוק את הדירה?")} '${apt.apartment_name}'`)) return;
+    if (!confirm(`${t("apt.delete_confirm", "למחוק את הדירה?")} '${apartmentTitle(apt)}'`)) return;
     await apiFetch(`/api/apartments/${apt.id}`, { method: "DELETE" });
     await onChanged();
     success(t("msg.deleted", "נמחק בהצלחה"));
@@ -309,7 +331,13 @@ function ApartmentRow({
 
   return (
     <li className="flex items-center gap-2 text-sm">
-      <span className="font-medium">{apt.apartment_name}</span>
+      <Link
+        href={`/dashboard/apartments/${apt.id}`}
+        className="font-medium text-status-magenta hover:underline"
+      >
+        {apartmentTitle(apt)}
+      </Link>
+      {apt.name && <span className="text-gray-600">{apt.name}</span>}
       {apt.apartment_notes && <span className="text-gray-500">— {apt.apartment_notes}</span>}
       <span className="ms-auto flex items-center gap-2">
         <button onClick={() => setEditing(true)} className="text-xs text-gray-600 hover:underline">
@@ -325,22 +353,36 @@ function ApartmentRow({
   );
 }
 
+/** Compact inline apartment form (label, floor, resident, notes). The full
+ *  editing flow (all fields, contact-card style) lives on the apartment page. */
 function ApartmentInlineForm({
-  buildingId,
+  building,
   apt,
   onClose,
   onSaved,
 }: {
-  buildingId: number;
+  building: Building;
   apt?: Apartment;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
   const { t } = useLocalization();
-  const [name, setName] = useState(apt?.apartment_name ?? "");
+  const { isFieldVisible } = useFieldSettings();
+  const [label, setLabel] = useState(apt?.apartment_name ?? "");
+  const [floor, setFloor] = useState(apt?.floor ?? "");
+  const [resident, setResident] = useState(apt?.name ?? "");
   const [notes, setNotes] = useState(apt?.apartment_notes ?? "");
+  const [floors, setFloors] = useState<Floor[]>(building.floors ?? []);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (building.floors) return; // already came with the building payload
+    apiFetch<Floor[]>(`/api/buildings/${building.id}/floors`)
+      .then(setFloors)
+      .catch(() => setFloors([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [building.id]);
 
   const inputClass =
     "w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
@@ -349,21 +391,18 @@ function ApartmentInlineForm({
     e.preventDefault();
     setError("");
     setBusy(true);
+    const body = JSON.stringify({
+      ...(apt ? {} : { building_id: building.id }),
+      apartment_name: label || null,
+      floor: floor || null,
+      name: resident || null,
+      apartment_notes: notes || null,
+    });
     try {
       if (apt) {
-        await apiFetch(`/api/apartments/${apt.id}`, {
-          method: "PUT",
-          body: JSON.stringify({ apartment_name: name, apartment_notes: notes || null }),
-        });
+        await apiFetch(`/api/apartments/${apt.id}`, { method: "PUT", body });
       } else {
-        await apiFetch("/api/apartments", {
-          method: "POST",
-          body: JSON.stringify({
-            building_id: buildingId,
-            apartment_name: name,
-            apartment_notes: notes || null,
-          }),
-        });
+        await apiFetch("/api/apartments", { method: "POST", body });
       }
       await onSaved();
     } catch (err) {
@@ -375,13 +414,28 @@ function ApartmentInlineForm({
 
   return (
     <form onSubmit={save} className="rounded-md bg-gray-50 p-2 space-y-2">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {isFieldVisible("apartments.apartment_name") && (
+          <input
+            className={inputClass}
+            placeholder={t("apartments.apartment_name", "תווית")}
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+          />
+        )}
+        <select className={inputClass} value={floor} onChange={(e) => setFloor(e.target.value)}>
+          <option value="">{t("apartments.floor", "קומה")}…</option>
+          {floors.map((f) => (
+            <option key={f.id} value={f.name}>
+              {f.name}
+            </option>
+          ))}
+        </select>
         <input
           className={inputClass}
-          placeholder={t("apartments.apartment_name", "כותרת")}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
+          placeholder={t("apartments.name", "שם דייר")}
+          value={resident}
+          onChange={(e) => setResident(e.target.value)}
         />
         <input
           className={inputClass}
@@ -417,44 +471,53 @@ function BuildingEditor({
   onClose,
   onSaved,
 }: {
-  building: Partial<Building>;
+  building: Building;
   areas: Area[];
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
   const { t } = useLocalization();
+  const { isFieldVisible } = useFieldSettings();
   const [areaId, setAreaId] = useState<number | "">(building.area_id ?? "");
   const [name, setName] = useState(building.building_name ?? "");
   const [address, setAddress] = useState(building.building_address ?? "");
   const [lat, setLat] = useState<number | null>(roundCoord(building.latitude));
   const [lng, setLng] = useState<number | null>(roundCoord(building.longitude));
   const [error, setError] = useState("");
+  // Geofence interceptor (fixes7 §7B): outside-the-zone saves need an explicit
+  // second confirmation.
+  const [geoWarning, setGeoWarning] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const inputClass =
     "w-full rounded-md border border-gray-300 px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
-  async function save(e: FormEvent) {
+  async function save(e: FormEvent, force = false) {
     e.preventDefault();
     setError("");
     if (areaId === "") {
       setError(t("msg.select_area", "יש לבחור אזור"));
       return;
     }
+    // Point-in-polygon guardrail against the selected area's boundary.
+    if (!force) {
+      const area = areas.find((a) => a.id === Number(areaId));
+      if (pointInPolygon(lat, lng, area?.area_polygon) === false) {
+        setGeoWarning(true);
+        return;
+      }
+    }
+    setGeoWarning(false);
     setBusy(true);
     const body = JSON.stringify({
       area_id: Number(areaId),
-      building_name: name,
-      building_address: address || null,
+      building_name: name || null,
+      building_address: address,
       latitude: lat,
       longitude: lng,
     });
     try {
-      if (building.id) {
-        await apiFetch(`/api/buildings/${building.id}`, { method: "PUT", body });
-      } else {
-        await apiFetch("/api/buildings", { method: "POST", body });
-      }
+      await apiFetch(`/api/buildings/${building.id}`, { method: "PUT", body });
       await onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
@@ -465,16 +528,17 @@ function BuildingEditor({
 
   return (
     <form onSubmit={save} className="bg-white rounded-xl shadow-sm p-4 space-y-3">
-      <h3 className="font-medium">
-        {building.id ? t("page.edit_building", "עריכת בניין") : t("page.new_building", "בניין חדש")}
-      </h3>
+      <h3 className="font-medium">{t("page.edit_building", "עריכת בניין")}</h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block space-y-1">
           <span className="block text-sm font-medium">{t("buildings.area_id", "אזור")}</span>
           <select
             className={inputClass}
             value={areaId}
-            onChange={(e) => setAreaId(e.target.value === "" ? "" : Number(e.target.value))}
+            onChange={(e) => {
+              setAreaId(e.target.value === "" ? "" : Number(e.target.value));
+              setGeoWarning(false);
+            }}
             required
           >
             <option value="">—</option>
@@ -485,30 +549,30 @@ function BuildingEditor({
             ))}
           </select>
         </label>
-        <label className="block space-y-1">
-          <span className="block text-sm font-medium">{t("buildings.building_name", "שם בניין")}</span>
-          <input
-            className={inputClass}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
-        </label>
+        {isFieldVisible("buildings.building_name") && (
+          <label className="block space-y-1">
+            <span className="block text-sm font-medium">{t("buildings.building_name", "שם בניין")}</span>
+            <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+        )}
         <div className="sm:col-span-2 space-y-1">
           <span className="block text-sm font-medium">{t("buildings.building_address", "כתובת בניין")}</span>
           <AddressAutocomplete
             className={inputClass}
             value={address}
+            required
             onChange={(a) => {
               // Manual typing clears coords until a place is picked.
               setAddress(a);
               setLat(null);
               setLng(null);
+              setGeoWarning(false);
             }}
             onPlace={(p) => {
               setAddress(p.address);
               setLat(roundCoord(p.lat));
               setLng(roundCoord(p.lng));
+              setGeoWarning(false);
             }}
           />
         </div>
@@ -535,6 +599,24 @@ function BuildingEditor({
           />
         </label>
       </div>
+
+      <FloorsEditor buildingId={building.id} />
+
+      {geoWarning && (
+        <div className="rounded-md border-2 border-status-darkred bg-red-50 p-3 space-y-2">
+          <p className="text-sm font-bold text-status-darkred">
+            ⚠ {t("geo.outside_area_warning", "אזהרה: הכתובת שנבחרה נמצאת מחוץ לתחום האזור שנבחר!")}
+          </p>
+          <p className="text-xs text-status-darkred">{t("geo.check_hint", "בדוק את הכתובת או בחר אזור אחר.")}</p>
+          <button
+            type="button"
+            onClick={(e) => save(e as unknown as FormEvent, true)}
+            className="rounded-md border border-status-darkred text-status-darkred px-3 py-1 text-xs font-medium hover:bg-red-100"
+          >
+            {t("geo.save_anyway", "שמור בכל זאת")}
+          </button>
+        </div>
+      )}
       {error && <p className="text-sm text-status-darkred">{error}</p>}
       <div className="flex items-center gap-2">
         <button
@@ -553,5 +635,118 @@ function BuildingEditor({
         </button>
       </div>
     </form>
+  );
+}
+
+/** Append / rename / drop a building's floors (fixes7 §3). Saves immediately. */
+function FloorsEditor({ buildingId }: { buildingId: number }) {
+  const { t } = useLocalization();
+  const { error: toastError } = useToast();
+  const [floors, setFloors] = useState<Floor[]>([]);
+  const [newName, setNewName] = useState("");
+
+  async function reload() {
+    setFloors(await apiFetch<Floor[]>(`/api/buildings/${buildingId}/floors`));
+  }
+
+  useEffect(() => {
+    reload().catch(() => setFloors([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buildingId]);
+
+  async function add() {
+    if (!newName.trim()) return;
+    try {
+      await apiFetch(`/api/buildings/${buildingId}/floors`, {
+        method: "POST",
+        body: JSON.stringify({ name: newName.trim() }),
+      });
+      setNewName("");
+      await reload();
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+    }
+  }
+
+  async function rename(floor: Floor) {
+    const name = prompt(t("floors.name", "שם קומה"), floor.name);
+    if (!name || name.trim() === floor.name) return;
+    try {
+      await apiFetch(`/api/buildings/${buildingId}/floors/${floor.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ name: name.trim() }),
+      });
+      await reload();
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+    }
+  }
+
+  async function remove(floor: Floor) {
+    if (!confirm(`${t("floors.delete_confirm", "למחוק קומה זו?")} '${floor.name}'`)) return;
+    try {
+      await apiFetch(`/api/buildings/${buildingId}/floors/${floor.id}`, {
+        method: "DELETE",
+      });
+      await reload();
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+    }
+  }
+
+  const chip =
+    "inline-flex items-center gap-1 rounded-full bg-gray-100 text-gray-700 px-3 py-1 text-sm";
+
+  return (
+    <div className="border-t border-gray-100 pt-3 space-y-2">
+      <span className="block text-sm font-medium">{t("buildings.floors", "קומות")}</span>
+      {floors.length === 0 ? (
+        <p className="text-sm text-gray-400">{t("floors.none", "אין קומות בבניין זה.")}</p>
+      ) : (
+        <ul className="flex flex-wrap gap-2">
+          {floors.map((f) => (
+            <li key={f.id} className={chip}>
+              <button
+                type="button"
+                onClick={() => rename(f)}
+                className="hover:underline"
+                title={t("action.edit", "ערוך")}
+              >
+                {f.name}
+              </button>
+              <button
+                type="button"
+                onClick={() => remove(f)}
+                className="text-gray-400 hover:text-status-darkred"
+                aria-label={t("action.delete", "מחק")}
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex items-center gap-2">
+        <input
+          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm w-36 focus:border-status-magenta focus:outline-none"
+          placeholder={t("floors.name", "שם קומה")}
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+        />
+        <button
+          type="button"
+          onClick={add}
+          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
+        >
+          + {t("floors.add", "הוסף קומה")}
+        </button>
+      </div>
+    </div>
   );
 }

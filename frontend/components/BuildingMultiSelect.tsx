@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
 import { useLocalization } from "@/lib/localization";
-import type { Apartment, Building } from "@/lib/types";
+import { buildingDisplayName, type Apartment, type Building } from "@/lib/types";
 
 /**
  * Relate whole buildings to a shliach. Only buildings inside the shliach's
@@ -77,7 +77,7 @@ export function BuildingMultiSelect({
             }`}
           >
             {on ? "✓ " : "+ "}
-            {b.building_name}
+            {buildingDisplayName(b)}
           </button>
         );
       })}

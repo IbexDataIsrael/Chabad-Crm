@@ -7,6 +7,8 @@ import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useFieldSettings } from "@/lib/fieldSettings";
+import { pointInPolygon } from "@/lib/geo";
 import { useLocalization } from "@/lib/localization";
 import { roundCoord, type Area } from "@/lib/types";
 
@@ -26,6 +28,7 @@ export default function AddBuildingPage() {
 function AddBuildingInner() {
   const { isAdmin, loading } = useAuth();
   const { t } = useLocalization();
+  const { isFieldVisible } = useFieldSettings();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -35,7 +38,10 @@ function AddBuildingInner() {
   const [address, setAddress] = useState("");
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
+  const [numFloors, setNumFloors] = useState("");
   const [error, setError] = useState("");
+  // Geofence interceptor (fixes7 §7B).
+  const [geoWarning, setGeoWarning] = useState(false);
   const [busy, setBusy] = useState(false);
 
   // Non-admins can't create buildings — bounce them back to the list.
@@ -54,23 +60,38 @@ function AddBuildingInner() {
       .catch(() => {});
   }, [searchParams]);
 
-  async function save(e: FormEvent) {
+  async function save(e: FormEvent, force = false) {
     e.preventDefault();
     setError("");
     if (areaId === "") {
       setError(t("msg.select_area", "יש לבחור אזור"));
       return;
     }
+    // Geofence guardrail: warn when the geocoded point is outside the zone.
+    if (!force) {
+      const area = areas.find((a) => a.id === Number(areaId));
+      if (pointInPolygon(lat, lng, area?.area_polygon) === false) {
+        setGeoWarning(true);
+        return;
+      }
+    }
+    setGeoWarning(false);
     setBusy(true);
+    const n = Number(numFloors);
+    const floors =
+      Number.isFinite(n) && n > 0
+        ? Array.from({ length: Math.min(n, 200) }, (_, i) => String(i + 1))
+        : [];
     try {
       await apiFetch("/api/buildings", {
         method: "POST",
         body: JSON.stringify({
           area_id: Number(areaId),
-          building_name: name,
-          building_address: address || null,
+          building_name: name || null,
+          building_address: address,
           latitude: lat,
           longitude: lng,
+          floors,
         }),
       });
       router.push("/dashboard/buildings");
@@ -107,7 +128,10 @@ function AddBuildingInner() {
               <select
                 className={inputClass}
                 value={areaId}
-                onChange={(e) => setAreaId(e.target.value === "" ? "" : Number(e.target.value))}
+                onChange={(e) => {
+                  setAreaId(e.target.value === "" ? "" : Number(e.target.value));
+                  setGeoWarning(false);
+                }}
                 required
               >
                 <option value="">—</option>
@@ -118,29 +142,29 @@ function AddBuildingInner() {
                 ))}
               </select>
             </label>
-            <label className="block space-y-1">
-              <span className="block text-sm font-medium">{t("buildings.building_name", "שם בניין")}</span>
-              <input
-                className={inputClass}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </label>
+            {isFieldVisible("buildings.building_name") && (
+              <label className="block space-y-1">
+                <span className="block text-sm font-medium">{t("buildings.building_name", "שם בניין")}</span>
+                <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} />
+              </label>
+            )}
             <div className="sm:col-span-2 space-y-1">
               <span className="block text-sm font-medium">{t("buildings.building_address", "כתובת בניין")}</span>
               <AddressAutocomplete
                 className={inputClass}
                 value={address}
+                required
                 onChange={(a) => {
                   setAddress(a);
                   setLat(null);
                   setLng(null);
+                  setGeoWarning(false);
                 }}
                 onPlace={(p) => {
                   setAddress(p.address);
                   setLat(roundCoord(p.lat));
                   setLng(roundCoord(p.lng));
+                  setGeoWarning(false);
                 }}
               />
             </div>
@@ -166,7 +190,42 @@ function AddBuildingInner() {
                 onChange={(e) => setLng(e.target.value === "" ? null : Number(e.target.value))}
               />
             </label>
+            <label className="block space-y-1">
+              <span className="block text-sm font-medium">{t("buildings.num_floors", "מספר קומות")}</span>
+              <input
+                type="number"
+                min="0"
+                dir="ltr"
+                className={inputClass}
+                value={numFloors}
+                onChange={(e) => setNumFloors(e.target.value)}
+              />
+              <span className="block text-xs text-gray-400">
+                {t(
+                  "buildings.num_floors_hint",
+                  "בעת יצירת הבניין ייווצרו קומות 1 עד המספר שנבחר.",
+                )}
+              </span>
+            </label>
           </div>
+
+          {geoWarning && (
+            <div className="rounded-md border-2 border-status-darkred bg-red-50 p-3 space-y-2">
+              <p className="text-sm font-bold text-status-darkred">
+                ⚠ {t("geo.outside_area_warning", "אזהרה: הכתובת שנבחרה נמצאת מחוץ לתחום האזור שנבחר!")}
+              </p>
+              <p className="text-xs text-status-darkred">
+                {t("geo.check_hint", "בדוק את הכתובת או בחר אזור אחר.")}
+              </p>
+              <button
+                type="button"
+                onClick={(e) => save(e as unknown as FormEvent, true)}
+                className="rounded-md border border-status-darkred text-status-darkred px-3 py-1 text-xs font-medium hover:bg-red-100"
+              >
+                {t("geo.save_anyway", "שמור בכל זאת")}
+              </button>
+            </div>
+          )}
           {error && <p className="text-sm text-status-darkred">{error}</p>}
           <div className="flex items-center gap-2">
             <button

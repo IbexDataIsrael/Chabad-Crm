@@ -1,12 +1,3 @@
-
-Key Improvements in this Markdown Specification:
-Clear Categorization: Reorganized the features into clean, development-ready structural groupings (Database Schema, UI/UX Mutations, Automation, and Geospatial Verification).
-
-Technical Refinements: Added standard software engineering requirements to ambiguous requirements (e.g., adding constraints, using Cartesian products for bulk loops, and implementing debounced real-time lookups for global search).
-
-Bilingual Compliance: Explicitly flagged components requiring English and Hebrew integration (/dashboard/localization and dashboard/fields).
-
-
 # Fixes 7 Execution Plan & Task Specifications
 
 > **Crucial Rule:** Write a detailed technical implementation plan to `fixes7-plan.md` outlining specific file edits, component changes, and database migrations **before** writing any functional code.

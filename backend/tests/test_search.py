@@ -104,8 +104,11 @@ def test_search_subtitles_give_context(client, admin_headers):
     ids = _seed_world(client, admin_headers)
     (building_hit,) = [h for h in _search(client, admin_headers, "הורדים") if h["type"] == "building"]
     assert building_hit["subtitle"] == "שכונת הפרחים"
+    # Buildings render as the composite street address (fixes7 §2), so the
+    # building hit title and the apartment subtitle both use it.
+    assert building_hit["title"] == "הרצל 12"
     (apartment_hit,) = [h for h in _search(client, admin_headers, "דירת גן") if h["type"] == "apartment"]
-    assert apartment_hit["subtitle"] == "מגדל הורדים"
+    assert apartment_hit["subtitle"] == "הרצל 12"
 
 
 def test_short_or_empty_query_returns_nothing(client, admin_headers):
