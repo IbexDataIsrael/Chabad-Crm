@@ -12,6 +12,8 @@ import {
   apartmentTitle,
   buildingDisplayName,
   type ApartmentListItem,
+  type ApartmentPage,
+  type Area,
   type Building,
   type Floor,
 } from "@/lib/types";
@@ -19,47 +21,139 @@ import {
 const inputClass =
   "rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
+const PAGE_SIZES = [20, 50, 100];
+
+type SortKey = "floor" | "label" | "resident" | "building";
+type SortDir = "asc" | "desc";
+
+/** Filter/sort/page values a handler wants applied before state has settled. */
+interface LoadOverrides {
+  areaId?: string;
+  buildingId?: string;
+  q?: string;
+  sort?: SortKey;
+  dir?: SortDir;
+  page?: number;
+  pageSize?: number;
+}
+
 export default function ApartmentsPage() {
   const { loading, isShliach } = useAuth();
   const { t } = useLocalization();
   const [items, setItems] = useState<ApartmentListItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [areas, setAreas] = useState<Area[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
+  const [filterArea, setFilterArea] = useState("");
   const [filterBuilding, setFilterBuilding] = useState("");
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortKey>("floor");
+  const [dir, setDir] = useState<SortDir>("asc");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [adding, setAdding] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false);
   const [busy, setBusy] = useState(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  async function reload(buildingId = filterBuilding, q = query) {
+  async function reload(over: LoadOverrides = {}) {
     const params = new URLSearchParams();
+    const areaId = over.areaId ?? filterArea;
+    const buildingId = over.buildingId ?? filterBuilding;
+    const q = (over.q ?? query).trim();
+    if (areaId) params.set("area_id", areaId);
     if (buildingId) params.set("building_id", buildingId);
-    if (q.trim()) params.set("q", q.trim());
-    const qs = params.toString();
-    setItems(await apiFetch<ApartmentListItem[]>(`/api/apartments/list${qs ? `?${qs}` : ""}`));
+    if (q) params.set("q", q);
+    params.set("sort", over.sort ?? sort);
+    params.set("dir", over.dir ?? dir);
+    params.set("page", String(over.page ?? page));
+    params.set("page_size", String(over.pageSize ?? pageSize));
+    const res = await apiFetch<ApartmentPage>(`/api/apartments/list?${params}`);
+    setItems(res.items);
+    setTotal(res.total);
   }
 
+  // The building dropdown holds only the active area's buildings (fixes8 §2B).
+  async function loadBuildings(areaId: string) {
+    const list = await apiFetch<Building[]>(
+      `/api/buildings${areaId ? `?area_id=${areaId}` : ""}`,
+    ).catch(() => [] as Building[]);
+    setBuildings(list);
+    return list;
+  }
+
+  // Boot (fixes8 §2A): land pre-filtered on the first area (fallback: first
+  // building) instead of loading the whole org. Shliach users skip the default
+  // — their list is already server-scoped to the apartments they cover, and a
+  // default area could hide all of them.
   useEffect(() => {
-    Promise.all([
-      reload(),
-      apiFetch<Building[]>("/api/buildings").then(setBuildings).catch(() => {}),
-    ])
+    if (loading) return;
+    (async () => {
+      const a = await apiFetch<Area[]>("/api/areas").catch(() => [] as Area[]);
+      setAreas(a);
+      const areaId = !isShliach && a.length > 0 ? String(a[0].id) : "";
+      const bs = await loadBuildings(areaId);
+      const buildingId = !isShliach && !areaId && bs.length > 0 ? String(bs[0].id) : "";
+      setFilterArea(areaId);
+      setFilterBuilding(buildingId);
+      await reload({ areaId, buildingId, page: 1 });
+    })()
       .catch(() => setItems([]))
       .finally(() => setBusy(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loading]);
 
   // Debounced dynamic search (street name / label / resident).
   function onQueryChange(v: string) {
     setQuery(v);
+    setPage(1);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => reload(filterBuilding, v).catch(() => {}), 300);
+    debounceRef.current = setTimeout(() => reload({ q: v, page: 1 }).catch(() => {}), 300);
+  }
+
+  function onAreaChange(v: string) {
+    setFilterArea(v);
+    setFilterBuilding("");
+    setPage(1);
+    loadBuildings(v).catch(() => {});
+    reload({ areaId: v, buildingId: "", page: 1 }).catch(() => {});
   }
 
   function onBuildingChange(v: string) {
     setFilterBuilding(v);
-    reload(v, query).catch(() => {});
+    setPage(1);
+    reload({ buildingId: v, page: 1 }).catch(() => {});
   }
+
+  function onSortChange(v: SortKey) {
+    setSort(v);
+    setPage(1);
+    reload({ sort: v, page: 1 }).catch(() => {});
+  }
+
+  function onDirToggle() {
+    const d: SortDir = dir === "asc" ? "desc" : "asc";
+    setDir(d);
+    setPage(1);
+    reload({ dir: d, page: 1 }).catch(() => {});
+  }
+
+  function onPageSizeChange(n: number) {
+    setPageSize(n);
+    setPage(1);
+    reload({ pageSize: n, page: 1 }).catch(() => {});
+  }
+
+  function goToPage(p: number) {
+    setPage(p);
+    reload({ page: p }).catch(() => {});
+  }
+
+  const lastPage = Math.max(1, Math.ceil(total / pageSize));
+  const rangeText = t("pager.range", "{from}–{to} מתוך {total}")
+    .replace("{from}", String(total === 0 ? 0 : (page - 1) * pageSize + 1))
+    .replace("{to}", String(Math.min(page * pageSize, total)))
+    .replace("{total}", String(total));
 
   if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
 
@@ -89,9 +183,21 @@ export default function ApartmentsPage() {
         )}
       </div>
 
-      {/* Dataset filters (fixes7 §2): building bound + street-name lookup. */}
+      {/* Dataset filters (fixes8 §2): area + building bounds, street lookup. */}
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-gray-500">{t("filter.by_building", "סנן לפי בניין:")}</span>
+        <span className="text-gray-500">{t("filter.by_area", "סנן לפי אזור:")}</span>
+        <select
+          className={inputClass}
+          value={filterArea}
+          onChange={(e) => onAreaChange(e.target.value)}
+        >
+          <option value="">{t("filter.all_areas", "כל האזורים")}</option>
+          {areas.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.area_name}
+            </option>
+          ))}
+        </select>
         <select
           className={inputClass}
           value={filterBuilding}
@@ -112,9 +218,43 @@ export default function ApartmentsPage() {
         />
       </div>
 
+      {/* Sorting (fixes8 §1C) + page size (fixes8 §2C). */}
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-gray-500">{t("sort.label", "מיון:")}</span>
+        <select
+          className={inputClass}
+          value={sort}
+          onChange={(e) => onSortChange(e.target.value as SortKey)}
+        >
+          <option value="floor">{t("sort.floor", "קומה")}</option>
+          <option value="label">{t("sort.by_label", "תווית דירה")}</option>
+          <option value="resident">{t("sort.resident", "שם דייר")}</option>
+          <option value="building">{t("sort.building", "בניין")}</option>
+        </select>
+        <button
+          type="button"
+          onClick={onDirToggle}
+          className="rounded-md border border-gray-300 px-3 py-2 hover:bg-gray-50"
+          title={dir === "asc" ? t("sort.asc", "עולה") : t("sort.desc", "יורד")}
+        >
+          {dir === "asc" ? "↑" : "↓"} {dir === "asc" ? t("sort.asc", "עולה") : t("sort.desc", "יורד")}
+        </button>
+        <span className="ms-auto text-gray-500">{t("pager.page_size", "בעמוד:")}</span>
+        <select
+          className={inputClass}
+          value={pageSize}
+          onChange={(e) => onPageSizeChange(Number(e.target.value))}
+        >
+          {PAGE_SIZES.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {batchOpen && (
         <BatchModal
-          buildings={buildings}
           onClose={() => setBatchOpen(false)}
           onDone={async () => {
             setBatchOpen(false);
@@ -175,23 +315,46 @@ export default function ApartmentsPage() {
           ))
         )}
       </div>
+
+      {/* Server-side pager (fixes8 §2C). */}
+      {!busy && total > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <button
+            type="button"
+            disabled={page <= 1}
+            onClick={() => goToPage(page - 1)}
+            className="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {t("pager.prev", "→ הקודם")}
+          </button>
+          <span className="text-gray-500">{rangeText}</span>
+          <button
+            type="button"
+            disabled={page >= lastPage}
+            onClick={() => goToPage(page + 1)}
+            className="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {t("pager.next", "הבא ←")}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
 /** Bulk apartment generator (fixes7 §5): building → floors → explicit label
- *  tokens → Cartesian product, in one request/transaction. */
+ *  tokens → Cartesian product, in one request/transaction. Fetches the full
+ *  building list itself — the page's dropdown is scoped to the active area. */
 function BatchModal({
-  buildings,
   onClose,
   onDone,
 }: {
-  buildings: Building[];
   onClose: () => void;
   onDone: () => Promise<void>;
 }) {
   const { t } = useLocalization();
   const { success, error: toastError } = useToast();
+  const [buildings, setBuildings] = useState<Building[]>([]);
   const [buildingId, setBuildingId] = useState<number | "">("");
   const [floors, setFloors] = useState<Floor[]>([]);
   const [selectedFloors, setSelectedFloors] = useState<number[]>([]);
@@ -199,6 +362,12 @@ function BatchModal({
   const [labelInput, setLabelInput] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    apiFetch<Building[]>("/api/buildings")
+      .then(setBuildings)
+      .catch(() => setBuildings([]));
+  }, []);
 
   useEffect(() => {
     if (buildingId === "") {

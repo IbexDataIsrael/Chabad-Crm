@@ -4,10 +4,10 @@ Apartments are created inline from the contact forms, so create/update are open 
 any authenticated user; delete is admin-only. The batch endpoint (fixes7 §5)
 creates the Cartesian product of selected floors × labels in one transaction.
 """
-from typing import Optional
+from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import or_
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, nullslast, or_, select
 from sqlalchemy.orm import Session
 
 from app import models
@@ -20,6 +20,7 @@ from app.schemas import (
     ApartmentCreate,
     ApartmentListOut,
     ApartmentOut,
+    ApartmentPageOut,
     ApartmentUpdate,
 )
 
@@ -118,32 +119,85 @@ def list_apartments(
     return query.order_by(models.Apartment.apartment_name).all()
 
 
-@router.get("/list", response_model=list[ApartmentListOut])
+def _natural(col):
+    """Cross-DB natural-ish sort keys for numeric-leaning text: ordering by
+    (length, value) puts '2' before '10'. Works on both SQLite and PostgreSQL."""
+    return [func.length(col), col]
+
+
+def _floor_rank():
+    """The apartment's floor position within its building (floors.sort_order),
+    resolved by name via a correlated subquery — apartments.floor is free text,
+    so a join could duplicate rows if two floors ever share a name."""
+    return (
+        select(func.min(models.Floor.sort_order))
+        .where(
+            models.Floor.building_id == models.Apartment.building_id,
+            models.Floor.name == models.Apartment.floor,
+        )
+        .correlate(models.Apartment)
+        .scalar_subquery()
+    )
+
+
+def _sort_keys(sort: str) -> list:
+    """Direction-sensitive primary keys per sort option (fixes8 §1D). The caller
+    appends the always-ascending secondaries."""
+    if sort == "label":
+        return _natural(models.Apartment.apartment_name)
+    if sort == "resident":
+        return [models.Apartment.name]  # plain alphabetical — names aren't numeric
+    if sort == "building":
+        return [models.Building.building_address]
+    # Default "floor": canonical floor order, then the free-text floor name for
+    # floors that no longer exist in the floors table.
+    return [_floor_rank(), *_natural(models.Apartment.floor)]
+
+
+@router.get("/list", response_model=ApartmentPageOut)
 def list_apartments_enriched(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
     building_id: Optional[int] = None,
+    area_id: Optional[int] = None,
+    apartment_id: Optional[int] = None,
     q: Optional[str] = None,
+    sort: Literal["floor", "label", "resident", "building"] = "floor",
+    dir: Literal["asc", "desc"] = "asc",
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20),
 ):
-    """Apartments enriched with building/area + linked contact, for the apartments
-    page. Shliach users see only the apartments they cover. Filters (fixes7 §2):
-    `building_id` bounds the list to one building; `q` matches the street name in
-    the parent building address (plus the apartment label / resident name)."""
-    query = db.query(models.Apartment).filter(
-        models.Apartment.organization_id == current_user.organization_id
+    """One page of apartments enriched with building/area + linked contact, for
+    the apartments page. Shliach users see only the apartments they cover.
+
+    Filters: `building_id` / `area_id` bound the list (fixes8 §2A lazy loading);
+    `apartment_id` returns a single enriched row (detail page); `q` matches the
+    street name in the parent building address (plus label / resident name).
+    Sorting (fixes8 §1D) defaults to floor, then apartment number within a floor;
+    `dir` flips the primary key only. Pagination (fixes8 §2C) is server-side."""
+    if page_size not in (20, 50, 100):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "page_size must be 20, 50 or 100"
+        )
+    query = (
+        db.query(models.Apartment)
+        .join(models.Building, models.Building.id == models.Apartment.building_id)
+        .filter(models.Apartment.organization_id == current_user.organization_id)
     )
     if current_user.role == "shliach":
         ids = _shliach_apartment_ids(db, current_user)
         if not ids:
-            return []
+            return ApartmentPageOut(items=[], total=0, page=page, page_size=page_size)
         query = query.filter(models.Apartment.id.in_(ids))
     if building_id is not None:
         query = query.filter(models.Apartment.building_id == building_id)
+    if area_id is not None:
+        query = query.filter(models.Building.area_id == area_id)
+    if apartment_id is not None:
+        query = query.filter(models.Apartment.id == apartment_id)
     if q:
         like = f"%{q.strip()}%"
-        query = query.join(
-            models.Building, models.Building.id == models.Apartment.building_id
-        ).filter(
+        query = query.filter(
             or_(
                 models.Building.building_address.ilike(like),
                 models.Building.building_name.ilike(like),
@@ -151,8 +205,25 @@ def list_apartments_enriched(
                 models.Apartment.name.ilike(like),
             )
         )
-    rows = query.order_by(models.Apartment.apartment_name).all()
-    return [_enrich(a) for a in rows]
+
+    total = query.count()
+
+    primary = [k.desc() if dir == "desc" else k.asc() for k in _sort_keys(sort)]
+    # Secondary keys always ascend: within a floor, apartments sort by number.
+    secondary = [] if sort == "label" else _natural(models.Apartment.apartment_name)
+    order = [nullslast(k) for k in (*primary, *secondary)]
+    rows = (
+        query.order_by(*order, models.Apartment.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return ApartmentPageOut(
+        items=[_enrich(a) for a in rows],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.post("", response_model=ApartmentOut, status_code=status.HTTP_201_CREATED)

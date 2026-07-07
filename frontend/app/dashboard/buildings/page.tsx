@@ -32,28 +32,38 @@ export default function BuildingsPage() {
   // goes to the dedicated /dashboard/buildings/add page.
   const [editing, setEditing] = useState<Building | null>(null);
 
-  async function reload() {
-    const [a, b] = await Promise.all([
-      apiFetch<Area[]>("/api/areas"),
-      apiFetch<Building[]>("/api/buildings"),
-    ]);
-    setAreas(a);
-    setBuildings(b);
+  // Only the active filter's buildings are fetched (fixes8 §2 lazy loading).
+  async function loadBuildings(areaId: string) {
+    setBuildings(
+      await apiFetch<Building[]>(`/api/buildings${areaId ? `?area_id=${areaId}` : ""}`),
+    );
   }
 
+  async function reload() {
+    await loadBuildings(filterArea);
+  }
+
+  // Boot (fixes8 §2A): land pre-filtered on the first area, not the whole org.
   useEffect(() => {
-    reload().catch(() => {});
+    (async () => {
+      const a = await apiFetch<Area[]>("/api/areas");
+      setAreas(a);
+      const areaId = a.length > 0 ? String(a[0].id) : "";
+      setFilterArea(areaId);
+      await loadBuildings(areaId);
+    })().catch(() => {});
   }, []);
+
+  function onFilterArea(v: string) {
+    setFilterArea(v);
+    loadBuildings(v).catch(() => {});
+  }
 
   const areaName = useMemo(() => {
     const map = new Map<number, string>();
     areas.forEach((a) => map.set(a.id, a.area_name));
     return (id: number) => map.get(id) ?? "—";
   }, [areas]);
-
-  const shown = filterArea
-    ? buildings.filter((b) => b.area_id === Number(filterArea))
-    : buildings;
 
   if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
 
@@ -86,7 +96,7 @@ export default function BuildingsPage() {
           <select
             className={inputClass}
             value={filterArea}
-            onChange={(e) => setFilterArea(e.target.value)}
+            onChange={(e) => onFilterArea(e.target.value)}
           >
             <option value="">{t("filter.all", "הכל")}</option>
             {areas.map((a) => (
@@ -110,14 +120,14 @@ export default function BuildingsPage() {
         />
       )}
 
-      {shown.length > 0 && (
+      {buildings.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm p-2">
-          <BuildingsMap buildings={shown} />
+          <BuildingsMap buildings={buildings} />
         </div>
       )}
 
       <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
-        {shown.map((b) => (
+        {buildings.map((b) => (
           <BuildingRow
             key={b.id}
             building={b}
@@ -127,7 +137,7 @@ export default function BuildingsPage() {
             onDeleted={reload}
           />
         ))}
-        {shown.length === 0 && (
+        {buildings.length === 0 && (
           <p className="px-4 py-6 text-center text-gray-400">{t("page.no_buildings", "אין בניינים להצגה.")}</p>
         )}
       </div>

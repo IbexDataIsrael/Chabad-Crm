@@ -10,6 +10,15 @@ import { useLocalization } from "@/lib/localization";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { LanguageToggle } from "@/components/LanguageToggle";
 
+/** Post-login destination from ?redirect= (fixes8 §3), restricted to internal
+ *  paths — absolute and protocol-relative URLs fall back to the dashboard. */
+function loginTarget(): string {
+  if (typeof window === "undefined") return "/dashboard";
+  const target = new URLSearchParams(window.location.search).get("redirect");
+  if (target && target.startsWith("/") && !target.startsWith("//")) return target;
+  return "/dashboard";
+}
+
 export default function LoginPage() {
   const { signIn, signInWithGoogle, user } = useAuth();
   const { t } = useLocalization();
@@ -21,9 +30,9 @@ export default function LoginPage() {
   const [resendEmail, setResendEmail] = useState("");
   const [busy, setBusy] = useState(false);
 
-  // Already authenticated → go straight to the dashboard.
+  // Already authenticated → go straight to the intended page (or dashboard).
   useEffect(() => {
-    if (getToken() || user) router.replace("/dashboard");
+    if (getToken() || user) router.replace(loginTarget());
   }, [user, router]);
 
   async function onSubmit(e: FormEvent) {
@@ -33,7 +42,7 @@ export default function LoginPage() {
     setBusy(true);
     try {
       await signIn(username, password);
-      router.replace("/dashboard");
+      router.replace(loginTarget());
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
         setUnverified(true);
@@ -52,7 +61,7 @@ export default function LoginPage() {
     setBusy(true);
     try {
       await signInWithGoogle(credential);
-      router.replace("/dashboard");
+      router.replace(loginTarget());
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
         setError(err.message);

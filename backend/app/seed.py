@@ -492,6 +492,18 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("batch", "batch.select_all", "בחר הכל", "Select all"),
     ("batch", "batch.result", "נוצרו {created} דירות ({skipped} דולגו — קיימות)", "Created {created} apartments ({skipped} skipped — already exist)"),
     ("batch", "batch.pick_floor_label", "יש לבחור לפחות קומה אחת ותווית אחת", "Pick at least one floor and one label"),
+    # --- fixes8: apartment sorting + pagination ---
+    ("sort", "sort.label", "מיון:", "Sort:"),
+    ("sort", "sort.floor", "קומה", "Floor"),
+    ("sort", "sort.by_label", "תווית דירה", "Apartment label"),
+    ("sort", "sort.resident", "שם דייר", "Resident name"),
+    ("sort", "sort.building", "בניין", "Building"),
+    ("sort", "sort.asc", "עולה", "Ascending"),
+    ("sort", "sort.desc", "יורד", "Descending"),
+    ("pager", "pager.prev", "→ הקודם", "← Previous"),
+    ("pager", "pager.next", "הבא ←", "Next →"),
+    ("pager", "pager.range", "{from}–{to} מתוך {total}", "{from}–{to} of {total}"),
+    ("pager", "pager.page_size", "בעמוד:", "Per page:"),
     # --- fixes7 §7: areas map + geofence ---
     ("areas", "areas.map_all", "מפת האזורים", "Areas map"),
     ("areas", "areas.view_area", "הצג אזור »", "View area »"),

@@ -150,6 +150,14 @@ export interface ApartmentListItem extends Apartment {
   contact_name: string | null;
 }
 
+/** One server-side page of the enriched apartment list (fixes8 §2C). */
+export interface ApartmentPage {
+  items: ApartmentListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 /** The "[number] [street]" segment of a formatted address (first comma part). */
 export function streetPart(address: string | null | undefined): string | null {
   if (!address) return null;

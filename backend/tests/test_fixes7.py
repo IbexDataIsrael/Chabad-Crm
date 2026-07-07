@@ -242,9 +242,11 @@ class TestApartmentFields:
             )
         by_building = client.get(
             f"/api/apartments/list?building_id={b1['id']}", headers=admin_headers
-        ).json()
+        ).json()["items"]
         assert [a["apartment_name"] for a in by_building] == ["A"]
-        by_street = client.get("/api/apartments/list?q=Eastern", headers=admin_headers).json()
+        by_street = client.get(
+            "/api/apartments/list?q=Eastern", headers=admin_headers
+        ).json()["items"]
         assert [a["apartment_name"] for a in by_street] == ["A"]
         assert by_street[0]["building_address"].startswith("770 Eastern")
 
@@ -271,7 +273,7 @@ class TestApartmentBatch:
         assert r.json() == {"created": 0, "skipped": 6}
         apts = client.get(
             f"/api/apartments/list?building_id={b['id']}", headers=admin_headers
-        ).json()
+        ).json()["items"]
         assert len(apts) == 6
         assert {(a["floor"], a["apartment_name"]) for a in apts} == {
             (f, l) for f in ("1", "2") for l in ("A", "B", "C")

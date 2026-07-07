@@ -3,7 +3,7 @@ import re
 from datetime import datetime, time
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 Role = Literal["admin", "staff", "shliach"]
 ContactType = Literal["mekurav", "shliach"]
@@ -328,7 +328,11 @@ class BuildingBase(BaseModel):
 
 class BuildingCreate(BuildingBase):
     # Creation hook (fixes7 §3): floor names to auto-create with the building.
-    floors: list[str] = []
+    # fixes8 §1A: every new building starts with floors 1..8 unless the payload
+    # explicitly overrides (an explicit [] creates a building with no floors).
+    floors: list[str] = Field(
+        default_factory=lambda: [str(n) for n in range(1, 9)]
+    )
 
 
 class BuildingUpdate(BaseModel):
@@ -448,6 +452,15 @@ class ApartmentListOut(ApartmentOut):
     area_name: Optional[str] = None
     contact_id: Optional[int] = None
     contact_name: Optional[str] = None
+
+
+class ApartmentPageOut(BaseModel):
+    """One server-side page of the enriched apartment list (fixes8 §2C)."""
+
+    items: list[ApartmentListOut]
+    total: int
+    page: int
+    page_size: int
 
 
 class ApartmentBatchCreate(BaseModel):

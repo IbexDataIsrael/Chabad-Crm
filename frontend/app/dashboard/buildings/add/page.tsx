@@ -38,7 +38,8 @@ function AddBuildingInner() {
   const [address, setAddress] = useState("");
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
-  const [numFloors, setNumFloors] = useState("");
+  // fixes8 §1A: new buildings start with 8 floors unless the user overrides.
+  const [numFloors, setNumFloors] = useState("8");
   const [error, setError] = useState("");
   // Geofence interceptor (fixes7 §7B).
   const [geoWarning, setGeoWarning] = useState(false);

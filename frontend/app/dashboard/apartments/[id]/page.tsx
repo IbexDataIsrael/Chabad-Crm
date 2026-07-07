@@ -15,7 +15,7 @@ import {
   apartmentTitle,
   buildingDisplayName,
   type Apartment,
-  type ApartmentListItem,
+  type ApartmentPage,
   type Building,
 } from "@/lib/types";
 
@@ -45,11 +45,12 @@ export default function ApartmentDetailPage() {
     const a = await apiFetch<Apartment>(`/api/apartments/${apartmentId}`);
     setApt(a);
     setBuilding(await apiFetch<Building>(`/api/buildings/${a.building_id}`).catch(() => null));
-    // The linked contact comes from the enriched list (shliach-scoped too).
-    const items = await apiFetch<ApartmentListItem[]>(
-      `/api/apartments/list?building_id=${a.building_id}`,
-    ).catch(() => [] as ApartmentListItem[]);
-    const row = items.find((x) => x.id === apartmentId);
+    // The linked contact comes from the enriched list (shliach-scoped too);
+    // apartment_id fetches just this row instead of the whole building (fixes8).
+    const enriched = await apiFetch<ApartmentPage>(
+      `/api/apartments/list?apartment_id=${apartmentId}`,
+    ).catch(() => null);
+    const row = enriched?.items[0];
     setLinked(
       row?.contact_id ? { id: row.contact_id, name: row.contact_name ?? "" } : null,
     );
