@@ -9,7 +9,7 @@ Shliach users see only mekuravim in apartments they cover (scoped reads).
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app import models
@@ -25,6 +25,7 @@ from app.schemas import (
     ContactCustomFieldOut,
     ContactDetailOut,
     ContactOut,
+    ContactPageOut,
     ContactUpdate,
     CustomFieldValueIn,
     MekuravOut,
@@ -331,14 +332,15 @@ def _set_shliach_areas(
 
 
 # --- CRUD -------------------------------------------------------------------
-@router.get("", response_model=list[ContactOut])
-def list_contacts(
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-    pipeline_status: Optional[str] = None,
-    contact_type: Optional[str] = None,
-    assigned_user_id: Optional[int] = None,
+def _contacts_query(
+    db: Session,
+    current_user: models.User,
+    pipeline_status: Optional[str],
+    contact_type: Optional[str],
+    assigned_user_id: Optional[int],
 ):
+    """The org-scoped, filtered, shliach-aware contacts query (shared by the
+    plain list and the paginated list)."""
     query = db.query(models.Contact).filter(
         models.Contact.organization_id == current_user.organization_id
     )
@@ -362,8 +364,50 @@ def list_contacts(
         if ap_ids:
             cond = cond | models.ContactMekurav.apartment_id.in_(ap_ids)
         query = query.filter(cond)
+    return query
 
+
+@router.get("", response_model=list[ContactOut])
+def list_contacts(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+    pipeline_status: Optional[str] = None,
+    contact_type: Optional[str] = None,
+    assigned_user_id: Optional[int] = None,
+):
+    query = _contacts_query(
+        db, current_user, pipeline_status, contact_type, assigned_user_id
+    )
     return query.order_by(models.Contact.name).all()
+
+
+@router.get("/list", response_model=ContactPageOut)
+def list_contacts_paginated(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+    pipeline_status: Optional[str] = None,
+    contact_type: Optional[str] = None,
+    assigned_user_id: Optional[int] = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20),
+):
+    """One server-side page of contacts (same fixes8 §2C pattern as the
+    apartments list) — the contacts page uses this instead of the full dump."""
+    if page_size not in (20, 50, 100):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "page_size must be 20, 50 or 100"
+        )
+    query = _contacts_query(
+        db, current_user, pipeline_status, contact_type, assigned_user_id
+    )
+    total = query.count()
+    rows = (
+        query.order_by(models.Contact.name, models.Contact.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return ContactPageOut(items=rows, total=total, page=page, page_size=page_size)
 
 
 @router.post("", response_model=ContactDetailOut, status_code=status.HTTP_201_CREATED)

@@ -106,6 +106,14 @@ export interface Contact {
   picklist_values?: Record<string, string>;
 }
 
+/** One server-side page of the contacts list (fixes8 §2C pattern). */
+export interface ContactPage {
+  items: Contact[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 /** The dynamic (admin-managed) picklists shown on the mekurav form, by system_name. */
 export const MEKURAV_PICKLISTS = ["Jewish_status", "affiliation", "language"] as const;
 

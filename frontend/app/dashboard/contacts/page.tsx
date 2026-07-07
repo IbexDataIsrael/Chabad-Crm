@@ -10,7 +10,7 @@ import { rowStyle } from "@/lib/colors";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
-import { contactFullName, type Contact } from "@/lib/types";
+import { contactFullName, type Contact, type ContactPage } from "@/lib/types";
 
 export default function ContactsPage() {
   const router = useRouter();
@@ -30,19 +30,36 @@ export default function ContactsPage() {
   } = usePicklist("contact.pipeline_status");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [statusFilter, setStatusFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // Server-side page (fixes8 §2C pattern) instead of the full org dump.
   useEffect(() => {
     const params = new URLSearchParams();
     params.set("contact_type", "mekurav"); // contacts page shows mekuravim only
     if (statusFilter) params.set("pipeline_status", statusFilter);
-    const qs = params.toString();
+    params.set("page", String(page));
+    params.set("page_size", String(pageSize));
     setLoading(true);
-    apiFetch<Contact[]>(`/api/contacts${qs ? `?${qs}` : ""}`)
-      .then(setContacts)
-      .catch(() => setContacts([]))
+    apiFetch<ContactPage>(`/api/contacts/list?${params}`)
+      .then((res) => {
+        setContacts(res.items);
+        setTotal(res.total);
+      })
+      .catch(() => {
+        setContacts([]);
+        setTotal(0);
+      })
       .finally(() => setLoading(false));
-  }, [statusFilter]);
+  }, [statusFilter, page, pageSize]);
+
+  const lastPage = Math.max(1, Math.ceil(total / pageSize));
+  const rangeText = t("pager.range", "{from}–{to} מתוך {total}")
+    .replace("{from}", String(total === 0 ? 0 : (page - 1) * pageSize + 1))
+    .replace("{to}", String(Math.min(page * pageSize, total)))
+    .replace("{total}", String(total));
 
   const selectClass =
     "rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none";
@@ -68,7 +85,10 @@ export default function ContactsPage() {
           <select
             className={selectClass}
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setPage(1);
+            }}
           >
             <option value="">{t("filter.all_statuses", "כל הסטטוסים")}</option>
             {statusOptions.map((o) => (
@@ -78,6 +98,23 @@ export default function ContactsPage() {
             ))}
           </select>
         )}
+        <span className="ms-auto flex items-center gap-2 text-sm text-gray-500">
+          {t("pager.page_size", "בעמוד:")}
+          <select
+            className={selectClass}
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              setPage(1);
+            }}
+          >
+            {[20, 50, 100].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </span>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
@@ -120,7 +157,10 @@ export default function ContactsPage() {
                   onClick={() => router.push(`/dashboard/contacts/${c.id}`)}
                   className="border-t border-gray-100 cursor-pointer hover:bg-gray-50/80"
                 >
-                  <td className="px-3 py-1.5 font-medium text-status-magenta underline">
+                  <td
+                    className="px-3 py-1.5 font-medium text-status-magenta underline max-w-[11rem] truncate"
+                    title={contactFullName(c)}
+                  >
                     {contactFullName(c)}
                   </td>
                   <td className="px-3 py-1.5" dir="ltr">{c.phone}</td>
@@ -145,6 +185,29 @@ export default function ContactsPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Server-side pager (fixes8 §2C pattern). */}
+      {!loading && total > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <button
+            type="button"
+            disabled={page <= 1}
+            onClick={() => setPage(page - 1)}
+            className="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {t("pager.prev", "→ הקודם")}
+          </button>
+          <span className="text-gray-500">{rangeText}</span>
+          <button
+            type="button"
+            disabled={page >= lastPage}
+            onClick={() => setPage(page + 1)}
+            className="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {t("pager.next", "הבא ←")}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

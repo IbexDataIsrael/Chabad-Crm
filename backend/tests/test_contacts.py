@@ -8,6 +8,28 @@ def _make_contact(client, auth_headers, **overrides):
     return client.post("/api/contacts", json=payload, headers=auth_headers)
 
 
+def test_contacts_list_pagination(client, auth_headers):
+    for n in range(25):
+        assert _make_contact(client, auth_headers, name=f"מקורב {n:02d}").status_code == 201
+    page1 = client.get("/api/contacts/list?page=1&page_size=20", headers=auth_headers).json()
+    assert set(page1) == {"items", "total", "page", "page_size"}
+    assert page1["total"] == 25 and len(page1["items"]) == 20
+    page2 = client.get("/api/contacts/list?page=2&page_size=20", headers=auth_headers).json()
+    assert len(page2["items"]) == 5
+    # Pages are disjoint and ordered by name.
+    names = [c["name"] for c in page1["items"] + page2["items"]]
+    assert names == sorted(names) and len(set(names)) == 25
+    # Filters still apply; bad page sizes are rejected.
+    filtered = client.get(
+        "/api/contacts/list?contact_type=shliach", headers=auth_headers
+    ).json()
+    assert filtered["total"] == 0
+    assert (
+        client.get("/api/contacts/list?page_size=7", headers=auth_headers).status_code
+        == 422
+    )
+
+
 def test_contact_phone_optional(client, auth_headers):
     # Phone became optional for the data import; omitted → stored as NULL.
     r = client.post("/api/contacts", json={"name": "בלי טלפון"}, headers=auth_headers)

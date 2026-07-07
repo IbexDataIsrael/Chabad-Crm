@@ -678,6 +678,15 @@ class ContactDetailOut(ContactOut):
     picklist_values: dict[str, str] = {}
 
 
+class ContactPageOut(BaseModel):
+    """One server-side page of the contacts list (fixes8 §2C pattern)."""
+
+    items: list[ContactOut]
+    total: int
+    page: int
+    page_size: int
+
+
 # --- Interactions ----------------------------------------------------------
 class InteractionCreate(BaseModel):
     contact_id: int
