@@ -117,7 +117,9 @@ class Contact(Base):
     )
     name = Column(String(150), nullable=False, index=True)  # first/given name (שם פרטי)
     last_name = Column(String(100), nullable=True, index=True)  # family name (שם משפחה)
-    phone = Column(String(50), nullable=False, index=True)  # required, unique per org
+    # Optional since the data import (see docs/data_import-plan.md); when present
+    # it stays unique per org (NULLs never collide in the unique constraint).
+    phone = Column(String(50), nullable=True, index=True)
     email = Column(String(255), nullable=True)  # אימייל
     contact_type = Column(
         String(20), nullable=False, default="mekurav", index=True
@@ -204,6 +206,10 @@ class ContactMekurav(Base):
     apartment_id = Column(
         Integer, ForeignKey("apartments.id"), nullable=True, index=True
     )  # דירה
+    admin_area_id = Column(
+        Integer, ForeignKey("admin_areas.id"), nullable=True, index=True
+    )  # אזור מנהל (fixes9 §2C)
+    tzedaka_potential = Column(Text, nullable=True)  # פוטנציאל לצדקה (fixes9 §3)
     first_visit = Column(DateTime, nullable=True)  # ביקור ראשון
     potential_next_step = Column(String(50), nullable=True)  # picklist (פוטנציאל לצעד)
     rebbe_connection = Column(Text, nullable=True)  # קשר לרבי
@@ -215,6 +221,7 @@ class ContactMekurav(Base):
 
     contact = relationship("Contact", back_populates="mekurav")
     apartment = relationship("Apartment", back_populates="mekuravim")
+    admin_area = relationship("AdminArea", back_populates="mekuravim")
     special_dates = relationship(
         "ContactMekuravSpecialDate",
         back_populates="mekurav",
@@ -301,6 +308,24 @@ class ContactShliachArea(Base):
 
     shliach = relationship("ContactShliach", back_populates="areas")
     area = relationship("Area")
+
+
+class AdminArea(Base):
+    """An administrative area (אזור מנהל, fixes9 §2) — a named org-scoped
+    grouping that mekurav contacts can be assigned to via a many-to-one FK."""
+
+    __tablename__ = "admin_areas"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    name = Column(String(150), nullable=False)  # שם
+    comments = Column(Text, nullable=True)  # הערות
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    mekuravim = relationship("ContactMekurav", back_populates="admin_area")
 
 
 class Area(Base):
@@ -582,6 +607,24 @@ class EmailTemplate(Base):
     subject = Column(Text, nullable=False)
     body = Column(Text, nullable=False, default="")  # English
     body_hebrew = Column(Text, nullable=False, default="")  # Hebrew
+    updated_at = Column(
+        DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+
+class SystemSetting(Base):
+    """Platform-level, superadmin-editable key/value setting (fixes9 §1).
+
+    Global like EmailTemplate — not tenant-scoped. Known keys:
+    'system_title_template' and 'system_fallback_org_name'.
+    """
+
+    __tablename__ = "system_settings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    key = Column(String(100), nullable=False, unique=True, index=True)
+    value = Column(Text, nullable=False, default="")
     updated_at = Column(
         DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
     )

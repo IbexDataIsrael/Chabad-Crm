@@ -43,6 +43,7 @@ def _run_migrations() -> None:
     command.upgrade(cfg, "head")
 from app.routers import (
     admin,
+    admin_areas,
     ai,
     apartments,
     areas,
@@ -112,6 +113,7 @@ app.include_router(users.router)
 app.include_router(organizations.router)
 app.include_router(custom_fields.router)
 app.include_router(field_settings.router)
+app.include_router(admin_areas.router)
 app.include_router(areas.router)
 app.include_router(buildings.router)
 app.include_router(apartments.router)

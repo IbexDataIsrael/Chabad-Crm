@@ -148,6 +148,21 @@ def _validate_apartment(apartment_id: Optional[int], org_id: int, db: Session) -
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "apartment_id does not exist")
 
 
+def _validate_admin_area(admin_area_id: Optional[int], org_id: int, db: Session) -> None:
+    if admin_area_id is None:
+        return
+    ok = (
+        db.query(models.AdminArea)
+        .filter(
+            models.AdminArea.id == admin_area_id,
+            models.AdminArea.organization_id == org_id,
+        )
+        .first()
+    )
+    if not ok:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "admin_area_id does not exist")
+
+
 # --- Dynamic picklist values (generic store) -------------------------------
 def _picklist_values_map(db: Session, contact: models.Contact) -> dict[str, str]:
     """The contact's selected dynamic-picklist values, keyed by system_name."""
@@ -361,7 +376,8 @@ def create_contact(
     data = payload.model_dump(exclude={"mekurav", "shliach", "picklist_values"})
     _validate_fks(data, org_id, db)
     _validate_picklists(data, org_id, db)
-    _check_phone_unique(db, org_id, data["phone"])
+    if data.get("phone"):
+        _check_phone_unique(db, org_id, data["phone"])
     _geocode_fallback(data)
 
     contact = models.Contact(**data, organization_id=org_id)
@@ -408,6 +424,7 @@ def create_contact(
                 mk_data["potential_next_step"],
             )
         _validate_apartment(mk_data.get("apartment_id"), org_id, db)
+        _validate_admin_area(mk_data.get("admin_area_id"), org_id, db)
         db.add(
             models.ContactMekurav(
                 organization_id=org_id, contact_id=contact.id, **mk_data
@@ -462,6 +479,8 @@ def update_contact(
             )
         if "apartment_id" in mk_data:
             _validate_apartment(mk_data["apartment_id"], org_id, db)
+        if "admin_area_id" in mk_data:
+            _validate_admin_area(mk_data["admin_area_id"], org_id, db)
         if contact.mekurav is None:
             contact.mekurav = models.ContactMekurav(
                 organization_id=org_id, contact_id=contact.id

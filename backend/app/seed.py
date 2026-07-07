@@ -504,6 +504,22 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("pager", "pager.next", "הבא ←", "Next →"),
     ("pager", "pager.range", "{from}–{to} מתוך {total}", "{from}–{to} of {total}"),
     ("pager", "pager.page_size", "בעמוד:", "Per page:"),
+    # --- fixes9: admin areas + mekurav fields + system title settings ---
+    ("nav", "nav.admin_areas", "אזור מנהל", "Admin area"),
+    ("page", "page.admin_areas_title", "אזורי מנהל", "Admin areas"),
+    ("page", "page.add_admin_area", "אזור מנהל חדש", "New admin area"),
+    ("page", "page.edit_admin_area", "עריכת אזור מנהל", "Edit admin area"),
+    ("page", "page.no_admin_areas", "אין אזורי מנהל להצגה.", "No admin areas to show."),
+    ("msg", "msg.delete_admin_area_confirm", "למחוק את אזור המנהל?", "Delete this admin area?"),
+    ("column", "admin_areas.name", "שם", "Name"),
+    ("column", "admin_areas.comments", "הערות", "Comments"),
+    ("column", "contact_mekurav.admin_area_id", "אזור מנהל", "Admin area"),
+    ("column", "contact_mekurav.tzedaka_potential", "פוטנציאל לצדקה", "Tzedaka potential"),
+    ("admin", "admin.system_settings_title", "הגדרות מערכת", "System settings"),
+    ("admin", "admin.system_settings_intro", "תבנית כותרת הדפדפן לכל העמודים ושם ברירת מחדל כשאין שם ארגון.", "The browser-title template for all pages, and the default name when no organization name exists."),
+    ("admin", "admin.title_template", "תבנית כותרת המערכת", "System title template"),
+    ("admin", "admin.title_template_hint", "{public.organizations.name} יוחלף בשם הארגון.", "{public.organizations.name} is replaced with the organization's name."),
+    ("admin", "admin.fallback_name", "שם זמני / ברירת מחדל", "Temporary / fallback name"),
     # --- fixes7 §7: areas map + geofence ---
     ("areas", "areas.map_all", "מפת האזורים", "Areas map"),
     ("areas", "areas.view_area", "הצג אזור »", "View area »"),
@@ -581,6 +597,26 @@ PICKLIST_ENGLISH_DISPLAY: dict[str, str] = {
     "apartment.campaign_status": "Campaign status",
     "apartment.mezuzah_status": "Mezuzah",
 }
+
+
+# Platform title configuration (fixes9 §1). The metadata endpoint falls back to
+# these values when the rows are missing, so a fresh/un-seeded DB still works.
+SYSTEM_SETTING_DEFAULTS: dict[str, str] = {
+    "system_title_template": "{public.organizations.name} CRM",
+    "system_fallback_org_name": "Jewish Points CRM",
+}
+
+
+def seed_system_settings(db: Session) -> None:
+    """Insert any missing system_settings rows (idempotent, never overwrites)."""
+    existing = {r.key for r in db.query(models.SystemSetting.key).all()}
+    dirty = False
+    for key, value in SYSTEM_SETTING_DEFAULTS.items():
+        if key not in existing:
+            db.add(models.SystemSetting(key=key, value=value))
+            dirty = True
+    if dirty:
+        db.commit()
 
 
 def seed_localization(db: Session) -> None:
@@ -896,6 +932,7 @@ def seed_all(db: Session) -> None:
     seed_localization(db)
     seed_superadmin(db)
     seed_email_templates(db)
+    seed_system_settings(db)
 
     # Backfill system picklist *definitions* for EVERY org (idempotent). An org
     # created before a given system picklist existed would otherwise never see it

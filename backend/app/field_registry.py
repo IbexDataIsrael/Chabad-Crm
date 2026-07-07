@@ -42,6 +42,17 @@ TOGGLEABLE_FIELDS: list[tuple[str, str, str]] = [
         "contact_mekurav",
     ),
     ("contact_mekurav.background", "contact_mekurav.background", "contact_mekurav"),
+    # fixes9: admin-area link + tzedaka potential
+    (
+        "contact_mekurav.admin_area_id",
+        "contact_mekurav.admin_area_id",
+        "contact_mekurav",
+    ),
+    (
+        "contact_mekurav.tzedaka_potential",
+        "contact_mekurav.tzedaka_potential",
+        "contact_mekurav",
+    ),
     # Mekurav dynamic picklists (keyed by picklist system_name).
     ("Jewish_status", "picklist.Jewish_status", "contact_mekurav"),
     ("affiliation", "picklist.affiliation", "contact_mekurav"),

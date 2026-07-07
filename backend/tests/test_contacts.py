@@ -8,9 +8,19 @@ def _make_contact(client, auth_headers, **overrides):
     return client.post("/api/contacts", json=payload, headers=auth_headers)
 
 
-def test_contact_phone_required(client, auth_headers):
+def test_contact_phone_optional(client, auth_headers):
+    # Phone became optional for the data import; omitted → stored as NULL.
     r = client.post("/api/contacts", json={"name": "בלי טלפון"}, headers=auth_headers)
-    assert r.status_code == 422  # phone is required
+    assert r.status_code == 201, r.text
+    assert r.json()["phone"] is None
+    # Two phoneless contacts coexist (NULLs don't collide in the unique key).
+    r = client.post("/api/contacts", json={"name": "גם בלי טלפון"}, headers=auth_headers)
+    assert r.status_code == 201, r.text
+    # A provided phone must still be valid.
+    r = client.post(
+        "/api/contacts", json={"name": "רע", "phone": "abc"}, headers=auth_headers
+    )
+    assert r.status_code == 422
 
 
 def test_contact_phone_unique_per_org(client, auth_headers):

@@ -21,6 +21,7 @@ import {
   type AdminUser,
 } from "@/lib/api";
 import { EmailTemplatesCard } from "@/components/EmailTemplatesCard";
+import { SystemSettingsCard } from "@/components/SystemSettingsCard";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
@@ -533,6 +534,7 @@ export default function SystemAdminPage() {
       )}
 
       <EmailTemplatesCard />
+      <SystemSettingsCard />
     </div>
   );
 }

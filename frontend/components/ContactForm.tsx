@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
+import { apiFetch } from "@/lib/api";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { isValidPhone } from "@/lib/validation";
@@ -9,6 +10,7 @@ import {
   formatCoords,
   roundCoord,
   MEKURAV_PICKLISTS,
+  type AdminArea,
   type Contact,
   type ContactType,
   type UserSummary,
@@ -25,6 +27,8 @@ import { PicklistSelect } from "./PicklistSelect";
 
 export interface MekuravFormValues {
   apartment_id: number | null;
+  admin_area_id: number | null; // אזור מנהל (fixes9)
+  tzedaka_potential: string | null; // פוטנציאל לצדקה (fixes9)
   first_visit: string | null;
   potential_next_step: string | null;
   rebbe_connection: string | null;
@@ -90,6 +94,8 @@ export function ContactForm({
     priority_score: initial?.priority_score ?? null,
     mekurav: {
       apartment_id: initial?.mekurav?.apartment_id ?? null,
+      admin_area_id: initial?.mekurav?.admin_area_id ?? null,
+      tzedaka_potential: initial?.mekurav?.tzedaka_potential ?? null,
       first_visit: initial?.mekurav?.first_visit ?? null,
       potential_next_step: initial?.mekurav?.potential_next_step ?? null,
       rebbe_connection: initial?.mekurav?.rebbe_connection ?? null,
@@ -105,10 +111,21 @@ export function ContactForm({
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [phoneValid, setPhoneValid] = useState(() => isValidPhone(initial?.phone ?? ""));
+  // Phone is optional: empty is valid, a provided value must pass validation.
+  const [phoneValid, setPhoneValid] = useState(() => {
+    const p = (initial?.phone ?? "").trim();
+    return p === "" || isValidPhone(p);
+  });
 
   const isMekurav = values.contact_type === "mekurav";
   const isShliach = values.contact_type === "shliach";
+
+  // Admin areas for the mekurav link dropdown (fixes9 §2C).
+  const [adminAreas, setAdminAreas] = useState<AdminArea[]>([]);
+  useEffect(() => {
+    if (!isMekurav) return;
+    apiFetch<AdminArea[]>("/api/admin-areas").then(setAdminAreas).catch(() => {});
+  }, [isMekurav]);
 
   function set<K extends keyof ContactFormValues>(key: K, v: ContactFormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: v }));
@@ -324,12 +341,44 @@ export function ContactForm({
             </Field>
           )}
 
+          {vis("contact_mekurav.admin_area_id") && (
+            <Field label={t("contact_mekurav.admin_area_id", "אזור מנהל")}>
+              <select
+                className={inputClass}
+                value={values.mekurav.admin_area_id ?? ""}
+                onChange={(e) =>
+                  setMekurav(
+                    "admin_area_id",
+                    e.target.value === "" ? null : Number(e.target.value),
+                  )
+                }
+              >
+                <option value="">—</option>
+                {adminAreas.map((aa) => (
+                  <option key={aa.id} value={aa.id}>
+                    {aa.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+
           {vis("contact_mekurav.potential_next_step") && (
             <Field label={t("contact_mekurav.potential_next_step", "פוטנציאל לצעד")}>
               <PicklistSelect
                 fieldKey="contact.potential_next_step"
                 value={values.mekurav.potential_next_step}
                 onChange={(v) => setMekurav("potential_next_step", v)}
+              />
+            </Field>
+          )}
+
+          {vis("contact_mekurav.tzedaka_potential") && (
+            <Field label={t("contact_mekurav.tzedaka_potential", "פוטנציאל לצדקה")}>
+              <input
+                className={inputClass}
+                value={values.mekurav.tzedaka_potential ?? ""}
+                onChange={(e) => setMekurav("tzedaka_potential", e.target.value || null)}
               />
             </Field>
           )}

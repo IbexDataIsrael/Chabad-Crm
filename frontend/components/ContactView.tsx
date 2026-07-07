@@ -10,6 +10,7 @@ import { usePicklist } from "@/lib/picklists";
 import {
   apartmentTitle,
   CHECKLIST_ROWS,
+  type AdminArea,
   type Apartment,
   type Area,
   type Contact,
@@ -49,7 +50,7 @@ export function ContactView({
   const fields: [string | null, string, ReactNode][] = [
     [null, t("contacts.name", "שם פרטי"), contact.name],
     ["contacts.last_name", t("contacts.last_name", "שם משפחה"), contact.last_name || "—"],
-    [null, t("contacts.phone", "טלפון"), <span dir="ltr" key="p">{contact.phone}</span>],
+    [null, t("contacts.phone", "טלפון"), contact.phone ? <span dir="ltr" key="p">{contact.phone}</span> : "—"],
     ["contacts.email", t("contacts.email", "אימייל"), contact.email ? <span dir="ltr">{contact.email}</span> : "—"],
     [null, t("contacts.contact_type", "סוג איש קשר"), contactType.labelFor(contact.contact_type) || "—"],
     ["contacts.assigned_user_id", t("contacts.assigned_user_id", "משויך ל"), assignee?.full_name ?? "—"],
@@ -81,6 +82,11 @@ export function ContactView({
           <ApartmentLabel key="ap" id={mk.apartment_id} />,
         ],
         [
+          "contact_mekurav.admin_area_id",
+          t("contact_mekurav.admin_area_id", "אזור מנהל"),
+          <AdminAreaLabel key="aa" id={mk.admin_area_id} />,
+        ],
+        [
           "contact_mekurav.first_visit",
           t("contact_mekurav.first_visit", "ביקור ראשון"),
           mk.first_visit ? new Date(mk.first_visit).toLocaleString("he-IL") : "—",
@@ -89,6 +95,11 @@ export function ContactView({
           "contact_mekurav.potential_next_step",
           t("contact_mekurav.potential_next_step", "פוטנציאל לצעד"),
           potential.labelFor(mk.potential_next_step) || "—",
+        ],
+        [
+          "contact_mekurav.tzedaka_potential",
+          t("contact_mekurav.tzedaka_potential", "פוטנציאל לצדקה"),
+          mk.tzedaka_potential || "—",
         ],
         ["contact_mekurav.rebbe_connection", t("contact_mekurav.rebbe_connection", "קשר לרבי"), mk.rebbe_connection || "—"],
         ["contact_mekurav.recommendations", t("contact_mekurav.recommendations", "המלצות"), mk.recommendations || "—"],
@@ -232,6 +243,28 @@ function ApartmentLabel({ id }: { id: number | null }) {
     let active = true;
     apiFetch<Apartment>(`/api/apartments/${id}`)
       .then((a) => active && setLabel(apartmentTitle(a)))
+      .catch(() => active && setLabel(null));
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  if (id == null) return <>—</>;
+  return <>{label ?? "…"}</>;
+}
+
+/** Resolves an admin-area id to its name for display (fixes9). */
+function AdminAreaLabel({ id }: { id: number | null }) {
+  const [label, setLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (id == null) {
+      setLabel(null);
+      return;
+    }
+    let active = true;
+    apiFetch<AdminArea>(`/api/admin-areas/${id}`)
+      .then((aa) => active && setLabel(aa.name))
       .catch(() => active && setLabel(null));
     return () => {
       active = false;

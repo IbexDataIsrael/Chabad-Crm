@@ -5,7 +5,9 @@ import { Footer } from "@/components/Footer";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "שיפסיידביי CRM",
+  // Pre-hydration default only — TitleManager applies the configured template
+  // ("{public.organizations.name} CRM" + fallback name) on every page (fixes9).
+  title: "Jewish Points CRM",
   description: "Bilingual Hebrew/English Mini CRM",
 };
 

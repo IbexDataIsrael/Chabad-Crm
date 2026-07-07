@@ -22,6 +22,8 @@ from app.schemas import (
     AdminUserOut,
     EmailTemplateOut,
     EmailTemplateUpdate,
+    SystemConfigOut,
+    SystemConfigUpdate,
     Token,
 )
 from app.seed import provision_org
@@ -119,6 +121,7 @@ def _delete_organization_cascade(db: Session, org_id: int) -> None:
         models.Apartment,
         models.Building,
         models.Area,
+        models.AdminArea,  # after ContactMekurav, which references it
         models.Contact,
         models.FieldSetting,
         models.User,
@@ -442,3 +445,48 @@ def update_email_template(
     db.refresh(tpl)
     logger.info("superadmin %s edited email template %s", admin.email, key)
     return tpl
+
+
+# --- System title configuration (fixes9 §1) ----------------------------------
+_SYSTEM_CONFIG_KEYS = {
+    "title_template": "system_title_template",
+    "fallback_name": "system_fallback_org_name",
+}
+
+
+@router.get("/system-settings", response_model=SystemConfigOut)
+def get_system_settings(
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_superadmin),
+):
+    from app.routers.metadata import read_system_settings
+
+    values = read_system_settings(db)
+    return SystemConfigOut(
+        title_template=values["system_title_template"],
+        fallback_name=values["system_fallback_org_name"],
+    )
+
+
+@router.put("/system-settings", response_model=SystemConfigOut)
+def update_system_settings(
+    payload: SystemConfigUpdate,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_superadmin),
+):
+    for field, key in _SYSTEM_CONFIG_KEYS.items():
+        value = getattr(payload, field)
+        if value is None:
+            continue
+        row = (
+            db.query(models.SystemSetting)
+            .filter(models.SystemSetting.key == key)
+            .first()
+        )
+        if row is None:
+            row = models.SystemSetting(key=key)
+            db.add(row)
+        row.value = value.strip()
+    db.commit()
+    logger.info("superadmin %s updated system settings", admin.email)
+    return get_system_settings(db, admin)

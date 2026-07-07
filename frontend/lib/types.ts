@@ -36,11 +36,21 @@ export interface Mekurav {
   id: number;
   contact_id: number;
   apartment_id: number | null;
+  admin_area_id: number | null; // אזור מנהל (fixes9)
+  tzedaka_potential: string | null; // פוטנציאל לצדקה (fixes9)
   first_visit: string | null;
   potential_next_step: string | null;
   rebbe_connection: string | null;
   recommendations: string | null;
   background: string | null;
+}
+
+/** An administrative area (אזור מנהל, fixes9) mekurav contacts link to. */
+export interface AdminArea {
+  id: number;
+  guid: string;
+  name: string;
+  comments: string | null;
 }
 
 export interface Shliach {
@@ -76,7 +86,7 @@ export interface Contact {
   guid: string;
   name: string;
   last_name: string | null;
-  phone: string;
+  phone: string | null; // optional since the data import
   email: string | null;
   contact_type: ContactType;
   assigned_user_id: number | null;

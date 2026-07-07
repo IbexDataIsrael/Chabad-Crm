@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.database import get_db
+from app.schemas import SystemConfigOut
+from app.seed import SYSTEM_SETTING_DEFAULTS
 
 router = APIRouter(prefix="/api/metadata", tags=["metadata"])
 
@@ -26,3 +28,24 @@ def get_localization(db: Session = Depends(get_db)) -> dict[str, dict[str, str]]
             "en": row.english_label or "",
         }
     return out
+
+
+def read_system_settings(db: Session) -> dict[str, str]:
+    """The system_settings rows merged over the seed defaults, so a fresh or
+    un-seeded database still yields a working title configuration."""
+    values = dict(SYSTEM_SETTING_DEFAULTS)
+    for row in db.query(models.SystemSetting).all():
+        if row.key in values and row.value.strip():
+            values[row.key] = row.value
+    return values
+
+
+@router.get("/system-config", response_model=SystemConfigOut)
+def get_system_config(db: Session = Depends(get_db)) -> SystemConfigOut:
+    """Platform title configuration (fixes9 §1). Public — the frontend computes
+    the HTML <title> on every page, including the login screen pre-auth."""
+    values = read_system_settings(db)
+    return SystemConfigOut(
+        title_template=values["system_title_template"],
+        fallback_name=values["system_fallback_org_name"],
+    )

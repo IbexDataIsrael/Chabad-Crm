@@ -146,6 +146,18 @@ class EmailTemplateUpdate(BaseModel):
     body_hebrew: Optional[str] = None
 
 
+class SystemConfigOut(BaseModel):
+    """The platform title configuration (fixes9 §1) — public + superadmin read."""
+
+    title_template: str
+    fallback_name: str
+
+
+class SystemConfigUpdate(BaseModel):
+    title_template: Optional[str] = None
+    fallback_name: Optional[str] = None
+
+
 class AdminOrgCreate(BaseModel):
     """Superadmin provisions an org + its (already-verified) admin directly."""
     organization_name: str
@@ -264,6 +276,41 @@ class CustomFieldValueIn(BaseModel):
     definition_id: int
     checked: bool = False
     note: Optional[str] = None
+
+
+# --- Admin areas (fixes9 §2) -------------------------------------------------
+class AdminAreaCreate(BaseModel):
+    name: str
+    comments: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def _check_name(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Name is required")
+        return v.strip()
+
+
+class AdminAreaUpdate(BaseModel):
+    name: Optional[str] = None
+    comments: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def _check_name(cls, v: Optional[str]) -> Optional[str]:
+        # An explicit empty name is rejected; omitting the field is fine.
+        if v is not None and not v.strip():
+            raise ValueError("Name is required")
+        return v.strip() if v is not None else None
+
+
+class AdminAreaOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    guid: str
+    name: str
+    comments: Optional[str] = None
 
 
 # --- Areas / Buildings / Apartments ----------------------------------------
@@ -526,6 +573,8 @@ class SignificantDateOut(SignificantDateBase):
 # --- Mekurav / Shliach sub-payloads ----------------------------------------
 class MekuravData(BaseModel):
     apartment_id: Optional[int] = None
+    admin_area_id: Optional[int] = None  # אזור מנהל (fixes9 §2C)
+    tzedaka_potential: Optional[str] = None  # פוטנציאל לצדקה (fixes9 §3, free text)
     first_visit: Optional[datetime] = None
     potential_next_step: Optional[str] = None
     rebbe_connection: Optional[str] = None
@@ -561,7 +610,8 @@ class ShliachOut(BaseModel):
 class ContactBase(BaseModel):
     name: str
     last_name: Optional[str] = None
-    phone: str
+    # Optional (data import): validated + unique-per-org only when provided.
+    phone: Optional[str] = None
     email: Optional[str] = None
     contact_type: ContactType = "mekurav"
     assigned_user_id: Optional[int] = None
@@ -580,11 +630,11 @@ class ContactCreate(ContactBase):
     picklist_values: dict[str, Optional[str]] = {}
 
     # Validate on input only (not on ContactOut) so existing rows with legacy
-    # bad numbers still read back without erroring.
+    # bad numbers still read back without erroring. Blank normalizes to NULL.
     @field_validator("phone")
     @classmethod
-    def _check_phone(cls, v: str) -> str:
-        return _validate_phone(v)
+    def _check_phone(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_phone(v) if v and v.strip() else None
 
 
 class ContactUpdate(BaseModel):
@@ -606,7 +656,8 @@ class ContactUpdate(BaseModel):
     @field_validator("phone")
     @classmethod
     def _check_phone(cls, v: Optional[str]) -> Optional[str]:
-        return _validate_phone(v)
+        # Blank clears the phone; a provided value must be valid.
+        return _validate_phone(v) if v and v.strip() else None
 
 
 class ContactOut(ContactBase):

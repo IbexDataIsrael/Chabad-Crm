@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, type ReactNode } from "react";
+import { type ReactNode } from "react";
 
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { LanguageToggle } from "@/components/LanguageToggle";
@@ -23,11 +23,7 @@ function DashboardChrome({ children }: { children: ReactNode }) {
   const { t } = useLocalization();
   const orgName = user?.organization?.name ?? t("auth.app_title", "מיני CRM");
   const logoUrl = user?.organization?.logo_url ?? null;
-
-  // Organization name as the browser tab title.
-  useEffect(() => {
-    document.title = orgName;
-  }, [orgName]);
+  // The browser-tab title comes from TitleManager (fixes9 §1) — not set here.
 
   // Drop admin-only entries for staff users; a menu with no items hides itself.
   const adminOnly = (items: (NavMenuItem & { admin?: boolean })[]): NavMenuItem[] =>
@@ -40,6 +36,8 @@ function DashboardChrome({ children }: { children: ReactNode }) {
     { href: "/dashboard/visits", label: t("nav.visits", "ביקורים"), admin: true },
   ]);
   const placeItems = adminOnly([
+    // fixes9 §2B: Admin Area sits immediately before Areas.
+    { href: "/dashboard/admin-areas", label: t("nav.admin_areas", "אזור מנהל") },
     { href: "/dashboard/areas", label: t("nav.areas", "אזורים") },
     { href: "/dashboard/buildings", label: t("nav.buildings", "בניינים"), admin: true },
     { href: "/dashboard/apartments", label: t("nav.apartments", "דירות") },
