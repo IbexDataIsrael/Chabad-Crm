@@ -21,8 +21,9 @@ export default function ContactsPage() {
   const showPriority = vis("contacts.priority_score");
   // The color has no column of its own (fixes7 §8A) — it tints the whole row.
   const showColor = vis("contacts.color_tag");
-  // name + phone + actions are always shown; add the visible toggleable columns.
-  const colCount = 3 + [showStatus, showPriority].filter(Boolean).length;
+  // name + phone + actions + the trailing filler column are always shown;
+  // add the visible toggleable columns.
+  const colCount = 4 + [showStatus, showPriority].filter(Boolean).length;
   const {
     options: statusOptions,
     labelFor: statusLabel,
@@ -119,21 +120,28 @@ export default function ContactsPage() {
 
       <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
+          {/* Data columns are content-width (w-px + nowrap); the empty trailing
+              column absorbs the slack so everything condenses to the start. */}
           <thead className="bg-gray-50 text-gray-600 text-right">
             <tr>
-              <th className="px-3 py-1.5 font-medium">{t("common.name", "שם")}</th>
-              <th className="px-3 py-1.5 font-medium">{t("contacts.phone", "טלפון")}</th>
+              <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
+                {t("common.name", "שם")}
+              </th>
+              <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
+                {t("contacts.phone", "טלפון")}
+              </th>
               {showStatus && (
-                <th className="px-3 py-1.5 font-medium">
+                <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
                   {t("contacts.pipeline_status", "סטטוס")}
                 </th>
               )}
               {showPriority && (
-                <th className="px-3 py-1.5 font-medium">
+                <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
                   {t("contacts.priority_score", "ציון עדיפות")}
                 </th>
               )}
-              <th className="px-3 py-1.5 font-medium"></th>
+              <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap"></th>
+              <th className="w-full"></th>
             </tr>
           </thead>
           <tbody>
@@ -163,14 +171,16 @@ export default function ContactsPage() {
                   >
                     {contactFullName(c)}
                   </td>
-                  <td className="px-3 py-1.5" dir="ltr">{c.phone}</td>
+                  <td className="px-3 py-1.5 w-px whitespace-nowrap" dir="ltr">{c.phone}</td>
                   {showStatus && (
-                    <td className="px-3 py-1.5">{statusLabel(c.pipeline_status)}</td>
+                    <td className="px-3 py-1.5 w-px whitespace-nowrap">
+                      {statusLabel(c.pipeline_status)}
+                    </td>
                   )}
                   {showPriority && (
-                    <td className="px-3 py-1.5">{c.priority_score ?? ""}</td>
+                    <td className="px-3 py-1.5 w-px whitespace-nowrap">{c.priority_score ?? ""}</td>
                   )}
-                  <td className="px-3 py-1.5 text-left">
+                  <td className="px-3 py-1.5 w-px whitespace-nowrap">
                     <Link
                       href={`/dashboard/contacts/${c.id}`}
                       onClick={(e) => e.stopPropagation()}
@@ -179,6 +189,7 @@ export default function ContactsPage() {
                       {t("action.open_edit", "פתח / עריכה ›")}
                     </Link>
                   </td>
+                  <td></td>
                 </tr>
               ))
             )}
