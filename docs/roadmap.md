@@ -46,3 +46,15 @@ Self-service "change password" form on `/dashboard/settings`. Backend
 enforces the strength rules, and sets the new bcrypt hash. The settings page now
 renders for all users (org-settings form stays admin-only; the change-password card
 shows for everyone), and the settings nav link is visible to non-admins.
+
+## 4. fixes8 — floors default, apartment sort + pagination, login deep-links  ✅ DONE (2026-07-07)
+
+Spec `docs/fixes8.md`, plan `docs/fixes8-plan.md`, commit `db8f10f`; tested live.
+New buildings auto-create floors 1–8 unless overridden. `GET /api/apartments/list`
+returns a paginated envelope `{items,total,page,page_size}` (20/50/100 per page)
+with `area_id`/`apartment_id` filters and natural-order sorting (floor →
+apartment number). The apartments and buildings pages land pre-filtered on the
+first area and fetch lazily per filter change. Unauthenticated deep links bounce
+to `/?redirect=…` and return to the original page after login (internal paths
+only). Note for external consumers of `/api/apartments/list`: the response is no
+longer a bare array — read `.items`.
