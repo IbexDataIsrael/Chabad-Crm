@@ -430,6 +430,10 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("nav", "nav.ai_chat", "צ'אט AI", "AI chat"),
     ("ai", "ai.title", "תאום דיגיטלי", "Digital twin"),
     ("ai", "ai.intro", "שאל את התאום הדיגיטלי שאלות על הקריירה שלי.", "Ask the digital twin questions about my career."),
+    # CRM-grounded assistant (replaces the career twin; new keys because the
+    # old rows already exist in tenant DBs and re-seeding never overwrites).
+    ("ai", "ai.crm_title", "עוזר AI", "AI assistant"),
+    ("ai", "ai.crm_intro", "שאל שאלות על נתוני הארגון — אנשי קשר, אזורים, דירות, ביקורים ותרומות.", "Ask questions about the organization's data — contacts, areas, apartments, visits and donations."),
     ("ai", "ai.placeholder", "כתוב שאלה…", "Type a question…"),
     ("ai", "ai.send", "שלח", "Send"),
     ("ai", "ai.thinking", "חושב…", "Thinking…"),

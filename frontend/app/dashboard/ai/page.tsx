@@ -7,7 +7,8 @@ import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
 
 /**
- * "Digital twin" AI chat — answers questions about the operator's career.
+ * CRM AI assistant — answers questions grounded in the organization's data
+ * (the backend injects an org-scoped DB snapshot into every request).
  * The conversation lives in component state (resets on reload); each send
  * posts the full history to /api/ai/chat (OpenRouter behind the backend).
  */
@@ -46,9 +47,12 @@ export default function AiChatPage() {
   return (
     <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-3xl flex-col">
       <div className="mb-4">
-        <h1 className="text-2xl font-bold">🤖 {t("ai.title", "תאום דיגיטלי")}</h1>
+        <h1 className="text-2xl font-bold">🤖 {t("ai.crm_title", "עוזר AI")}</h1>
         <p className="mt-1 text-sm text-gray-600">
-          {t("ai.intro", "שאל את התאום הדיגיטלי שאלות על הקריירה שלי.")}
+          {t(
+            "ai.crm_intro",
+            "שאל שאלות על נתוני הארגון — אנשי קשר, אזורים, דירות, ביקורים ותרומות.",
+          )}
         </p>
       </div>
 
