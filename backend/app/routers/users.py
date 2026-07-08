@@ -1,6 +1,8 @@
 """Org user management, scoped to the caller's organization.
 
-Reads (assignee selector / users page): any authenticated user. Mutations
+Reads (assignee selector / users page): admin or staff — shliach users are
+blocked (fixes10 §3.2/§3.6; their contact ownership is forced, so they never
+need the directory). Mutations
 (fixes7 §1): admins only — an admin can provision additional admins or
 restricted (staff) users. A user created without a password is a Google-only
 account: the verified Google email is all that's needed to sign in (the
@@ -16,7 +18,7 @@ from app import models
 from app.core.email import send_shliach_welcome
 from app.core.security import hash_password
 from app.database import get_db
-from app.deps import get_current_user, require_admin
+from app.deps import require_admin, require_staff_or_admin
 from app.schemas import OrgUserCreate, OrgUserUpdate, UserOut
 
 router = APIRouter(prefix="/api/users", tags=["users"])
@@ -38,7 +40,7 @@ def _get_or_404(user_id: int, org_id: int, db: Session) -> models.User:
 @router.get("", response_model=list[UserOut])
 def list_users(
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(require_staff_or_admin),
 ):
     return (
         db.query(models.User)
@@ -139,9 +141,9 @@ def delete_user(
     user = _get_or_404(user_id, admin.organization_id, db)
     if user.id == admin.id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "You cannot delete yourself")
-    # Unassign their contacts instead of blocking the delete.
+    # Unassign their contacts instead of blocking the delete (guid FK, fixes10).
     db.query(models.Contact).filter(
-        models.Contact.assigned_user_id == user.id
+        models.Contact.assigned_user_id == user.guid
     ).update({models.Contact.assigned_user_id: None}, synchronize_session=False)
     db.query(models.ContactShliach).filter(
         models.ContactShliach.user_id == user.id

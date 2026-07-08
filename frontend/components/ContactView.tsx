@@ -40,7 +40,7 @@ export function ContactView({
   const affiliation = usePicklist("affiliation");
   const language = usePicklist("language");
 
-  const assignee = users.find((u) => u.id === contact.assigned_user_id);
+  const assignee = users.find((u) => u.guid === contact.assigned_user_id);
   const cl = contact.checklist ?? null;
   const mk = contact.mekurav ?? null;
   const isMekurav = contact.contact_type === "mekurav";
@@ -265,7 +265,8 @@ function AdminAreaLabel({ id }: { id: number | null }) {
     let active = true;
     apiFetch<AdminArea>(`/api/admin-areas/${id}`)
       .then((aa) => active && setLabel(aa.name))
-      .catch(() => active && setLabel(null));
+      // 403 for shliach users (fixes10 §3.6) / deleted area → show a dash.
+      .catch(() => active && setLabel("—"));
     return () => {
       active = false;
     };

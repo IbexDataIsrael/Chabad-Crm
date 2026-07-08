@@ -16,7 +16,7 @@ from app import models
 from app.core.email import send_shliach_welcome
 from app.core.geocode import geocode_address
 from app.database import get_db
-from app.deps import get_current_user, require_staff_or_admin
+from app.deps import get_current_user
 from app.picklist_utils import validate_picklist_value
 from app.schemas import (
     ChecklistOut,
@@ -41,23 +41,6 @@ logger = logging.getLogger("app.contacts")
 
 
 # --- Shliach scoping --------------------------------------------------------
-def _shliach_apartment_ids(db: Session, user: models.User) -> list[int]:
-    """Apartment ids covered by the shliach contact linked to this user."""
-    shliach = (
-        db.query(models.ContactShliach)
-        .filter(models.ContactShliach.user_id == user.id)
-        .first()
-    )
-    if not shliach:
-        return []
-    return [
-        row.apartment_id
-        for row in db.query(models.ContactShliachApartment.apartment_id)
-        .filter(models.ContactShliachApartment.contact_shliach_id == shliach.id)
-        .all()
-    ]
-
-
 def _get_contact_or_404(
     contact_id: int, user: models.User, db: Session
 ) -> models.Contact:
@@ -77,20 +60,25 @@ def _get_contact_or_404(
 
 
 def _can_shliach_see(db: Session, user: models.User, contact: models.Contact) -> bool:
+    """fixes10 §3.5: a shliach sees only contacts assigned to them (i.e. the
+    ones they created — ownership is forced on creation), plus their own
+    shliach contact record."""
     if contact.shliach and contact.shliach.user_id == user.id:
         return True  # their own shliach record
-    if contact.mekurav and contact.mekurav.apartment_id is not None:
-        return contact.mekurav.apartment_id in _shliach_apartment_ids(db, user)
-    return False
+    return contact.assigned_user_id == user.guid
 
 
 # --- Validation helpers -----------------------------------------------------
 def _validate_fks(data: dict, org_id: int, db: Session) -> None:
-    user_id = data.get("assigned_user_id")
-    if user_id is not None:
+    # assigned_user_id holds the user's GUID (fixes10 §2.1).
+    user_guid = data.get("assigned_user_id")
+    if user_guid is not None:
         user = (
             db.query(models.User)
-            .filter(models.User.id == user_id, models.User.organization_id == org_id)
+            .filter(
+                models.User.guid == user_guid,
+                models.User.organization_id == org_id,
+            )
             .first()
         )
         if not user:
@@ -337,7 +325,7 @@ def _contacts_query(
     current_user: models.User,
     pipeline_status: Optional[str],
     contact_type: Optional[str],
-    assigned_user_id: Optional[int],
+    assigned_user_id: Optional[str],
 ):
     """The org-scoped, filtered, shliach-aware contacts query (shared by the
     plain list and the paginated list)."""
@@ -352,18 +340,15 @@ def _contacts_query(
         query = query.filter(models.Contact.assigned_user_id == assigned_user_id)
 
     if current_user.role == "shliach":
-        ap_ids = _shliach_apartment_ids(db, current_user)
+        # fixes10 §3.5: ownership isolation — only contacts assigned to this
+        # shliach (they created them), plus their own shliach contact record.
         query = query.outerjoin(
-            models.ContactMekurav,
-            models.ContactMekurav.contact_id == models.Contact.id,
-        ).outerjoin(
             models.ContactShliach,
             models.ContactShliach.contact_id == models.Contact.id,
+        ).filter(
+            (models.Contact.assigned_user_id == current_user.guid)
+            | (models.ContactShliach.user_id == current_user.id)
         )
-        cond = models.ContactShliach.user_id == current_user.id
-        if ap_ids:
-            cond = cond | models.ContactMekurav.apartment_id.in_(ap_ids)
-        query = query.filter(cond)
     return query
 
 
@@ -373,7 +358,7 @@ def list_contacts(
     current_user: models.User = Depends(get_current_user),
     pipeline_status: Optional[str] = None,
     contact_type: Optional[str] = None,
-    assigned_user_id: Optional[int] = None,
+    assigned_user_id: Optional[str] = None,
 ):
     query = _contacts_query(
         db, current_user, pipeline_status, contact_type, assigned_user_id
@@ -387,7 +372,7 @@ def list_contacts_paginated(
     current_user: models.User = Depends(get_current_user),
     pipeline_status: Optional[str] = None,
     contact_type: Optional[str] = None,
-    assigned_user_id: Optional[int] = None,
+    assigned_user_id: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20),
 ):
@@ -414,10 +399,26 @@ def list_contacts_paginated(
 def create_contact(
     payload: ContactCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(require_staff_or_admin),
+    current_user: models.User = Depends(get_current_user),
 ):
     org_id = current_user.organization_id
     data = payload.model_dump(exclude={"mekurav", "shliach", "picklist_values"})
+
+    # fixes10 §3.3/§3.4: a shliach may create mekurav contacts only (creating a
+    # shliach contact provisions a login user — admin/staff flows), and their
+    # ownership is forced regardless of the payload.
+    if current_user.role == "shliach":
+        if data.get("contact_type") == "shliach":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "A shliach cannot create shliach contacts",
+            )
+        data["assigned_user_id"] = current_user.guid
+    # fixes10 §2.2: every new contact is owned by its creator unless the
+    # payload explicitly assigns someone else.
+    elif not data.get("assigned_user_id"):
+        data["assigned_user_id"] = current_user.guid
+
     _validate_fks(data, org_id, db)
     _validate_picklists(data, org_id, db)
     if data.get("phone"):
@@ -506,6 +507,8 @@ def update_contact(
     data = payload.model_dump(
         exclude_unset=True, exclude={"mekurav", "shliach", "picklist_values"}
     )
+    if current_user.role == "shliach":
+        data.pop("assigned_user_id", None)  # a shliach cannot reassign ownership
     _validate_fks(data, org_id, db)
     _validate_picklists(data, org_id, db)
     if data.get("phone"):

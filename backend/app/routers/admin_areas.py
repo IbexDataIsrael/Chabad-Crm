@@ -1,14 +1,15 @@
 """Admin-area CRUD (אזור מנהל, fixes9 §2), org-scoped.
 
-Reads: any authenticated user. Mutations: admins only. Deleting an admin area
-detaches it from any mekurav contacts that reference it (FK is nulled).
+Reads: admin or staff (shliach users are blocked from the whole section —
+fixes10 §3.6). Mutations: admins only. Deleting an admin area detaches it from
+any mekurav contacts that reference it (FK is nulled).
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app import models
 from app.database import get_db
-from app.deps import get_current_user, require_admin
+from app.deps import require_admin, require_staff_or_admin
 from app.schemas import AdminAreaCreate, AdminAreaOut, AdminAreaUpdate
 
 router = APIRouter(prefix="/api/admin-areas", tags=["admin-areas"])
@@ -31,7 +32,7 @@ def _get_or_404(admin_area_id: int, org_id: int, db: Session) -> models.AdminAre
 @router.get("", response_model=list[AdminAreaOut])
 def list_admin_areas(
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(require_staff_or_admin),
 ):
     return (
         db.query(models.AdminArea)
@@ -58,7 +59,7 @@ def create_admin_area(
 def get_admin_area(
     admin_area_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(require_staff_or_admin),
 ):
     return _get_or_404(admin_area_id, current_user.organization_id, db)
 

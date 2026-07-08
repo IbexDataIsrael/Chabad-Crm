@@ -62,11 +62,11 @@ def require_superadmin(
 def require_staff_or_admin(
     current_user: models.User = Depends(get_current_user),
 ) -> models.User:
-    """Allow admin or staff; block shliach. Shliach users manage apartments, not
-    contacts — they get read-only (scoped) contact access elsewhere."""
+    """Allow admin or staff; block shliach (fixes10 §3.6 — org-level tooling
+    like admin areas and the user directory is off-limits to shliach users)."""
     if current_user.role not in ("admin", "staff"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admin or staff can create contacts",
+            detail="Admin or staff privileges required",
         )
     return current_user

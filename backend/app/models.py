@@ -124,7 +124,9 @@ class Contact(Base):
     contact_type = Column(
         String(20), nullable=False, default="mekurav", index=True
     )  # picklist contact.contact_type (מקורב | פעיל)
-    assigned_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # GUID of the owning user (fixes10 §2.1 — was an int users.id FK). Set to
+    # the creator automatically on creation; forced for shliach creators.
+    assigned_user_id = Column(String(36), ForeignKey("users.guid"), nullable=True)
     address = Column(Text, nullable=True)  # formatted address (Google Places)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)

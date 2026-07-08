@@ -89,7 +89,7 @@ export interface Contact {
   phone: string | null; // optional since the data import
   email: string | null;
   contact_type: ContactType;
-  assigned_user_id: number | null;
+  assigned_user_id: string | null; // owning user's GUID (fixes10)
   address: string | null;
   latitude: number | null;
   longitude: number | null;
@@ -279,6 +279,7 @@ export interface OrgDetails {
 
 export interface UserSummary {
   id: number;
+  guid: string; // contact assignment key (fixes10)
   username: string;
   full_name: string;
   role: string;

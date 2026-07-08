@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
 import { rowStyle } from "@/lib/colors";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
@@ -15,7 +14,6 @@ import { contactFullName, type Contact, type ContactPage } from "@/lib/types";
 export default function ContactsPage() {
   const router = useRouter();
   const { t } = useLocalization();
-  const { isShliach } = useAuth();
   const { isFieldVisible: vis } = useFieldSettings();
   const showStatus = vis("contacts.pipeline_status");
   const showPriority = vis("contacts.priority_score");
@@ -70,14 +68,13 @@ export default function ContactsPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">{t("contacts", "אנשי קשר")}</h1>
         <div className="flex items-center gap-2">
-          {!isShliach && (
-            <Link
-              href="/dashboard/contacts/new"
-              className="rounded-md bg-status-magenta text-white px-4 py-2 text-sm font-medium hover:opacity-90"
-            >
-              + {t("page.new_contact", "איש קשר חדש")}
-            </Link>
-          )}
+          {/* fixes10 §3.3: shliach users create (their own) contacts too. */}
+          <Link
+            href="/dashboard/contacts/new"
+            className="rounded-md bg-status-magenta text-white px-4 py-2 text-sm font-medium hover:opacity-90"
+          >
+            + {t("page.new_contact", "איש קשר חדש")}
+          </Link>
         </div>
       </div>
 

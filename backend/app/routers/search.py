@@ -13,7 +13,6 @@ from app.core.display import apartment_title, building_display_name
 from app.database import get_db
 from app.deps import get_current_user
 from app.routers.areas import _shliach_area_ids
-from app.routers.contacts import _shliach_apartment_ids
 from app.schemas import SearchHit, SearchOut
 
 router = APIRouter(prefix="/api/search", tags=["search"])
@@ -50,15 +49,15 @@ def global_search(
         ),
     )
     if is_shliach:
-        ap_ids = _shliach_apartment_ids(db, current_user)
+        # fixes10 §3.5: ownership isolation — only contacts assigned to this
+        # shliach (plus their own shliach contact record).
         own = db.query(models.ContactShliach.contact_id).filter(
             models.ContactShliach.user_id == current_user.id
         )
-        via_apartment = db.query(models.ContactMekurav.contact_id).filter(
-            models.ContactMekurav.apartment_id.in_(ap_ids or [-1])
+        contacts = contacts.filter(
+            (models.Contact.assigned_user_id == current_user.guid)
+            | models.Contact.id.in_(own)
         )
-        visible_ids = {r[0] for r in own.all()} | {r[0] for r in via_apartment.all()}
-        contacts = contacts.filter(models.Contact.id.in_(visible_ids or [-1]))
     for c in contacts.order_by(models.Contact.name).limit(MAX_PER_TYPE).all():
         full_name = f"{c.name} {c.last_name}".strip() if c.last_name else c.name
         results.append(

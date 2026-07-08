@@ -122,16 +122,11 @@ export default function SystemAdminPage() {
     }
   }
 
-  async function onDeleteOrg(org: AdminOrganization) {
-    if (
-      !confirm(
-        t(
-          "admin.confirm_delete_org",
-          `למחוק את הארגון "${org.name}" ואת כל הנתונים שלו? פעולה זו אינה הפיכה.`,
-        ),
-      )
-    )
-      return;
+  // fixes10 §1.2: deletion goes through the two-step modal, not confirm().
+  const [orgToDelete, setOrgToDelete] = useState<AdminOrganization | null>(null);
+
+  async function onDeleteOrgConfirmed(org: AdminOrganization) {
+    setOrgToDelete(null);
     await run(async () => {
       await adminDeleteOrg(org.id);
       await loadOrgs();
@@ -433,7 +428,7 @@ export default function SystemAdminPage() {
                       )}
                       <button
                         disabled={busy}
-                        onClick={() => onDeleteOrg(org)}
+                        onClick={() => setOrgToDelete(org)}
                         className="rounded-md border border-status-darkred/30 text-status-darkred px-3 py-1 hover:bg-red-50 disabled:opacity-50"
                       >
                         {t("action.delete", "מחק")}
@@ -535,6 +530,79 @@ export default function SystemAdminPage() {
 
       <EmailTemplatesCard />
       <SystemSettingsCard />
+
+      {orgToDelete && (
+        <DeleteOrgModal
+          org={orgToDelete}
+          onCancel={() => setOrgToDelete(null)}
+          onConfirm={() => onDeleteOrgConfirmed(orgToDelete)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Two-step deletion safeguard (fixes10 §1.2): a warning plus an explicit
+ *  text-match — the superadmin must type the org's exact name (or DELETE)
+ *  before the final button enables. */
+function DeleteOrgModal({
+  org,
+  onCancel,
+  onConfirm,
+}: {
+  org: AdminOrganization;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { t } = useLocalization();
+  const [typed, setTyped] = useState("");
+  const armed = typed.trim() === org.name || typed.trim() === "DELETE";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md bg-white rounded-xl shadow-xl p-5 space-y-4">
+        <h2 className="text-lg font-bold text-status-darkred">
+          {t("admin.delete_org_title", "מחיקת ארגון")}
+        </h2>
+        <p className="text-sm text-gray-700">
+          {t(
+            "admin.delete_org_warning",
+            "האם אתה בטוח שברצונך למחוק את הארגון וכל הנתונים שלו? פעולה זו אינה הפיכה.",
+          )}
+        </p>
+        <p className="text-sm font-medium">{org.name}</p>
+        <label className="block space-y-1">
+          <span className="block text-xs text-gray-500">
+            {t(
+              "admin.delete_org_type_to_confirm",
+              "לאישור, הקלד את שם הארגון במדויק (או DELETE):",
+            )}
+          </span>
+          <input
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-darkred focus:outline-none focus:ring-1 focus:ring-status-darkred"
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            autoFocus
+          />
+        </label>
+        <div className="flex items-center gap-2 pt-1">
+          <button
+            type="button"
+            disabled={!armed}
+            onClick={onConfirm}
+            className="rounded-md bg-status-darkred text-white px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {t("admin.delete_org_confirm", "מחק לצמיתות")}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+          >
+            {t("action.cancel", "ביטול")}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

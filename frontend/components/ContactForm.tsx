@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
 import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { isValidPhone } from "@/lib/validation";
@@ -48,7 +49,7 @@ export interface ContactFormValues {
   phone: string;
   email: string | null;
   contact_type: ContactType;
-  assigned_user_id: number | null;
+  assigned_user_id: string | null; // owning user's GUID (fixes10)
   address: string | null;
   latitude: number | null;
   longitude: number | null;
@@ -79,6 +80,8 @@ export function ContactForm({
 }) {
   const { t } = useLocalization();
   const { isFieldVisible: vis } = useFieldSettings();
+  // The logged-in user's role (distinct from isShliach = the contact's type).
+  const { isShliach: isShliachUser } = useAuth();
   const [values, setValues] = useState<ContactFormValues>({
     name: initial?.name ?? "",
     last_name: initial?.last_name ?? null,
@@ -120,12 +123,13 @@ export function ContactForm({
   const isMekurav = values.contact_type === "mekurav";
   const isShliach = values.contact_type === "shliach";
 
-  // Admin areas for the mekurav link dropdown (fixes9 §2C).
+  // Admin areas for the mekurav link dropdown (fixes9 §2C). The section is
+  // blocked for shliach users (fixes10 §3.6) — don't fetch or render it.
   const [adminAreas, setAdminAreas] = useState<AdminArea[]>([]);
   useEffect(() => {
-    if (!isMekurav) return;
+    if (!isMekurav || isShliachUser) return;
     apiFetch<AdminArea[]>("/api/admin-areas").then(setAdminAreas).catch(() => {});
-  }, [isMekurav]);
+  }, [isMekurav, isShliachUser]);
 
   function set<K extends keyof ContactFormValues>(key: K, v: ContactFormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: v }));
@@ -220,21 +224,19 @@ export function ContactForm({
         </Field>
       )}
 
-      {vis("contacts.assigned_user_id") && (
+      {/* Ownership is forced server-side for shliach users — no picker. */}
+      {vis("contacts.assigned_user_id") && !isShliachUser && (
         <Field label={t("contacts.assigned_user_id", "משויך ל")}>
           <select
             className={inputClass}
             value={values.assigned_user_id ?? ""}
             onChange={(e) =>
-              set(
-                "assigned_user_id",
-                e.target.value === "" ? null : Number(e.target.value),
-              )
+              set("assigned_user_id", e.target.value === "" ? null : e.target.value)
             }
           >
             <option value="">—</option>
             {users.map((u) => (
-              <option key={u.id} value={u.id}>
+              <option key={u.guid} value={u.guid}>
                 {u.full_name}
               </option>
             ))}
@@ -341,7 +343,7 @@ export function ContactForm({
             </Field>
           )}
 
-          {vis("contact_mekurav.admin_area_id") && (
+          {vis("contact_mekurav.admin_area_id") && !isShliachUser && (
             <Field label={t("contact_mekurav.admin_area_id", "אזור מנהל")}>
               <select
                 className={inputClass}

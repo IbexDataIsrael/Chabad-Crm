@@ -119,6 +119,7 @@ def _delete_organization_cascade(db: Session, org_id: int) -> None:
         models.PicklistDefinition,
         models.SignificantDate,
         models.Apartment,
+        models.Floor,  # before Building (FK); DB-level cascade only covers PG
         models.Building,
         models.Area,
         models.AdminArea,  # after ContactMekurav, which references it
@@ -335,7 +336,7 @@ def delete_user(
         models.Interaction.created_by == user_id
     ).delete(synchronize_session=False)
     db.query(models.Contact).filter(
-        models.Contact.assigned_user_id == user_id
+        models.Contact.assigned_user_id == user.guid
     ).update({models.Contact.assigned_user_id: None}, synchronize_session=False)
     db.query(models.ContactShliach).filter(
         models.ContactShliach.user_id == user_id

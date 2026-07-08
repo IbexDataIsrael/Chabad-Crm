@@ -614,7 +614,8 @@ class ContactBase(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     contact_type: ContactType = "mekurav"
-    assigned_user_id: Optional[int] = None
+    # The owning user's GUID (fixes10 §2.1); defaults to the creator (§2.2).
+    assigned_user_id: Optional[str] = None
     address: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
@@ -642,7 +643,7 @@ class ContactUpdate(BaseModel):
     last_name: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
-    assigned_user_id: Optional[int] = None
+    assigned_user_id: Optional[str] = None  # user GUID (fixes10 §2.1)
     address: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None

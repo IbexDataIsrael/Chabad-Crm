@@ -40,12 +40,27 @@ def _shliach_headers(client, db_session, admin_headers):
     return {"Authorization": f"Bearer {token}"}
 
 
-# --- RBAC: shliach can't create contacts -----------------------------------
-def test_shliach_cannot_create_contact(client, admin_headers, db_session):
+# --- RBAC: shliach contact creation (fixes10 §3.3/§3.4) ---------------------
+def test_shliach_creates_mekurav_with_forced_ownership(
+    client, admin_headers, db_session
+):
     headers = _shliach_headers(client, db_session, admin_headers)
     r = client.post(
         "/api/contacts",
         json={"name": "x", "phone": "050-7700001", "contact_type": "mekurav"},
+        headers=headers,
+    )
+    assert r.status_code == 201, r.text
+    login_user = (
+        db_session.query(models.User)
+        .filter(models.User.username == "shliachlogin")
+        .one()
+    )
+    assert r.json()["assigned_user_id"] == login_user.guid
+    # But a shliach may not create shliach contacts (user provisioning).
+    r = client.post(
+        "/api/contacts",
+        json={"name": "y", "phone": "050-7700002", "contact_type": "shliach"},
         headers=headers,
     )
     assert r.status_code == 403

@@ -85,7 +85,11 @@ def test_contact_list_filters(client, auth_headers):
 
 
 def test_contact_invalid_assignee_fk(client, auth_headers):
-    r = _make_contact(client, auth_headers, assigned_user_id=99999)
+    # assigned_user_id is a user GUID (fixes10 §2.1); an unknown one is a 400.
+    r = _make_contact(
+        client, auth_headers,
+        assigned_user_id="00000000-0000-0000-0000-000000000000",
+    )
     assert r.status_code == 400
 
 
