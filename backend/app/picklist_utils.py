@@ -25,6 +25,7 @@ PICKLIST_FIELDS: dict[str, str] = {
     "apartment.Jewish_status": "יהדות (דירה)",
     "apartment.campaign_status": "סטטוס קמפיין",
     "apartment.mezuzah_status": "מזוזה",
+    "apartment.language": "שפה",  # fixes13
 }
 
 # field_key -> (model, column attribute name) for validation + usage counting.
@@ -43,6 +44,7 @@ FIELD_KEY_TO_COLUMN: dict[str, tuple[type, str]] = {
     "apartment.Jewish_status": (models.Apartment, "jewish_status"),
     "apartment.campaign_status": (models.Apartment, "campaign_status"),
     "apartment.mezuzah_status": (models.Apartment, "mezuzah_status"),
+    "apartment.language": (models.Apartment, "language"),
 }
 
 

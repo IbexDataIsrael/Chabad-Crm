@@ -60,6 +60,7 @@ export function ApartmentEditor({
   const [mezuzahStatus, setMezuzahStatus] = useState<string | null>(
     apt?.mezuzah_status ?? null,
   );
+  const [language, setLanguage] = useState<string | null>(apt?.language ?? null);
   const [notes, setNotes] = useState(apt?.apartment_notes ?? "");
   const [contactId, setContactId] = useState<number | "">("");
   const [error, setError] = useState("");
@@ -108,6 +109,7 @@ export function ApartmentEditor({
       jewish_status: jewishStatus,
       campaign_status: campaignStatus,
       mezuzah_status: mezuzahStatus,
+      language,
       apartment_notes: notes || null,
     };
     try {
@@ -164,7 +166,7 @@ export function ApartmentEditor({
         {vis("apartments.apartment_name") && (
           <label className="block space-y-1">
             <span className="block text-sm font-medium">
-              {t("apartments.apartment_name", "תווית")}
+              {t("apartments.apartment_name", "מספר דירה")}
             </span>
             <input className={inputClass} value={label} onChange={(e) => setLabel(e.target.value)} />
           </label>
@@ -242,6 +244,18 @@ export function ApartmentEditor({
               fieldKey="apartment.mezuzah_status"
               value={mezuzahStatus}
               onChange={setMezuzahStatus}
+            />
+          </label>
+        )}
+        {vis("apartment.language") && (
+          <label className="block space-y-1">
+            <span className="block text-sm font-medium">
+              {t("picklist.apartment.language", "שפה")}
+            </span>
+            <PicklistSelect
+              fieldKey="apartment.language"
+              value={language}
+              onChange={setLanguage}
             />
           </label>
         )}

@@ -73,6 +73,7 @@ TOGGLEABLE_FIELDS: list[tuple[str, str, str]] = [
     ("apartment.Jewish_status", "picklist.apartment.Jewish_status", "apartment"),
     ("apartment.campaign_status", "picklist.apartment.campaign_status", "apartment"),
     ("apartment.mezuzah_status", "picklist.apartment.mezuzah_status", "apartment"),
+    ("apartment.language", "picklist.apartment.language", "apartment"),  # fixes13
 ]
 
 # Fields concealed by default (an explicit field_settings row overrides this).

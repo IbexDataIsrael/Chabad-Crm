@@ -31,6 +31,7 @@ _APARTMENT_PICKLISTS = {
     "jewish_status": "apartment.Jewish_status",
     "campaign_status": "apartment.campaign_status",
     "mezuzah_status": "apartment.mezuzah_status",
+    "language": "apartment.language",  # fixes13
 }
 
 

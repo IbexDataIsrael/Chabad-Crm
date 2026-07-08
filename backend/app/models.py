@@ -419,6 +419,7 @@ class Apartment(Base):
     jewish_status = Column(String(100), nullable=True)  # picklist apartment.Jewish_status
     campaign_status = Column(String(100), nullable=True)  # picklist apartment.campaign_status
     mezuzah_status = Column(String(100), nullable=True)  # picklist apartment.mezuzah_status
+    language = Column(String(100), nullable=True)  # picklist apartment.language (fixes13)
     name = Column(String(150), nullable=True)  # שם דייר (resident)
     phone = Column(String(50), nullable=True)  # טלפון (validated at the API)
     email = Column(String(255), nullable=True)  # אימייל (validated at the API)

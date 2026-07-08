@@ -440,6 +440,7 @@ class ApartmentBase(BaseModel):
     jewish_status: Optional[str] = None
     campaign_status: Optional[str] = None
     mezuzah_status: Optional[str] = None
+    language: Optional[str] = None  # picklist apartment.language (fixes13)
     name: Optional[str] = None  # resident name
     phone: Optional[str] = None
     email: Optional[str] = None
@@ -468,6 +469,7 @@ class ApartmentUpdate(BaseModel):
     jewish_status: Optional[str] = None
     campaign_status: Optional[str] = None
     mezuzah_status: Optional[str] = None
+    language: Optional[str] = None
     name: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
@@ -495,6 +497,7 @@ class ApartmentOut(BaseModel):
     jewish_status: Optional[str] = None
     campaign_status: Optional[str] = None
     mezuzah_status: Optional[str] = None
+    language: Optional[str] = None
     name: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None

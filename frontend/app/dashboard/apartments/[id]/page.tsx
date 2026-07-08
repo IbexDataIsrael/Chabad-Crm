@@ -40,6 +40,7 @@ export default function ApartmentDetailPage() {
   const { labelFor: jewishLabel } = usePicklist("apartment.Jewish_status");
   const { labelFor: campaignLabel } = usePicklist("apartment.campaign_status");
   const { labelFor: mezuzahLabel } = usePicklist("apartment.mezuzah_status");
+  const { labelFor: languageLabel } = usePicklist("apartment.language");
 
   async function reload() {
     const a = await apiFetch<Apartment>(`/api/apartments/${apartmentId}`);
@@ -166,7 +167,7 @@ export default function ApartmentDetailPage() {
             {field(
               "apartments.apartment_name",
               "apartments.apartment_name",
-              "תווית",
+              "מספר דירה",
               apt.apartment_name,
             )}
             {field("apartments.name", "apartments.name", "שם דייר", apt.name)}
@@ -189,6 +190,12 @@ export default function ApartmentDetailPage() {
               "picklist.apartment.mezuzah_status",
               "מזוזה",
               mezuzahLabel(apt.mezuzah_status),
+            )}
+            {field(
+              "apartment.language",
+              "picklist.apartment.language",
+              "שפה",
+              languageLabel(apt.language),
             )}
             {building?.building_address && (
               <div className="sm:col-span-2">

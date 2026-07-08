@@ -59,7 +59,9 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("column", "buildings.longitude", "קו אורך", "Longitude"),
     ("column", "buildings.latitude", "קו רוחב", "Latitude"),
     ("column", "apartments.building_id", "בניין", "Building"),
-    ("column", "apartments.apartment_name", "כותרת", "Title"),
+    # fixes13: the apartment label is its NUMBER (was "כותרת"/"Title"; existing
+    # rows are updated by a one-off data fix since re-seeding never overwrites).
+    ("column", "apartments.apartment_name", "מספר דירה", "Apartment number"),
     ("column", "apartments.apartment_notes", "הערות", "Notes"),
     ("column", "significant_dates.special_date", "תאריך חשוב", "Significant date"),
     ("column", "significant_dates.hebrew_date", "תאריך עברי", "Hebrew date"),
@@ -479,6 +481,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("picklist", "picklist.apartment.Jewish_status", "יהדות", "Jewish status"),
     ("picklist", "picklist.apartment.campaign_status", "סטטוס קמפיין", "Campaign status"),
     ("picklist", "picklist.apartment.mezuzah_status", "מזוזה", "Mezuzah"),
+    ("picklist", "picklist.apartment.language", "שפה", "Language"),
     ("table", "building", "בניין", "Building"),
     ("table", "apartment", "דירה", "Apartment"),
     ("pl", "pl.group_apartment", "דירה", "Apartment"),
@@ -613,7 +616,27 @@ PICKLISTS: list[tuple[str, str, str, str | None, int, bool]] = [
     ("apartment.Jewish_status", "jewish_shtumtz", "יהודי שתומצ", None, 5, False),
     ("apartment.mezuzah_status", "checked", "נבדק", None, 0, False),
     ("apartment.mezuzah_status", "needs_check", "צריך בדיקה", None, 1, False),
+    # fixes13: apartment language picklist (bilingual values below).
+    ("apartment.language", "hebrew", "עברית", None, 0, False),
+    ("apartment.language", "english", "אנגלית", None, 1, False),
+    ("apartment.language", "russian", "רוסית", None, 2, False),
+    ("apartment.language", "yiddish", "יידיש", None, 3, False),
 ]
+
+# English display for picklist OPTION values, keyed by (field_key, value).
+# Applied on insert and backfilled onto existing blank english_value rows
+# (fixes13 — the values themselves are bilingual, not just the list names).
+PICKLIST_ENGLISH_VALUES: dict[tuple[str, str], str] = {
+    ("apartment.language", "hebrew"): "Hebrew",
+    ("apartment.language", "english"): "English",
+    ("apartment.language", "russian"): "Russian",
+    ("apartment.language", "yiddish"): "Yiddish",
+    # The contact-level language list carries the same values.
+    ("language", "hebrew"): "Hebrew",
+    ("language", "english"): "English",
+    ("language", "russian"): "Russian",
+    ("language", "yiddish"): "Yiddish",
+}
 
 # Picklist definition display names (he from PICKLIST_FIELDS; en where known per spec).
 PICKLIST_ENGLISH_DISPLAY: dict[str, str] = {
@@ -624,6 +647,7 @@ PICKLIST_ENGLISH_DISPLAY: dict[str, str] = {
     "apartment.Jewish_status": "Jewish status (apartment)",
     "apartment.campaign_status": "Campaign status",
     "apartment.mezuzah_status": "Mezuzah",
+    "apartment.language": "Language",
 }
 
 
@@ -647,6 +671,17 @@ def seed_system_settings(db: Session) -> None:
         db.commit()
 
 
+# Deliberate renames of previously-seeded labels (fixes13). Re-seeding never
+# overwrites, so each entry force-updates a row — but ONLY while its current
+# text is one of the known old seeds, so admin-customized labels survive.
+LOCALIZATION_RENAMES: dict[str, tuple[set, str, set, str]] = {
+    # key: (old hebrew variants, new hebrew, old english variants, new english)
+    "apartments.apartment_name": (
+        {"כותרת", "תווית"}, "מספר דירה", {"Title", "Label"}, "Apartment number",
+    ),
+}
+
+
 def seed_localization(db: Session) -> None:
     """Insert any missing global localization rows; backfill English on existing rows.
 
@@ -656,6 +691,17 @@ def seed_localization(db: Session) -> None:
     rows = {r.technical_name: r for r in db.query(models.FieldLocalization).all()}
     seen: set[str] = set()
     dirty = False
+
+    for key, (old_he, new_he, old_en, new_en) in LOCALIZATION_RENAMES.items():
+        row = rows.get(key)
+        if row is None:
+            continue
+        if row.hebrew_label in old_he:
+            row.hebrew_label = new_he
+            dirty = True
+        if row.english_label in old_en:
+            row.english_label = new_en
+            dirty = True
     for entity_type, technical_name, hebrew_label, english_label in LOCALIZATION:
         if technical_name in seen:
             continue  # guard against an accidental duplicate key in the list
@@ -694,6 +740,7 @@ def seed_picklists(db: Session, organization_id: int) -> None:
             field_key=field_key,
             value=value,
             hebrew_label=hebrew_label,
+            english_value=PICKLIST_ENGLISH_VALUES.get((field_key, value)),
             color_hint=color_hint,
             sort_order=sort_order,
             is_default=is_default,
@@ -703,6 +750,29 @@ def seed_picklists(db: Session, organization_id: int) -> None:
     ]
     if new_rows:
         db.add_all(new_rows)
+        db.commit()
+
+
+def backfill_picklist_english_values(db: Session, organization_id: int) -> None:
+    """Fill english_value on existing options where the seed knows it and the
+    org hasn't set one (idempotent; admin-entered values are never touched)."""
+    dirty = False
+    for (field_key, value), english in PICKLIST_ENGLISH_VALUES.items():
+        rows = (
+            db.query(models.PicklistValue)
+            .filter(
+                models.PicklistValue.organization_id == organization_id,
+                models.PicklistValue.field_key == field_key,
+                models.PicklistValue.value == value,
+                (models.PicklistValue.english_value.is_(None))
+                | (models.PicklistValue.english_value == ""),
+            )
+            .all()
+        )
+        for row in rows:
+            row.english_value = english
+            dirty = True
+    if dirty:
         db.commit()
 
 
@@ -762,6 +832,7 @@ def seed_default_options_for_empty_lists(db: Session, organization_id: int) -> N
             field_key=field_key,
             value=value,
             hebrew_label=hebrew_label,
+            english_value=PICKLIST_ENGLISH_VALUES.get((field_key, value)),
             color_hint=color_hint,
             sort_order=sort_order,
             is_default=is_default,
@@ -970,6 +1041,7 @@ def seed_all(db: Session) -> None:
     for (org_id,) in db.query(models.Organization.id).all():
         seed_picklist_definitions(db, org_id)
         seed_default_options_for_empty_lists(db, org_id)
+        backfill_picklist_english_values(db, org_id)
 
     if not settings.seed_demo_data:
         return

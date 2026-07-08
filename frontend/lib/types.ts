@@ -154,6 +154,7 @@ export interface Apartment {
   jewish_status: string | null;
   campaign_status: string | null;
   mezuzah_status: string | null;
+  language: string | null; // picklist apartment.language (fixes13)
   name: string | null; // resident name
   phone: string | null;
   email: string | null;
