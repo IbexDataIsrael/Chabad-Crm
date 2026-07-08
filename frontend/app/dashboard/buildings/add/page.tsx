@@ -38,12 +38,30 @@ function AddBuildingInner() {
   const [address, setAddress] = useState("");
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
+  // fixes11 §2.4: one "longitude,latitude" text box instead of two inputs.
+  const [coords, setCoords] = useState("");
   // fixes8 §1A: new buildings start with 8 floors unless the user overrides.
   const [numFloors, setNumFloors] = useState("8");
   const [error, setError] = useState("");
   // Geofence interceptor (fixes7 §7B).
   const [geoWarning, setGeoWarning] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  function onCoordsChange(v: string) {
+    setCoords(v);
+    setGeoWarning(false);
+    const parts = v.split(",").map((s) => s.trim());
+    const parsedLng = Number(parts[0]);
+    const parsedLat = Number(parts[1]);
+    const ok =
+      parts.length === 2 &&
+      parts[0] !== "" &&
+      parts[1] !== "" &&
+      Number.isFinite(parsedLng) &&
+      Number.isFinite(parsedLat);
+    setLng(ok ? parsedLng : null);
+    setLat(ok ? parsedLat : null);
+  }
 
   // Non-admins can't create buildings — bounce them back to the list.
   useEffect(() => {
@@ -159,37 +177,31 @@ function AddBuildingInner() {
                   setAddress(a);
                   setLat(null);
                   setLng(null);
+                  setCoords("");
                   setGeoWarning(false);
                 }}
                 onPlace={(p) => {
                   setAddress(p.address);
                   setLat(roundCoord(p.lat));
                   setLng(roundCoord(p.lng));
+                  setCoords(`${roundCoord(p.lng)},${roundCoord(p.lat)}`);
                   setGeoWarning(false);
                 }}
               />
             </div>
-            <label className="block space-y-1">
-              <span className="block text-sm font-medium">{t("buildings.latitude", "קו רוחב")}</span>
+            {/* fixes11 §2.4: one combined longitude,latitude input. */}
+            <label className="block space-y-1 sm:col-span-2">
+              <span className="block text-sm font-medium">{t("buildings.coords", "קואורדינטות")}</span>
               <input
-                type="number"
-                step="any"
                 dir="ltr"
                 className={inputClass}
-                value={lat ?? ""}
-                onChange={(e) => setLat(e.target.value === "" ? null : Number(e.target.value))}
+                placeholder="longitude,latitude"
+                value={coords}
+                onChange={(e) => onCoordsChange(e.target.value)}
               />
-            </label>
-            <label className="block space-y-1">
-              <span className="block text-sm font-medium">{t("buildings.longitude", "קו אורך")}</span>
-              <input
-                type="number"
-                step="any"
-                dir="ltr"
-                className={inputClass}
-                value={lng ?? ""}
-                onChange={(e) => setLng(e.target.value === "" ? null : Number(e.target.value))}
-              />
+              <span className="block text-xs text-gray-400">
+                {t("buildings.coords_hint", "פורמט: longitude,latitude — לדוגמה 35.2137,31.7683")}
+              </span>
             </label>
             <label className="block space-y-1">
               <span className="block text-sm font-medium">{t("buildings.num_floors", "מספר קומות")}</span>

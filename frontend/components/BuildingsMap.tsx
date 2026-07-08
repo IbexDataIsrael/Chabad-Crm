@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef } from "react";
 
 import { loadGoogleMaps, mapsKey } from "@/lib/maps";
 import { useLocalization } from "@/lib/localization";
-import { buildingDisplayName, type Building } from "@/lib/types";
+import { buildingDisplayName, type Area, type Building } from "@/lib/types";
+import { geoJSONToPath, ZONE_COLORS } from "./AreasMap";
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) =>
@@ -14,10 +15,18 @@ function escapeHtml(s: string): string {
 
 /**
  * A Google map plotting every building that has coordinates, with a marker per
- * building (click → name/address + link to its detail page). Fits the view to
- * all markers. Degrades to a message when no Maps key or no located buildings.
+ * building (click → name/address + link to its detail page). All of the org's
+ * geo-fence polygons are overlaid under the markers (fixes11 §2.5). Fits the
+ * view to all markers. Degrades to a message when no Maps key or no located
+ * buildings.
  */
-export function BuildingsMap({ buildings }: { buildings: Building[] }) {
+export function BuildingsMap({
+  buildings,
+  areas = [],
+}: {
+  buildings: Building[];
+  areas?: Area[];
+}) {
   const { t } = useLocalization();
   const ref = useRef<HTMLDivElement>(null);
 
@@ -25,10 +34,18 @@ export function BuildingsMap({ buildings }: { buildings: Building[] }) {
     () => buildings.filter((b) => b.latitude != null && b.longitude != null),
     [buildings],
   );
-  // Stable dependency so the map only rebuilds when the located set changes.
-  const signature = located
-    .map((b) => `${b.id}:${b.latitude},${b.longitude}`)
-    .join("|");
+  const zones = useMemo(
+    () =>
+      areas
+        .map((a) => (a.area_polygon ? geoJSONToPath(a.area_polygon) : null))
+        .filter((p): p is { lat: number; lng: number }[] => !!p && p.length >= 3),
+    [areas],
+  );
+  // Stable dependency so the map only rebuilds when the plotted set changes.
+  const signature =
+    located.map((b) => `${b.id}:${b.latitude},${b.longitude}`).join("|") +
+    "@" +
+    zones.map((z) => z.length).join(",");
 
   useEffect(() => {
     if (!mapsKey || !ref.current || located.length === 0) return;
@@ -42,6 +59,19 @@ export function BuildingsMap({ buildings }: { buildings: Building[] }) {
         });
         const bounds = new g.maps.LatLngBounds();
         const info = new g.maps.InfoWindow();
+        // Geo-fence overlays render under the building markers (fixes11 §2.5).
+        zones.forEach((path, i) => {
+          const color = ZONE_COLORS[i % ZONE_COLORS.length];
+          new g.maps.Polygon({
+            paths: path,
+            map,
+            fillColor: color,
+            fillOpacity: 0.12,
+            strokeColor: color,
+            strokeWeight: 2,
+            clickable: false,
+          });
+        });
         located.forEach((b) => {
           const pos = { lat: b.latitude as number, lng: b.longitude as number };
           const display = buildingDisplayName(b);

@@ -11,12 +11,12 @@ import type { Area } from "@/lib/types";
 const DEFAULT_CENTER = { lat: 40.5862, lng: -73.9442 };
 
 // A small qualitative palette so adjacent zones are tellable apart.
-const ZONE_COLORS = ["#d6249f", "#1faa00", "#ff7a00", "#2563eb", "#8b0000", "#f2c200"];
+export const ZONE_COLORS = ["#d6249f", "#1faa00", "#ff7a00", "#2563eb", "#8b0000", "#f2c200"];
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /** Parse a GeoJSON Polygon string into a {lat,lng}[] ring (drops the closing point). */
-function geoJSONToPath(geojson: string): { lat: number; lng: number }[] | null {
+export function geoJSONToPath(geojson: string): { lat: number; lng: number }[] | null {
   try {
     const obj = JSON.parse(geojson);
     const ring = obj?.coordinates?.[0];

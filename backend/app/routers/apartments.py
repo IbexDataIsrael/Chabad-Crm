@@ -112,6 +112,13 @@ def list_apartments(
     query = db.query(models.Apartment).filter(
         models.Apartment.organization_id == current_user.organization_id
     )
+    # fixes11 §1.2: a shliach only gets the apartments they cover (the enriched
+    # /list endpoint was already scoped; the plain list feeds the pickers).
+    if current_user.role == "shliach":
+        ids = _shliach_apartment_ids(db, current_user)
+        if not ids:
+            return []
+        query = query.filter(models.Apartment.id.in_(ids))
     if building_id is not None:
         query = query.filter(models.Apartment.building_id == building_id)
     if q:

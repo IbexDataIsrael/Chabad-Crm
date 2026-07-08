@@ -7,7 +7,7 @@ shliach also provisions a login `User` (role 'shliach') linked by email.
 Shliach users see only mekuravim in apartments they cover (scoped reads).
 """
 import logging
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -373,11 +373,15 @@ def list_contacts_paginated(
     pipeline_status: Optional[str] = None,
     contact_type: Optional[str] = None,
     assigned_user_id: Optional[str] = None,
+    sort: Literal["name", "created"] = "name",
+    dir: Literal["asc", "desc"] = "asc",
     page: int = Query(1, ge=1),
     page_size: int = Query(20),
 ):
     """One server-side page of contacts (same fixes8 §2C pattern as the
-    apartments list) — the contacts page uses this instead of the full dump."""
+    apartments list) — the contacts page uses this instead of the full dump.
+    Sorting (fixes11 §2.3): alphabetical (`name`) or `created` (creation date);
+    the page's default presentation is created-descending."""
     if page_size not in (20, 50, 100):
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY, "page_size must be 20, 50 or 100"
@@ -386,8 +390,11 @@ def list_contacts_paginated(
         db, current_user, pipeline_status, contact_type, assigned_user_id
     )
     total = query.count()
+    key = models.Contact.created_at if sort == "created" else models.Contact.name
     rows = (
-        query.order_by(models.Contact.name, models.Contact.id)
+        query.order_by(
+            key.desc() if dir == "desc" else key.asc(), models.Contact.id
+        )
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()

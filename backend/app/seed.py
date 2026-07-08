@@ -529,6 +529,15 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("admin", "admin.delete_org_warning", "האם אתה בטוח שברצונך למחוק את הארגון וכל הנתונים שלו? פעולה זו אינה הפיכה.", "Are you sure you want to delete this organization and all of its data? This action is irreversible."),
     ("admin", "admin.delete_org_type_to_confirm", "לאישור, הקלד את שם הארגון במדויק (או DELETE):", "To confirm, type the organization's exact name (or DELETE):"),
     ("admin", "admin.delete_org_confirm", "מחק לצמיתות", "Delete permanently"),
+    # --- fixes11: shliach header suffix + contacts owner filter/sort ---
+    ("header", "header.shliach_display_suffix", "תצוגת פעילים", "Activists view"),
+    ("filter", "filter.by_assigned", "משויך ל:", "Assigned to:"),
+    ("filter", "filter.all_users", "כל המשתמשים", "All users"),
+    ("sort", "sort.created", "תאריך יצירה", "Creation date"),
+    ("sort", "sort.by_name", "שם", "Name"),
+    ("apt", "apt.none_covered", "אין דירות משויכות אליך.", "No apartments are assigned to you."),
+    ("column", "contacts.created_at", "נוצר בתאריך", "Created on"),
+    ("buildings", "buildings.coords_hint", "פורמט: longitude,latitude — לדוגמה 35.2137,31.7683", "Format: longitude,latitude — e.g. 35.2137,31.7683"),
     # --- fixes7 §7: areas map + geofence ---
     ("areas", "areas.map_all", "מפת האזורים", "Areas map"),
     ("areas", "areas.view_area", "הצג אזור »", "View area »"),

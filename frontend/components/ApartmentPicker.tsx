@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import {
   apartmentTitle,
@@ -28,6 +29,9 @@ export function ApartmentPicker({
   onChange: (apartmentId: number | null) => void;
 }) {
   const { t } = useLocalization();
+  // fixes11 §1.2: shliach users get a flat, server-scoped apartment list —
+  // no building dropdown, no inline creation.
+  const { isShliach } = useAuth();
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [buildingId, setBuildingId] = useState<number | "">("");
   const [apartments, setApartments] = useState<Apartment[]>([]);
@@ -38,6 +42,13 @@ export function ApartmentPicker({
 
   // Load buildings, and resolve the current apartment's building when editing.
   useEffect(() => {
+    if (isShliach) {
+      // Server scopes the plain list to the shliach's covered apartments.
+      apiFetch<Apartment[]>("/api/apartments")
+        .then(setApartments)
+        .catch(() => setApartments([]));
+      return;
+    }
     let active = true;
     (async () => {
       try {
@@ -56,10 +67,11 @@ export function ApartmentPicker({
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isShliach]);
 
-  // Load apartments whenever the selected building changes.
+  // Load apartments whenever the selected building changes (admin/staff flow).
   useEffect(() => {
+    if (isShliach) return;
     if (buildingId === "") {
       setApartments([]);
       return;
@@ -67,7 +79,7 @@ export function ApartmentPicker({
     apiFetch<Apartment[]>(`/api/apartments?building_id=${buildingId}`)
       .then(setApartments)
       .catch(() => setApartments([]));
-  }, [buildingId]);
+  }, [buildingId, isShliach]);
 
   async function createApartment() {
     setError("");
@@ -89,6 +101,31 @@ export function ApartmentPicker({
     } catch (err) {
       setError(err instanceof Error ? err.message : t("apt.add_failed", "הוספת דירה נכשלה"));
     }
+  }
+
+  if (isShliach) {
+    // Flat, coverage-scoped select — no building navigation (fixes11 §1.2).
+    if (apartments.length === 0) {
+      return (
+        <p className="text-sm text-gray-500">
+          {t("apt.none_covered", "אין דירות משויכות אליך.")}
+        </p>
+      );
+    }
+    return (
+      <select
+        className={inputClass}
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+      >
+        <option value="">{t("apt.choose_apartment", "בחר דירה…")}</option>
+        {apartments.map((a) => (
+          <option key={a.id} value={a.id}>
+            {apartmentTitle(a)}
+          </option>
+        ))}
+      </select>
+    );
   }
 
   if (buildings.length === 0) {

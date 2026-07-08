@@ -73,7 +73,15 @@ function DashboardChrome({ children }: { children: ReactNode }) {
                   🏢
                 </span>
               )}
-              <span className="text-lg font-bold">{orgName}</span>
+              <span className="text-lg font-bold">
+                {orgName}
+                {/* fixes11 §1.1: shliach sessions carry a localized suffix. */}
+                {isShliach && (
+                  <span className="ms-2 text-base font-medium text-gray-500">
+                    {t("header.shliach_display_suffix", "תצוגת פעילים")}
+                  </span>
+                )}
+              </span>
             </Link>
             <nav className="flex flex-wrap items-center gap-x-1 gap-y-1 text-sm">
               {isSuperadmin ? (

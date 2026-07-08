@@ -29,6 +29,7 @@ export interface Organization {
 
 export interface User {
   id: number;
+  guid: string; // contact-assignment key (fixes10/11)
   username: string;
   full_name: string;
   role: string;

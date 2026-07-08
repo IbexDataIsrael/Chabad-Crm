@@ -72,6 +72,11 @@ export function ContactView({
     ],
     ["contacts.priority_score", t("contacts.priority_score", "ציון עדיפות"), contact.priority_score ?? "—"],
     ["contacts.address", t("contacts.address", "כתובת"), contact.address || "—"],
+    [
+      null,
+      t("contacts.created_at", "נוצר בתאריך"),
+      <span dir="ltr" key="cr">{new Date(contact.created_at).toLocaleDateString("he-IL")}</span>,
+    ],
   ];
 
   const mekuravFields: [string | null, string, ReactNode][] = mk

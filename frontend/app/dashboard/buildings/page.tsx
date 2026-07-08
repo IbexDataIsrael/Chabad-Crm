@@ -43,14 +43,13 @@ export default function BuildingsPage() {
     await loadBuildings(filterArea);
   }
 
-  // Boot (fixes8 §2A): land pre-filtered on the first area, not the whole org.
+  // Boot: default to הכל — all buildings (fixes11 §2.6 reverses the fixes8
+  // first-area default for this page); fetching stays lazy per filter change.
   useEffect(() => {
     (async () => {
       const a = await apiFetch<Area[]>("/api/areas");
       setAreas(a);
-      const areaId = a.length > 0 ? String(a[0].id) : "";
-      setFilterArea(areaId);
-      await loadBuildings(areaId);
+      await loadBuildings("");
     })().catch(() => {});
   }, []);
 
@@ -122,7 +121,8 @@ export default function BuildingsPage() {
 
       {buildings.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm p-2">
-          <BuildingsMap buildings={buildings} />
+          {/* fixes11 §2.5: geo-fence polygons overlay the building markers. */}
+          <BuildingsMap buildings={buildings} areas={areas} />
         </div>
       )}
 
@@ -493,11 +493,33 @@ function BuildingEditor({
   const [address, setAddress] = useState(building.building_address ?? "");
   const [lat, setLat] = useState<number | null>(roundCoord(building.latitude));
   const [lng, setLng] = useState<number | null>(roundCoord(building.longitude));
+  // fixes11 §2.4: one "longitude,latitude" text box instead of two inputs.
+  const [coords, setCoords] = useState(() =>
+    building.longitude != null && building.latitude != null
+      ? `${roundCoord(building.longitude)},${roundCoord(building.latitude)}`
+      : "",
+  );
   const [error, setError] = useState("");
   // Geofence interceptor (fixes7 §7B): outside-the-zone saves need an explicit
   // second confirmation.
   const [geoWarning, setGeoWarning] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  function onCoordsChange(v: string) {
+    setCoords(v);
+    setGeoWarning(false);
+    const parts = v.split(",").map((s) => s.trim());
+    const parsedLng = Number(parts[0]);
+    const parsedLat = Number(parts[1]);
+    const ok =
+      parts.length === 2 &&
+      parts[0] !== "" &&
+      parts[1] !== "" &&
+      Number.isFinite(parsedLng) &&
+      Number.isFinite(parsedLat);
+    setLng(ok ? parsedLng : null);
+    setLat(ok ? parsedLat : null);
+  }
 
   const inputClass =
     "w-full rounded-md border border-gray-300 px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
@@ -576,37 +598,31 @@ function BuildingEditor({
               setAddress(a);
               setLat(null);
               setLng(null);
+              setCoords("");
               setGeoWarning(false);
             }}
             onPlace={(p) => {
               setAddress(p.address);
               setLat(roundCoord(p.lat));
               setLng(roundCoord(p.lng));
+              setCoords(`${roundCoord(p.lng)},${roundCoord(p.lat)}`);
               setGeoWarning(false);
             }}
           />
         </div>
-        <label className="block space-y-1">
-          <span className="block text-sm font-medium">{t("buildings.latitude", "קו רוחב")}</span>
+        {/* fixes11 §2.4: one combined longitude,latitude input. */}
+        <label className="block space-y-1 sm:col-span-2">
+          <span className="block text-sm font-medium">{t("buildings.coords", "קואורדינטות")}</span>
           <input
-            type="number"
-            step="any"
             dir="ltr"
             className={inputClass}
-            value={lat ?? ""}
-            onChange={(e) => setLat(e.target.value === "" ? null : Number(e.target.value))}
+            placeholder="longitude,latitude"
+            value={coords}
+            onChange={(e) => onCoordsChange(e.target.value)}
           />
-        </label>
-        <label className="block space-y-1">
-          <span className="block text-sm font-medium">{t("buildings.longitude", "קו אורך")}</span>
-          <input
-            type="number"
-            step="any"
-            dir="ltr"
-            className={inputClass}
-            value={lng ?? ""}
-            onChange={(e) => setLng(e.target.value === "" ? null : Number(e.target.value))}
-          />
+          <span className="block text-xs text-gray-400">
+            {t("buildings.coords_hint", "פורמט: longitude,latitude — לדוגמה 35.2137,31.7683")}
+          </span>
         </label>
       </div>
 
