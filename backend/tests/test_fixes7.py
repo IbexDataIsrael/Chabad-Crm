@@ -307,9 +307,11 @@ class TestFieldSettingDefaults:
         assert by_key["buildings.building_name"]["entity"] == "building"
         assert by_key["apartments.floor"]["entity"] == "apartment"
         assert by_key["apartment.mezuzah_status"]["entity"] == "apartment"
-        # Names are hidden by default (fixes7) …
+        # The building name is hidden by default (fixes7); the apartment label
+        # is visible again (post-fixes12 hotfix — hiding it removed the field
+        # from the forms and apartments were saved nameless).
         assert by_key["buildings.building_name"]["is_visible"] is False
-        assert by_key["apartments.apartment_name"]["is_visible"] is False
+        assert by_key["apartments.apartment_name"]["is_visible"] is True
         # … and can be restored on demand.
         r = client.put(
             "/api/field-settings",

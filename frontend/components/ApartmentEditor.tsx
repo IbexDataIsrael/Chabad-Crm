@@ -158,6 +158,17 @@ export function ApartmentEditor({
             ))}
           </select>
         </label>
+        {/* The apartment label (apartment_name) renders before the floor so
+            the two can't be conflated — the label is the apartment's identity,
+            the floor is where it sits. */}
+        {vis("apartments.apartment_name") && (
+          <label className="block space-y-1">
+            <span className="block text-sm font-medium">
+              {t("apartments.apartment_name", "תווית")}
+            </span>
+            <input className={inputClass} value={label} onChange={(e) => setLabel(e.target.value)} />
+          </label>
+        )}
         {vis("apartments.floor") && (
           <label className="block space-y-1">
             <span className="block text-sm font-medium">{t("apartments.floor", "קומה")}</span>
@@ -174,14 +185,6 @@ export function ApartmentEditor({
                 </option>
               ))}
             </select>
-          </label>
-        )}
-        {vis("apartments.apartment_name") && (
-          <label className="block space-y-1">
-            <span className="block text-sm font-medium">
-              {t("apartments.apartment_name", "תווית")}
-            </span>
-            <input className={inputClass} value={label} onChange={(e) => setLabel(e.target.value)} />
           </label>
         )}
         {vis("apartments.name") && (

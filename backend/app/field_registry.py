@@ -76,9 +76,12 @@ TOGGLEABLE_FIELDS: list[tuple[str, str, str]] = [
 ]
 
 # Fields concealed by default (an explicit field_settings row overrides this).
+# apartments.apartment_name was default-hidden in fixes7, which removed the
+# label input from the apartment forms entirely — apartments were then saved
+# nameless and their computed title collapsed to the bare floor number. It is
+# visible by default again (hotfix after fixes12).
 DEFAULT_HIDDEN: set[str] = {
     "buildings.building_name",
-    "apartments.apartment_name",
 }
 
 TOGGLEABLE_KEYS: set[str] = {f[0] for f in TOGGLEABLE_FIELDS}
