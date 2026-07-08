@@ -168,6 +168,14 @@ export interface ApartmentListItem extends Apartment {
   contact_name: string | null;
 }
 
+/** One server-side page of the buildings list (fixes12 §3.3). */
+export interface BuildingPage {
+  items: Building[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 /** One server-side page of the enriched apartment list (fixes8 §2C). */
 export interface ApartmentPage {
   items: ApartmentListItem[];

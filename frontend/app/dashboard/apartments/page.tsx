@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { ApartmentEditor } from "@/components/ApartmentEditor";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
@@ -51,7 +50,6 @@ export default function ApartmentsPage() {
   const [dir, setDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [adding, setAdding] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false);
   const [busy, setBusy] = useState(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -82,21 +80,15 @@ export default function ApartmentsPage() {
     return list;
   }
 
-  // Boot (fixes8 §2A): land pre-filtered on the first area (fallback: first
-  // building) instead of loading the whole org. Shliach users skip the default
-  // — their list is already server-scoped to the apartments they cover, and a
-  // default area could hide all of them.
+  // Boot: default to Show All (fixes12 §2.1 reverses the fixes8 first-area
+  // default); fetching stays lazy and server-paginated per filter change.
   useEffect(() => {
     if (loading) return;
     (async () => {
       const a = await apiFetch<Area[]>("/api/areas").catch(() => [] as Area[]);
       setAreas(a);
-      const areaId = !isShliach && a.length > 0 ? String(a[0].id) : "";
-      const bs = await loadBuildings(areaId);
-      const buildingId = !isShliach && !areaId && bs.length > 0 ? String(bs[0].id) : "";
-      setFilterArea(areaId);
-      setFilterBuilding(buildingId);
-      await reload({ areaId, buildingId, page: 1 });
+      await loadBuildings("");
+      await reload({ areaId: "", buildingId: "", page: 1 });
     })()
       .catch(() => setItems([]))
       .finally(() => setBusy(false));
@@ -171,14 +163,13 @@ export default function ApartmentsPage() {
                 {t("batch.open", "יצירה מרובה")}
               </button>
             )}
-            {!adding && (
-              <button
-                onClick={() => setAdding(true)}
-                className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
-              >
-                + {t("apt.add_apartment", "הוסף דירה")}
-              </button>
-            )}
+            {/* Dedicated add route (fixes12 §2.2). */}
+            <Link
+              href="/dashboard/apartments/add"
+              className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
+            >
+              + {t("apt.add_apartment", "הוסף דירה")}
+            </Link>
           </div>
         )}
       </div>
@@ -261,18 +252,6 @@ export default function ApartmentsPage() {
             await reload();
           }}
         />
-      )}
-
-      {adding && (
-        <div className="bg-white rounded-xl shadow-sm p-4">
-          <ApartmentEditor
-            onClose={() => setAdding(false)}
-            onSaved={async () => {
-              setAdding(false);
-              await reload();
-            }}
-          />
-        </div>
       )}
 
       <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">

@@ -538,6 +538,16 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("apt", "apt.none_covered", "אין דירות משויכות אליך.", "No apartments are assigned to you."),
     ("column", "contacts.created_at", "נוצר בתאריך", "Created on"),
     ("buildings", "buildings.coords_hint", "פורמט: longitude,latitude — לדוגמה 35.2137,31.7683", "Format: longitude,latitude — e.g. 35.2137,31.7683"),
+    # --- fixes12: previously-unseeded strings + new routes/modal ---
+    ("page", "page.show_apartments", "הצג דירות", "Show apartments"),
+    ("page", "page.hide_apartments", "הסתר דירות", "Hide apartments"),
+    ("apt", "apt.delete_confirm", "למחוק את הדירה?", "Delete this apartment?"),
+    ("confirm", "confirm.title", "אישור פעולה", "Confirm action"),
+    ("action", "action.confirm", "אישור", "Confirm"),
+    ("page", "page.back_to_building", "← חזרה לבניין", "← Back to building"),
+    ("page", "page.edit_building_full", "עריכת בניין ודירות", "Edit building & apartments"),
+    ("apt", "apt.new_apartment_title", "דירה חדשה", "New apartment"),
+    ("page", "page.back_to_apartments", "← חזרה לדירות", "← Back to apartments"),
     # --- fixes7 §7: areas map + geofence ---
     ("areas", "areas.map_all", "מפת האזורים", "Areas map"),
     ("areas", "areas.view_area", "הצג אזור »", "View area »"),

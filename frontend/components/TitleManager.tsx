@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
@@ -17,6 +18,9 @@ const ORG_NAME_PLACEHOLDER = "{public.organizations.name}";
  *  name, or the configured fallback name when no org name is available. */
 export function TitleManager() {
   const { user } = useAuth();
+  // fixes12 §1: the App Router re-stamps the static metadata title on every
+  // client-side navigation, wiping the computed one — re-apply per pathname.
+  const pathname = usePathname();
   const [config, setConfig] = useState<SystemConfig | null>(null);
 
   // Public endpoint — fetched once at boot, before login.
@@ -36,7 +40,7 @@ export function TitleManager() {
       ? config.title_template.split(ORG_NAME_PLACEHOLDER).join(orgName).trim()
       : config.fallback_name;
     document.title = title || config.fallback_name;
-  }, [config, user]);
+  }, [config, user, pathname]);
 
   return null;
 }

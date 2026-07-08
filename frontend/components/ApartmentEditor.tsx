@@ -27,10 +27,14 @@ const inputClass =
  */
 export function ApartmentEditor({
   apt,
+  initialBuildingId,
   onClose,
   onSaved,
 }: {
   apt?: Apartment;
+  /** Preselected building for the create flow (fixes12 — used when embedding
+   *  the add view in a building's context via ?building=<id>). */
+  initialBuildingId?: number;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
@@ -39,7 +43,9 @@ export function ApartmentEditor({
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [floors, setFloors] = useState<Floor[]>([]);
-  const [buildingId, setBuildingId] = useState<number | "">(apt?.building_id ?? "");
+  const [buildingId, setBuildingId] = useState<number | "">(
+    apt?.building_id ?? initialBuildingId ?? "",
+  );
   const [label, setLabel] = useState(apt?.apartment_name ?? "");
   const [floor, setFloor] = useState(apt?.floor ?? "");
   const [resident, setResident] = useState(apt?.name ?? "");

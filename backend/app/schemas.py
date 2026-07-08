@@ -411,6 +411,15 @@ class BuildingOut(BaseModel):
     floors: list[FloorOut] = []
 
 
+class BuildingPageOut(BaseModel):
+    """One server-side page of the buildings list (fixes12 §3.3)."""
+
+    items: list[BuildingOut]
+    total: int
+    page: int
+    page_size: int
+
+
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 

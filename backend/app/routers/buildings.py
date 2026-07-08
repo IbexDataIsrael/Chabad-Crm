@@ -2,7 +2,7 @@
 Mutations: admins only. Creating a building can auto-create its floors (fixes7)."""
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app import models
@@ -11,6 +11,7 @@ from app.deps import get_current_user, require_admin
 from app.schemas import (
     BuildingCreate,
     BuildingOut,
+    BuildingPageOut,
     BuildingUpdate,
     FloorCreate,
     FloorOut,
@@ -72,6 +73,35 @@ def list_buildings(
     if area_id is not None:
         query = query.filter(models.Building.area_id == area_id)
     return query.order_by(models.Building.building_address).all()
+
+
+@router.get("/list", response_model=BuildingPageOut)
+def list_buildings_paginated(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+    area_id: Optional[int] = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20),
+):
+    """One server-side page of buildings (fixes12 §3.3, same envelope pattern
+    as contacts/apartments). The plain list keeps feeding the pickers."""
+    if page_size not in (20, 50, 100):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "page_size must be 20, 50 or 100"
+        )
+    query = db.query(models.Building).filter(
+        models.Building.organization_id == current_user.organization_id
+    )
+    if area_id is not None:
+        query = query.filter(models.Building.area_id == area_id)
+    total = query.count()
+    rows = (
+        query.order_by(models.Building.building_address, models.Building.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return BuildingPageOut(items=rows, total=total, page=page, page_size=page_size)
 
 
 @router.post("", response_model=BuildingOut, status_code=status.HTTP_201_CREATED)

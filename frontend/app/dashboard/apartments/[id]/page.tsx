@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { ApartmentEditor } from "@/components/ApartmentEditor";
+import { ConfirmModal } from "@/components/ConfirmModal";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useFieldSettings } from "@/lib/fieldSettings";
@@ -33,7 +33,7 @@ export default function ApartmentDetailPage() {
   const [apt, setApt] = useState<Apartment | null>(null);
   const [building, setBuilding] = useState<Building | null>(null);
   const [linked, setLinked] = useState<{ id: number; name: string } | null>(null);
-  const [editing, setEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
 
@@ -66,9 +66,10 @@ export default function ApartmentDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apartmentId, loading]);
 
+  // Confirmation runs through the localized ConfirmModal (fixes12 §3.1).
   async function remove() {
     if (!apt) return;
-    if (!confirm(`${t("apt.delete_confirm", "למחוק את הדירה?")} '${apartmentTitle(apt)}'`)) return;
+    setConfirmingDelete(false);
     await apiFetch(`/api/apartments/${apt.id}`, { method: "DELETE" });
     success(t("msg.deleted", "נמחק בהצלחה"));
     router.push("/dashboard/apartments");
@@ -110,42 +111,40 @@ export default function ApartmentDetailPage() {
         <Link href="/dashboard/apartments" className="text-sm text-status-magenta hover:underline">
           {t("page.back_to_apartments", "← חזרה לדירות")}
         </Link>
-        {!editing && (
-          <div className="flex items-center gap-2">
-            {!isShliach && (
-              <button
-                onClick={() => setEditing(true)}
-                className="rounded-md bg-gray-800 text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
-              >
-                {t("action.edit", "ערוך")}
-              </button>
-            )}
-            {isAdmin && (
-              <button
-                onClick={remove}
-                className="rounded-md border border-status-darkred/40 text-status-darkred px-3 py-1.5 text-sm hover:bg-red-50"
-              >
-                {t("action.delete", "מחק")}
-              </button>
-            )}
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {/* fixes12 §2.4: this page is a clean read-only reference view —
+              editing lives on the dedicated /apartments/edit/{id} route. */}
+          {!isShliach && (
+            <Link
+              href={`/dashboard/apartments/edit/${apartmentId}?return=${encodeURIComponent(
+                `/dashboard/apartments/${apartmentId}`,
+              )}`}
+              className="rounded-md bg-gray-800 text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
+            >
+              {t("action.edit", "ערוך")}
+            </Link>
+          )}
+          {isAdmin && (
+            <button
+              onClick={() => setConfirmingDelete(true)}
+              className="rounded-md border border-status-darkred/40 text-status-darkred px-3 py-1.5 text-sm hover:bg-red-50"
+            >
+              {t("action.delete", "מחק")}
+            </button>
+          )}
+        </div>
       </div>
 
-      {editing ? (
-        <div className="bg-white rounded-xl shadow-sm p-5">
-          <ApartmentEditor
-            apt={apt}
-            onClose={() => setEditing(false)}
-            onSaved={async () => {
-              setEditing(false);
-              await reload();
-              success(t("msg.saved", "נשמר בהצלחה"));
-            }}
-          />
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl shadow-sm p-5 space-y-3">
+      {confirmingDelete && (
+        <ConfirmModal
+          message={t("apt.delete_confirm", "למחוק את הדירה?")}
+          detail={apartmentTitle(apt)}
+          onCancel={() => setConfirmingDelete(false)}
+          onConfirm={remove}
+        />
+      )}
+
+      <div className="bg-white rounded-xl shadow-sm p-5 space-y-3">
           <h1 className="text-2xl font-bold">{apartmentTitle(apt)}</h1>
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <div>
@@ -205,7 +204,6 @@ export default function ApartmentDetailPage() {
             )}
           </dl>
         </div>
-      )}
 
       {/* Linked contact (mekurav) — name links to their contact page. */}
       <section className="bg-white rounded-xl shadow-sm p-5 space-y-2">

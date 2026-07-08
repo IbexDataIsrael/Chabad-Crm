@@ -18,7 +18,7 @@ import {
 } from "@/lib/types";
 
 export default function BuildingDetailPage() {
-  const { loading } = useAuth();
+  const { isAdmin, loading } = useAuth();
   const { t } = useLocalization();
   const { isFieldVisible } = useFieldSettings();
   const params = useParams<{ id: string }>();
@@ -67,9 +67,20 @@ export default function BuildingDetailPage() {
 
   return (
     <div className="space-y-5 max-w-3xl">
-      <Link href="/dashboard/buildings" className="text-sm text-status-magenta hover:underline">
-        {t("page.back_to_buildings", "← חזרה לבניינים")}
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link href="/dashboard/buildings" className="text-sm text-status-magenta hover:underline">
+          {t("page.back_to_buildings", "← חזרה לבניינים")}
+        </Link>
+        {/* fixes12 §3.2: prominent edit entry point (admins manage buildings). */}
+        {isAdmin && (
+          <Link
+            href={`/dashboard/buildings/edit/${building.id}`}
+            className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
+          >
+            {t("page.edit_building", "עריכת בניין")}
+          </Link>
+        )}
+      </div>
 
       <div className="bg-white rounded-xl shadow-sm p-5 space-y-3">
         <h1 className="text-2xl font-bold">{display}</h1>
