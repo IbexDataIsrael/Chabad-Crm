@@ -10,11 +10,13 @@ import logging
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app import models
 from app.core.email import send_shliach_welcome
 from app.core.geocode import geocode_address
+from app.core.security import hash_password
 from app.database import get_db
 from app.deps import get_current_user
 from app.picklist_utils import validate_picklist_value
@@ -245,16 +247,94 @@ def _sd_out(sd: models.SignificantDate) -> SignificantDateOut:
 
 
 # --- Shliach login provisioning --------------------------------------------
+def _check_shliach_email_unique(
+    db: Session, org_id: int, email: str, exclude_contact_id: Optional[int] = None
+) -> None:
+    """fixes14: one shliach contact per email within an organization (the same
+    email may exist in *other* organizations)."""
+    query = db.query(models.Contact).filter(
+        models.Contact.organization_id == org_id,
+        models.Contact.contact_type == "shliach",
+        func.lower(models.Contact.email) == email.strip().lower(),
+    )
+    if exclude_contact_id is not None:
+        query = query.filter(models.Contact.id != exclude_contact_id)
+    if query.first():
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "כתובת אימייל זו כבר משויכת לפעיל אחר בארגון"
+        )
+
+
+def _sync_user_email(db: Session, user: models.User, email: Optional[str]) -> None:
+    """fixes14: keep the shliach's login identity in step with the contact
+    email. An empty contact email never blanks the login (it's the auth
+    identity). The username follows only when it *was* the email."""
+    email = email.strip().lower() if email else None
+    if not email or email == (user.email or "").lower():
+        return
+    dup = (
+        db.query(models.User)
+        .filter(
+            models.User.organization_id == user.organization_id,
+            func.lower(models.User.email) == email,
+            models.User.id != user.id,
+        )
+        .first()
+    )
+    if dup:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "כתובת אימייל זו כבר בשימוש אצל משתמש אחר בארגון",
+        )
+    if user.username == user.email:
+        username_taken = (
+            db.query(models.User)
+            .filter(
+                models.User.organization_id == user.organization_id,
+                models.User.username == email,
+                models.User.id != user.id,
+            )
+            .first()
+        )
+        if not username_taken:
+            user.username = email
+    user.email = email
+
+
 def _provision_shliach_user(
-    db: Session, org_id: int, contact: models.Contact
+    db: Session, org_id: int, contact: models.Contact,
+    password: Optional[str] = None,
 ) -> Optional[models.User]:
-    """Create (or reuse) a login User with role 'shliach' for this contact."""
+    """Create (or reuse) a login User with role 'shliach' for this contact.
+
+    The reuse lookup is org-scoped (fixes14): the same email in another
+    organization is a different account and must never be linked across
+    tenants. A same-org user already serving a different shliach contact
+    is rejected — one login per shliach."""
     if not contact.email:
         return None
     existing = (
-        db.query(models.User).filter(models.User.email == contact.email).first()
+        db.query(models.User)
+        .filter(
+            func.lower(models.User.email) == contact.email.strip().lower(),
+            models.User.organization_id == org_id,
+        )
+        .first()
     )
     if existing:
+        linked_elsewhere = (
+            db.query(models.ContactShliach)
+            .filter(
+                models.ContactShliach.user_id == existing.id,
+                models.ContactShliach.contact_id != contact.id,
+            )
+            .first()
+        )
+        if linked_elsewhere:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "כתובת אימייל זו כבר משויכת לפעיל אחר בארגון",
+            )
         return existing
     full_name = " ".join(filter(None, [contact.last_name, contact.name]))
     user = models.User(
@@ -265,7 +345,8 @@ def _provision_shliach_user(
         first_name=contact.name,
         last_name=contact.last_name,
         phone=contact.phone,
-        password_hash=None,  # Google-login only
+        # fixes14: without a password the account is Google-only.
+        password_hash=hash_password(password) if password else None,
         role="shliach",
         is_active=True,
         email_verified=True,
@@ -430,6 +511,8 @@ def create_contact(
     _validate_picklists(data, org_id, db)
     if data.get("phone"):
         _check_phone_unique(db, org_id, data["phone"])
+    if data.get("contact_type") == "shliach" and data.get("email"):
+        _check_shliach_email_unique(db, org_id, data["email"])
     _geocode_fallback(data)
 
     contact = models.Contact(**data, organization_id=org_id)
@@ -443,7 +526,9 @@ def create_contact(
             contact_id=contact.id,
             notes=sh.notes if sh else None,
         )
-        user = _provision_shliach_user(db, org_id, contact)
+        user = _provision_shliach_user(
+            db, org_id, contact, password=sh.password if sh else None
+        )
         if user:
             shliach.user_id = user.id
         db.add(shliach)
@@ -523,6 +608,10 @@ def update_contact(
     _geocode_fallback(data)
     for field, value in data.items():
         setattr(contact, field, value)
+    if contact.contact_type == "shliach" and data.get("email"):
+        _check_shliach_email_unique(
+            db, org_id, contact.email, exclude_contact_id=contact.id
+        )
 
     if payload.mekurav is not None and contact.contact_type == "mekurav":
         mk_data = payload.mekurav.model_dump(exclude_unset=True)
@@ -552,16 +641,25 @@ def update_contact(
         if sh_data.notes is not None:
             contact.shliach.notes = sh_data.notes
         if contact.shliach.user_id is None:
-            user = _provision_shliach_user(db, org_id, contact)
+            user = _provision_shliach_user(
+                db, org_id, contact, password=sh_data.password
+            )
             if user:
                 contact.shliach.user_id = user.id
+        elif sh_data.password:
+            # fixes14: let the admin (re)set the shliach's login password —
+            # without one the account is Google-only and may be locked out.
+            login_user = db.get(models.User, contact.shliach.user_id)
+            if login_user:
+                login_user.password_hash = hash_password(sh_data.password)
         _set_shliach_apartments(db, contact.shliach, sh_data.apartment_ids, org_id)
         _set_shliach_areas(db, contact.shliach, sh_data.area_ids, org_id)
 
     # Keep the shliach's *login user* in sync with the contact. The user's
     # full_name (shown in their own session) is a separate field from the
     # contact name an admin edits — without this, the shliach kept seeing the
-    # old name after an admin renamed them.
+    # old name after an admin renamed them. fixes14: the email (the login
+    # identity itself) is synced too.
     if (
         contact.contact_type == "shliach"
         and contact.shliach
@@ -576,6 +674,7 @@ def update_contact(
             user.first_name = contact.name
             user.last_name = contact.last_name
             user.phone = contact.phone
+            _sync_user_email(db, user, contact.email)
 
     if payload.picklist_values is not None:
         _apply_picklist_values(db, org_id, contact, payload.picklist_values)

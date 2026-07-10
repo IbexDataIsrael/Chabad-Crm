@@ -36,10 +36,11 @@ def test_register_login_and_me(client):
     assert me.json()["organization"]["id"] == r.json()["organization_id"]
 
 
-def test_duplicate_email_rejected(client):
-    # Email is globally unique across organizations.
+def test_duplicate_email_allowed_across_orgs(client):
+    # fixes14: email is unique per organization; register creates a brand-new
+    # org each time, so the same email may open accounts in several orgs.
     assert _register(client, "u1", email="a@b.com").status_code == 201
-    assert _register(client, "u2", email="a@b.com").status_code == 400
+    assert _register(client, "u2", email="a@b.com").status_code == 201
 
 
 def test_login_wrong_password(client):

@@ -145,13 +145,31 @@ export async function resendVerification(email: string): Promise<void> {
   });
 }
 
-/** Google Identity Services login: exchange a Google ID token for our JWT. */
-export async function googleLogin(credential: string): Promise<string> {
-  const data = await apiFetch<{ access_token: string }>("/api/auth/google", {
+/** fixes14: one email may belong to several organizations — login then returns
+ * the list to pick from instead of a token, and the client retries with the
+ * chosen `organization_id`. */
+export interface LoginOrgOption {
+  id: number;
+  name: string;
+  logo_url: string | null;
+}
+
+export interface LoginResult {
+  access_token: string | null;
+  requires_org_selection: boolean;
+  organizations: LoginOrgOption[];
+}
+
+/** Google Identity Services login: exchange a Google ID token for our JWT
+ * (or an organization-selection list — see LoginResult). */
+export async function googleLogin(
+  credential: string,
+  organizationId?: number,
+): Promise<LoginResult> {
+  return apiFetch<LoginResult>("/api/auth/google", {
     method: "POST",
-    body: JSON.stringify({ credential }),
+    body: JSON.stringify({ credential, organization_id: organizationId ?? null }),
   });
-  return data.access_token;
 }
 
 /** Google signup: register a new org for approval from a Google identity (no login). */
@@ -170,9 +188,15 @@ export async function googleSignup(
   });
 }
 
-/** OAuth2 password-flow login. Returns the access token. */
-export async function login(username: string, password: string): Promise<string> {
+/** OAuth2 password-flow login. Returns the access token — or an
+ * organization-selection list when the identity spans several orgs (fixes14). */
+export async function login(
+  username: string,
+  password: string,
+  organizationId?: number,
+): Promise<LoginResult> {
   const body = new URLSearchParams({ username, password });
+  if (organizationId != null) body.set("organization_id", String(organizationId));
   const res = await fetch(`${API_URL}/api/auth/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -188,8 +212,7 @@ export async function login(username: string, password: string): Promise<string>
     }
     throw new ApiError(res.status, detail);
   }
-  const data = await res.json();
-  return data.access_token as string;
+  return (await res.json()) as LoginResult;
 }
 
 /** Change the logged-in user's own password. */

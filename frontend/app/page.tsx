@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { ApiError, getToken, resendVerification } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
+import { useAuth, type LoginOrgOption } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { LanguageToggle } from "@/components/LanguageToggle";
@@ -29,6 +29,10 @@ export default function LoginPage() {
   const [unverified, setUnverified] = useState(false);
   const [resendEmail, setResendEmail] = useState("");
   const [busy, setBusy] = useState(false);
+  // fixes14: when the identity spans several orgs, login pauses on a selection
+  // screen. The Google credential is kept for the second (org-scoped) call.
+  const [orgOptions, setOrgOptions] = useState<LoginOrgOption[] | null>(null);
+  const [googleCredential, setGoogleCredential] = useState<string | null>(null);
 
   // Already authenticated → go straight to the intended page (or dashboard).
   useEffect(() => {
@@ -41,7 +45,12 @@ export default function LoginPage() {
     setUnverified(false);
     setBusy(true);
     try {
-      await signIn(username, password);
+      const orgs = await signIn(username, password);
+      if (orgs) {
+        setGoogleCredential(null);
+        setOrgOptions(orgs);
+        return;
+      }
       router.replace(loginTarget());
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
@@ -60,7 +69,12 @@ export default function LoginPage() {
     setUnverified(false);
     setBusy(true);
     try {
-      await signInWithGoogle(credential);
+      const orgs = await signInWithGoogle(credential);
+      if (orgs) {
+        setGoogleCredential(credential);
+        setOrgOptions(orgs);
+        return;
+      }
       router.replace(loginTarget());
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
@@ -71,6 +85,84 @@ export default function LoginPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  // fixes14: complete the login into the explicitly chosen organization.
+  async function onSelectOrg(orgId: number) {
+    setError("");
+    setBusy(true);
+    try {
+      const orgs = googleCredential
+        ? await signInWithGoogle(googleCredential, orgId)
+        : await signIn(username, password, orgId);
+      if (!orgs) router.replace(loginTarget());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("auth.login_failed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (orgOptions) {
+    return (
+      <main className="min-h-screen flex items-center justify-center p-6">
+        <div className="w-full max-w-sm bg-white rounded-xl shadow-md p-8 space-y-5">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold">
+              {t("auth.select_org_title", "בחירת ארגון")}
+            </h1>
+            <p className="mt-1 text-sm text-gray-500">
+              {t(
+                "auth.select_org_subtitle",
+                "החשבון שלך מקושר למספר ארגונים. יש לבחור לאיזה ארגון להתחבר.",
+              )}
+            </p>
+          </div>
+          <ul className="space-y-2">
+            {orgOptions.map((org) => (
+              <li key={org.id}>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onSelectOrg(org.id)}
+                  className="w-full flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3 text-start hover:border-status-magenta hover:bg-status-magenta/5 disabled:opacity-50"
+                >
+                  {org.logo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={org.logo_url}
+                      alt=""
+                      className="h-8 w-8 rounded-md object-contain border border-gray-200 bg-white"
+                    />
+                  ) : (
+                    <span className="flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-gray-50">
+                      🏢
+                    </span>
+                  )}
+                  <span className="font-medium">{org.name}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          {error && (
+            <p className="text-sm text-status-darkred bg-red-50 rounded-md px-3 py-2">
+              {error}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setOrgOptions(null);
+              setGoogleCredential(null);
+              setError("");
+            }}
+            className="w-full rounded-md border border-gray-300 py-2 text-sm text-gray-600 hover:bg-gray-50"
+          >
+            {t("auth.select_org_back", "חזרה להתחברות")}
+          </button>
+        </div>
+      </main>
+    );
   }
 
   return (

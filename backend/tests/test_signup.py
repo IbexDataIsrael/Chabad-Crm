@@ -38,9 +38,12 @@ def test_signup_creates_pending_org_and_blocks_login(client, db_session):
     assert login.status_code == 403
 
 
-def test_signup_duplicate_email_rejected(client):
+def test_signup_same_email_may_open_second_org(client):
+    # fixes14: email is unique per organization — signing up a second org with
+    # the same email is the supported multi-org scenario (login then offers an
+    # organization selection).
     assert _signup(client, username="a", email="dup@x.com", org="A").status_code == 201
-    assert _signup(client, username="b", email="dup@x.com", org="B").status_code == 400
+    assert _signup(client, username="b", email="dup@x.com", org="B").status_code == 201
 
 
 def test_verify_invalid_token(client):

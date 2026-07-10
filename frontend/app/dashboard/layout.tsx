@@ -117,7 +117,8 @@ function DashboardChrome({ children }: { children: ReactNode }) {
           )}
           <div className="flex items-center gap-3 text-sm">
             <span className="text-gray-600">
-              {user?.full_name}
+              {/* fixes14 §2: the name comes from the linked contacts row. */}
+              {user?.display_name || user?.full_name}
               {isAdmin && (
                 <span className="ms-2 rounded bg-status-magenta/10 text-status-magenta px-2 py-0.5 text-xs">
                   {t("common.admin", "מנהל")}

@@ -15,7 +15,10 @@ import {
   googleLogin as apiGoogleLogin,
   login as apiLogin,
   setToken,
+  type LoginOrgOption,
 } from "./api";
+
+export type { LoginOrgOption };
 
 export interface Organization {
   id: number;
@@ -32,6 +35,8 @@ export interface User {
   guid: string; // contact-assignment key (fixes10/11)
   username: string;
   full_name: string;
+  /** fixes14: full name resolved from the linked contacts row (navbar). */
+  display_name?: string | null;
   role: string;
   created_at: string;
   organization_id: number;
@@ -44,8 +49,17 @@ interface AuthContextValue {
   isAdmin: boolean;
   isShliach: boolean;
   isSuperadmin: boolean;
-  signIn: (username: string, password: string) => Promise<void>;
-  signInWithGoogle: (credential: string) => Promise<void>;
+  /** Resolves to null when logged in, or to the organization list when the
+   * identity spans several orgs and one must be chosen (fixes14). */
+  signIn: (
+    username: string,
+    password: string,
+    organizationId?: number,
+  ) => Promise<LoginOrgOption[] | null>;
+  signInWithGoogle: (
+    credential: string,
+    organizationId?: number,
+  ) => Promise<LoginOrgOption[] | null>;
   signUp: (username: string, fullName: string, password: string) => Promise<void>;
   signOut: () => void;
   refresh: () => Promise<void>;
@@ -69,16 +83,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  async function signIn(username: string, password: string) {
-    const token = await apiLogin(username, password);
-    setToken(token);
+  async function signIn(
+    username: string,
+    password: string,
+    organizationId?: number,
+  ): Promise<LoginOrgOption[] | null> {
+    const result = await apiLogin(username, password, organizationId);
+    if (result.requires_org_selection) return result.organizations;
+    setToken(result.access_token!);
     setUser(await apiFetch<User>("/api/auth/me"));
+    return null;
   }
 
-  async function signInWithGoogle(credential: string) {
-    const token = await apiGoogleLogin(credential);
-    setToken(token);
+  async function signInWithGoogle(
+    credential: string,
+    organizationId?: number,
+  ): Promise<LoginOrgOption[] | null> {
+    const result = await apiGoogleLogin(credential, organizationId);
+    if (result.requires_org_selection) return result.organizations;
+    setToken(result.access_token!);
     setUser(await apiFetch<User>("/api/auth/me"));
+    return null;
   }
 
   // Public self-registration creates a staff user, then signs them in.

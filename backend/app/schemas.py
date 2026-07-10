@@ -26,6 +26,16 @@ def _validate_phone(value: Optional[str]) -> Optional[str]:
     return value
 
 
+def _normalize_email(value: Optional[str]) -> Optional[str]:
+    """Emails are case-insensitive identifiers — store them lowercased (fixes14:
+    Google ID tokens always carry the address lowercased, so a mixed-case stored
+    email made the login lookup miss and return 403). Blank normalizes to NULL."""
+    if value is None:
+        return None
+    cleaned = value.strip().lower()
+    return cleaned or None
+
+
 class UserCreate(BaseModel):
     username: str
     full_name: str
@@ -33,6 +43,8 @@ class UserCreate(BaseModel):
     role: Role = "staff"
     email: Optional[str] = None
     organization_name: Optional[str] = None
+
+    _email_lower = field_validator("email")(_normalize_email)
 
 
 class OrganizationOut(BaseModel):
@@ -64,6 +76,9 @@ class UserOut(BaseModel):
     guid: str
     username: str
     full_name: str
+    # fixes14 §feature 2: full name resolved from the linked contacts row
+    # (set on /api/auth/me only; None elsewhere).
+    display_name: Optional[str] = None
     email: Optional[str] = None
     role: str
     is_active: bool = True
@@ -87,17 +102,42 @@ class OrgUserCreate(BaseModel):
     password: Optional[str] = None  # omitted => Google-only account
     phone: Optional[str] = None
 
+    _email_lower = field_validator("email")(_normalize_email)
+
 
 class OrgUserUpdate(BaseModel):
     full_name: Optional[str] = None
+    email: Optional[str] = None  # fixes14: propagates to a linked shliach contact
+    phone: Optional[str] = None
     role: Optional[OrgRole] = None
     is_active: Optional[bool] = None
     password: Optional[str] = None
+
+    _email_lower = field_validator("email")(_normalize_email)
 
 
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+# --- Multi-org login (fixes14 §feature 1) -----------------------------------
+class OrgOption(BaseModel):
+    """One selectable organization on the login org-selection screen."""
+
+    id: int
+    name: str
+    logo_url: Optional[str] = None
+
+
+class LoginResponse(BaseModel):
+    """Login result: either a token, or (when the verified identity maps to
+    more than one organization and none was chosen yet) the list to pick from."""
+
+    access_token: Optional[str] = None
+    token_type: str = "bearer"
+    requires_org_selection: bool = False
+    organizations: list[OrgOption] = []
 
 
 # --- Platform superadmin (cross-tenant admin dashboard) --------------------
@@ -177,15 +217,21 @@ class SignupRequest(BaseModel):
     username: str
     password: str
 
+    _email_lower = field_validator("email")(_normalize_email)
+
 
 class ResendRequest(BaseModel):
     email: str
 
+    _email_lower = field_validator("email")(_normalize_email)
+
 
 class GoogleLoginRequest(BaseModel):
-    """Google Identity Services flow: the browser posts the Google ID token."""
+    """Google Identity Services flow: the browser posts the Google ID token.
+    `organization_id` completes a multi-org selection (fixes14)."""
 
     credential: str
+    organization_id: Optional[int] = None
 
 
 class GoogleSignupRequest(BaseModel):
@@ -605,6 +651,10 @@ class ShliachData(BaseModel):
     notes: Optional[str] = None
     apartment_ids: list[int] = []
     area_ids: list[int] = []
+    # fixes14: optional password for the shliach's login user. Without one the
+    # account is Google-only — which locks the shliach out entirely when
+    # Google sign-in isn't available. Never returned (input only).
+    password: Optional[str] = None
 
 
 class ShliachOut(BaseModel):
@@ -649,6 +699,8 @@ class ContactCreate(ContactBase):
     def _check_phone(cls, v: Optional[str]) -> Optional[str]:
         return _validate_phone(v) if v and v.strip() else None
 
+    _email_lower = field_validator("email")(_normalize_email)
+
 
 class ContactUpdate(BaseModel):
     name: Optional[str] = None
@@ -671,6 +723,8 @@ class ContactUpdate(BaseModel):
     def _check_phone(cls, v: Optional[str]) -> Optional[str]:
         # Blank clears the phone; a provided value must be valid.
         return _validate_phone(v) if v and v.strip() else None
+
+    _email_lower = field_validator("email")(_normalize_email)
 
 
 class ContactOut(ContactBase):

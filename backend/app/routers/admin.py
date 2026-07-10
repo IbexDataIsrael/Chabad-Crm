@@ -180,10 +180,9 @@ def create_organization(
     """Provision an org + its admin directly (already active & verified).
 
     No email verification / Google needed — the superadmin sets the credentials.
+    fixes14: the admin email may already exist in *other* organizations (email
+    is unique per org, and the login flow offers an org selection).
     """
-    if db.query(models.User).filter(models.User.email == payload.admin_email).first():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email already registered")
-
     org = models.Organization(name=payload.organization_name)
     db.add(org)
     db.flush()

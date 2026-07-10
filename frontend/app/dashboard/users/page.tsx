@@ -218,11 +218,14 @@ function UserForm({
   const [busy, setBusy] = useState(false);
 
   const isSelf = user != null && me?.id === user.id;
+  // fixes14: a shliach's role is managed by its contact link — never send a
+  // role for them (it silently demoted the account to staff).
+  const isShliachAccount = user?.role === "shliach";
 
   async function save(e: FormEvent) {
     e.preventDefault();
     setError("");
-    if (!user && !emailValid) {
+    if (!emailValid) {
       setError(t("msg.invalid_email", "כתובת אימייל לא תקינה"));
       return;
     }
@@ -233,7 +236,9 @@ function UserForm({
           method: "PUT",
           body: JSON.stringify({
             full_name: fullName,
-            ...(isSelf ? {} : { role }),
+            // fixes14: email is editable and syncs to a linked shliach contact.
+            ...(email && email !== (user.email ?? "") ? { email } : {}),
+            ...(isSelf || isShliachAccount ? {} : { role }),
             ...(password ? { password } : {}),
           }),
         });
@@ -271,23 +276,30 @@ function UserForm({
             required
           />
         </label>
-        {!user && (
-          <label className="block space-y-1">
-            <span className="block text-sm font-medium">{t("contacts.email", "אימייל")}</span>
-            <EmailInput value={email} onChange={setEmail} onValidityChange={setEmailValid} required />
-          </label>
-        )}
+        <label className="block space-y-1">
+          <span className="block text-sm font-medium">{t("contacts.email", "אימייל")}</span>
+          <EmailInput value={email} onChange={setEmail} onValidityChange={setEmailValid} required />
+        </label>
         <label className="block space-y-1">
           <span className="block text-sm font-medium">{t("users.role_label", "תפקיד")}</span>
-          <select
-            className={inputClass}
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            disabled={isSelf}
-          >
-            <option value="staff">{t("users.role_staff", "משתמש מוגבל")}</option>
-            <option value="admin">{t("users.role_admin", "מנהל")}</option>
-          </select>
+          {isShliachAccount ? (
+            // fixes14: the shliach role is fixed (managed by the contact link).
+            <input
+              className={inputClass}
+              value={t("users.role_shliach", "פעיל")}
+              disabled
+            />
+          ) : (
+            <select
+              className={inputClass}
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              disabled={isSelf}
+            >
+              <option value="staff">{t("users.role_staff", "משתמש מוגבל")}</option>
+              <option value="admin">{t("users.role_admin", "מנהל")}</option>
+            </select>
+          )}
           {isSelf && (
             <span className="block text-xs text-gray-400">
               {t("users.self_guard", "לא ניתן לשנות או למחוק את עצמך")}

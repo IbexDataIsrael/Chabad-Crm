@@ -6,11 +6,14 @@
 - `register`      — legacy/dev path: creates an immediately-active user in a new org.
                     Retired in Phase 9.
 """
+import datetime
 import logging
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Form, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app import models
@@ -34,9 +37,10 @@ from app.schemas import (
     ChangePasswordRequest,
     GoogleLoginRequest,
     GoogleSignupRequest,
+    LoginResponse,
+    OrgOption,
     ResendRequest,
     SignupRequest,
-    Token,
     UserCreate,
     UserOut,
 )
@@ -56,6 +60,47 @@ def _assert_org_active(org) -> None:
     else:
         detail = "This organization has been disabled. Contact support."
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+
+
+def _log_access(db: Session, username: str, outcome: str) -> None:
+    """fixes14 §feature 3: audit every login attempt, success or failure.
+
+    Committed immediately so the row survives the HTTPException raised right
+    after a failed attempt (the request session is discarded without commit)."""
+    now = datetime.datetime.utcnow()
+    db.add(
+        models.SystemAccessLog(
+            date=now.date(), time=now.time(), username=username, status=outcome
+        )
+    )
+    db.commit()
+
+
+def _loginable(user: models.User) -> bool:
+    """All the non-credential gates a user must pass to receive a token."""
+    return (
+        user.email_verified
+        and user.is_active
+        and user.organization is not None
+        and user.organization.is_active
+    )
+
+
+def _org_selection_response(db: Session, identifier: str, users) -> LoginResponse:
+    """fixes14 §feature 1: the verified identity maps to several organizations —
+    withhold the token and let the user pick one explicitly."""
+    _log_access(db, identifier, "ORG_SELECTION_REQUIRED")
+    return LoginResponse(
+        requires_org_selection=True,
+        organizations=[
+            OrgOption(
+                id=u.organization.id,
+                name=u.organization.name,
+                logo_url=u.organization.logo_url,
+            )
+            for u in users
+        ],
+    )
 
 
 def _send_verification_safely(user, token: str) -> None:
@@ -100,12 +145,10 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)) -> dict:
     Creates a PENDING org + its admin (email+password). The org is inactive and
     the owner can't log in until a superadmin approves it. Emails the user a
     "received, under review" note and the platform admin a notification.
-    """
-    if db.query(models.User).filter(models.User.email == payload.email).first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
-        )
 
+    fixes14: the email may already exist in *other* organizations — email is
+    unique per org, and login offers an org selection for multi-org identities.
+    """
     org = models.Organization(
         name=payload.organization_name,
         logo_url=payload.organization_logo_url,
@@ -154,22 +197,23 @@ def verify_email(token: str, db: Session = Depends(get_db)) -> dict:
 
 @router.post("/resend-verification")
 def resend_verification(payload: ResendRequest, db: Session = Depends(get_db)) -> dict:
-    """Re-issue a verification link. Always 200 (no email enumeration)."""
-    user = db.query(models.User).filter(models.User.email == payload.email).first()
-    if user and not user.email_verified:
-        _send_verification_safely(user, create_email_token(user.id))
+    """Re-issue a verification link. Always 200 (no email enumeration).
+    fixes14: an email may exist in several orgs — cover every unverified one."""
+    users = (
+        db.query(models.User)
+        .filter(func.lower(models.User.email) == (payload.email or ""))
+        .all()
+    )
+    for user in users:
+        if not user.email_verified:
+            _send_verification_safely(user, create_email_token(user.id))
     return {"status": "ok"}
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def register(payload: UserCreate, db: Session = Depends(get_db)) -> models.User:
-    if payload.email:
-        if db.query(models.User).filter(models.User.email == payload.email).first():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered",
-            )
-
+    # Registration creates a brand-new org, so an email existing in *other*
+    # orgs is allowed (fixes14: email is unique per organization).
     org = models.Organization(
         name=payload.organization_name or payload.full_name or payload.username
     )
@@ -192,50 +236,123 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> models.User:
     return user
 
 
-@router.post("/token", response_model=Token)
+@router.post("/token", response_model=LoginResponse)
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
+    organization_id: Optional[int] = Form(None),
     db: Session = Depends(get_db),
-) -> Token:
-    user = (
+) -> LoginResponse:
+    """Password login. The identifier matches username *or* email; when the
+    verified credentials map to users in several organizations (fixes14), the
+    response asks for an explicit org selection instead of issuing a token —
+    the client retries with `organization_id`."""
+    identifier = form_data.username
+    # Email matching is case-insensitive: new rows are stored lowercased, but
+    # legacy rows (and typed identifiers) may carry uppercase letters.
+    candidates = (
         db.query(models.User)
-        .filter(models.User.username == form_data.username)
-        .first()
+        .filter(
+            (models.User.username == identifier)
+            | (func.lower(models.User.email) == identifier.strip().lower())
+        )
+        .all()
     )
-    if not user or not verify_password(form_data.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    if not user.email_verified or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Please verify your email before logging in",
-        )
-    _assert_org_active(user.organization)
+    credentials_error = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Incorrect username or password",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if not candidates:
+        _log_access(db, identifier, "FAILED_NO_USER")
+        raise credentials_error
+
+    # Credentials first: org names are never revealed for a wrong password.
+    verified = [
+        u
+        for u in candidates
+        if u.password_hash and verify_password(form_data.password, u.password_hash)
+    ]
+    if not verified:
+        _log_access(db, identifier, "FAILED_INVALID_PASSWORD")
+        raise credentials_error
+    if organization_id is not None:
+        verified = [u for u in verified if u.organization_id == organization_id]
+        if not verified:
+            _log_access(db, identifier, "FAILED_NO_USER")
+            raise credentials_error
+
+    eligible = [u for u in verified if _loginable(u)]
+    if not eligible:
+        blocked = verified[0]
+        if not blocked.email_verified or not blocked.is_active:
+            _log_access(db, identifier, "FAILED_NOT_VERIFIED")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Please verify your email before logging in",
+            )
+        _log_access(db, identifier, "FAILED_ORG_DISABLED")
+        _assert_org_active(blocked.organization)  # raises with the org detail
+        raise credentials_error  # unreachable safety net
+
+    # One user per org (username/email are org-unique); dedupe defensively.
+    by_org = {}
+    for u in eligible:
+        by_org.setdefault(u.organization_id, u)
+    if organization_id is None and len(by_org) > 1:
+        return _org_selection_response(db, identifier, list(by_org.values()))
+
+    user = next(iter(by_org.values()))
+    _log_access(db, identifier, "SUCCESS")
     token = create_access_token(subject=str(user.id), role=user.role)
-    return Token(access_token=token)
+    return LoginResponse(access_token=token)
 
 
-@router.post("/google", response_model=Token)
-def google_login(payload: GoogleLoginRequest, db: Session = Depends(get_db)) -> Token:
-    """Google Identity Services login. Links to an existing user by email."""
+@router.post("/google", response_model=LoginResponse)
+def google_login(
+    payload: GoogleLoginRequest, db: Session = Depends(get_db)
+) -> LoginResponse:
+    """Google Identity Services login. Links to existing users by email; when
+    the email exists in several organizations (fixes14) the response asks for
+    an explicit org selection — the client retries with `organization_id`."""
     try:
         info = verify_google_token(payload.credential)
     except ValueError:
+        _log_access(db, "(google)", "FAILED_INVALID_PASSWORD")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Google token",
         )
-    email = info["email"]
-    user = db.query(models.User).filter(models.User.email == email).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="לא נמצא משתמש עם כתובת אימייל זו. יש להירשם או לקבל הזמנה תחילה.",
-        )
-    _assert_org_active(user.organization)
+    email = info["email"].strip().lower()
+    no_user_error = HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="לא נמצא משתמש עם כתובת אימייל זו. יש להירשם או לקבל הזמנה תחילה.",
+    )
+    # Case-insensitive: a mixed-case stored email must not 403 the login
+    # (Google ID tokens always carry the address lowercased).
+    users = (
+        db.query(models.User).filter(func.lower(models.User.email) == email).all()
+    )
+    if not users:
+        _log_access(db, email, "FAILED_NO_USER")
+        raise no_user_error
+    if payload.organization_id is not None:
+        users = [u for u in users if u.organization_id == payload.organization_id]
+        if not users:
+            _log_access(db, email, "FAILED_NO_USER")
+            raise no_user_error
+
+    # Google verified the email itself, so only the org gate applies here
+    # (the first sign-in below flips email_verified/is_active on).
+    active = [u for u in users if u.organization and u.organization.is_active]
+    if not active:
+        _log_access(db, email, "FAILED_ORG_DISABLED")
+        _assert_org_active(users[0].organization)  # raises with the org detail
+        raise no_user_error  # unreachable safety net
+
+    if payload.organization_id is None and len(active) > 1:
+        return _org_selection_response(db, email, active)
+
+    user = active[0]
     # First Google sign-in: bind the Google subject and activate the account.
     if not user.google_sub:
         user.google_sub = info.get("sub")
@@ -243,7 +360,10 @@ def google_login(payload: GoogleLoginRequest, db: Session = Depends(get_db)) -> 
         user.email_verified = True
     user.is_active = True
     db.commit()
-    return Token(access_token=create_access_token(subject=str(user.id), role=user.role))
+    _log_access(db, email, "SUCCESS")
+    return LoginResponse(
+        access_token=create_access_token(subject=str(user.id), role=user.role)
+    )
 
 
 @router.post("/google-signup", status_code=status.HTTP_201_CREATED)
@@ -260,11 +380,8 @@ def google_signup(payload: GoogleSignupRequest, db: Session = Depends(get_db)) -
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Google token"
         )
     email = info["email"]
-    if db.query(models.User).filter(models.User.email == email).first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
-        )
-
+    # fixes14: the email may already exist in *other* organizations — this
+    # signup creates a brand-new org, so there is no per-org conflict.
     org = models.Organization(
         name=payload.organization_name,
         logo_url=payload.organization_logo_url,
@@ -288,9 +405,38 @@ def google_signup(payload: GoogleSignupRequest, db: Session = Depends(get_db)) -
     return {"status": "pending_approval", "email": user.email}
 
 
+def _resolve_display_name(db: Session, user: models.User) -> Optional[str]:
+    """fixes14 §feature 2: the user's full name as recorded on the contacts
+    table — the linked shliach contact first, else a same-org contact carrying
+    the user's email. None when the user has no contact record (e.g. staff)."""
+    link = (
+        db.query(models.ContactShliach)
+        .filter(models.ContactShliach.user_id == user.id)
+        .first()
+    )
+    contact = link.contact if link else None
+    if contact is None and user.email:
+        contact = (
+            db.query(models.Contact)
+            .filter(
+                models.Contact.organization_id == user.organization_id,
+                models.Contact.email == user.email,
+            )
+            .first()
+        )
+    if contact is None:
+        return None
+    return " ".join(filter(None, [contact.name, contact.last_name])) or None
+
+
 @router.get("/me", response_model=UserOut)
-def me(current_user: models.User = Depends(get_current_user)) -> models.User:
-    return current_user
+def me(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+) -> UserOut:
+    out = UserOut.model_validate(current_user)
+    out.display_name = _resolve_display_name(db, current_user)
+    return out
 
 
 def _is_strong_password(pw: str) -> bool:

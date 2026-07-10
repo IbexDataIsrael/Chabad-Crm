@@ -41,6 +41,8 @@ export interface ShliachFormValues {
   notes: string | null;
   apartment_ids: number[];
   area_ids: number[];
+  /** fixes14: optional login password — empty keeps the existing one. */
+  password: string | null;
 }
 
 export interface ContactFormValues {
@@ -109,6 +111,7 @@ export function ContactForm({
       notes: initial?.shliach?.notes ?? null,
       apartment_ids: initial?.shliach?.apartment_ids ?? [],
       area_ids: initial?.shliach?.area_ids ?? [],
+      password: null,
     },
     picklist_values: { ...(initial?.picklist_values ?? {}) },
   });
@@ -481,6 +484,24 @@ export function ContactForm({
               )}
             </div>
           )}
+
+          {/* fixes14: without a password the login is Google-only, which can
+              lock the shliach out entirely. Empty keeps the current password. */}
+          <Field label={t("contact_shliach.password", "סיסמה למערכת (לא חובה)")}>
+            <input
+              type="password"
+              className={inputClass}
+              value={values.shliach.password ?? ""}
+              onChange={(e) => setShliach("password", e.target.value || null)}
+              autoComplete="new-password"
+            />
+            <span className="mt-1 block text-xs text-gray-400">
+              {t(
+                "contact_shliach.password_hint",
+                "עם סיסמה הפעיל מתחבר עם האימייל והסיסמה; ללא סיסמה — עם Google בלבד. שדה ריק לא משנה סיסמה קיימת.",
+              )}
+            </span>
+          </Field>
 
           {vis("contact_shliach.notes") && (
             <div className="sm:col-span-2">

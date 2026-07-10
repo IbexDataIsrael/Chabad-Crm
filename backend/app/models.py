@@ -14,6 +14,7 @@ from uuid import uuid4
 from sqlalchemy import (
     Boolean,
     Column,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -67,9 +68,11 @@ class Organization(Base):
 
 class User(Base):
     __tablename__ = "users"
-    # Username is unique within an organization; email is globally unique.
+    # Username and email are unique within an organization (fixes14: the same
+    # email may exist in several orgs — one login account per org).
     __table_args__ = (
         UniqueConstraint("organization_id", "username", name="uq_user_org_username"),
+        UniqueConstraint("organization_id", "email", name="uq_user_org_email"),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -79,13 +82,14 @@ class User(Base):
     )
     username = Column(String(50), nullable=False, index=True)
     full_name = Column(String(100), nullable=False)  # Hebrew display name
-    email = Column(String(255), unique=True, nullable=True, index=True)
+    email = Column(String(255), nullable=True, index=True)
     first_name = Column(String(100), nullable=True)
     last_name = Column(String(100), nullable=True)
     phone = Column(String(50), nullable=True)
     # Nullable: Google-only accounts have no local password.
     password_hash = Column(String(255), nullable=True)
-    google_sub = Column(String(255), unique=True, nullable=True, index=True)
+    # Non-unique: the same Google identity may be bound to one user per org.
+    google_sub = Column(String(255), nullable=True, index=True)
     role = Column(String(20), nullable=False, default="staff")  # 'admin' | 'staff' | 'shliach'
     is_active = Column(Boolean, nullable=False, default=True)
     email_verified = Column(Boolean, nullable=False, default=False)
@@ -631,6 +635,27 @@ class SystemSetting(Base):
     updated_at = Column(
         DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
     )
+
+
+class SystemAccessLog(Base):
+    """Audit row for every login attempt, successful or not (fixes14 §3).
+
+    Platform-level (not tenant-scoped): a failed attempt has no resolved org,
+    and one identifier may map to users in several orgs. `username` is the
+    identifier exactly as the visitor typed it.
+    """
+
+    __tablename__ = "system_access_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    date = Column(Date, nullable=False, index=True)
+    time = Column(Time, nullable=False)
+    username = Column(String(255), nullable=False)
+    # 'SUCCESS' | 'FAILED_INVALID_PASSWORD' | 'FAILED_NO_USER' |
+    # 'FAILED_NOT_VERIFIED' | 'FAILED_ORG_DISABLED' | 'ORG_SELECTION_REQUIRED'
+    status = Column(String(50), nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
 class FieldLocalization(Base):

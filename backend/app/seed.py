@@ -196,6 +196,10 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("auth", "auth.resend_verification", "שליחת קישור אימות מחדש", "Resend verification link"),
     ("auth", "auth.google_failed", "התחברות עם Google נכשלה", "Google sign-in failed"),
     ("auth", "auth.google_load_failed", "טעינת ההתחברות עם Google נכשלה", "Failed to load Google sign-in"),
+    # fixes14 §feature 1: multi-organization login selection
+    ("auth", "auth.select_org_title", "בחירת ארגון", "Choose an organization"),
+    ("auth", "auth.select_org_subtitle", "החשבון שלך מקושר למספר ארגונים. יש לבחור לאיזה ארגון להתחבר.", "Your account is linked to several organizations. Choose which one to sign in to."),
+    ("auth", "auth.select_org_back", "חזרה להתחברות", "Back to sign-in"),
     ("auth", "signup.title", "פתיחת חשבון ארגון", "Open an organization account"),
     ("auth", "signup.subtitle", "צור ארגון חדש ב-CRM", "Create a new CRM organization"),
     ("auth", "signup.org_name", "שם הארגון", "Organization name"),
@@ -377,6 +381,9 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     # --- User-facing error messages (editable in the localization page) ---
     ("error", "error.no_areas_for_shliach", "נא להוסיף לפחות אזור אחד למערכת", "Please add at least 1 area to the system"),
     ("column", "contact_shliach.relate_building", "שייך בניין (יוסיף את כל דירותיו)", "Relate a building (adds all its apartments)"),
+    # fixes14: shliach login password (set from the contact form)
+    ("column", "contact_shliach.password", "סיסמה למערכת (לא חובה)", "System password (optional)"),
+    ("column", "contact_shliach.password_hint", "עם סיסמה הפעיל מתחבר עם האימייל והסיסמה; ללא סיסמה — עם Google בלבד. שדה ריק לא משנה סיסמה קיימת.", "With a password the activist signs in with their email and password; without one — Google only. Leaving it blank keeps the current password."),
     # --- Area polygon map ---
     ("apm", "apm.load_failed_hint", "טעינת מפת Google נכשלה — בדוק את מפתח ה-API (הפעלת Maps JavaScript API והרשאת המקור localhost). ניתן להזין GeoJSON ידנית.", "Google Maps failed to load — check the API key (enable Maps JavaScript API and allow the localhost origin). You can enter GeoJSON manually."),
     ("apm", "apm.no_key_hint", "לציור פוליגון אינטראקטיבי הגדר מפתח Google Maps.", "Set a Google Maps key to draw a polygon interactively."),

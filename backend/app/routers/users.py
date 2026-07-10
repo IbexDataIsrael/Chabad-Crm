@@ -12,6 +12,7 @@ welcome email template as new shliach accounts.
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app import models
@@ -56,10 +57,21 @@ def create_user(
     db: Session = Depends(get_db),
     admin: models.User = Depends(require_admin),
 ):
-    email = payload.email.strip().lower()
+    email = payload.email or ""  # schema-normalized: lowercase, blank → None
     if not email:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email is required")
-    if db.query(models.User).filter(models.User.email == email).first():
+    # fixes14: email is unique per organization (the same email may exist in
+    # other organizations — one login account per org). Case-insensitive so a
+    # legacy mixed-case row still counts as a duplicate.
+    dup_email = (
+        db.query(models.User)
+        .filter(
+            models.User.organization_id == admin.organization_id,
+            func.lower(models.User.email) == email,
+        )
+        .first()
+    )
+    if dup_email:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email already registered")
 
     username = (payload.username or email).strip()
@@ -122,9 +134,56 @@ def update_user(
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, "You cannot demote or deactivate yourself"
         )
+    # fixes14: a shliach's role is managed by its contact link — editing the
+    # user (e.g. to set a password) must never silently demote them to staff.
+    if user.role == "shliach":
+        data.pop("role", None)
     password = data.pop("password", None)
     if password:
         user.password_hash = hash_password(password)
+
+    # fixes14 (user → contact sync): email/phone edits propagate to the linked
+    # shliach contact so the two records never drift apart.
+    linked = (
+        db.query(models.ContactShliach)
+        .filter(models.ContactShliach.user_id == user.id)
+        .first()
+    )
+    email = data.pop("email", None)
+    if email and email != user.email:
+        dup = (
+            db.query(models.User)
+            .filter(
+                models.User.organization_id == admin.organization_id,
+                func.lower(models.User.email) == email,
+                models.User.id != user.id,
+            )
+            .first()
+        )
+        if dup:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email already registered")
+        # The username follows only when it *was* the email (shliach accounts).
+        if user.username == user.email:
+            username_taken = (
+                db.query(models.User)
+                .filter(
+                    models.User.organization_id == admin.organization_id,
+                    models.User.username == email,
+                    models.User.id != user.id,
+                )
+                .first()
+            )
+            if not username_taken:
+                user.username = email
+        user.email = email
+        if linked and linked.contact:
+            linked.contact.email = email
+    if "phone" in data:
+        phone = data.pop("phone")
+        user.phone = phone
+        if linked and linked.contact:
+            linked.contact.phone = phone
+
     for field, value in data.items():
         setattr(user, field, value)
     db.commit()
