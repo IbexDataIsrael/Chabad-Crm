@@ -10,10 +10,11 @@ import logging
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app import models
+from app.core.display import building_display_name
 from app.core.email import send_shliach_welcome
 from app.core.geocode import geocode_address
 from app.core.security import hash_password
@@ -401,15 +402,34 @@ def _set_shliach_areas(
 
 
 # --- CRUD -------------------------------------------------------------------
+# The mekurav mitzvot booleans a "has mitzvot" filter checks (fixes15 §5.1).
+_MITZVAH_COLUMNS = (
+    "tefillin",
+    "tzedakah",
+    "shabbat_candles",
+    "torah_pamphlet",
+    "torah_letter",
+)
+
+
 def _contacts_query(
     db: Session,
     current_user: models.User,
     pipeline_status: Optional[str],
     contact_type: Optional[str],
     assigned_user_id: Optional[str],
+    q: Optional[str] = None,
+    area_ids: Optional[list[int]] = None,
+    building_ids: Optional[list[int]] = None,
+    has_mitzvot: bool = False,
 ):
     """The org-scoped, filtered, shliach-aware contacts query (shared by the
-    plain list and the paginated list)."""
+    plain list, the paginated list and the bulk-email address list).
+
+    fixes15 §5.1: `q` matches name / last name / phone / email; `area_ids` /
+    `building_ids` narrow geographically — a mekurav belongs through its
+    apartment's building, a shliach through its coverage links; `has_mitzvot`
+    keeps only contacts with at least one community-mitzvah checked."""
     query = db.query(models.Contact).filter(
         models.Contact.organization_id == current_user.organization_id
     )
@@ -419,6 +439,88 @@ def _contacts_query(
         query = query.filter(models.Contact.contact_type == contact_type)
     if assigned_user_id is not None:
         query = query.filter(models.Contact.assigned_user_id == assigned_user_id)
+    if q and q.strip():
+        like = f"%{q.strip()}%"
+        query = query.filter(
+            or_(
+                models.Contact.name.ilike(like),
+                models.Contact.last_name.ilike(like),
+                models.Contact.phone.ilike(like),
+                models.Contact.email.ilike(like),
+            )
+        )
+    # Geographic filters via IN-subqueries — the shliach-role scoping below
+    # already outer-joins ContactShliach, so joining again would duplicate rows.
+    if contact_type == "shliach":
+        if area_ids:
+            query = query.filter(
+                models.Contact.id.in_(
+                    select(models.ContactShliach.contact_id)
+                    .join(
+                        models.ContactShliachArea,
+                        models.ContactShliachArea.contact_shliach_id
+                        == models.ContactShliach.id,
+                    )
+                    .where(models.ContactShliachArea.area_id.in_(area_ids))
+                )
+            )
+        if building_ids:
+            query = query.filter(
+                models.Contact.id.in_(
+                    select(models.ContactShliach.contact_id)
+                    .join(
+                        models.ContactShliachApartment,
+                        models.ContactShliachApartment.contact_shliach_id
+                        == models.ContactShliach.id,
+                    )
+                    .join(
+                        models.Apartment,
+                        models.Apartment.id
+                        == models.ContactShliachApartment.apartment_id,
+                    )
+                    .where(models.Apartment.building_id.in_(building_ids))
+                )
+            )
+    else:
+        if building_ids:
+            query = query.filter(
+                models.Contact.id.in_(
+                    select(models.ContactMekurav.contact_id)
+                    .join(
+                        models.Apartment,
+                        models.Apartment.id == models.ContactMekurav.apartment_id,
+                    )
+                    .where(models.Apartment.building_id.in_(building_ids))
+                )
+            )
+        if area_ids:
+            query = query.filter(
+                models.Contact.id.in_(
+                    select(models.ContactMekurav.contact_id)
+                    .join(
+                        models.Apartment,
+                        models.Apartment.id == models.ContactMekurav.apartment_id,
+                    )
+                    .join(
+                        models.Building,
+                        models.Building.id == models.Apartment.building_id,
+                    )
+                    .where(models.Building.area_id.in_(area_ids))
+                )
+            )
+    if has_mitzvot:
+        query = query.filter(
+            models.Contact.id.in_(
+                select(models.CommunityChecklist.contact_id).where(
+                    or_(
+                        *[
+                            getattr(models.CommunityChecklist, col).is_(True)
+                            for col in _MITZVAH_COLUMNS
+                        ]
+                    )
+                )
+            )
+        )
 
     if current_user.role == "shliach":
         # fixes10 §3.5: ownership isolation — only contacts assigned to this
@@ -447,6 +549,18 @@ def list_contacts(
     return query.order_by(models.Contact.name).all()
 
 
+def _list_item(contact: models.Contact) -> ContactOut:
+    """A list row enriched with the mekurav apartment's building/area names
+    (fixes15 §5.1 optional grid columns)."""
+    out = ContactOut.model_validate(contact)
+    apartment = contact.mekurav.apartment if contact.mekurav else None
+    if apartment and apartment.building:
+        out.building_name = building_display_name(apartment.building)
+        if apartment.building.area:
+            out.area_name = apartment.building.area.area_name
+    return out
+
+
 @router.get("/list", response_model=ContactPageOut)
 def list_contacts_paginated(
     db: Session = Depends(get_db),
@@ -454,6 +568,10 @@ def list_contacts_paginated(
     pipeline_status: Optional[str] = None,
     contact_type: Optional[str] = None,
     assigned_user_id: Optional[str] = None,
+    q: Optional[str] = None,
+    area_ids: Optional[list[int]] = Query(None),
+    building_ids: Optional[list[int]] = Query(None),
+    has_mitzvot: bool = False,
     sort: Literal["name", "created"] = "name",
     dir: Literal["asc", "desc"] = "asc",
     page: int = Query(1, ge=1),
@@ -462,13 +580,15 @@ def list_contacts_paginated(
     """One server-side page of contacts (same fixes8 §2C pattern as the
     apartments list) — the contacts page uses this instead of the full dump.
     Sorting (fixes11 §2.3): alphabetical (`name`) or `created` (creation date);
-    the page's default presentation is created-descending."""
+    the page's default presentation is created-descending. fixes15 §5.1 adds
+    the apartments-style filters (q / area_ids / building_ids / has_mitzvot)."""
     if page_size not in (20, 50, 100):
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY, "page_size must be 20, 50 or 100"
         )
     query = _contacts_query(
-        db, current_user, pipeline_status, contact_type, assigned_user_id
+        db, current_user, pipeline_status, contact_type, assigned_user_id,
+        q=q, area_ids=area_ids, building_ids=building_ids, has_mitzvot=has_mitzvot,
     )
     total = query.count()
     key = models.Contact.created_at if sort == "created" else models.Contact.name
@@ -480,7 +600,46 @@ def list_contacts_paginated(
         .limit(page_size)
         .all()
     )
-    return ContactPageOut(items=rows, total=total, page=page, page_size=page_size)
+    return ContactPageOut(
+        items=[_list_item(c) for c in rows],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/emails", response_model=list[str])
+def list_contact_emails(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+    pipeline_status: Optional[str] = None,
+    contact_type: Optional[str] = None,
+    assigned_user_id: Optional[str] = None,
+    q: Optional[str] = None,
+    area_ids: Optional[list[int]] = Query(None),
+    building_ids: Optional[list[int]] = Query(None),
+    has_mitzvot: bool = False,
+):
+    """The distinct email addresses of every contact matching the same filter
+    set as /list (fixes15 §5.2) — feeds the bulk `mailto:` BCC action, so it
+    spans the whole filtered set, not just the visible page."""
+    query = _contacts_query(
+        db, current_user, pipeline_status, contact_type, assigned_user_id,
+        q=q, area_ids=area_ids, building_ids=building_ids, has_mitzvot=has_mitzvot,
+    )
+    rows = (
+        query.filter(models.Contact.email.isnot(None), models.Contact.email != "")
+        .order_by(models.Contact.name)
+        .all()
+    )
+    seen: set[str] = set()
+    emails: list[str] = []
+    for c in rows:
+        key = c.email.strip().lower()
+        if key and key not in seen:
+            seen.add(key)
+            emails.append(c.email.strip())
+    return emails
 
 
 @router.post("", response_model=ContactDetailOut, status_code=status.HTTP_201_CREATED)
@@ -544,6 +703,7 @@ def create_contact(
             )
             try:
                 send_shliach_welcome(
+                    db,
                     to=contact.email,
                     first_name=contact.name,
                     last_name=contact.last_name or "",

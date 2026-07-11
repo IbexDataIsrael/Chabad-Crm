@@ -19,6 +19,7 @@ from app.deps import require_superadmin
 from app.schemas import (
     AdminOrgCreate,
     AdminOrganizationOut,
+    AdminUserDependenciesOut,
     AdminUserOut,
     EmailTemplateOut,
     EmailTemplateUpdate,
@@ -321,6 +322,49 @@ def _get_manageable_user(db: Session, user_id: int, actor: models.User) -> model
     if user.role == "superadmin":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot modify a superadmin account")
     return user
+
+
+@router.get("/users/{user_id}/dependencies", response_model=AdminUserDependenciesOut)
+def user_dependencies(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_superadmin),
+):
+    """Everything still tied to a user (fixes15 §2.2) — surfaced in the
+    delete-confirm modal so a shliach's data ties are visible before deleting."""
+    user = _get_manageable_user(db, user_id, _)
+    assigned = (
+        db.query(func.count(models.Contact.id))
+        .filter(models.Contact.assigned_user_id == user.guid)
+        .scalar()
+    ) or 0
+    interactions = (
+        db.query(func.count(models.Interaction.id))
+        .filter(models.Interaction.created_by == user_id)
+        .scalar()
+    ) or 0
+    out = AdminUserDependenciesOut(
+        assigned_contacts=assigned, interactions=interactions
+    )
+    shliach = (
+        db.query(models.ContactShliach)
+        .filter(models.ContactShliach.user_id == user_id)
+        .first()
+    )
+    if shliach:
+        out.shliach_contact_id = shliach.contact_id
+        if shliach.contact:
+            out.shliach_contact_name = " ".join(
+                filter(None, [shliach.contact.last_name, shliach.contact.name])
+            )
+        out.covered_apartments = len(shliach.apartments)
+        out.covered_areas = len(shliach.areas)
+    out.has_dependencies = bool(
+        assigned
+        or interactions
+        or shliach is not None
+    )
+    return out
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -4,16 +4,41 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
-import { contactFullName, type Contact } from "@/lib/types";
+import { usePersistentState } from "@/lib/persist";
+import {
+  buildingDisplayName,
+  contactFullName,
+  type Area,
+  type Building,
+  type Contact,
+  type ContactPage,
+} from "@/lib/types";
+
+type SortKey = "name" | "created";
 
 export default function ShluchimPage() {
   const router = useRouter();
   const { isAdmin, loading } = useAuth();
   const { t } = useLocalization();
   const [shluchim, setShluchim] = useState<Contact[]>([]);
+  const [areas, setAreas] = useState<Area[]>([]);
+  const [buildings, setBuildings] = useState<Building[]>([]);
+  // fixes15 §4.1: sorting + multi-select geo filters, all persisted (§1.2).
+  const [areaIds, setAreaIds] = usePersistentState<number[]>(
+    "crm.shluchim.areaIds", [],
+  );
+  const [buildingIds, setBuildingIds] = usePersistentState<number[]>(
+    "crm.shluchim.buildingIds", [],
+  );
+  const [sort, setSort] = usePersistentState<SortKey>("crm.shluchim.sort", "name");
+  const [dir, setDir] = usePersistentState<"asc" | "desc">("crm.shluchim.dir", "asc");
+  const [page, setPage] = usePersistentState("crm.shluchim.page", 1);
+  const [pageSize, setPageSize] = usePersistentState("crm.shluchim.pageSize", 20);
+  const [total, setTotal] = useState(0);
   const [busy, setBusy] = useState(true);
 
   // Admin-only page.
@@ -23,13 +48,48 @@ export default function ShluchimPage() {
 
   useEffect(() => {
     if (loading || !isAdmin) return;
-    apiFetch<Contact[]>("/api/contacts?contact_type=shliach")
-      .then(setShluchim)
-      .catch(() => setShluchim([]))
-      .finally(() => setBusy(false));
+    apiFetch<Area[]>("/api/areas").then(setAreas).catch(() => {});
+    apiFetch<Building[]>("/api/buildings").then(setBuildings).catch(() => {});
   }, [loading, isAdmin]);
 
+  // Server-side page (fixes15 §1.1) — filters match the shliach's coverage.
+  useEffect(() => {
+    if (loading || !isAdmin) return;
+    const params = new URLSearchParams();
+    params.set("contact_type", "shliach");
+    areaIds.forEach((id) => params.append("area_ids", String(id)));
+    buildingIds.forEach((id) => params.append("building_ids", String(id)));
+    params.set("sort", sort);
+    params.set("dir", dir);
+    params.set("page", String(page));
+    params.set("page_size", String(pageSize));
+    setBusy(true);
+    apiFetch<ContactPage>(`/api/contacts/list?${params}`)
+      .then((res) => {
+        setShluchim(res.items);
+        setTotal(res.total);
+      })
+      .catch(() => {
+        setShluchim([]);
+        setTotal(0);
+      })
+      .finally(() => setBusy(false));
+  }, [loading, isAdmin, areaIds, buildingIds, sort, dir, page, pageSize]);
+
   if (loading || !isAdmin) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+
+  const selectClass =
+    "rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none";
+
+  const lastPage = Math.max(1, Math.ceil(total / pageSize));
+  const rangeText = t("pager.range", "{from}–{to} מתוך {total}")
+    .replace("{from}", String(total === 0 ? 0 : (page - 1) * pageSize + 1))
+    .replace("{to}", String(Math.min(page * pageSize, total)))
+    .replace("{total}", String(total));
+
+  const buildingOptions = buildings
+    .filter((b) => areaIds.length === 0 || areaIds.includes(b.area_id))
+    .map((b) => ({ id: b.id, label: buildingDisplayName(b) }));
 
   return (
     <div className="space-y-4">
@@ -43,6 +103,77 @@ export default function ShluchimPage() {
         </Link>
       </div>
 
+      {/* fixes15 §4.1: multi-select coverage filters + sorting. */}
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <MultiSelectFilter
+          allLabel={t("filter.all_areas", "כל האזורים")}
+          options={areas.map((a) => ({ id: a.id, label: a.area_name }))}
+          value={areaIds}
+          onChange={(ids) => {
+            setAreaIds(ids);
+            setBuildingIds((prev) =>
+              ids.length === 0
+                ? prev
+                : prev.filter((bid) =>
+                    buildings.some((b) => b.id === bid && ids.includes(b.area_id)),
+                  ),
+            );
+            setPage(1);
+          }}
+        />
+        <MultiSelectFilter
+          allLabel={t("filter.all_buildings", "כל הבניינים")}
+          options={buildingOptions}
+          value={buildingIds}
+          onChange={(ids) => {
+            setBuildingIds(ids);
+            setPage(1);
+          }}
+        />
+        <span className="flex items-center gap-2 text-gray-500">
+          {t("sort.label", "מיון:")}
+          <select
+            className={selectClass}
+            value={sort}
+            onChange={(e) => {
+              setSort(e.target.value as SortKey);
+              setPage(1);
+            }}
+          >
+            <option value="name">{t("sort.by_name", "שם")}</option>
+            <option value="created">{t("sort.created", "תאריך יצירה")}</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => {
+              setDir(dir === "asc" ? "desc" : "asc");
+              setPage(1);
+            }}
+            className="rounded-md border border-gray-300 px-3 py-2 hover:bg-gray-50"
+            title={dir === "asc" ? t("sort.asc", "עולה") : t("sort.desc", "יורד")}
+          >
+            {dir === "asc" ? "↑" : "↓"}
+          </button>
+        </span>
+        <span className="ms-auto flex items-center gap-2 text-gray-500">
+          {t("pager.page_size", "בעמוד:")}
+          <select
+            className={selectClass}
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              setPage(1);
+            }}
+          >
+            {[20, 50, 100].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </span>
+      </div>
+
       <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm min-w-[520px]">
           <thead className="bg-gray-50 text-gray-600 text-start">
@@ -50,19 +181,22 @@ export default function ShluchimPage() {
               <th className="px-4 py-2 text-start font-medium">{t("common.name", "שם")}</th>
               <th className="px-4 py-2 text-start font-medium">{t("contacts.phone", "טלפון")}</th>
               <th className="px-4 py-2 text-start font-medium">{t("contacts.email", "אימייל")}</th>
+              <th className="px-4 py-2 text-start font-medium">
+                {t("contacts.created_at", "נוצר בתאריך")}
+              </th>
               <th className="px-4 py-2" />
             </tr>
           </thead>
           <tbody>
             {busy ? (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
                   {t("action.loading", "טוען…")}
                 </td>
               </tr>
             ) : shluchim.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
                   {t("page.no_shluchim", "אין פעילים עדיין.")}
                 </td>
               </tr>
@@ -78,6 +212,9 @@ export default function ShluchimPage() {
                   </td>
                   <td className="px-4 py-2" dir="ltr">{c.phone}</td>
                   <td className="px-4 py-2" dir="ltr">{c.email ?? ""}</td>
+                  <td className="px-4 py-2" dir="ltr">
+                    {new Date(c.created_at).toLocaleDateString("he-IL")}
+                  </td>
                   <td className="px-4 py-2 text-end">
                     <Link
                       href={`/dashboard/contacts/${c.id}`}
@@ -93,6 +230,29 @@ export default function ShluchimPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Server-side pager (fixes15 §1.1). */}
+      {!busy && total > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <button
+            type="button"
+            disabled={page <= 1}
+            onClick={() => setPage(page - 1)}
+            className="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {t("pager.prev", "→ הקודם")}
+          </button>
+          <span className="text-gray-500">{rangeText}</span>
+          <button
+            type="button"
+            disabled={page >= lastPage}
+            onClick={() => setPage(page + 1)}
+            className="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {t("pager.next", "הבא ←")}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { ContactView } from "@/components/ContactView";
 import { CustomFieldsEditor } from "@/components/CustomFieldsEditor";
 import { DonationsEditor } from "@/components/DonationsEditor";
 import { InteractionsTimeline } from "@/components/InteractionsTimeline";
+import { ShliachApartmentsGrid } from "@/components/ShliachApartmentsGrid";
 import { SignificantDatesEditor } from "@/components/SignificantDatesEditor";
 import { VisitHistoryEditor } from "@/components/VisitHistoryEditor";
 import { apiFetch } from "@/lib/api";
@@ -96,7 +97,11 @@ export default function ContactDetailPage() {
       return;
     await apiFetch(`/api/contacts/${contactId}`, { method: "DELETE" });
     success(t("msg.deleted", "נמחק"));
-    router.push("/dashboard/contacts");
+    // fixes15 §3.1: return to the page that manages this record — deleting a
+    // shliach (a login user) used to incorrectly dump the admin in Contacts.
+    router.push(
+      contact?.contact_type === "shliach" ? "/dashboard/shluchim" : "/dashboard/contacts",
+    );
   }
 
   if (notFound)
@@ -147,7 +152,11 @@ export default function ContactDetailPage() {
       <h1 className="text-2xl font-bold">{contactFullName(contact)}</h1>
 
       <section className="bg-white rounded-xl shadow-sm p-6">
-        <h2 className="font-semibold mb-4">{t("page.contact_details", "פרטי איש קשר")}</h2>
+        <h2 className="font-semibold mb-4">
+          {contact.contact_type === "shliach"
+            ? t("page.shliach_details", "פרטי פעיל")
+            : t("page.contact_details", "פרטי איש קשר")}
+        </h2>
         {editing ? (
           <ContactForm
             initial={contact}
@@ -175,6 +184,16 @@ export default function ContactDetailPage() {
           <ContactView contact={contact} users={users} customFields={customFields} />
         )}
       </section>
+
+      {/* fixes15 §4.2: the apartments assigned to this shliach, as a sub-grid. */}
+      {contact.contact_type === "shliach" && (
+        <section className="bg-white rounded-xl shadow-sm p-6">
+          <h2 className="font-semibold mb-4">
+            {t("contact_shliach.apartments", "דירות באחריות הפעיל")}
+          </h2>
+          <ShliachApartmentsGrid contactId={contact.id} />
+        </section>
+      )}
 
       {contact.contact_type === "mekurav" && (
         <section className="bg-white rounded-xl shadow-sm p-6">

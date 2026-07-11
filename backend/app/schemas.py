@@ -156,6 +156,19 @@ class AdminUserOut(BaseModel):
     organization_id: int
 
 
+class AdminUserDependenciesOut(BaseModel):
+    """What still points at a user (fixes15 §2.2) — shown in the delete-confirm
+    modal so the superadmin sees the data ties before deleting a shliach."""
+
+    assigned_contacts: int = 0
+    interactions: int = 0
+    shliach_contact_id: Optional[int] = None
+    shliach_contact_name: Optional[str] = None
+    covered_apartments: int = 0
+    covered_areas: int = 0
+    has_dependencies: bool = False
+
+
 class AdminOrganizationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -357,6 +370,7 @@ class AdminAreaOut(BaseModel):
     guid: str
     name: str
     comments: Optional[str] = None
+    created_at: Optional[datetime] = None  # feeds date sorting (fixes15 §6)
 
 
 # --- Areas / Buildings / Apartments ----------------------------------------
@@ -734,6 +748,10 @@ class ContactOut(ContactBase):
     guid: str
     created_at: datetime
     updated_at: datetime
+    # Enriched by /list only (fixes15 §5.1 optional grid columns): the mekurav
+    # apartment's building display name + its area name. None elsewhere.
+    building_name: Optional[str] = None
+    area_name: Optional[str] = None
 
 
 class ContactDetailOut(ContactOut):

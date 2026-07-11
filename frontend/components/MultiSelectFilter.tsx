@@ -1,0 +1,96 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+
+import { useLocalization } from "@/lib/localization";
+
+/**
+ * Generic multi-select dropdown filter (fixes15 §4.1/§5.1/§7.1): a compact
+ * button showing the selection summary that opens a checkbox list. An empty
+ * selection means "all" (no filtering).
+ */
+export function MultiSelectFilter({
+  allLabel,
+  options,
+  value,
+  onChange,
+}: {
+  /** Button text while nothing is selected, e.g. "כל האזורים". */
+  allLabel: string;
+  options: { id: number; label: string }[];
+  value: number[];
+  onChange: (ids: number[]) => void;
+}) {
+  const { t } = useLocalization();
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  function toggle(id: number) {
+    onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
+  }
+
+  const summary =
+    value.length === 0
+      ? allLabel
+      : value.length === 1
+        ? options.find((o) => o.id === value[0])?.label ?? allLabel
+        : t("filter.n_selected", "{n} נבחרו").replace("{n}", String(value.length));
+
+  return (
+    <div ref={rootRef} className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`rounded-md border px-3 py-2 text-sm ${
+          value.length > 0
+            ? "border-status-magenta text-status-magenta bg-status-magenta/5"
+            : "border-gray-300 text-gray-700 hover:bg-gray-50"
+        }`}
+      >
+        {summary} <span className="text-xs">▾</span>
+      </button>
+      {open && (
+        <div className="absolute z-30 mt-1 min-w-[12rem] max-h-64 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg p-2 space-y-1 text-sm">
+          {options.length === 0 ? (
+            <p className="px-2 py-1 text-gray-400">—</p>
+          ) : (
+            options.map((o) => (
+              <label
+                key={o.id}
+                className="flex items-center gap-2 rounded px-2 py-1 cursor-pointer hover:bg-gray-50"
+              >
+                <input
+                  type="checkbox"
+                  className="accent-status-magenta"
+                  checked={value.includes(o.id)}
+                  onChange={() => toggle(o.id)}
+                />
+                {o.label}
+              </label>
+            ))
+          )}
+          {value.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="w-full text-start rounded px-2 py-1 text-status-magenta hover:bg-status-magenta/5"
+            >
+              {t("filter.clear", "נקה סינון")}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

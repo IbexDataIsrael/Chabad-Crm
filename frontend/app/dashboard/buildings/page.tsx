@@ -5,10 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 
 import { BuildingsMap } from "@/components/BuildingsMap";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
+import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 import {
   apartmentTitle,
@@ -20,56 +22,58 @@ import {
   type BuildingPage,
 } from "@/lib/types";
 
+type SortKey = "address" | "name" | "area" | "created";
+
 export default function BuildingsPage() {
   const { isAdmin, loading } = useAuth();
   const { t } = useLocalization();
   const [areas, setAreas] = useState<Area[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
-  const [filterArea, setFilterArea] = useState<string>("");
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  // fixes15 §7.1: multi-area filter + sorting; §1.2: everything persisted.
+  const [areaIds, setAreaIds] = usePersistentState<number[]>(
+    "crm.buildings.areaIds", [],
+  );
+  const [sort, setSort] = usePersistentState<SortKey>("crm.buildings.sort", "address");
+  const [dir, setDir] = usePersistentState<"asc" | "desc">("crm.buildings.dir", "asc");
+  const [page, setPage] = usePersistentState("crm.buildings.page", 1);
+  const [pageSize, setPageSize] = usePersistentState("crm.buildings.pageSize", 20);
   const [total, setTotal] = useState(0);
 
   // One server-side page of buildings (fixes12 §3.3); הכל is the default
   // filter (fixes11 §2.6) and fetching stays lazy per filter change.
-  async function loadBuildings(areaId = filterArea, p = page, size = pageSize) {
+  async function reload() {
     const params = new URLSearchParams();
-    if (areaId) params.set("area_id", areaId);
-    params.set("page", String(p));
-    params.set("page_size", String(size));
+    areaIds.forEach((id) => params.append("area_ids", String(id)));
+    params.set("sort", sort);
+    params.set("dir", dir);
+    params.set("page", String(page));
+    params.set("page_size", String(pageSize));
     const res = await apiFetch<BuildingPage>(`/api/buildings/list?${params}`);
     setBuildings(res.items);
     setTotal(res.total);
   }
 
-  async function reload() {
-    await loadBuildings();
-  }
-
   useEffect(() => {
-    (async () => {
-      const a = await apiFetch<Area[]>("/api/areas");
-      setAreas(a);
-      await loadBuildings("", 1, 20);
-    })().catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    apiFetch<Area[]>("/api/areas").then(setAreas).catch(() => {});
   }, []);
 
-  function onFilterArea(v: string) {
-    setFilterArea(v);
+  useEffect(() => {
+    reload().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [areaIds, sort, dir, page, pageSize]);
+
+  function onAreasChange(ids: number[]) {
+    setAreaIds(ids);
     setPage(1);
-    loadBuildings(v, 1).catch(() => {});
   }
 
   function onPageSizeChange(n: number) {
     setPageSize(n);
     setPage(1);
-    loadBuildings(filterArea, 1, n).catch(() => {});
   }
 
   function goToPage(p: number) {
     setPage(p);
-    loadBuildings(filterArea, p).catch(() => {});
   }
 
   const areaName = useMemo(() => {
@@ -112,18 +116,41 @@ export default function BuildingsPage() {
       ) : (
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="text-gray-500">{t("filter.by_area", "סנן לפי אזור:")}</span>
-          <select
-            className={inputClass}
-            value={filterArea}
-            onChange={(e) => onFilterArea(e.target.value)}
-          >
-            <option value="">{t("filter.all", "הכל")}</option>
-            {areas.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.area_name}
-              </option>
-            ))}
-          </select>
+          {/* fixes15 §7.1: several areas at once (like the apartments view). */}
+          <MultiSelectFilter
+            allLabel={t("filter.all", "הכל")}
+            options={areas.map((a) => ({ id: a.id, label: a.area_name }))}
+            value={areaIds}
+            onChange={onAreasChange}
+          />
+          {/* fixes15 §7.1: full column sorting. */}
+          <span className="flex items-center gap-2 text-gray-500">
+            {t("sort.label", "מיון:")}
+            <select
+              className={inputClass}
+              value={sort}
+              onChange={(e) => {
+                setSort(e.target.value as SortKey);
+                setPage(1);
+              }}
+            >
+              <option value="address">{t("sort.address", "כתובת")}</option>
+              <option value="name">{t("buildings.building_name", "שם בניין")}</option>
+              <option value="area">{t("sort.area", "אזור")}</option>
+              <option value="created">{t("sort.created", "תאריך יצירה")}</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => {
+                setDir(dir === "asc" ? "desc" : "asc");
+                setPage(1);
+              }}
+              className="rounded-md border border-gray-300 px-3 py-2 hover:bg-gray-50"
+              title={dir === "asc" ? t("sort.asc", "עולה") : t("sort.desc", "יורד")}
+            >
+              {dir === "asc" ? "↑" : "↓"}
+            </button>
+          </span>
           <span className="ms-auto flex items-center gap-2 text-gray-500">
             {t("pager.page_size", "בעמוד:")}
             <select

@@ -168,7 +168,9 @@ def list_apartments_enriched(
     current_user: models.User = Depends(get_current_user),
     building_id: Optional[int] = None,
     area_id: Optional[int] = None,
+    area_ids: Optional[list[int]] = Query(None),
     apartment_id: Optional[int] = None,
+    shliach_contact_id: Optional[int] = None,
     q: Optional[str] = None,
     sort: Literal["floor", "label", "resident", "building"] = "floor",
     dir: Literal["asc", "desc"] = "asc",
@@ -201,8 +203,24 @@ def list_apartments_enriched(
         query = query.filter(models.Apartment.building_id == building_id)
     if area_id is not None:
         query = query.filter(models.Building.area_id == area_id)
+    # fixes15 §7.1: multi-select area filter (repeated ?area_ids=… params).
+    if area_ids:
+        query = query.filter(models.Building.area_id.in_(area_ids))
     if apartment_id is not None:
         query = query.filter(models.Apartment.id == apartment_id)
+    # fixes15 §4.2: the apartments covered by one shliach contact (profile grid).
+    if shliach_contact_id is not None:
+        query = query.filter(
+            models.Apartment.id.in_(
+                select(models.ContactShliachApartment.apartment_id)
+                .join(
+                    models.ContactShliach,
+                    models.ContactShliach.id
+                    == models.ContactShliachApartment.contact_shliach_id,
+                )
+                .where(models.ContactShliach.contact_id == shliach_contact_id)
+            )
+        )
     if q:
         like = f"%{q.strip()}%"
         query = query.filter(

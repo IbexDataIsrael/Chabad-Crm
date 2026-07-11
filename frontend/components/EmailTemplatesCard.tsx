@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { RichTextEditor } from "@/components/RichTextEditor";
 import {
   adminListEmailTemplates,
   adminUpdateEmailTemplate,
@@ -14,6 +15,15 @@ import { useToast } from "@/lib/toast";
 const TEMPLATE_LABELS: Record<string, string> = {
   aignummail1: "מייל בקשה התקבלה (למשתמש)",
   aignummail2: "מייל אישור הארגון (למשתמש)",
+  shliach_welcome: "מייל קבלת פנים (פעיל / משתמש חדש)",
+};
+
+// Which {{placeholders}} each template understands (shown as a hint).
+const TEMPLATE_PLACEHOLDERS: Record<string, string> = {
+  aignummail1: "{{user_name}}, {{org_name}}",
+  aignummail2: "{{user_name}}, {{org_name}}, {{login_link}}",
+  shliach_welcome:
+    "{{first_name}}, {{last_name}}, {{url_to_system}}, {{shliach_email}}, {{org_name}}, {{logo_url}}",
 };
 
 const inputClass =
@@ -114,26 +124,26 @@ export function EmailTemplatesCard() {
                   <label className="block text-xs text-gray-500">
                     {t("admin.template_body_he", "תוכן (עברית)")}
                   </label>
-                  <textarea
-                    className={`${inputClass} min-h-[6rem]`}
+                  {/* fixes15 §2.1: WYSIWYG editing (HTML templates included). */}
+                  <RichTextEditor
                     dir="rtl"
                     value={draft.body_hebrew}
-                    onChange={(e) => setField(tpl.key, "body_hebrew", e.target.value)}
+                    onChange={(html) => setField(tpl.key, "body_hebrew", html)}
                   />
                   <label className="block text-xs text-gray-500">
                     {t("admin.template_body_en", "תוכן (אנגלית)")}
                   </label>
-                  <textarea
-                    className={`${inputClass} min-h-[6rem]`}
+                  <RichTextEditor
                     dir="ltr"
                     value={draft.body}
-                    onChange={(e) => setField(tpl.key, "body", e.target.value)}
+                    onChange={(html) => setField(tpl.key, "body", html)}
                   />
-                  <p className="text-xs text-gray-400">
-                    {t(
-                      "admin.template_placeholders",
-                      "ניתן להשתמש ב-{{user_name}}, {{org_name}}, {{login_link}}",
-                    )}
+                  <p className="text-xs text-gray-400" dir="ltr">
+                    {TEMPLATE_PLACEHOLDERS[tpl.key] ??
+                      t(
+                        "admin.template_placeholders",
+                        "ניתן להשתמש ב-{{user_name}}, {{org_name}}, {{login_link}}",
+                      )}
                   </p>
                   <button
                     disabled={savingKey === tpl.key}

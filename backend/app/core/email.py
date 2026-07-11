@@ -19,6 +19,18 @@ from app.config import settings
 
 logger = logging.getLogger("app.email")
 
+# backend/HTML  (email.py = backend/app/core/email.py → parents[2] = backend)
+HTML_DIR = Path(__file__).resolve().parents[2] / "HTML"
+
+
+def _load_html(name: str) -> str:
+    """The raw text of an /HTML template file ('' if missing)."""
+    try:
+        return (HTML_DIR / name).read_text(encoding="utf-8")
+    except OSError:  # pragma: no cover — template files ship with the repo
+        return ""
+
+
 # Superadmin-editable email templates (platform-level). Seeded into the
 # email_templates table on startup; these are the fallback defaults. The sent
 # email is the Hebrew body followed by the English body; {{placeholders}} are
@@ -26,7 +38,17 @@ logger = logging.getLogger("app.email")
 # Two superadmin-editable bilingual emails (keys the user chose). aignummail1 is
 # sent to the user on signup; aignummail2 when the org is approved. Placeholders:
 # {{user_name}}, {{org_name}}, and (aignummail2) {{login_link}}.
+# fixes15 §2.1 adds `shliach_welcome` — the new-shliach/new-user welcome mail,
+# seeded with the exact HTML shell of backend/HTML/hello_shliach.html so the
+# superadmin can restyle it in the WYSIWYG editor. Placeholders:
+# {{first_name}}, {{last_name}}, {{url_to_system}}, {{shliach_email}},
+# {{org_name}}, {{logo_url}}.
 DEFAULT_EMAIL_TEMPLATES: dict[str, dict[str, str]] = {
+    "shliach_welcome": {
+        "subject": "Welcome to the system",
+        "body_hebrew": "",
+        "body": _load_html("hello_shliach.html"),
+    },
     "aignummail1": {
         "subject": "בקשתך התקבלה — מיני CRM",
         "body_hebrew": (
@@ -123,9 +145,6 @@ def send_templated_email(db: Session, key: str, to: str, **vars: str) -> None:
         text_body = combined
 
     send_email(to, subject, text_body, html=html_body)
-
-# backend/HTML  (email.py = backend/app/core/email.py → parents[2] = backend)
-HTML_DIR = Path(__file__).resolve().parents[2] / "HTML"
 
 
 def _logo_url() -> str:
@@ -231,28 +250,29 @@ def send_verification_email(user, token: str) -> str:
 
 
 def send_shliach_welcome(
+    db: Session,
     to: str,
     first_name: str,
     last_name: str,
     shliach_email: str,
     org_name: str = "",
 ) -> None:
-    """Send (or log) the access-link email to a newly-created shliach (`hello_shliach.html`)."""
-    url = settings.frontend_url
-    body = (
-        f"Hello {first_name} {last_name}, here is your link to the system: {url}\n"
-        f"Use your email {shliach_email} to sign in."
-    )
-    html = render_template(
-        "hello_shliach.html",
+    """Send (or log) the access-link email to a newly-created shliach / user.
+
+    fixes15 §2.1: goes through the superadmin-editable `shliach_welcome` DB
+    template (seeded with the exact hello_shliach.html), so the WYSIWYG edits
+    take effect; the file stays only as the seed/fallback default."""
+    send_templated_email(
+        db,
+        "shliach_welcome",
+        to,
         first_name=first_name,
         last_name=last_name,
-        url_to_system=url,
+        url_to_system=settings.frontend_url,
         shliach_email=shliach_email,
         org_name=org_name,
         logo_url=_logo_url(),
     )
-    send_email(to, "Welcome to the system", body, html=html)
 
 
 # --- Signup approval workflow emails ---------------------------------------

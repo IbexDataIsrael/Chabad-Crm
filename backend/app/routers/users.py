@@ -107,6 +107,7 @@ def create_user(
     first, _, last = payload.full_name.partition(" ")
     try:
         send_shliach_welcome(
+            db,
             to=email,
             first_name=first,
             last_name=last,

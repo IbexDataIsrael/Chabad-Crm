@@ -3,9 +3,12 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
+import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
+import { usePersistentState } from "@/lib/persist";
+import { usePicklist } from "@/lib/picklists";
 import { useToast } from "@/lib/toast";
 import {
   apartmentTitle,
@@ -25,16 +28,20 @@ const PAGE_SIZES = [20, 50, 100];
 type SortKey = "floor" | "label" | "resident" | "building";
 type SortDir = "asc" | "desc";
 
-/** Filter/sort/page values a handler wants applied before state has settled. */
-interface LoadOverrides {
-  areaId?: string;
-  buildingId?: string;
-  q?: string;
-  sort?: SortKey;
-  dir?: SortDir;
-  page?: number;
-  pageSize?: number;
-}
+/** Toggleable row attributes (fixes15 §7.2); the title link always shows. */
+const FIELD_KEYS = [
+  "resident",
+  "location",
+  "notes",
+  "phone",
+  "email",
+  "language",
+  "jewish_status",
+  "campaign_status",
+  "mezuzah_status",
+] as const;
+type FieldKey = (typeof FIELD_KEYS)[number];
+const DEFAULT_FIELDS: FieldKey[] = ["resident", "location"];
 
 export default function ApartmentsPage() {
   const { loading, isShliach } = useAuth();
@@ -43,103 +50,135 @@ export default function ApartmentsPage() {
   const [total, setTotal] = useState(0);
   const [areas, setAreas] = useState<Area[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
-  const [filterArea, setFilterArea] = useState("");
-  const [filterBuilding, setFilterBuilding] = useState("");
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<SortKey>("floor");
-  const [dir, setDir] = useState<SortDir>("asc");
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  // fixes15 §1.2: filters/sort/page survive navigation; §7.1: multi-area.
+  const [areaIds, setAreaIds] = usePersistentState<number[]>(
+    "crm.apartments.areaIds", [],
+  );
+  const [filterBuilding, setFilterBuilding] = usePersistentState(
+    "crm.apartments.building", "",
+  );
+  const [query, setQuery] = usePersistentState("crm.apartments.q", "");
+  const [sort, setSort] = usePersistentState<SortKey>("crm.apartments.sort", "floor");
+  const [dir, setDir] = usePersistentState<SortDir>("crm.apartments.dir", "asc");
+  const [page, setPage] = usePersistentState("crm.apartments.page", 1);
+  const [pageSize, setPageSize] = usePersistentState("crm.apartments.pageSize", 20);
+  const [fields, setFields] = usePersistentState<FieldKey[]>(
+    "crm.apartments.fields", DEFAULT_FIELDS,
+  );
+  const [fieldsOpen, setFieldsOpen] = useState(false);
+  const [debouncedQ, setDebouncedQ] = useState(query);
   const [batchOpen, setBatchOpen] = useState(false);
   const [busy, setBusy] = useState(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const language = usePicklist("apartment.language");
+  const jewish = usePicklist("apartment.Jewish_status");
+  const campaign = usePicklist("apartment.campaign_status");
+  const mezuzah = usePicklist("apartment.mezuzah_status");
 
-  async function reload(over: LoadOverrides = {}) {
+  async function reload() {
     const params = new URLSearchParams();
-    const areaId = over.areaId ?? filterArea;
-    const buildingId = over.buildingId ?? filterBuilding;
-    const q = (over.q ?? query).trim();
-    if (areaId) params.set("area_id", areaId);
-    if (buildingId) params.set("building_id", buildingId);
-    if (q) params.set("q", q);
-    params.set("sort", over.sort ?? sort);
-    params.set("dir", over.dir ?? dir);
-    params.set("page", String(over.page ?? page));
-    params.set("page_size", String(over.pageSize ?? pageSize));
+    areaIds.forEach((id) => params.append("area_ids", String(id)));
+    if (filterBuilding) params.set("building_id", filterBuilding);
+    if (debouncedQ.trim()) params.set("q", debouncedQ.trim());
+    params.set("sort", sort);
+    params.set("dir", dir);
+    params.set("page", String(page));
+    params.set("page_size", String(pageSize));
     const res = await apiFetch<ApartmentPage>(`/api/apartments/list?${params}`);
     setItems(res.items);
     setTotal(res.total);
   }
 
-  // The building dropdown holds only the active area's buildings (fixes8 §2B).
-  async function loadBuildings(areaId: string) {
-    const list = await apiFetch<Building[]>(
-      `/api/buildings${areaId ? `?area_id=${areaId}` : ""}`,
-    ).catch(() => [] as Building[]);
-    setBuildings(list);
-    return list;
-  }
-
-  // Boot: default to Show All (fixes12 §2.1 reverses the fixes8 first-area
-  // default); fetching stays lazy and server-paginated per filter change.
+  // Boot: load the filter sources once; the list itself is fetched by the
+  // effect below (restored filters included — fixes15 §1.2).
   useEffect(() => {
     if (loading) return;
-    (async () => {
-      const a = await apiFetch<Area[]>("/api/areas").catch(() => [] as Area[]);
-      setAreas(a);
-      await loadBuildings("");
-      await reload({ areaId: "", buildingId: "", page: 1 });
-    })()
-      .catch(() => setItems([]))
+    apiFetch<Area[]>("/api/areas").then(setAreas).catch(() => setAreas([]));
+    apiFetch<Building[]>("/api/buildings")
+      .then(setBuildings)
+      .catch(() => setBuildings([]));
+  }, [loading]);
+
+  // One server-side page per filter/sort/page change.
+  useEffect(() => {
+    if (loading) return;
+    setBusy(true);
+    reload()
+      .catch(() => {
+        setItems([]);
+        setTotal(0);
+      })
       .finally(() => setBusy(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading]);
+  }, [loading, areaIds, filterBuilding, debouncedQ, sort, dir, page, pageSize]);
 
   // Debounced dynamic search (street name / label / resident).
   function onQueryChange(v: string) {
     setQuery(v);
     setPage(1);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => reload({ q: v, page: 1 }).catch(() => {}), 300);
+    debounceRef.current = setTimeout(() => setDebouncedQ(v), 300);
   }
 
-  function onAreaChange(v: string) {
-    setFilterArea(v);
-    setFilterBuilding("");
+  function onAreasChange(ids: number[]) {
+    setAreaIds(ids);
+    // Drop a building selection that fell outside the chosen areas.
+    if (
+      filterBuilding &&
+      ids.length > 0 &&
+      !buildings.some((b) => String(b.id) === filterBuilding && ids.includes(b.area_id))
+    ) {
+      setFilterBuilding("");
+    }
     setPage(1);
-    loadBuildings(v).catch(() => {});
-    reload({ areaId: v, buildingId: "", page: 1 }).catch(() => {});
   }
 
   function onBuildingChange(v: string) {
     setFilterBuilding(v);
     setPage(1);
-    reload({ buildingId: v, page: 1 }).catch(() => {});
   }
 
   function onSortChange(v: SortKey) {
     setSort(v);
     setPage(1);
-    reload({ sort: v, page: 1 }).catch(() => {});
   }
 
   function onDirToggle() {
-    const d: SortDir = dir === "asc" ? "desc" : "asc";
-    setDir(d);
+    setDir(dir === "asc" ? "desc" : "asc");
     setPage(1);
-    reload({ dir: d, page: 1 }).catch(() => {});
   }
 
   function onPageSizeChange(n: number) {
     setPageSize(n);
     setPage(1);
-    reload({ pageSize: n, page: 1 }).catch(() => {});
   }
 
   function goToPage(p: number) {
     setPage(p);
-    reload({ page: p }).catch(() => {});
   }
+
+  function toggleField(k: FieldKey) {
+    setFields((prev) =>
+      prev.includes(k) ? prev.filter((f) => f !== k) : [...prev, k],
+    );
+  }
+
+  const fieldLabels: Record<FieldKey, string> = {
+    resident: t("apartments.name", "שם דייר"),
+    location: t("apartments.building_id", "בניין"),
+    notes: t("apartments.apartment_notes", "הערות"),
+    phone: t("apartments.phone", "טלפון"),
+    email: t("apartments.email", "אימייל"),
+    language: t("picklist.apartment.language", "שפה"),
+    jewish_status: t("picklist.apartment.Jewish_status", "יהדות"),
+    campaign_status: t("picklist.apartment.campaign_status", "סטטוס קמפיין"),
+    mezuzah_status: t("picklist.apartment.mezuzah_status", "מזוזה"),
+  };
+  const on = (k: FieldKey) => fields.includes(k);
+
+  const visibleBuildings = buildings.filter(
+    (b) => areaIds.length === 0 || areaIds.includes(b.area_id),
+  );
 
   const lastPage = Math.max(1, Math.ceil(total / pageSize));
   const rangeText = t("pager.range", "{from}–{to} מתוך {total}")
@@ -174,28 +213,23 @@ export default function ApartmentsPage() {
         )}
       </div>
 
-      {/* Dataset filters (fixes8 §2): area + building bounds, street lookup. */}
+      {/* Dataset filters (fixes8 §2): multi-area (fixes15 §7.1) + building
+          bounds, street lookup. */}
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="text-gray-500">{t("filter.by_area", "סנן לפי אזור:")}</span>
-        <select
-          className={inputClass}
-          value={filterArea}
-          onChange={(e) => onAreaChange(e.target.value)}
-        >
-          <option value="">{t("filter.all_areas", "כל האזורים")}</option>
-          {areas.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.area_name}
-            </option>
-          ))}
-        </select>
+        <MultiSelectFilter
+          allLabel={t("filter.all_areas", "כל האזורים")}
+          options={areas.map((a) => ({ id: a.id, label: a.area_name }))}
+          value={areaIds}
+          onChange={onAreasChange}
+        />
         <select
           className={inputClass}
           value={filterBuilding}
           onChange={(e) => onBuildingChange(e.target.value)}
         >
           <option value="">{t("filter.all_buildings", "כל הבניינים")}</option>
-          {buildings.map((b) => (
+          {visibleBuildings.map((b) => (
             <option key={b.id} value={b.id}>
               {buildingDisplayName(b)}
             </option>
@@ -209,7 +243,7 @@ export default function ApartmentsPage() {
         />
       </div>
 
-      {/* Sorting (fixes8 §1C) + page size (fixes8 §2C). */}
+      {/* Sorting (fixes8 §1C) + field config (fixes15 §7.2) + page size. */}
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="text-gray-500">{t("sort.label", "מיון:")}</span>
         <select
@@ -230,6 +264,13 @@ export default function ApartmentsPage() {
         >
           {dir === "asc" ? "↑" : "↓"} {dir === "asc" ? t("sort.asc", "עולה") : t("sort.desc", "יורד")}
         </button>
+        <button
+          type="button"
+          onClick={() => setFieldsOpen((v) => !v)}
+          className="rounded-md border border-gray-300 px-3 py-2 hover:bg-gray-50"
+        >
+          ⚙ {t("columns.fields_configure", "התאמת שדות")}
+        </button>
         <span className="ms-auto text-gray-500">{t("pager.page_size", "בעמוד:")}</span>
         <select
           className={inputClass}
@@ -243,6 +284,45 @@ export default function ApartmentsPage() {
           ))}
         </select>
       </div>
+
+      {/* fixes15 §7.2: user-selected row attributes (persisted per browser). */}
+      {fieldsOpen && (
+        <div className="bg-white rounded-xl shadow-sm p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">{t("columns.title", "עמודות מוצגות")}</h3>
+            <button
+              type="button"
+              onClick={() => setFields(DEFAULT_FIELDS)}
+              className="text-xs text-status-magenta hover:underline"
+            >
+              {t("columns.reset", "איפוס ברירת מחדל")}
+            </button>
+          </div>
+          <p className="text-xs text-gray-400">
+            {t(
+              "columns.hint",
+              "בחר אילו עמודות יוצגו בטבלה. ההעדפה נשמרת בדפדפן זה.",
+            )}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {FIELD_KEYS.map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => toggleField(k)}
+                className={`rounded-md border px-3 py-1.5 text-sm ${
+                  on(k)
+                    ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
+                    : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                {on(k) ? "✓ " : ""}
+                {fieldLabels[k]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {batchOpen && (
         <BatchModal
@@ -271,12 +351,52 @@ export default function ApartmentsPage() {
                 >
                   {apartmentTitle(a)}
                 </Link>
-                {a.name && <span className="ms-2 text-sm text-gray-600">{a.name}</span>}
-                <div className="text-xs text-gray-500">
-                  {[buildingDisplayName({ id: a.building_id, building_name: a.building_name, building_address: a.building_address }), a.area_name]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </div>
+                {on("resident") && a.name && (
+                  <span className="ms-2 text-sm text-gray-600">{a.name}</span>
+                )}
+                {on("location") && (
+                  <div className="text-xs text-gray-500">
+                    {[buildingDisplayName({ id: a.building_id, building_name: a.building_name, building_address: a.building_address }), a.area_name]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </div>
+                )}
+                {on("notes") && a.apartment_notes && (
+                  <div className="text-xs text-gray-500">{a.apartment_notes}</div>
+                )}
+              </div>
+              {/* fixes15 §7.2: the optional technical attributes as chips. */}
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                {on("phone") && a.phone && (
+                  <span dir="ltr" className="rounded bg-gray-100 text-gray-600 px-2 py-0.5">
+                    {a.phone}
+                  </span>
+                )}
+                {on("email") && a.email && (
+                  <span dir="ltr" className="rounded bg-gray-100 text-gray-600 px-2 py-0.5">
+                    {a.email}
+                  </span>
+                )}
+                {on("language") && a.language && (
+                  <span className="rounded bg-gray-100 text-gray-600 px-2 py-0.5">
+                    {fieldLabels.language}: {language.labelFor(a.language)}
+                  </span>
+                )}
+                {on("jewish_status") && a.jewish_status && (
+                  <span className="rounded bg-gray-100 text-gray-600 px-2 py-0.5">
+                    {fieldLabels.jewish_status}: {jewish.labelFor(a.jewish_status)}
+                  </span>
+                )}
+                {on("campaign_status") && a.campaign_status && (
+                  <span className="rounded bg-gray-100 text-gray-600 px-2 py-0.5">
+                    {fieldLabels.campaign_status}: {campaign.labelFor(a.campaign_status)}
+                  </span>
+                )}
+                {on("mezuzah_status") && a.mezuzah_status && (
+                  <span className="rounded bg-gray-100 text-gray-600 px-2 py-0.5">
+                    {fieldLabels.mezuzah_status}: {mezuzah.labelFor(a.mezuzah_status)}
+                  </span>
+                )}
               </div>
               <div className="ms-auto text-sm">
                 {a.contact_id ? (

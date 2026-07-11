@@ -46,6 +46,21 @@ export function ContactView({
   const isMekurav = contact.contact_type === "mekurav";
   const hasCoords = contact.latitude != null && contact.longitude != null;
 
+  // fixes15 §4.2: a shliach profile shows only shliach-relevant fields — no
+  // pipeline/color/priority/address (those are general-CRM/mekurav data).
+  const shliachFields: [string | null, string, ReactNode][] = [
+    [null, t("contacts.name", "שם פרטי"), contact.name],
+    ["contacts.last_name", t("contacts.last_name", "שם משפחה"), contact.last_name || "—"],
+    [null, t("contacts.phone", "טלפון"), contact.phone ? <span dir="ltr" key="p">{contact.phone}</span> : "—"],
+    ["contacts.email", t("contacts.email", "אימייל"), contact.email ? <span dir="ltr">{contact.email}</span> : "—"],
+    [null, t("contacts.contact_type", "סוג איש קשר"), contactType.labelFor(contact.contact_type) || "—"],
+    [
+      null,
+      t("contacts.created_at", "נוצר בתאריך"),
+      <span dir="ltr" key="cr">{new Date(contact.created_at).toLocaleDateString("he-IL")}</span>,
+    ],
+  ];
+
   // Each entry: [fieldKey | null, label, value]. null = always shown (required).
   const fields: [string | null, string, ReactNode][] = [
     [null, t("contacts.name", "שם פרטי"), contact.name],
@@ -127,9 +142,11 @@ export function ContactView({
       ]
     : [];
 
-  const allFields = [...fields, ...mekuravFields].filter(
-    ([key]) => key === null || vis(key),
-  );
+  const allFields = (
+    contact.contact_type === "shliach"
+      ? shliachFields
+      : [...fields, ...mekuravFields]
+  ).filter(([key]) => key === null || vis(key));
 
   return (
     <div className="space-y-6">
@@ -157,23 +174,8 @@ export function ContactView({
                 </dd>
               </div>
             )}
-            {vis("contact_shliach.apartments") && (
-              <div className="flex flex-col">
-                <dt className="text-xs text-gray-500">{t("contact_shliach.apartments", "דירות באחריות הפעיל")}</dt>
-                <dd className="text-sm">
-                  {contact.shliach.apartment_ids.length === 0 ? (
-                    "—"
-                  ) : (
-                    contact.shliach.apartment_ids.map((id, i) => (
-                      <span key={id}>
-                        {i > 0 && ", "}
-                        <ApartmentLabel id={id} />
-                      </span>
-                    ))
-                  )}
-                </dd>
-              </div>
-            )}
+            {/* The covered apartments now render as a dedicated sub-grid on
+                the profile page (fixes15 §4.2) instead of an inline list. */}
             {vis("contact_shliach.notes") && (
               <div className="flex flex-col">
                 <dt className="text-xs text-gray-500">{t("contact_shliach.notes", "הערות")}</dt>
@@ -184,7 +186,8 @@ export function ContactView({
         )}
       </dl>
 
-      {hasCoords && (
+      {/* Map goes with the (mekurav) address — shliach profiles skip it. */}
+      {isMekurav && hasCoords && (
         <ContactMap lat={contact.latitude as number} lng={contact.longitude as number} />
       )}
 

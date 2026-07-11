@@ -15,10 +15,12 @@ import {
   adminListOrgUsers,
   adminListOrganizations,
   adminListUsers,
+  adminUserDependencies,
   adminVerifyUser,
   setToken,
   type AdminOrganization,
   type AdminUser,
+  type AdminUserDependencies,
 } from "@/lib/api";
 import { EmailTemplatesCard } from "@/components/EmailTemplatesCard";
 import { SystemSettingsCard } from "@/components/SystemSettingsCard";
@@ -149,16 +151,21 @@ export default function SystemAdminPage() {
     }
   }
 
-  async function onDeleteUser(orgId: number, user: AdminUser) {
-    if (
-      !confirm(
-        t("admin.confirm_delete_user", `למחוק את המשתמש ${user.email ?? user.username}?`),
-      )
-    )
-      return;
+  // fixes15 §2.2: user deletion opens a modal that reports the data ties
+  // (assigned contacts, shliach card, coverage) and asks "בטוח ?".
+  const [userToDelete, setUserToDelete] = useState<{
+    user: AdminUser;
+    orgId: number | null;
+  } | null>(null);
+
+  async function onDeleteUserConfirmed() {
+    if (!userToDelete) return;
+    const { user, orgId } = userToDelete;
+    setUserToDelete(null);
     await run(async () => {
       await adminDeleteUser(user.id);
-      await refreshUsers(orgId);
+      if (orgId !== null) await refreshUsers(orgId);
+      await loadAllUsers();
       await loadOrgs();
     }, t("admin.user_deleted", "המשתמש נמחק"));
   }
@@ -194,19 +201,6 @@ export default function SystemAdminPage() {
     }, t("admin.org_rejected", "הבקשה נדחתה"));
   }
 
-  async function onDeleteUserGlobal(user: AdminUser) {
-    if (
-      !confirm(
-        t("admin.confirm_delete_user", `למחוק את המשתמש ${user.email ?? user.username}?`),
-      )
-    )
-      return;
-    await run(async () => {
-      await adminDeleteUser(user.id);
-      await loadAllUsers();
-      await loadOrgs();
-    }, t("admin.user_deleted", "המשתמש נמחק"));
-  }
 
   if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
   if (!isSuperadmin) {
@@ -319,7 +313,7 @@ export default function SystemAdminPage() {
                       <td className="py-2 text-end whitespace-nowrap">
                         <button
                           disabled={busy}
-                          onClick={() => onDeleteUserGlobal(u)}
+                          onClick={() => setUserToDelete({ user: u, orgId: null })}
                           className="text-status-darkred hover:underline disabled:opacity-50"
                         >
                           {t("action.delete", "מחק")}
@@ -510,7 +504,7 @@ export default function SystemAdminPage() {
                               )}
                               <button
                                 disabled={busy}
-                                onClick={() => onDeleteUser(org.id, u)}
+                                onClick={() => setUserToDelete({ user: u, orgId: org.id })}
                                 className="text-status-darkred hover:underline disabled:opacity-50"
                               >
                                 {t("action.delete", "מחק")}
@@ -538,6 +532,120 @@ export default function SystemAdminPage() {
           onConfirm={() => onDeleteOrgConfirmed(orgToDelete)}
         />
       )}
+
+      {userToDelete && (
+        <DeleteUserModal
+          user={userToDelete.user}
+          onCancel={() => setUserToDelete(null)}
+          onConfirm={onDeleteUserConfirmed}
+        />
+      )}
+    </div>
+  );
+}
+
+/** fixes15 §2.2: before deleting a user (e.g. a shliach), show what's still
+ *  tied to them and require an explicit "בטוח ?" confirmation. All copy is
+ *  localization-table-mapped. */
+function DeleteUserModal({
+  user,
+  onCancel,
+  onConfirm,
+}: {
+  user: AdminUser;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { t } = useLocalization();
+  const [deps, setDeps] = useState<AdminUserDependencies | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    adminUserDependencies(user.id)
+      .then(setDeps)
+      .catch(() => setFailed(true));
+  }, [user.id]);
+
+  const n = (tpl: string, count: number) => tpl.replace("{n}", String(count));
+  const ties: string[] = deps
+    ? [
+        ...(deps.shliach_contact_id
+          ? [
+              t("admin.deps_shliach_contact", "מקושר לכרטיס פעיל: {name}").replace(
+                "{name}",
+                deps.shliach_contact_name ?? `#${deps.shliach_contact_id}`,
+              ),
+            ]
+          : []),
+        ...(deps.assigned_contacts > 0
+          ? [n(t("admin.deps_assigned_contacts", "אנשי קשר משויכים: {n}"), deps.assigned_contacts)]
+          : []),
+        ...(deps.covered_apartments > 0
+          ? [n(t("admin.deps_apartments", "דירות באחריות: {n}"), deps.covered_apartments)]
+          : []),
+        ...(deps.covered_areas > 0
+          ? [n(t("admin.deps_areas", "אזורים באחריות: {n}"), deps.covered_areas)]
+          : []),
+        ...(deps.interactions > 0
+          ? [n(t("admin.deps_interactions", "אינטראקציות שנוצרו: {n}"), deps.interactions)]
+          : []),
+      ]
+    : [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md bg-white rounded-xl shadow-xl p-5 space-y-4">
+        <h2 className="text-lg font-bold text-status-darkred">
+          {t("admin.delete_user_title", "מחיקת משתמש")}
+        </h2>
+        <p className="text-sm font-medium" dir="ltr">
+          {user.full_name} · {user.email ?? user.username}
+        </p>
+
+        {/* fixes15 §2.2: the connected-data report. */}
+        {deps === null && !failed ? (
+          <p className="text-sm text-gray-400">{t("action.loading", "טוען…")}</p>
+        ) : deps?.has_dependencies ? (
+          <div className="space-y-1.5">
+            <p className="text-sm text-gray-700">
+              {t("admin.deps_intro", "למשתמש זה קיימים נתונים מקושרים במערכת:")}
+            </p>
+            <ul className="list-disc ps-5 text-sm text-gray-700 space-y-0.5">
+              {ties.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+            <p className="text-xs text-gray-500">
+              {t(
+                "admin.deps_note",
+                "בעת המחיקה השיוכים יוסרו והנתונים יישארו ללא משתמש מקושר.",
+              )}
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">
+            {t("admin.deps_none", "אין נתונים מקושרים למשתמש זה.")}
+          </p>
+        )}
+
+        <p className="text-sm font-semibold">{t("admin.confirm_sure", "בטוח ?")}</p>
+        <div className="flex items-center gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="rounded-md bg-status-darkred text-white px-4 py-2 text-sm font-medium hover:opacity-90"
+          >
+            {t("action.delete", "מחק")}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+          >
+            {t("action.cancel", "ביטול")}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

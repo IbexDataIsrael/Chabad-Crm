@@ -1,8 +1,9 @@
 """Building CRUD (belong to an area) + nested floor CRUD, org-scoped.
 Mutations: admins only. Creating a building can auto-create its floors (fixes7)."""
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import nullslast
 from sqlalchemy.orm import Session
 
 from app import models
@@ -80,11 +81,16 @@ def list_buildings_paginated(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
     area_id: Optional[int] = None,
+    area_ids: Optional[list[int]] = Query(None),
+    sort: Literal["address", "name", "area", "created"] = "address",
+    dir: Literal["asc", "desc"] = "asc",
     page: int = Query(1, ge=1),
     page_size: int = Query(20),
 ):
     """One server-side page of buildings (fixes12 §3.3, same envelope pattern
-    as contacts/apartments). The plain list keeps feeding the pickers."""
+    as contacts/apartments). The plain list keeps feeding the pickers.
+    fixes15 §7.1: sortable (`sort`+`dir`) and filterable by several areas at
+    once (repeated ?area_ids=… params; the single `area_id` stays supported)."""
     if page_size not in (20, 50, 100):
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY, "page_size must be 20, 50 or 100"
@@ -94,9 +100,24 @@ def list_buildings_paginated(
     )
     if area_id is not None:
         query = query.filter(models.Building.area_id == area_id)
+    if area_ids:
+        query = query.filter(models.Building.area_id.in_(area_ids))
     total = query.count()
+    if sort == "name":
+        key = models.Building.building_name
+    elif sort == "area":
+        # Alphabetical by the parent area's name.
+        query = query.join(models.Area, models.Area.id == models.Building.area_id)
+        key = models.Area.area_name
+    elif sort == "created":
+        key = models.Building.created_at
+    else:
+        key = models.Building.building_address
     rows = (
-        query.order_by(models.Building.building_address, models.Building.id)
+        query.order_by(
+            nullslast(key.desc() if dir == "desc" else key.asc()),
+            models.Building.id,
+        )
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()

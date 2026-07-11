@@ -308,6 +308,22 @@ export const adminUpdateEmailTemplate = (
 
 export const adminListUsers = (): Promise<AdminUser[]> => apiFetch("/api/admin/users");
 
+/** What still points at a user (fixes15 §2.2 delete-confirm modal). */
+export interface AdminUserDependencies {
+  assigned_contacts: number;
+  interactions: number;
+  shliach_contact_id: number | null;
+  shliach_contact_name: string | null;
+  covered_apartments: number;
+  covered_areas: number;
+  has_dependencies: boolean;
+}
+
+export const adminUserDependencies = (
+  userId: number,
+): Promise<AdminUserDependencies> =>
+  apiFetch(`/api/admin/users/${userId}/dependencies`);
+
 export const adminDeleteUser = (userId: number): Promise<void> =>
   apiFetch(`/api/admin/users/${userId}`, { method: "DELETE" });
 

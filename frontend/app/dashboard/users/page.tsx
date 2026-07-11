@@ -7,6 +7,7 @@ import { EmailInput } from "@/components/EmailInput";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
+import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 
 interface OrgUser {
@@ -16,10 +17,16 @@ interface OrgUser {
   email: string | null;
   role: string;
   is_active: boolean;
+  created_at: string;
 }
+
+type SortKey = "name" | "created";
 
 const inputClass =
   "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+// Compact variant for the sort/paging toolbar controls.
+const toolbarSelectClass =
+  "rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none";
 
 export default function UsersPage() {
   const router = useRouter();
@@ -30,6 +37,11 @@ export default function UsersPage() {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<OrgUser | null>(null);
   const [busy, setBusy] = useState(true);
+  // fixes15 §3.2: sorting (A-Z / date created) + paging, persisted (§1.2).
+  const [sort, setSort] = usePersistentState<SortKey>("crm.users.sort", "name");
+  const [dir, setDir] = usePersistentState<"asc" | "desc">("crm.users.dir", "asc");
+  const [page, setPage] = usePersistentState("crm.users.page", 1);
+  const [pageSize, setPageSize] = usePersistentState("crm.users.pageSize", 20);
 
   useEffect(() => {
     if (!loading && !isAdmin) router.replace("/dashboard");
@@ -65,6 +77,22 @@ export default function UsersPage() {
       : role === "shliach"
         ? t("users.role_shliach", "פעיל")
         : t("users.role_staff", "משתמש מוגבל");
+
+  // Client-side sort + page — the org's user directory is one small list.
+  const sorted = [...users].sort((a, b) => {
+    const cmp =
+      sort === "created"
+        ? a.created_at.localeCompare(b.created_at)
+        : a.full_name.localeCompare(b.full_name, "he");
+    return dir === "desc" ? -cmp : cmp;
+  });
+  const lastPage = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const safePage = Math.min(page, lastPage);
+  const visible = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const rangeText = t("pager.range", "{from}–{to} מתוך {total}")
+    .replace("{from}", String(sorted.length === 0 ? 0 : (safePage - 1) * pageSize + 1))
+    .replace("{to}", String(Math.min(safePage * pageSize, sorted.length)))
+    .replace("{total}", String(sorted.length));
 
   return (
     <div className="space-y-4 max-w-4xl">
@@ -114,6 +142,52 @@ export default function UsersPage() {
         />
       )}
 
+      {/* fixes15 §3.2: sorting + paging toolbar. */}
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="flex items-center gap-2 text-gray-500">
+          {t("sort.label", "מיון:")}
+          <select
+            className={toolbarSelectClass}
+            value={sort}
+            onChange={(e) => {
+              setSort(e.target.value as SortKey);
+              setPage(1);
+            }}
+          >
+            <option value="name">{t("sort.by_name", "שם")}</option>
+            <option value="created">{t("sort.created", "תאריך יצירה")}</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => {
+              setDir(dir === "asc" ? "desc" : "asc");
+              setPage(1);
+            }}
+            className="rounded-md border border-gray-300 px-3 py-2 hover:bg-gray-50"
+            title={dir === "asc" ? t("sort.asc", "עולה") : t("sort.desc", "יורד")}
+          >
+            {dir === "asc" ? "↑" : "↓"}
+          </button>
+        </span>
+        <span className="ms-auto flex items-center gap-2 text-gray-500">
+          {t("pager.page_size", "בעמוד:")}
+          <select
+            className={toolbarSelectClass}
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              setPage(1);
+            }}
+          >
+            {[20, 50, 100].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </span>
+      </div>
+
       <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-600 text-start">
@@ -121,6 +195,9 @@ export default function UsersPage() {
               <th className="px-4 py-2 text-start font-medium">{t("common.name", "שם")}</th>
               <th className="px-4 py-2 text-start font-medium">{t("contacts.email", "אימייל")}</th>
               <th className="px-4 py-2 text-start font-medium">{t("users.role_label", "תפקיד")}</th>
+              <th className="px-4 py-2 text-start font-medium">
+                {t("contacts.created_at", "נוצר בתאריך")}
+              </th>
               <th className="px-4 py-2 text-start font-medium"></th>
               <th className="px-4 py-2" />
             </tr>
@@ -128,18 +205,18 @@ export default function UsersPage() {
           <tbody>
             {busy ? (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
                   {t("action.loading", "טוען…")}
                 </td>
               </tr>
-            ) : users.length === 0 ? (
+            ) : sorted.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
                   {t("users.none", "אין משתמשים.")}
                 </td>
               </tr>
             ) : (
-              users.map((u) => (
+              visible.map((u) => (
                 <tr key={u.id} className="border-t border-gray-100">
                   <td className="px-4 py-2 font-medium">
                     {u.full_name}
@@ -160,6 +237,9 @@ export default function UsersPage() {
                     >
                       {roleLabel(u.role)}
                     </span>
+                  </td>
+                  <td className="px-4 py-2" dir="ltr">
+                    {new Date(u.created_at).toLocaleDateString("he-IL")}
                   </td>
                   <td className="px-4 py-2">
                     {!u.is_active && (
@@ -193,6 +273,29 @@ export default function UsersPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Client-side pager (fixes15 §3.2). */}
+      {!busy && sorted.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <button
+            type="button"
+            disabled={safePage <= 1}
+            onClick={() => setPage(safePage - 1)}
+            className="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {t("pager.prev", "→ הקודם")}
+          </button>
+          <span className="text-gray-500">{rangeText}</span>
+          <button
+            type="button"
+            disabled={safePage >= lastPage}
+            onClick={() => setPage(safePage + 1)}
+            className="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {t("pager.next", "הבא ←")}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -51,6 +51,7 @@ export interface AdminArea {
   guid: string;
   name: string;
   comments: string | null;
+  created_at?: string | null; // feeds date sorting (fixes15 §6)
 }
 
 export interface Shliach {
@@ -104,6 +105,9 @@ export interface Contact {
   special_dates?: SignificantDate[];
   /** Dynamic picklist selections, keyed by system_name. */
   picklist_values?: Record<string, string>;
+  /** Enriched by /api/contacts/list only (fixes15 §5.1 grid columns). */
+  building_name?: string | null;
+  area_name?: string | null;
 }
 
 /** One server-side page of the contacts list (fixes8 §2C pattern). */

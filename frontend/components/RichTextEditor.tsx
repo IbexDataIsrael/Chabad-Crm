@@ -1,0 +1,113 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+
+import { useLocalization } from "@/lib/localization";
+
+/**
+ * Dependency-free WYSIWYG editor for the superadmin email templates
+ * (fixes15 §2.1): a contentEditable surface with a small formatting toolbar,
+ * plus an HTML-source mode for hand-editing the full markup. Values that are
+ * complete HTML documents (like the seeded welcome mail) open in HTML mode —
+ * the visual surface keeps only body content.
+ */
+export function RichTextEditor({
+  value,
+  onChange,
+  dir = "ltr",
+}: {
+  value: string;
+  onChange: (html: string) => void;
+  dir?: "ltr" | "rtl";
+}) {
+  const { t } = useLocalization();
+  const isFullDocument = /<html[\s>]|<!doctype/i.test(value);
+  const [mode, setMode] = useState<"visual" | "html">(
+    isFullDocument ? "html" : "visual",
+  );
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
+
+  // Push external value into the editable DOM only when it actually differs —
+  // rewriting innerHTML on every keystroke would reset the caret.
+  useEffect(() => {
+    if (mode !== "visual") return;
+    const el = surfaceRef.current;
+    if (el && el.innerHTML !== value) el.innerHTML = value;
+  }, [value, mode]);
+
+  function exec(cmd: string, arg?: string) {
+    surfaceRef.current?.focus();
+    document.execCommand(cmd, false, arg);
+    onChange(surfaceRef.current?.innerHTML ?? "");
+  }
+
+  function addLink() {
+    const url = window.prompt(t("editor.link_prompt", "כתובת הקישור:"), "https://");
+    if (url) exec("createLink", url);
+  }
+
+  const toolBtn =
+    "rounded border border-gray-200 px-2 py-1 text-xs hover:bg-gray-50 min-w-[1.9rem]";
+  const modeBtn = (active: boolean) =>
+    `rounded px-2 py-1 text-xs ${
+      active
+        ? "bg-status-magenta text-white"
+        : "border border-gray-200 text-gray-600 hover:bg-gray-50"
+    }`;
+
+  return (
+    <div className="rounded-md border border-gray-300 overflow-hidden bg-white">
+      <div className="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50 px-2 py-1.5">
+        {mode === "visual" && (
+          <>
+            <button type="button" className={`${toolBtn} font-bold`} title={t("editor.bold", "מודגש")} onClick={() => exec("bold")}>
+              B
+            </button>
+            <button type="button" className={`${toolBtn} italic`} title={t("editor.italic", "נטוי")} onClick={() => exec("italic")}>
+              I
+            </button>
+            <button type="button" className={`${toolBtn} underline`} title={t("editor.underline", "קו תחתון")} onClick={() => exec("underline")}>
+              U
+            </button>
+            <button type="button" className={toolBtn} title={t("editor.list", "רשימה")} onClick={() => exec("insertUnorderedList")}>
+              ••
+            </button>
+            <button type="button" className={toolBtn} title={t("editor.list", "רשימה")} onClick={() => exec("insertOrderedList")}>
+              1.
+            </button>
+            <button type="button" className={toolBtn} title={t("editor.link", "קישור")} onClick={addLink}>
+              🔗
+            </button>
+          </>
+        )}
+        <span className="ms-auto flex items-center gap-1">
+          <button type="button" className={modeBtn(mode === "visual")} onClick={() => setMode("visual")}>
+            {t("editor.visual", "עיצוב")}
+          </button>
+          <button type="button" className={modeBtn(mode === "html")} onClick={() => setMode("html")}>
+            {t("editor.html", "HTML")}
+          </button>
+        </span>
+      </div>
+      {mode === "visual" ? (
+        /* pre-wrap keeps the newlines of legacy plain-text templates visible */
+        <div
+          ref={surfaceRef}
+          dir={dir}
+          contentEditable
+          suppressContentEditableWarning
+          onInput={() => onChange(surfaceRef.current?.innerHTML ?? "")}
+          className="min-h-[8rem] max-h-[24rem] overflow-y-auto px-3 py-2 text-sm whitespace-pre-wrap focus:outline-none"
+        />
+      ) : (
+        <textarea
+          dir="ltr"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full min-h-[12rem] max-h-[28rem] px-3 py-2 font-mono text-xs focus:outline-none resize-y"
+          spellCheck={false}
+        />
+      )}
+    </div>
+  );
+}

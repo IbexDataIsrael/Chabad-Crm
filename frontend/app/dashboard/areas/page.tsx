@@ -4,15 +4,21 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { AreasMap } from "@/components/AreasMap";
+import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
+import { usePersistentState } from "@/lib/persist";
 import type { Area } from "@/lib/types";
 
 export default function AreasPage() {
   const { isAdmin, loading } = useAuth();
   const { t } = useLocalization();
   const [areas, setAreas] = useState<Area[]>([]);
+  // fixes15 §7.1 multi-select filter + §1.1 pagination, persisted (§1.2).
+  const [areaIds, setAreaIds] = usePersistentState<number[]>("crm.areas.ids", []);
+  const [page, setPage] = usePersistentState("crm.areas.page", 1);
+  const [pageSize, setPageSize] = usePersistentState("crm.areas.pageSize", 20);
 
   async function reload() {
     setAreas(await apiFetch<Area[]>("/api/areas"));
@@ -23,6 +29,19 @@ export default function AreasPage() {
   }, []);
 
   if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+
+  const filtered =
+    areaIds.length === 0 ? areas : areas.filter((a) => areaIds.includes(a.id));
+  const lastPage = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, lastPage);
+  const visible = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const rangeText = t("pager.range", "{from}–{to} מתוך {total}")
+    .replace("{from}", String(filtered.length === 0 ? 0 : (safePage - 1) * pageSize + 1))
+    .replace("{to}", String(Math.min(safePage * pageSize, filtered.length)))
+    .replace("{total}", String(filtered.length));
+
+  const inputClass =
+    "rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none";
 
   return (
     <div className="space-y-5 max-w-3xl">
@@ -39,26 +58,81 @@ export default function AreasPage() {
       </div>
       <p className="text-sm text-gray-500">{t("page.areas_intro")}</p>
 
-      {/* All the org's zone polygons on one map (fixes7 §7A). */}
-      {areas.some((a) => a.area_polygon) && (
+      {areas.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-gray-500">{t("filter.by_area", "סנן לפי אזור:")}</span>
+          <MultiSelectFilter
+            allLabel={t("filter.all", "הכל")}
+            options={areas.map((a) => ({ id: a.id, label: a.area_name }))}
+            value={areaIds}
+            onChange={(ids) => {
+              setAreaIds(ids);
+              setPage(1);
+            }}
+          />
+          <span className="ms-auto flex items-center gap-2 text-gray-500">
+            {t("pager.page_size", "בעמוד:")}
+            <select
+              className={inputClass}
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(1);
+              }}
+            >
+              {[20, 50, 100].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </span>
+        </div>
+      )}
+
+      {/* All the org's zone polygons on one map (fixes7 §7A) — filtered. */}
+      {filtered.some((a) => a.area_polygon) && (
         <div className="bg-white rounded-xl shadow-sm p-2 space-y-1">
           <h2 className="px-2 pt-1 text-sm font-semibold text-gray-500">
             {t("areas.map_all", "מפת האזורים")}
           </h2>
-          <AreasMap areas={areas} />
+          <AreasMap areas={filtered} />
         </div>
       )}
 
       <div className="space-y-3">
-        {areas.map((a) => (
+        {visible.map((a) => (
           <AreaCard key={a.id} area={a} isAdmin={isAdmin} onChanged={reload} />
         ))}
-        {areas.length === 0 && (
+        {filtered.length === 0 && (
           <p className="bg-white rounded-xl shadow-sm px-4 py-6 text-center text-gray-400">
             {t("page.no_areas", "אין אזורים עדיין.")}
           </p>
         )}
       </div>
+
+      {/* Client-side pager (fixes15 §1.1 — areas live in one small list). */}
+      {filtered.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <button
+            type="button"
+            disabled={safePage <= 1}
+            onClick={() => setPage(safePage - 1)}
+            className="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {t("pager.prev", "→ הקודם")}
+          </button>
+          <span className="text-gray-500">{rangeText}</span>
+          <button
+            type="button"
+            disabled={safePage >= lastPage}
+            onClick={() => setPage(safePage + 1)}
+            className="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {t("pager.next", "הבא ←")}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
