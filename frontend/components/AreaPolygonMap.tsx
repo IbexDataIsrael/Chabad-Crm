@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { useLocalization } from "@/lib/localization";
 import { loadGoogleMaps, mapsKey } from "@/lib/maps";
 
 // Sheepshead Bay, Brooklyn — sensible default center when an area has no polygon yet.
@@ -47,6 +48,9 @@ export function AreaPolygonMap({
   value: string | null;
   onChange: (geojson: string | null) => void;
 }) {
+  // fixes17 §4: the apm.* keys were seeded long ago but this component was
+  // hardcoded Hebrew — the English UI now resolves them properly.
+  const { t } = useLocalization();
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const polygonRef = useRef<any>(null); // finalized, editable polygon
@@ -264,8 +268,11 @@ export function AreaPolygonMap({
         />
         <p className="text-xs text-gray-400">
           {loadError
-            ? "טעינת מפת Google נכשלה — בדוק את מפתח ה-API (הפעלת Maps JavaScript API והרשאת המקור localhost). ניתן להזין GeoJSON ידנית."
-            : "לציור פוליגון אינטראקטיבי הגדר מפתח Google Maps."}
+            ? t(
+                "apm.load_failed_hint",
+                "טעינת מפת Google נכשלה — בדוק את מפתח ה-API (הפעלת Maps JavaScript API והרשאת המקור localhost). ניתן להזין GeoJSON ידנית.",
+              )
+            : t("apm.no_key_hint", "לציור פוליגון אינטראקטיבי הגדר מפתח Google Maps.")}
         </p>
       </div>
     );
@@ -277,31 +284,40 @@ export function AreaPolygonMap({
         <div ref={ref} className="absolute inset-0" style={{ minHeight: 320 }} />
         {status === "loading" && (
           <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-400 pointer-events-none">
-            טוען מפה…
+            {t("apm.loading_map", "טוען מפה…")}
           </div>
         )}
       </div>
 
       {mode === "drawing" ? (
         <p className="text-xs text-gray-500 leading-relaxed">
-          לחץ על המפה כדי להוסיף נקודות ({draftCount}). כשיש לפחות 3 נקודות, לחץ על
-          הנקודה הראשונה או על «סיום» כדי לסגור את התחום.
+          {t("apm.draw_click", "לחץ על המפה כדי להוסיף נקודות")} ({draftCount}).{" "}
+          {t(
+            "apm.draw_close",
+            "כשיש לפחות 3 נקודות, לחץ על הנקודה הראשונה או על «סיום» כדי לסגור את התחום.",
+          )}
         </p>
       ) : (
         <p className="text-xs text-gray-500 leading-relaxed">
           {hasPolygon
-            ? "התחום מוגדר. ניתן לגרור כל נקודה כדי לעדכן את הצורה, או לצייר מחדש."
-            : "לחץ «התחל ציור» ואז לחץ על המפה כדי לסמן את גבולות האזור."}
+            ? t(
+                "apm.defined_hint",
+                "התחום מוגדר. ניתן לגרור כל נקודה כדי לעדכן את הצורה, או לצייר מחדש.",
+              )
+            : t(
+                "apm.start_hint",
+                "לחץ «התחל ציור» ואז לחץ על המפה כדי לסמן את גבולות האזור.",
+              )}
         </p>
       )}
 
       <div className="flex items-center justify-between text-sm">
         <span className={hasPolygon ? "text-status-green" : "text-gray-500"}>
           {hasPolygon
-            ? "✓ תחום מוגדר"
+            ? `✓ ${t("apm.boundary_set", "תחום מוגדר")}`
             : mode === "drawing"
-              ? "במצב ציור…"
-              : "אין תחום"}
+              ? t("apm.drawing_mode", "במצב ציור…")
+              : t("apm.no_boundary", "אין תחום")}
         </span>
         <div className="flex items-center gap-3">
           {mode === "drawing" ? (
@@ -312,14 +328,14 @@ export function AreaPolygonMap({
                 disabled={draftCount < 3}
                 className="text-status-magenta hover:underline disabled:text-gray-300 disabled:no-underline"
               >
-                סיום
+                {t("apm.finish", "סיום")}
               </button>
               <button
                 type="button"
                 onClick={clear}
                 className="text-status-darkred hover:underline"
               >
-                ביטול
+                {t("action.cancel", "ביטול")}
               </button>
             </>
           ) : (
@@ -329,7 +345,9 @@ export function AreaPolygonMap({
                 onClick={startDrawing}
                 className="text-status-magenta hover:underline"
               >
-                {hasPolygon ? "צייר תחום מחדש" : "התחל ציור"}
+                {hasPolygon
+                  ? t("apm.redraw", "צייר תחום מחדש")
+                  : t("apm.start_draw", "התחל ציור")}
               </button>
               {hasPolygon && (
                 <button
@@ -337,7 +355,7 @@ export function AreaPolygonMap({
                   onClick={clear}
                   className="text-status-darkred hover:underline"
                 >
-                  נקה תחום
+                  {t("apm.clear_boundary", "נקה תחום")}
                 </button>
               )}
             </>

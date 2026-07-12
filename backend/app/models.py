@@ -840,6 +840,27 @@ class ContactPicklistValue(Base):
     picklist = relationship("PicklistDefinition")
 
 
+class UserPreference(Base):
+    """A per-user UI preference (fixes17 §1.1) — e.g. which grid columns are
+    visible, or the chosen interface language. Value is a JSON document so the
+    same table serves lists, strings and flags. Persisting these in the DB
+    (instead of localStorage) makes them follow the user across browsers."""
+
+    __tablename__ = "user_preferences"
+    __table_args__ = (
+        UniqueConstraint("user_id", "key", name="uq_userpref_user_key"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    key = Column(String(100), nullable=False)  # e.g. 'contacts.columns', 'locale'
+    value = Column(Text, nullable=False, default="null")  # JSON-encoded
+    updated_at = Column(
+        DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+
 class OrgBackup(Base):
     """A restore point of one organization's CRM data (fixes16).
 

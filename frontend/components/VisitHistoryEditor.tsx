@@ -6,11 +6,13 @@ import { apiFetch } from "@/lib/api";
 import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
 import type { Visit } from "@/lib/types";
+import { useConfirm } from "@/lib/confirm";
 import { VisitForm } from "./VisitForm";
 
 /** Per-contact visit history (date, type, location, notes), newest first. */
 export function VisitHistoryEditor({ contactId }: { contactId: number }) {
   const { t } = useLocalization();
+  const confirmDialog = useConfirm();
   const { labelFor } = usePicklist("visit.type");
   const [visits, setVisits] = useState<Visit[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,7 +30,7 @@ export function VisitHistoryEditor({ contactId }: { contactId: number }) {
   }, [contactId]);
 
   async function remove(id: number) {
-    if (!confirm(t("visit.delete_confirm", "למחוק ביקור זה?"))) return;
+    if (!(await confirmDialog({ message: t("visit.delete_confirm", "למחוק ביקור זה?") }))) return;
     await apiFetch(`/api/contacts/${contactId}/visits/${id}`, { method: "DELETE" });
     await reload();
   }

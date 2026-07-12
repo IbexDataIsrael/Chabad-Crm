@@ -7,9 +7,10 @@ import { useLocalization } from "@/lib/localization";
 /**
  * Generic multi-select dropdown filter (fixes15 §4.1/§5.1/§7.1): a compact
  * button showing the selection summary that opens a checkbox list. An empty
- * selection means "all" (no filtering).
+ * selection means "all" (no filtering). Ids may be numbers (entity filters)
+ * or strings (fixes17 §2.2 — e.g. mitzvah field names).
  */
-export function MultiSelectFilter({
+export function MultiSelectFilter<Id extends number | string>({
   allLabel,
   options,
   value,
@@ -17,9 +18,9 @@ export function MultiSelectFilter({
 }: {
   /** Button text while nothing is selected, e.g. "כל האזורים". */
   allLabel: string;
-  options: { id: number; label: string }[];
-  value: number[];
-  onChange: (ids: number[]) => void;
+  options: { id: Id; label: string }[];
+  value: Id[];
+  onChange: (ids: Id[]) => void;
 }) {
   const { t } = useLocalization();
   const [open, setOpen] = useState(false);
@@ -36,7 +37,7 @@ export function MultiSelectFilter({
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [open]);
 
-  function toggle(id: number) {
+  function toggle(id: Id) {
     onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
   }
 

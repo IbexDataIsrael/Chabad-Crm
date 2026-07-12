@@ -12,6 +12,7 @@ import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
+import { useConfirm } from "@/lib/confirm";
 import {
   apartmentTitle,
   buildingDisplayName,
@@ -226,9 +227,10 @@ function DeleteButton({
   onDone: () => Promise<void>;
 }) {
   const { t } = useLocalization();
+  const confirmDialog = useConfirm();
   const { success } = useToast();
   async function remove() {
-    if (!confirm(`${t("msg.delete_building_confirm", "למחוק את הבניין?")} '${name}'`)) return;
+    if (!(await confirmDialog({ message: t("msg.delete_building_confirm", "למחוק את הבניין?"), detail: name }))) return;
     await apiFetch(`/api/buildings/${id}`, { method: "DELETE" });
     await onDone();
     success(t("msg.deleted", "נמחק בהצלחה"));

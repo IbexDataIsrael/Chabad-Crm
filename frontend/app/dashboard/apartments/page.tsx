@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { usePicklist } from "@/lib/picklists";
+import { useDbPreference } from "@/lib/preferences";
 import { useToast } from "@/lib/toast";
 import {
   apartmentTitle,
@@ -28,10 +29,12 @@ const PAGE_SIZES = [20, 50, 100];
 type SortKey = "floor" | "label" | "resident" | "building";
 type SortDir = "asc" | "desc";
 
-/** Toggleable row attributes (fixes15 §7.2); the title link always shows. */
+/** Toggleable table columns (fixes15 §7.2 / fixes17 §3.1); the apartment
+ * title and the linked contact always show. */
 const FIELD_KEYS = [
   "resident",
-  "location",
+  "building",
+  "area",
   "notes",
   "phone",
   "email",
@@ -41,7 +44,7 @@ const FIELD_KEYS = [
   "mezuzah_status",
 ] as const;
 type FieldKey = (typeof FIELD_KEYS)[number];
-const DEFAULT_FIELDS: FieldKey[] = ["resident", "location"];
+const DEFAULT_FIELDS: FieldKey[] = ["resident", "building", "area"];
 
 export default function ApartmentsPage() {
   const { loading, isShliach } = useAuth();
@@ -62,8 +65,9 @@ export default function ApartmentsPage() {
   const [dir, setDir] = usePersistentState<SortDir>("crm.apartments.dir", "asc");
   const [page, setPage] = usePersistentState("crm.apartments.page", 1);
   const [pageSize, setPageSize] = usePersistentState("crm.apartments.pageSize", 20);
-  const [fields, setFields] = usePersistentState<FieldKey[]>(
-    "crm.apartments.fields", DEFAULT_FIELDS,
+  // fixes17 §1.1: the column selection lives in the DB (follows the account).
+  const [fields, setFields] = useDbPreference<FieldKey[]>(
+    "apartments.fields", DEFAULT_FIELDS,
   );
   const [fieldsOpen, setFieldsOpen] = useState(false);
   const [debouncedQ, setDebouncedQ] = useState(query);
@@ -165,7 +169,8 @@ export default function ApartmentsPage() {
 
   const fieldLabels: Record<FieldKey, string> = {
     resident: t("apartments.name", "שם דייר"),
-    location: t("apartments.building_id", "בניין"),
+    building: t("apartments.building_id", "בניין"),
+    area: t("buildings.area_id", "אזור"),
     notes: t("apartments.apartment_notes", "הערות"),
     phone: t("apartments.phone", "טלפון"),
     email: t("apartments.email", "אימייל"),
@@ -174,7 +179,37 @@ export default function ApartmentsPage() {
     campaign_status: t("picklist.apartment.campaign_status", "סטטוס קמפיין"),
     mezuzah_status: t("picklist.apartment.mezuzah_status", "מזוזה"),
   };
-  const on = (k: FieldKey) => fields.includes(k);
+  // Ignore unknown stored keys (older versions used e.g. "location").
+  const activeFields = FIELD_KEYS.filter((k) => fields.includes(k));
+
+  function cell(a: ApartmentListItem, k: FieldKey) {
+    switch (k) {
+      case "resident":
+        return a.name ?? "—";
+      case "building":
+        return buildingDisplayName({
+          id: a.building_id,
+          building_name: a.building_name,
+          building_address: a.building_address,
+        });
+      case "area":
+        return a.area_name ?? "—";
+      case "notes":
+        return a.apartment_notes ?? "—";
+      case "phone":
+        return a.phone ? <span dir="ltr">{a.phone}</span> : "—";
+      case "email":
+        return a.email ? <span dir="ltr">{a.email}</span> : "—";
+      case "language":
+        return language.labelFor(a.language) || "—";
+      case "jewish_status":
+        return jewish.labelFor(a.jewish_status) || "—";
+      case "campaign_status":
+        return campaign.labelFor(a.campaign_status) || "—";
+      case "mezuzah_status":
+        return mezuzah.labelFor(a.mezuzah_status) || "—";
+    }
+  }
 
   const visibleBuildings = buildings.filter(
     (b) => areaIds.length === 0 || areaIds.includes(b.area_id),
@@ -255,6 +290,8 @@ export default function ApartmentsPage() {
           <option value="label">{t("sort.by_label", "תווית דירה")}</option>
           <option value="resident">{t("sort.resident", "שם דייר")}</option>
           <option value="building">{t("sort.building", "בניין")}</option>
+          {/* fixes17 §3.2: chronological sorting. */}
+          <option value="created">{t("sort.created", "תאריך יצירה")}</option>
         </select>
         <button
           type="button"
@@ -311,12 +348,12 @@ export default function ApartmentsPage() {
                 type="button"
                 onClick={() => toggleField(k)}
                 className={`rounded-md border px-3 py-1.5 text-sm ${
-                  on(k)
+                  activeFields.includes(k)
                     ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
                     : "border-gray-200 text-gray-600 hover:bg-gray-50"
                 }`}
               >
-                {on(k) ? "✓ " : ""}
+                {activeFields.includes(k) ? "✓ " : ""}
                 {fieldLabels[k]}
               </button>
             ))}
@@ -334,85 +371,72 @@ export default function ApartmentsPage() {
         />
       )}
 
-      <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
-        {busy ? (
-          <p className="px-4 py-6 text-center text-gray-400">{t("action.loading", "טוען…")}</p>
-        ) : items.length === 0 ? (
-          <p className="px-4 py-6 text-center text-gray-400">
-            {t("apt.no_apartments_page", "אין דירות להצגה.")}
-          </p>
-        ) : (
-          items.map((a) => (
-            <div key={a.id} className="px-4 py-3 flex flex-wrap items-center gap-2">
-              <div className="min-w-[9rem]">
-                <Link
-                  href={`/dashboard/apartments/${a.id}`}
-                  className="font-medium text-status-magenta hover:underline"
-                >
-                  {apartmentTitle(a)}
-                </Link>
-                {on("resident") && a.name && (
-                  <span className="ms-2 text-sm text-gray-600">{a.name}</span>
-                )}
-                {on("location") && (
-                  <div className="text-xs text-gray-500">
-                    {[buildingDisplayName({ id: a.building_id, building_name: a.building_name, building_address: a.building_address }), a.area_name]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </div>
-                )}
-                {on("notes") && a.apartment_notes && (
-                  <div className="text-xs text-gray-500">{a.apartment_notes}</div>
-                )}
-              </div>
-              {/* fixes15 §7.2: the optional technical attributes as chips. */}
-              <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                {on("phone") && a.phone && (
-                  <span dir="ltr" className="rounded bg-gray-100 text-gray-600 px-2 py-0.5">
-                    {a.phone}
-                  </span>
-                )}
-                {on("email") && a.email && (
-                  <span dir="ltr" className="rounded bg-gray-100 text-gray-600 px-2 py-0.5">
-                    {a.email}
-                  </span>
-                )}
-                {on("language") && a.language && (
-                  <span className="rounded bg-gray-100 text-gray-600 px-2 py-0.5">
-                    {fieldLabels.language}: {language.labelFor(a.language)}
-                  </span>
-                )}
-                {on("jewish_status") && a.jewish_status && (
-                  <span className="rounded bg-gray-100 text-gray-600 px-2 py-0.5">
-                    {fieldLabels.jewish_status}: {jewish.labelFor(a.jewish_status)}
-                  </span>
-                )}
-                {on("campaign_status") && a.campaign_status && (
-                  <span className="rounded bg-gray-100 text-gray-600 px-2 py-0.5">
-                    {fieldLabels.campaign_status}: {campaign.labelFor(a.campaign_status)}
-                  </span>
-                )}
-                {on("mezuzah_status") && a.mezuzah_status && (
-                  <span className="rounded bg-gray-100 text-gray-600 px-2 py-0.5">
-                    {fieldLabels.mezuzah_status}: {mezuzah.labelFor(a.mezuzah_status)}
-                  </span>
-                )}
-              </div>
-              <div className="ms-auto text-sm">
-                {a.contact_id ? (
-                  <Link
-                    href={`/dashboard/contacts/${a.contact_id}`}
-                    className="rounded-full bg-status-magenta/10 text-status-magenta px-3 py-1 hover:bg-status-magenta/20"
-                  >
-                    {a.contact_name}
-                  </Link>
-                ) : (
-                  <span className="text-gray-400">{t("apt.no_contact", "ללא איש קשר")}</span>
-                )}
-              </div>
-            </div>
-          ))
-        )}
+      {/* fixes17 §3.1: a real table — every column carries its field's title. */}
+      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-gray-600 text-right">
+            <tr>
+              <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
+                {t("apartments.apartment_name", "מספר דירה")}
+              </th>
+              {activeFields.map((k) => (
+                <th key={k} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
+                  {fieldLabels[k]}
+                </th>
+              ))}
+              <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
+                {t("apartments.contact", "איש קשר")}
+              </th>
+              <th className="w-full"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {busy ? (
+              <tr>
+                <td colSpan={3 + activeFields.length} className="px-4 py-6 text-center text-gray-400">
+                  {t("action.loading", "טוען…")}
+                </td>
+              </tr>
+            ) : items.length === 0 ? (
+              <tr>
+                <td colSpan={3 + activeFields.length} className="px-4 py-6 text-center text-gray-400">
+                  {t("apt.no_apartments_page", "אין דירות להצגה.")}
+                </td>
+              </tr>
+            ) : (
+              items.map((a) => (
+                <tr key={a.id} className="border-t border-gray-100">
+                  <td className="px-3 py-2 w-px whitespace-nowrap">
+                    <Link
+                      href={`/dashboard/apartments/${a.id}`}
+                      className="font-medium text-status-magenta hover:underline"
+                    >
+                      {apartmentTitle(a)}
+                    </Link>
+                  </td>
+                  {activeFields.map((k) => (
+                    <td key={k} className="px-3 py-2 w-px whitespace-nowrap max-w-[14rem] truncate">
+                      {cell(a, k)}
+                    </td>
+                  ))}
+                  <td className="px-3 py-2 w-px whitespace-nowrap">
+                    {a.contact_id ? (
+                      <Link
+                        href={`/dashboard/contacts/${a.contact_id}`}
+                        className="rounded-full bg-status-magenta/10 text-status-magenta px-3 py-0.5 hover:bg-status-magenta/20"
+                      >
+                        {a.contact_name}
+                      </Link>
+                    ) : (
+                      <span className="text-gray-400">{t("apt.no_contact", "ללא איש קשר")}</span>
+                    )}
+                  </td>
+                  <td></td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
 
       {/* Server-side pager (fixes8 §2C). */}

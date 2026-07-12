@@ -3,7 +3,7 @@
 Buildings render as the composite address "[street number] + [street name]" —
 the first comma-segment of the formatted address (e.g. "770 Eastern Pkwy,
 Brooklyn, NY" → "770 Eastern Pkwy"). Apartments render as the computed title
-label+floor (e.g. label "A" on floor "1" → "A1").
+label - floor (e.g. label "A" on floor "1" → "A - 1"; fixes17 §3.1).
 
 The frontend twins live in frontend/lib/types.ts (buildingDisplayName /
 apartmentTitle) — keep the fallback chains in sync.
@@ -29,10 +29,13 @@ def building_display_name(building) -> str:
 
 
 def apartment_title(apartment) -> str:
-    """Computed title: label+floor ("A"+"1" → "A1"), with sane fallbacks."""
+    """Computed title: label - floor ("A"+"1" → "A - 1", fixes17 §3.1 — a
+    space-isolated hyphen separates the parts), with sane fallbacks."""
     label = (getattr(apartment, "apartment_name", None) or "").strip()
     floor = (getattr(apartment, "floor", None) or "").strip()
+    if label and floor:
+        return f"{label} - {floor}"
     if label or floor:
-        return f"{label}{floor}"
+        return label or floor
     resident = (getattr(apartment, "name", None) or "").strip()
     return resident or f"#{apartment.id}"

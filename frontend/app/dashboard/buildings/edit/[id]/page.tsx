@@ -12,6 +12,7 @@ import { useFieldSettings } from "@/lib/fieldSettings";
 import { pointInPolygon } from "@/lib/geo";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
+import { useConfirm } from "@/lib/confirm";
 import {
   apartmentTitle,
   buildingDisplayName,
@@ -293,6 +294,7 @@ function BuildingEditForm({
 /** Append / rename / drop a building's floors (fixes7 §3). Saves immediately. */
 function FloorsEditor({ buildingId }: { buildingId: number }) {
   const { t } = useLocalization();
+  const confirmDialog = useConfirm();
   const { error: toastError } = useToast();
   const [floors, setFloors] = useState<Floor[]>([]);
   const [newName, setNewName] = useState("");
@@ -335,7 +337,7 @@ function FloorsEditor({ buildingId }: { buildingId: number }) {
   }
 
   async function remove(floor: Floor) {
-    if (!confirm(`${t("floors.delete_confirm", "למחוק קומה זו?")} '${floor.name}'`)) return;
+    if (!(await confirmDialog({ message: t("floors.delete_confirm", "למחוק קומה זו?"), detail: floor.name }))) return;
     try {
       await apiFetch(`/api/buildings/${buildingId}/floors/${floor.id}`, {
         method: "DELETE",

@@ -59,6 +59,7 @@ from app.routers import (
     metadata,
     organizations,
     picklists,
+    preferences,
     search,
     uploads,
     users,
@@ -124,6 +125,7 @@ app.include_router(donations.router)
 app.include_router(uploads.router)
 app.include_router(admin.router)
 app.include_router(backups.router)
+app.include_router(preferences.router)
 app.include_router(search.router)
 app.include_router(ai.router)
 

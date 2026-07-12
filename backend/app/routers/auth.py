@@ -103,7 +103,7 @@ def _org_selection_response(db: Session, identifier: str, users) -> LoginRespons
     )
 
 
-def _send_verification_safely(user, token: str) -> None:
+def _send_verification_safely(db: Session, user, token: str) -> None:
     """Email the verification link; never let a mail failure break signup.
 
     The org + pending admin are already committed, so a raised SMTP/template
@@ -112,7 +112,7 @@ def _send_verification_safely(user, token: str) -> None:
     activated and we can see *why* delivery failed in the Render logs.
     """
     try:
-        link = send_verification_email(user, token)
+        link = send_verification_email(db, user, token)
         logger.info("Verification email dispatched to %s (link: %s)", user.email, link)
     except Exception:  # noqa: BLE001 — mail must never break the signup flow
         logger.exception("Failed to send verification email to %s", user.email)
@@ -206,7 +206,7 @@ def resend_verification(payload: ResendRequest, db: Session = Depends(get_db)) -
     )
     for user in users:
         if not user.email_verified:
-            _send_verification_safely(user, create_email_token(user.id))
+            _send_verification_safely(db, user, create_email_token(user.id))
     return {"status": "ok"}
 
 

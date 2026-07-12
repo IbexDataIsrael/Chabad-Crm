@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import type { Area } from "@/lib/types";
+import { useConfirm } from "@/lib/confirm";
 
 export default function AreasPage() {
   const { isAdmin, loading } = useAuth();
@@ -147,9 +148,10 @@ function AreaCard({
   onChanged: () => Promise<void>;
 }) {
   const { t } = useLocalization();
+  const confirmDialog = useConfirm();
 
   async function remove() {
-    if (!confirm(`${t("msg.delete_area_confirm", "למחוק את האזור?")} '${area.area_name}'`))
+    if (!(await confirmDialog({ message: t("msg.delete_area_confirm", "למחוק את האזור?"), detail: area.area_name })))
       return;
     await apiFetch(`/api/areas/${area.id}`, { method: "DELETE" });
     await onChanged();

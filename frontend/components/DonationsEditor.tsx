@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useLocalization } from "@/lib/localization";
 import { contactFullName, type Contact, type Donation } from "@/lib/types";
+import { useConfirm } from "@/lib/confirm";
 import { DatePicker } from "./DatePicker";
 
 const inputClass =
@@ -18,6 +19,7 @@ const inputClass =
  */
 export function DonationsEditor({ contactId }: { contactId?: number }) {
   const { t } = useLocalization();
+  const confirmDialog = useConfirm();
   const [donations, setDonations] = useState<Donation[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +44,7 @@ export function DonationsEditor({ contactId }: { contactId?: number }) {
   }, [contactId]);
 
   async function remove(id: number) {
-    if (!confirm(t("donation.delete_confirm", "למחוק תרומה זו?"))) return;
+    if (!(await confirmDialog({ message: t("donation.delete_confirm", "למחוק תרומה זו?") }))) return;
     await apiFetch(`/api/donations/${id}`, { method: "DELETE" });
     await reload();
   }

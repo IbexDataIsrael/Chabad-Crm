@@ -9,6 +9,7 @@ import logging
 import re
 import smtplib
 from email.message import EmailMessage
+from email.utils import formataddr, parseaddr
 from pathlib import Path
 from typing import Optional
 
@@ -48,6 +49,15 @@ DEFAULT_EMAIL_TEMPLATES: dict[str, dict[str, str]] = {
         "subject": "Welcome to the system",
         "body_hebrew": "",
         "body": _load_html("hello_shliach.html"),
+    },
+    # fixes17 §1.3: the signup/registration verification mail, seeded with the
+    # exact hello_tenant.html so the superadmin can restyle it. Placeholders:
+    # {{first_name}}, {{last_name}}, {{organization_name}}, {{email}},
+    # {{phone}}, {{username}}, {{verify_url}}, {{expire_hours}}, {{logo_url}}.
+    "tenant_verification": {
+        "subject": "אימות חשבון — מיני CRM",
+        "body_hebrew": "",
+        "body": _load_html("hello_tenant.html"),
     },
     "aignummail1": {
         "subject": "בקשתך התקבלה — מיני CRM",
@@ -101,12 +111,20 @@ def _strip_tags(html_text: str) -> str:
     return htmllib.unescape(text).strip()
 
 
-def send_templated_email(db: Session, key: str, to: str, **vars: str) -> None:
+def send_templated_email(
+    db: Session,
+    key: str,
+    to: str,
+    from_name: Optional[str] = None,
+    reply_to: Optional[str] = None,
+    **vars: str,
+) -> None:
     """Load an editable template by key (DB, falling back to the default),
     substitute {{vars}}, and send it as an HTML email (with a plain-text fallback).
 
     If the template body is plain text it's wrapped in the branded shell; if the
     author pasted their own HTML into the box, that HTML is sent verbatim.
+    fixes17 §1.3: `from_name`/`reply_to` brand the sender per organization.
     """
     row = db.query(models.EmailTemplate).filter(models.EmailTemplate.key == key).first()
     default = DEFAULT_EMAIL_TEMPLATES.get(key, {})
@@ -144,7 +162,10 @@ def send_templated_email(db: Session, key: str, to: str, **vars: str) -> None:
         )
         text_body = combined
 
-    send_email(to, subject, text_body, html=html_body)
+    send_email(
+        to, subject, text_body, html=html_body,
+        from_name=from_name, reply_to=reply_to,
+    )
 
 
 def _logo_url() -> str:
@@ -164,7 +185,18 @@ def render_template(name: str, **vars: str) -> str:
     return html
 
 
-def send_email(to: str, subject: str, body: str, html: Optional[str] = None) -> None:
+def send_email(
+    to: str,
+    subject: str,
+    body: str,
+    html: Optional[str] = None,
+    from_name: Optional[str] = None,
+    reply_to: Optional[str] = None,
+) -> None:
+    """Send (or dev-log) one email. fixes17 §1.3: `from_name` shows the
+    organization's name as the sender (the address itself must stay the
+    authenticated SMTP account — Gmail rewrites spoofed senders); `reply_to`
+    points replies at the organization's address."""
     logger.info(
         "send_email START to=%s subject=%r | host=%s port=%s user=%s from=%s pwd_set=%s pwd_len=%s",
         to,
@@ -196,7 +228,13 @@ def send_email(to: str, subject: str, body: str, html: Optional[str] = None) -> 
         return
 
     msg = EmailMessage()
-    msg["From"] = settings.email_from
+    if from_name:
+        # Keep the real (authenticated) address; brand only the display name.
+        msg["From"] = formataddr((from_name, parseaddr(settings.email_from)[1]))
+    else:
+        msg["From"] = settings.email_from
+    if reply_to:
+        msg["Reply-To"] = reply_to
     msg["To"] = to
     msg["Subject"] = subject
     msg.set_content(body)
@@ -219,22 +257,22 @@ def send_email(to: str, subject: str, body: str, html: Optional[str] = None) -> 
         raise
 
 
-def send_verification_email(user, token: str) -> str:
-    """Send (or log) the tenant verification link (HTML `hello_tenant.html`).
+def send_verification_email(db: Session, user, token: str) -> str:
+    """Send (or log) the tenant verification link.
 
-    `user` is the pending admin User (has email/first_name/last_name/phone/username
-    and an `organization`). Returns the link for testing/logging.
+    fixes17 §1.3: goes through the superadmin-editable `tenant_verification`
+    DB template (seeded with the exact hello_tenant.html; the file remains the
+    fallback default). `user` is the pending admin User (has
+    email/first_name/last_name/phone/username and an `organization`).
+    Returns the link for testing/logging.
     """
     link = f"{settings.frontend_url}/verify?token={token}"
     org_name = user.organization.name if getattr(user, "organization", None) else ""
-    body = (
-        "ברוך הבא למיני CRM!\n\n"
-        "לאימות כתובת האימייל והפעלת החשבון, לחץ על הקישור:\n"
-        f"{link}\n\n"
-        f"הקישור תקף ל-{settings.verification_token_expire_hours} שעות."
-    )
-    html = render_template(
-        "hello_tenant.html",
+    send_templated_email(
+        db,
+        "tenant_verification",
+        user.email,
+        from_name=org_name or None,
         first_name=user.first_name or "",
         last_name=user.last_name or "",
         organization_name=org_name,
@@ -245,7 +283,6 @@ def send_verification_email(user, token: str) -> str:
         expire_hours=str(settings.verification_token_expire_hours),
         logo_url=_logo_url(),
     )
-    send_email(user.email, "אימות חשבון — מיני CRM", body, html=html)
     return link
 
 
@@ -256,16 +293,21 @@ def send_shliach_welcome(
     last_name: str,
     shliach_email: str,
     org_name: str = "",
+    reply_to: Optional[str] = None,
 ) -> None:
     """Send (or log) the access-link email to a newly-created shliach / user.
 
     fixes15 §2.1: goes through the superadmin-editable `shliach_welcome` DB
     template (seeded with the exact hello_shliach.html), so the WYSIWYG edits
-    take effect; the file stays only as the seed/fallback default."""
+    take effect; the file stays only as the seed/fallback default.
+    fixes17 §1.3: sent in the organization's name, with replies routed to the
+    admin who created the account."""
     send_templated_email(
         db,
         "shliach_welcome",
         to,
+        from_name=org_name or None,
+        reply_to=reply_to,
         first_name=first_name,
         last_name=last_name,
         url_to_system=settings.frontend_url,

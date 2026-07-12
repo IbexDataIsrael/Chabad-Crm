@@ -623,6 +623,10 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("backup", "backup.restore_warning", "כל נתוני הארגון הנוכחיים יוחלפו בנתוני נקודת השחזור הזו. נקודת שחזור אוטומטית של המצב הנוכחי תיווצר לפני השחזור, כך שניתן לבטל.", "All of the organization's current data will be replaced with this restore point. An automatic restore point of the current state is created first, so this can be undone."),
     ("backup", "backup.restored", "השחזור הושלם", "Restore completed"),
     ("backup", "backup.restore_failed", "השחזור נכשל — הנתונים לא שונו", "Restore failed — the data was not changed"),
+    # --- fixes17: mitzvot/tzedaka filters + apartments table ---
+    ("filter", "filter.all_mitzvot", "מצוות קהילה", "Community mitzvot"),
+    ("filter", "filter.tzedaka_ph", "פוטנציאל לצדקה…", "Tzedaka potential…"),
+    ("column", "apartments.contact", "איש קשר", "Contact"),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)

@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
+import { useConfirm } from "@/lib/confirm";
 
 interface OrgUser {
   id: number;
@@ -32,6 +33,7 @@ export default function UsersPage() {
   const router = useRouter();
   const { user: me, isAdmin, loading } = useAuth();
   const { t } = useLocalization();
+  const confirmDialog = useConfirm();
   const { success, error: toastError } = useToast();
   const [users, setUsers] = useState<OrgUser[]>([]);
   const [adding, setAdding] = useState(false);
@@ -59,7 +61,7 @@ export default function UsersPage() {
   }, [loading, isAdmin]);
 
   async function remove(u: OrgUser) {
-    if (!confirm(`${t("users.delete_confirm", "למחוק את המשתמש?")} '${u.full_name}'`)) return;
+    if (!(await confirmDialog({ message: t("users.delete_confirm", "למחוק את המשתמש?"), detail: u.full_name }))) return;
     try {
       await apiFetch(`/api/users/${u.id}`, { method: "DELETE" });
       await reload();

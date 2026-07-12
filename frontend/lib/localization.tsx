@@ -10,7 +10,8 @@ import {
   type ReactNode,
 } from "react";
 
-import { apiFetch } from "./api";
+import { apiFetch, getToken } from "./api";
+import { useAuth } from "./auth";
 
 export type Lang = "he" | "en";
 const LANG_KEY = "crm_lang";
@@ -33,15 +34,31 @@ const LocalizationContext = createContext<LocalizationContextValue | undefined>(
 );
 
 export function LocalizationProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [data, setData] = useState<LocalizationMap>({});
   const [loading, setLoading] = useState(true);
   const [lang, setLangState] = useState<Lang>("he");
 
-  // Restore the saved language before paint.
+  // Restore the saved language before paint (works pre-login too).
   useEffect(() => {
     const saved = window.localStorage.getItem(LANG_KEY);
     if (saved === "he" || saved === "en") setLangState(saved);
   }, []);
+
+  // fixes17 §1.1: the language preference lives in the DB per user — once a
+  // session resolves, the account's stored locale wins over this browser's.
+  useEffect(() => {
+    if (!user) return;
+    apiFetch<Record<string, unknown>>("/api/preferences")
+      .then((prefs) => {
+        const locale = prefs["locale"];
+        if (locale === "he" || locale === "en") {
+          setLangState(locale);
+          window.localStorage.setItem(LANG_KEY, locale);
+        }
+      })
+      .catch(() => {});
+  }, [user]);
 
   // Reflect the language on <html> (dir + lang) so the whole app flips RTL/LTR.
   useEffect(() => {
@@ -61,6 +78,13 @@ export function LocalizationProvider({ children }: { children: ReactNode }) {
   const setLang = useCallback((next: Lang) => {
     setLangState(next);
     window.localStorage.setItem(LANG_KEY, next);
+    // fixes17 §1.1: persist the choice on the account (logged-in users).
+    if (getToken()) {
+      apiFetch("/api/preferences", {
+        method: "PUT",
+        body: JSON.stringify({ key: "locale", value: next }),
+      }).catch(() => {});
+    }
   }, []);
 
   const value = useMemo<LocalizationContextValue>(() => {

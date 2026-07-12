@@ -8,15 +8,19 @@ import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { rowStyle } from "@/lib/colors";
+import { telHref, waHref } from "@/lib/contactActions";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { usePicklist } from "@/lib/picklists";
+import { useDbPreference } from "@/lib/preferences";
 import { useToast } from "@/lib/toast";
 import {
+  CHECKLIST_BOOLEANS,
   contactFullName,
   type Area,
   type Building,
+  type Checklist,
   type Contact,
   type ContactPage,
   type UserSummary,
@@ -42,18 +46,8 @@ type ColumnKey = (typeof COLUMN_KEYS)[number];
 // which the page always showed until now).
 const DEFAULT_COLUMNS: ColumnKey[] = ["phone", "owner", "created"];
 
-/** `tel:` link (dialers accept the local format as-is). */
-function telHref(phone: string): string {
-  return `tel:${phone.replace(/[^\d+]/g, "")}`;
-}
-
-/** WhatsApp deep link — wa.me wants an international number without '+'.
- *  Israeli local numbers (leading 0) become 972…; others pass through. */
-function waHref(phone: string): string {
-  let digits = phone.replace(/\D/g, "");
-  if (digits.startsWith("0")) digits = `972${digits.slice(1)}`;
-  return `https://wa.me/${digits}`;
-}
+/** The mitzvah checkbox filters (fixes17 §2.2), typed as checklist booleans. */
+const MITZVAH_KEYS = CHECKLIST_BOOLEANS as (keyof Checklist & string)[];
 
 export default function ContactsPage() {
   const router = useRouter();
@@ -87,9 +81,11 @@ export default function ContactsPage() {
     "crm.contacts.buildingIds", [],
   );
   const [query, setQuery] = usePersistentState("crm.contacts.q", "");
-  const [mitzvotOnly, setMitzvotOnly] = usePersistentState(
-    "crm.contacts.mitzvot", false,
+  // fixes17 §2.2: per-mitzvah checkboxes (AND) + tzedaka-potential text.
+  const [mitzvotFilter, setMitzvotFilter] = usePersistentState<string[]>(
+    "crm.contacts.mitzvotFields", [],
   );
+  const [tzedaka, setTzedaka] = usePersistentState("crm.contacts.tzedaka", "");
   const [sort, setSort] = usePersistentState<SortKey>(
     "crm.contacts.sort", "created", // fixes11 §2.3 default
   );
@@ -98,15 +94,19 @@ export default function ContactsPage() {
   );
   const [page, setPage] = usePersistentState("crm.contacts.page", 1);
   const [pageSize, setPageSize] = usePersistentState("crm.contacts.pageSize", 20);
-  const [columns, setColumns] = usePersistentState<ColumnKey[]>(
-    "crm.contacts.columns", DEFAULT_COLUMNS,
+  // fixes17 §1.1: the column selection lives in the DB — follows the account
+  // across browsers/devices (localStorage is only the boot cache).
+  const [columns, setColumns] = useDbPreference<ColumnKey[]>(
+    "contacts.columns", DEFAULT_COLUMNS,
   );
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  // Debounce the text search; `debouncedQ` is what actually hits the server.
+  // Debounce the text filters; the `debounced*` values hit the server.
   const [debouncedQ, setDebouncedQ] = useState(query);
+  const [debouncedTzedaka, setDebouncedTzedaka] = useState(tzedaka);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tzedakaDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Users directory feeds the owner column + filter (admin/staff only).
   useEffect(() => {
@@ -122,12 +122,28 @@ export default function ContactsPage() {
   }, [user]);
 
   // Default the filter to the logged-in user once the session resolves
-  // (fixes11 §2.2); shliach lists are already server-scoped → no filter.
+  // (fixes11 §2.2). fixes17 §5.1: the persisted filter survives ACROSS logins
+  // on a shared browser — a shliach inheriting an admin's guid saw an empty
+  // list. A shliach never applies an owner filter (server-scoped anyway).
   useEffect(() => {
-    if (assignedFilter !== null || !user) return;
-    setAssignedFilter(isShliach ? "" : user.guid);
+    if (!user) return;
+    if (isShliach) {
+      if (assignedFilter !== "") setAssignedFilter("");
+      return;
+    }
+    if (assignedFilter === null) setAssignedFilter(user.guid);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assignedFilter, user, isShliach]);
+
+  // fixes17 §5.1 (admin/staff): a persisted owner guid that no longer matches
+  // anyone in the org (other login, deleted user) resets to the current user.
+  useEffect(() => {
+    if (isShliach || !user || users.length === 0) return;
+    if (assignedFilter && !users.some((u) => u.guid === assignedFilter)) {
+      setAssignedFilter(user.guid);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [users, assignedFilter, user, isShliach]);
 
   const ownerName = (guid: string | null) =>
     (guid && users.find((u) => u.guid === guid)?.full_name) || "—";
@@ -139,6 +155,13 @@ export default function ContactsPage() {
     debounceRef.current = setTimeout(() => setDebouncedQ(v), 300);
   }
 
+  function onTzedakaChange(v: string) {
+    setTzedaka(v);
+    setPage(1);
+    if (tzedakaDebounceRef.current) clearTimeout(tzedakaDebounceRef.current);
+    tzedakaDebounceRef.current = setTimeout(() => setDebouncedTzedaka(v), 300);
+  }
+
   function listParams(): URLSearchParams {
     const params = new URLSearchParams();
     params.set("contact_type", "mekurav"); // contacts page shows mekuravim only
@@ -147,7 +170,11 @@ export default function ContactsPage() {
     if (debouncedQ.trim()) params.set("q", debouncedQ.trim());
     areaIds.forEach((id) => params.append("area_ids", String(id)));
     buildingIds.forEach((id) => params.append("building_ids", String(id)));
-    if (mitzvotOnly) params.set("has_mitzvot", "true");
+    // fixes17 §2.2: individual mitzvah checkboxes + tzedaka-potential text.
+    mitzvotFilter.forEach((m) => params.append("mitzvot", m));
+    if (debouncedTzedaka.trim()) {
+      params.set("tzedaka_potential", debouncedTzedaka.trim());
+    }
     return params;
   }
 
@@ -173,7 +200,7 @@ export default function ContactsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     statusFilter, assignedFilter, debouncedQ, areaIds, buildingIds,
-    mitzvotOnly, sort, dir, page, pageSize,
+    mitzvotFilter, debouncedTzedaka, sort, dir, page, pageSize,
   ]);
 
   // fixes15 §5.2: mass email to the WHOLE filtered set via mailto: BCC.
@@ -329,19 +356,26 @@ export default function ContactsPage() {
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
         />
-        {/* fixes15 §5.1: mitzvot quick filter. */}
-        <label className="inline-flex items-center gap-1.5 text-gray-600 cursor-pointer">
-          <input
-            type="checkbox"
-            className="accent-status-magenta"
-            checked={mitzvotOnly}
-            onChange={(e) => {
-              setMitzvotOnly(e.target.checked);
-              setPage(1);
-            }}
-          />
-          {t("filter.mitzvot_only", "רק עם מצוות קהילה")}
-        </label>
+        {/* fixes17 §2.2: one checkbox per mitzvah (bilingual labels). */}
+        <MultiSelectFilter
+          allLabel={t("filter.all_mitzvot", "מצוות קהילה")}
+          options={MITZVAH_KEYS.map((m) => ({
+            id: m,
+            label: t(`community_checklists.${m}`, m),
+          }))}
+          value={mitzvotFilter}
+          onChange={(ids) => {
+            setMitzvotFilter(ids);
+            setPage(1);
+          }}
+        />
+        {/* fixes17 §2.2: tzedaka-potential text filter. */}
+        <input
+          className={`${selectClass} w-40`}
+          placeholder={t("filter.tzedaka_ph", "פוטנציאל לצדקה…")}
+          value={tzedaka}
+          onChange={(e) => onTzedakaChange(e.target.value)}
+        />
       </div>
 
       <div className="flex flex-wrap gap-3">

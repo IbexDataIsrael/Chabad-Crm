@@ -27,10 +27,12 @@ import { SystemSettingsCard } from "@/components/SystemSettingsCard";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
+import { useConfirm } from "@/lib/confirm";
 
 export default function SystemAdminPage() {
   const { isSuperadmin, loading } = useAuth();
   const { t } = useLocalization();
+  const confirmDialog = useConfirm();
   const { success, error } = useToast();
 
   const [orgs, setOrgs] = useState<AdminOrganization[] | null>(null);
@@ -137,9 +139,7 @@ export default function SystemAdminPage() {
 
   async function onImpersonate(org: AdminOrganization) {
     if (
-      !confirm(
-        t("admin.confirm_impersonate", `להתחבר כמנהל של "${org.name}"? תנותק מחשבון המנהל.`),
-      )
+      !(await confirmDialog({ message: t("admin.confirm_impersonate", `להתחבר כמנהל של "${org.name}"? תנותק מחשבון המנהל.`) }))
     )
       return;
     try {
@@ -190,9 +190,7 @@ export default function SystemAdminPage() {
 
   async function onRejectOrg(org: AdminOrganization) {
     if (
-      !confirm(
-        t("admin.confirm_reject_org", `לדחות ולמחוק את בקשת הארגון "${org.name}"?`),
-      )
+      !(await confirmDialog({ message: t("admin.confirm_reject_org", `לדחות ולמחוק את בקשת הארגון "${org.name}"?`) }))
     )
       return;
     await run(async () => {

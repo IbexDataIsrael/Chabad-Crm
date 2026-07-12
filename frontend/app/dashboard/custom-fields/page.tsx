@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
 import type { CustomFieldDefinition } from "@/lib/types";
+import { useConfirm } from "@/lib/confirm";
 
 export default function CustomFieldsPage() {
   const { isAdmin, loading } = useAuth();
@@ -61,6 +62,7 @@ function DefRow({
   onChanged: () => Promise<void>;
 }) {
   const { t } = useLocalization();
+  const confirmDialog = useConfirm();
   const { success, error } = useToast();
   const [label, setLabel] = useState(def.hebrew_label);
 
@@ -101,7 +103,7 @@ function DefRow({
   }
 
   async function hardDelete() {
-    if (!confirm(`${t("cf.hard_delete_confirm", "למחוק לצמיתות את כל הערכים?")} '${def.field_key}'`))
+    if (!(await confirmDialog({ message: t("cf.hard_delete_confirm", "למחוק לצמיתות את כל הערכים?"), detail: def.field_key })))
       return;
     try {
       await apiFetch(`/api/custom-fields/${def.id}?hard=true`, { method: "DELETE" });

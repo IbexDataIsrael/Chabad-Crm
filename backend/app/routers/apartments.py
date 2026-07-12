@@ -7,7 +7,7 @@ creates the Cartesian product of selected floors × labels in one transaction.
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, nullslast, or_, select
+from sqlalchemy import case, func, nullslast, or_, select
 from sqlalchemy.orm import Session
 
 from app import models
@@ -127,10 +127,23 @@ def list_apartments(
     return query.order_by(models.Apartment.apartment_name).all()
 
 
-def _natural(col):
-    """Cross-DB natural-ish sort keys for numeric-leaning text: ordering by
-    (length, value) puts '2' before '10'. Works on both SQLite and PostgreSQL."""
-    return [func.length(col), col]
+def _natural(col, db: Session):
+    """Natural sort keys that respect the alphabet (fixes17 §3.2).
+
+    Pure-numeric values keep the natural (length, value) ordering — '2' before
+    '10' — while anything containing a non-digit sorts plainly alphabetically.
+    The old unconditional (length, value) key broke alphabetical labels
+    ('Bet' sorted before 'Aleph' because it's shorter). Digit detection is
+    dialect-specific: regex on PostgreSQL, GLOB on SQLite (tests)."""
+    if db.get_bind().dialect.name == "postgresql":
+        is_numeric = col.op("~")(r"^\d+$")
+    else:
+        is_numeric = ~col.op("GLOB")("*[^0-9]*")
+    # NULL values keep sorting last (the caller wraps keys in nullslast).
+    return [
+        case((col.is_(None), None), (is_numeric, func.length(col)), else_=0),
+        col,
+    ]
 
 
 def _floor_rank():
@@ -148,18 +161,20 @@ def _floor_rank():
     )
 
 
-def _sort_keys(sort: str) -> list:
+def _sort_keys(sort: str, db: Session) -> list:
     """Direction-sensitive primary keys per sort option (fixes8 §1D). The caller
     appends the always-ascending secondaries."""
     if sort == "label":
-        return _natural(models.Apartment.apartment_name)
+        return _natural(models.Apartment.apartment_name, db)
     if sort == "resident":
         return [models.Apartment.name]  # plain alphabetical — names aren't numeric
     if sort == "building":
         return [models.Building.building_address]
+    if sort == "created":
+        return [models.Apartment.created_at]  # fixes17 §3.2
     # Default "floor": canonical floor order, then the free-text floor name for
     # floors that no longer exist in the floors table.
-    return [_floor_rank(), *_natural(models.Apartment.floor)]
+    return [_floor_rank(), *_natural(models.Apartment.floor, db)]
 
 
 @router.get("/list", response_model=ApartmentPageOut)
@@ -172,7 +187,7 @@ def list_apartments_enriched(
     apartment_id: Optional[int] = None,
     shliach_contact_id: Optional[int] = None,
     q: Optional[str] = None,
-    sort: Literal["floor", "label", "resident", "building"] = "floor",
+    sort: Literal["floor", "label", "resident", "building", "created"] = "floor",
     dir: Literal["asc", "desc"] = "asc",
     page: int = Query(1, ge=1),
     page_size: int = Query(20),
@@ -234,9 +249,11 @@ def list_apartments_enriched(
 
     total = query.count()
 
-    primary = [k.desc() if dir == "desc" else k.asc() for k in _sort_keys(sort)]
+    primary = [k.desc() if dir == "desc" else k.asc() for k in _sort_keys(sort, db)]
     # Secondary keys always ascend: within a floor, apartments sort by number.
-    secondary = [] if sort == "label" else _natural(models.Apartment.apartment_name)
+    secondary = (
+        [] if sort == "label" else _natural(models.Apartment.apartment_name, db)
+    )
     order = [nullslast(k) for k in (*primary, *secondary)]
     rows = (
         query.order_by(*order, models.Apartment.id)

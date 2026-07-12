@@ -8,6 +8,7 @@ import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 import { type AdminArea } from "@/lib/types";
+import { useConfirm } from "@/lib/confirm";
 
 const inputClass =
   "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
@@ -22,6 +23,7 @@ type SortKey = "name" | "created";
 export default function AdminAreasPage() {
   const { isAdmin, loading } = useAuth();
   const { t } = useLocalization();
+  const confirmDialog = useConfirm();
   const { success } = useToast();
   const [items, setItems] = useState<AdminArea[]>([]);
   const [adding, setAdding] = useState(false);
@@ -44,7 +46,7 @@ export default function AdminAreasPage() {
   }, []);
 
   async function remove(aa: AdminArea) {
-    if (!confirm(`${t("msg.delete_admin_area_confirm", "למחוק את אזור המנהל?")} '${aa.name}'`)) {
+    if (!(await confirmDialog({ message: t("msg.delete_admin_area_confirm", "למחוק את אזור המנהל?"), detail: aa.name }))) {
       return;
     }
     await apiFetch(`/api/admin-areas/${aa.id}`, { method: "DELETE" });

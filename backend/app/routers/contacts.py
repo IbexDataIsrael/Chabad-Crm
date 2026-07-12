@@ -422,6 +422,8 @@ def _contacts_query(
     area_ids: Optional[list[int]] = None,
     building_ids: Optional[list[int]] = None,
     has_mitzvot: bool = False,
+    mitzvot: Optional[list[str]] = None,
+    tzedaka_potential: Optional[str] = None,
 ):
     """The org-scoped, filtered, shliach-aware contacts query (shared by the
     plain list, the paginated list and the bulk-email address list).
@@ -429,7 +431,9 @@ def _contacts_query(
     fixes15 §5.1: `q` matches name / last name / phone / email; `area_ids` /
     `building_ids` narrow geographically — a mekurav belongs through its
     apartment's building, a shliach through its coverage links; `has_mitzvot`
-    keeps only contacts with at least one community-mitzvah checked."""
+    keeps only contacts with at least one community-mitzvah checked.
+    fixes17 §2.2: `mitzvot` names specific checklist booleans that must ALL be
+    checked; `tzedaka_potential` text-matches the mekurav field."""
     query = db.query(models.Contact).filter(
         models.Contact.organization_id == current_user.organization_id
     )
@@ -521,6 +525,35 @@ def _contacts_query(
                 )
             )
         )
+    # fixes17 §2.2: specific mitzvot, AND semantics — every named checkbox
+    # must be checked on the contact's checklist.
+    if mitzvot:
+        for col in mitzvot:
+            if col not in _MITZVAH_COLUMNS:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    f"'{col}' is not a mitzvah field",
+                )
+        query = query.filter(
+            models.Contact.id.in_(
+                select(models.CommunityChecklist.contact_id).where(
+                    *[
+                        getattr(models.CommunityChecklist, col).is_(True)
+                        for col in mitzvot
+                    ]
+                )
+            )
+        )
+    if tzedaka_potential and tzedaka_potential.strip():
+        query = query.filter(
+            models.Contact.id.in_(
+                select(models.ContactMekurav.contact_id).where(
+                    models.ContactMekurav.tzedaka_potential.ilike(
+                        f"%{tzedaka_potential.strip()}%"
+                    )
+                )
+            )
+        )
 
     if current_user.role == "shliach":
         # fixes10 §3.5: ownership isolation — only contacts assigned to this
@@ -572,6 +605,8 @@ def list_contacts_paginated(
     area_ids: Optional[list[int]] = Query(None),
     building_ids: Optional[list[int]] = Query(None),
     has_mitzvot: bool = False,
+    mitzvot: Optional[list[str]] = Query(None),
+    tzedaka_potential: Optional[str] = None,
     sort: Literal["name", "created"] = "name",
     dir: Literal["asc", "desc"] = "asc",
     page: int = Query(1, ge=1),
@@ -589,6 +624,7 @@ def list_contacts_paginated(
     query = _contacts_query(
         db, current_user, pipeline_status, contact_type, assigned_user_id,
         q=q, area_ids=area_ids, building_ids=building_ids, has_mitzvot=has_mitzvot,
+        mitzvot=mitzvot, tzedaka_potential=tzedaka_potential,
     )
     total = query.count()
     key = models.Contact.created_at if sort == "created" else models.Contact.name
@@ -619,6 +655,8 @@ def list_contact_emails(
     area_ids: Optional[list[int]] = Query(None),
     building_ids: Optional[list[int]] = Query(None),
     has_mitzvot: bool = False,
+    mitzvot: Optional[list[str]] = Query(None),
+    tzedaka_potential: Optional[str] = None,
 ):
     """The distinct email addresses of every contact matching the same filter
     set as /list (fixes15 §5.2) — feeds the bulk `mailto:` BCC action, so it
@@ -626,6 +664,7 @@ def list_contact_emails(
     query = _contacts_query(
         db, current_user, pipeline_status, contact_type, assigned_user_id,
         q=q, area_ids=area_ids, building_ids=building_ids, has_mitzvot=has_mitzvot,
+        mitzvot=mitzvot, tzedaka_potential=tzedaka_potential,
     )
     rows = (
         query.filter(models.Contact.email.isnot(None), models.Contact.email != "")
@@ -709,6 +748,8 @@ def create_contact(
                     last_name=contact.last_name or "",
                     shliach_email=contact.email,
                     org_name=org_name,
+                    # fixes17 §1.3: replies go to the admin who created them.
+                    reply_to=current_user.email,
                 )
             except Exception:  # pragma: no cover - email must not block creation
                 logger.exception("Failed to send shliach welcome email")

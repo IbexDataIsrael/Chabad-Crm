@@ -212,9 +212,10 @@ export function buildingDisplayName(b: {
 }
 
 /**
- * Computed apartment title (fixes7 §4): label+floor — label "A" on floor "1"
- * renders "A1" — with fallbacks to whichever part exists, then the resident
- * name, then the id. Mirrors backend core/display.py.
+ * Computed apartment title: label - floor — label "A" on floor "1" renders
+ * "A - 1" (fixes17 §3.1: a space-isolated hyphen separates the parts) — with
+ * fallbacks to whichever part exists, then the resident name, then the id.
+ * Mirrors backend core/display.py.
  */
 export function apartmentTitle(a: {
   id: number;
@@ -224,7 +225,8 @@ export function apartmentTitle(a: {
 }): string {
   const label = (a.apartment_name ?? "").trim();
   const floor = (a.floor ?? "").trim();
-  if (label || floor) return `${label}${floor}`;
+  if (label && floor) return `${label} - ${floor}`;
+  if (label || floor) return label || floor;
   return (a.name ?? "").trim() || `#${a.id}`;
 }
 

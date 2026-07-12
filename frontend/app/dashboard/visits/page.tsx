@@ -10,10 +10,12 @@ import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { usePicklist } from "@/lib/picklists";
 import type { Contact, Visit } from "@/lib/types";
+import { useConfirm } from "@/lib/confirm";
 
 export default function VisitsPage() {
   const { isAdmin, loading } = useAuth();
   const { t } = useLocalization();
+  const confirmDialog = useConfirm();
   const { labelFor } = usePicklist("visit.type");
   const [visits, setVisits] = useState<Visit[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -47,7 +49,7 @@ export default function VisitsPage() {
   }, [visits, query]);
 
   async function remove(id: number) {
-    if (!confirm(t("visit.delete_confirm", "למחוק ביקור זה?"))) return;
+    if (!(await confirmDialog({ message: t("visit.delete_confirm", "למחוק ביקור זה?") }))) return;
     await apiFetch(`/api/visits/${id}`, { method: "DELETE" });
     await reload();
   }

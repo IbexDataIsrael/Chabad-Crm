@@ -4,7 +4,9 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useConfirm } from "@/lib/confirm";
 import { useLocalization } from "@/lib/localization";
+import { useToast } from "@/lib/toast";
 import type { PicklistField, PicklistValue } from "@/lib/types";
 
 export default function PicklistsPage() {
@@ -132,6 +134,7 @@ function DefinitionEditor({
   onDeleted: () => Promise<void>;
 }) {
   const { t } = useLocalization();
+  const confirmDialog = useConfirm();
   const [he, setHe] = useState(def.label);
   const [en, setEn] = useState(def.english_label ?? "");
 
@@ -150,7 +153,7 @@ function DefinitionEditor({
   }
 
   async function remove() {
-    if (!confirm(t("pl.delete_list_confirm", "למחוק רשימה זו וכל הערכים שלה?"))) return;
+    if (!(await confirmDialog({ message: t("pl.delete_list_confirm", "למחוק רשימה זו וכל הערכים שלה?") }))) return;
     await apiFetch(`/api/picklists/definition/${def.id}`, { method: "DELETE" });
     await onDeleted();
   }
@@ -278,6 +281,8 @@ function OptionRow({
   isLast: boolean;
 }) {
   const { t } = useLocalization();
+  const confirmDialog = useConfirm();
+  const { error: toastError } = useToast();
   const [label, setLabel] = useState(option.hebrew_label);
   const [english, setEnglish] = useState(option.english_value ?? "");
   const [color, setColor] = useState(option.color_hint ?? "");
@@ -310,12 +315,13 @@ function OptionRow({
 
   // Permanent delete: only allowed when the value is unused (backend returns 409 otherwise).
   async function hardDelete() {
-    if (!confirm(`${t("pl.hard_delete_confirm", "למחוק לצמיתות?")} '${option.value}'`)) return;
+    if (!(await confirmDialog({ message: t("pl.hard_delete_confirm", "למחוק לצמיתות?"), detail: option.value }))) return;
     try {
       await apiFetch(`/api/picklists/${option.id}?hard=true`, { method: "DELETE" });
       await onSaved();
     } catch {
-      alert(
+      // fixes17 §1.2: toast instead of the native alert().
+      toastError(
         t(
           "pl.hard_delete_in_use",
           "לא ניתן למחוק לצמיתות — הערך בשימוש על ידי רשומות קיימות. הוא הושבת במקום.",

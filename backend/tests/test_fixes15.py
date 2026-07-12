@@ -359,7 +359,7 @@ class TestShliachWelcomeTemplate:
     def test_welcome_sends_db_template(self, client, admin_headers, monkeypatch):
         sent = {}
 
-        def fake_send(to, subject, body, html=None):
+        def fake_send(to, subject, body, html=None, **kwargs):
             sent.update(to=to, subject=subject, body=body, html=html)
 
         monkeypatch.setattr("app.core.email.send_email", fake_send)
@@ -388,7 +388,7 @@ class TestShliachWelcomeTemplate:
         assert r.status_code == 200, r.text
         sent = {}
 
-        def fake_send(to, subject, body, html=None):
+        def fake_send(to, subject, body, html=None, **kwargs):
             sent.update(to=to, subject=subject, body=body, html=html)
 
         monkeypatch.setattr("app.core.email.send_email", fake_send)

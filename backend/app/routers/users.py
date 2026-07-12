@@ -113,6 +113,8 @@ def create_user(
             last_name=last,
             shliach_email=email,
             org_name=org_name,
+            # fixes17 §1.3: replies go to the admin who created the account.
+            reply_to=admin.email,
         )
     except Exception:  # pragma: no cover — email must not block creation
         logger.exception("Failed to send welcome email to %s", email)

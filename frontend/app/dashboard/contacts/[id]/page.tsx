@@ -15,6 +15,8 @@ import { SignificantDatesEditor } from "@/components/SignificantDatesEditor";
 import { VisitHistoryEditor } from "@/components/VisitHistoryEditor";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useConfirm } from "@/lib/confirm";
+import { telHref, waHref } from "@/lib/contactActions";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
 import {
@@ -31,6 +33,7 @@ export default function ContactDetailPage() {
   const contactId = Number(params.id);
   const router = useRouter();
   const { t } = useLocalization();
+  const confirmDialog = useConfirm();
   const { isAdmin } = useAuth();
   const { success } = useToast();
 
@@ -93,7 +96,7 @@ export default function ContactDetailPage() {
   }
 
   async function remove() {
-    if (!confirm(t("msg.delete_contact_confirm", "למחוק את איש הקשר? פעולה זו אינה הפיכה.")))
+    if (!(await confirmDialog({ message: t("msg.delete_contact_confirm", "למחוק את איש הקשר? פעולה זו אינה הפיכה.") })))
       return;
     await apiFetch(`/api/contacts/${contactId}`, { method: "DELETE" });
     success(t("msg.deleted", "נמחק"));
@@ -149,7 +152,41 @@ export default function ContactDetailPage() {
         </div>
       </div>
 
-      <h1 className="text-2xl font-bold">{contactFullName(contact)}</h1>
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-2xl font-bold">{contactFullName(contact)}</h1>
+        {/* fixes17 §2.1: one-click call / WhatsApp / mail from the profile. */}
+        <span className="flex items-center gap-2">
+          {contact.phone && (
+            <a
+              href={telHref(contact.phone)}
+              title={t("action.call", "חיוג")}
+              className="rounded-full border border-gray-200 px-2.5 py-1.5 text-sm leading-none hover:bg-status-green/10"
+            >
+              📞 {t("action.call", "חיוג")}
+            </a>
+          )}
+          {contact.phone && (
+            <a
+              href={waHref(contact.phone)}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={t("action.whatsapp", "וואטסאפ")}
+              className="rounded-full border border-gray-200 px-2.5 py-1.5 text-sm leading-none hover:bg-status-green/10"
+            >
+              💬 {t("action.whatsapp", "וואטסאפ")}
+            </a>
+          )}
+          {contact.email && (
+            <a
+              href={`mailto:${contact.email}`}
+              title={t("action.send_email", "שליחת מייל")}
+              className="rounded-full border border-gray-200 px-2.5 py-1.5 text-sm leading-none hover:bg-status-magenta/10"
+            >
+              ✉ {t("action.send_email", "שליחת מייל")}
+            </a>
+          )}
+        </span>
+      </div>
 
       <section className="bg-white rounded-xl shadow-sm p-6">
         <h2 className="font-semibold mb-4">

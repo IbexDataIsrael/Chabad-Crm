@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/api";
 import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
 import type { Reminder, SignificantDate } from "@/lib/types";
+import { useConfirm } from "@/lib/confirm";
 import { DatePicker } from "./DatePicker";
 import { PicklistSelect } from "./PicklistSelect";
 
@@ -51,6 +52,7 @@ function toDraft(sd?: SignificantDate): Draft {
 /** Live editor for a mekurav contact's significant dates + reminders. */
 export function SignificantDatesEditor({ contactId }: { contactId: number }) {
   const { t } = useLocalization();
+  const confirmDialog = useConfirm();
   const [dates, setDates] = useState<SignificantDate[]>([]);
   const [editing, setEditing] = useState<{ id: number | null } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,7 +72,7 @@ export function SignificantDatesEditor({ contactId }: { contactId: number }) {
   }, [contactId]);
 
   async function remove(id: number) {
-    if (!confirm(t("msg.delete_date_confirm", "למחוק תאריך זה?"))) return;
+    if (!(await confirmDialog({ message: t("msg.delete_date_confirm", "למחוק תאריך זה?") }))) return;
     await apiFetch(`/api/contacts/${contactId}/special-dates/${id}`, {
       method: "DELETE",
     });
