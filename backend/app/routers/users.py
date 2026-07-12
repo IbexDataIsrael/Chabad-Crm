@@ -208,5 +208,10 @@ def delete_user(
     db.query(models.ContactShliach).filter(
         models.ContactShliach.user_id == user.id
     ).update({models.ContactShliach.user_id: None}, synchronize_session=False)
+    # created_by is NOT NULL — keep the interaction history, owned by the
+    # deleting admin (fixes16: deleting an author used to crash with a 500).
+    db.query(models.Interaction).filter(
+        models.Interaction.created_by == user.id
+    ).update({models.Interaction.created_by: admin.id}, synchronize_session=False)
     db.delete(user)
     db.commit()

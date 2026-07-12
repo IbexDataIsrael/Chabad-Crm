@@ -607,6 +607,22 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("editor", "editor.link", "קישור", "Link"),
     ("editor", "editor.list", "רשימה", "List"),
     ("editor", "editor.link_prompt", "כתובת הקישור:", "Link URL:"),
+    # --- fixes16: backup & restore ---
+    ("backup", "backup.title", "גיבוי ושחזור", "Backup & restore"),
+    ("backup", "backup.intro", "צור נקודת שחזור של נתוני הארגון, ושחזר אליה אם משהו השתבש. נשמרות עד 10 נקודות; חשבונות המשתמשים אינם חלק מהגיבוי.", "Create a restore point of your organization's data and restore to it if something goes wrong. Up to 10 points are kept; user accounts are not part of the backup."),
+    ("backup", "backup.create", "צור גיבוי", "Create backup"),
+    ("backup", "backup.note_ph", "הערה (לא חובה) — לדוגמה: לפני ייבוא", "Note (optional) — e.g. before import"),
+    ("backup", "backup.created", "הגיבוי נוצר", "Backup created"),
+    ("backup", "backup.create_failed", "יצירת הגיבוי נכשלה", "Backup failed"),
+    ("backup", "backup.none", "אין נקודות שחזור עדיין.", "No restore points yet."),
+    ("backup", "backup.restore", "שחזר", "Restore"),
+    ("backup", "backup.download", "הורדה", "Download"),
+    ("backup", "backup.kind_auto", "אוטומטי", "Automatic"),
+    ("backup", "backup.contacts_n", "{n} אנשי קשר", "{n} contacts"),
+    ("backup", "backup.restore_title", "שחזור נתונים", "Restore data"),
+    ("backup", "backup.restore_warning", "כל נתוני הארגון הנוכחיים יוחלפו בנתוני נקודת השחזור הזו. נקודת שחזור אוטומטית של המצב הנוכחי תיווצר לפני השחזור, כך שניתן לבטל.", "All of the organization's current data will be replaced with this restore point. An automatic restore point of the current state is created first, so this can be undone."),
+    ("backup", "backup.restored", "השחזור הושלם", "Restore completed"),
+    ("backup", "backup.restore_failed", "השחזור נכשל — הנתונים לא שונו", "Restore failed — the data was not changed"),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)

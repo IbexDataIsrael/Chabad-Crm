@@ -48,6 +48,7 @@ from app.routers import (
     apartments,
     areas,
     auth,
+    backups,
     buildings,
     contacts,
     custom_fields,
@@ -122,6 +123,7 @@ app.include_router(visits.all_router)
 app.include_router(donations.router)
 app.include_router(uploads.router)
 app.include_router(admin.router)
+app.include_router(backups.router)
 app.include_router(search.router)
 app.include_router(ai.router)
 

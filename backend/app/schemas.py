@@ -156,6 +156,29 @@ class AdminUserOut(BaseModel):
     organization_id: int
 
 
+# --- Org backup & restore (fixes16) -----------------------------------------
+class BackupCreate(BaseModel):
+    note: Optional[str] = None
+
+
+class BackupOut(BaseModel):
+    """One restore point (metadata only — the blob never leaves the server
+    except via the explicit download endpoint)."""
+
+    id: int
+    guid: str
+    note: Optional[str] = None
+    kind: str  # 'manual' | 'auto'
+    created_by_name: Optional[str] = None
+    created_at: datetime
+    counts: dict[str, int] = {}
+
+
+class BackupRestoreResult(BaseModel):
+    restored: dict[str, int]
+    safety_backup_id: int
+
+
 class AdminUserDependenciesOut(BaseModel):
     """What still points at a user (fixes15 §2.2) — shown in the delete-confirm
     modal so the superadmin sees the data ties before deleting a shliach."""

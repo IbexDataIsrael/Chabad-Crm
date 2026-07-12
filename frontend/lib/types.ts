@@ -290,6 +290,17 @@ export interface OrgDetails {
   default_zoom: number;
 }
 
+/** One org restore point (fixes16) — metadata only, the blob stays server-side. */
+export interface OrgBackup {
+  id: number;
+  guid: string;
+  note: string | null;
+  kind: "manual" | "auto";
+  created_by_name: string | null;
+  created_at: string;
+  counts: Record<string, number>;
+}
+
 export interface UserSummary {
   id: number;
   guid: string; // contact assignment key (fixes10)

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 
+import { BackupRestoreCard } from "@/components/BackupRestoreCard";
 import { LogoUpload } from "@/components/LogoUpload";
 import { MapPointPicker } from "@/components/MapPointPicker";
 import { apiFetch, changePassword } from "@/lib/api";
@@ -162,6 +163,9 @@ export default function SettingsPage() {
         </div>
       </form>
       )}
+
+      {/* fixes16: backup & restore points (admin-only). */}
+      {isAdmin && <BackupRestoreCard />}
 
       <ChangePasswordCard />
     </div>

@@ -51,6 +51,28 @@ export async function uploadLogo(file: File): Promise<string> {
   return data.url as string;
 }
 
+/** Authenticated file download: fetches `path` with the Bearer token (a plain
+ * <a href> can't carry it) and hands the blob to the browser as a download.
+ * The filename comes from Content-Disposition, falling back to `fallback`. */
+export async function apiDownload(path: string, fallback: string): Promise<void> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${API_URL}${path}`, { headers });
+  if (!res.ok) throw new ApiError(res.status, res.statusText);
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const match = disposition.match(/filename="?([^";]+)"?/);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = match?.[1] ?? fallback;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 /** Authenticated JSON fetch. Throws ApiError on non-2xx; redirects to login on 401. */
 export async function apiFetch<T>(
   path: string,

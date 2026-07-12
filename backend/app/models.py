@@ -19,6 +19,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    LargeBinary,
     String,
     Text,
     Time,
@@ -837,3 +838,27 @@ class ContactPicklistValue(Base):
 
     contact = relationship("Contact", back_populates="picklist_value_rows")
     picklist = relationship("PicklistDefinition")
+
+
+class OrgBackup(Base):
+    """A restore point of one organization's CRM data (fixes16).
+
+    The snapshot itself is a zlib-compressed JSON blob stored right here in the
+    database — the app server's disk is ephemeral (wiped on every deploy), and
+    keeping it as a row makes restore a pure DB operation. User accounts are
+    never part of a snapshot. `created_by_name` is denormalized on purpose so
+    the row stays meaningful after the creating user is deleted."""
+
+    __tablename__ = "org_backups"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    created_by_name = Column(String(150), nullable=True)
+    note = Column(String(300), nullable=True)  # e.g. "לפני ייבוא"
+    kind = Column(String(20), nullable=False, default="manual")  # manual | auto
+    counts = Column(Text, nullable=False, default="{}")  # JSON row-count summary
+    data = Column(LargeBinary, nullable=False)  # zlib-compressed JSON snapshot
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
