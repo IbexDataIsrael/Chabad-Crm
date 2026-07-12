@@ -6,6 +6,7 @@ import { useLocalization } from "@/lib/localization";
 import { contactFullName, type Contact, type Visit } from "@/lib/types";
 import { DatePicker } from "./DatePicker";
 import { PicklistSelect } from "./PicklistSelect";
+import { SearchableSelect } from "./SearchableSelect";
 
 const inputClass =
   "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
@@ -74,18 +75,12 @@ export function VisitForm({
         {lockedContactId === undefined && (
           <label className="block space-y-1">
             <span className="block text-sm font-medium">{t("visit.contact", "איש קשר")}</span>
-            <select
-              className={inputClass}
-              value={contactSel}
-              onChange={(e) => setContactSel(e.target.value === "" ? "" : Number(e.target.value))}
-            >
-              <option value="">{t("visit.no_contact", "ללא איש קשר")}</option>
-              {contacts.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {contactFullName(c)}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={contactSel === "" ? null : contactSel}
+              onChange={(id) => setContactSel(id ?? "")}
+              options={contacts.map((c) => ({ id: c.id, label: contactFullName(c) }))}
+              placeholder={t("visit.no_contact", "ללא איש קשר")}
+            />
           </label>
         )}
         <label className="block space-y-1">

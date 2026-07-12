@@ -8,6 +8,7 @@ import { useLocalization } from "@/lib/localization";
 import { contactFullName, type Contact, type Donation } from "@/lib/types";
 import { useConfirm } from "@/lib/confirm";
 import { DatePicker } from "./DatePicker";
+import { SearchableSelect } from "./SearchableSelect";
 
 const inputClass =
   "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
@@ -215,18 +216,12 @@ function DonationForm({
         {lockedContactId === undefined && (
           <label className="block space-y-1">
             <span className="block text-sm font-medium">{t("donation.contact", "איש קשר")}</span>
-            <select
-              className={inputClass}
-              value={contactSel}
-              onChange={(e) => setContactSel(e.target.value === "" ? "" : Number(e.target.value))}
-            >
-              <option value="">{t("donation.no_contact", "ללא איש קשר")}</option>
-              {contacts.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {contactFullName(c)}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={contactSel === "" ? null : contactSel}
+              onChange={(id) => setContactSel(id ?? "")}
+              options={contacts.map((c) => ({ id: c.id, label: contactFullName(c) }))}
+              placeholder={t("donation.no_contact", "ללא איש קשר")}
+            />
           </label>
         )}
         <label className="block space-y-1">

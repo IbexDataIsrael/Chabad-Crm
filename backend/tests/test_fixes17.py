@@ -129,8 +129,11 @@ class TestContactFilters17:
             mekurav={"tzedaka_potential": "גבוה מאוד"},
         )
         _mk_contact(client, admin_headers, name="רגיל")
-        got = _list(client, admin_headers, "?tzedaka_potential=גבוה")
+        got = _list(client, admin_headers, "?tzedaka_potential=גבוה מאוד")
         assert [x["id"] for x in got["items"]] == [c["id"]]
+        # fixes18 §3.2: the filter is an exact match (dropdown values) — a
+        # substring no longer matches.
+        assert _list(client, admin_headers, "?tzedaka_potential=גבוה")["total"] == 0
         assert _list(client, admin_headers, "?tzedaka_potential=נמוך")["total"] == 0
 
     def test_emails_respect_new_filters(self, client, admin_headers):
@@ -196,7 +199,8 @@ class TestApartmentSorting17:
         )
         hits = client.get("/api/search?q=לוי", headers=admin_headers).json()["results"]
         apt = [h for h in hits if h["type"] == "apartment"]
-        assert apt and apt[0]["title"] == "A - 1"  # fixes17 §3.1
+        # fixes18 §5.1: the title is the bare label — no "- floor" suffix.
+        assert apt and apt[0]["title"] == "A"
 
 
 # --- §1.3 org-branded email + tenant_verification template ---------------------------
@@ -273,7 +277,15 @@ class TestEmailBranding:
 
 # --- §5 shliach sees own contacts (regression) ---------------------------------------
 class TestShliachOwnContacts:
-    def test_created_contact_visible_to_creator(self, client, admin_headers):
+    def test_created_contact_visible_to_creator(self, client, admin_headers, db_session):
+        # fixes18 §6: own-contact visibility now requires the org's opt-in.
+        org_id = client.get("/api/auth/me", headers=admin_headers).json()[
+            "organization_id"
+        ]
+        db_session.query(models.Organization).filter(
+            models.Organization.id == org_id
+        ).update({"shliach_can_view_contacts": True})
+        db_session.commit()
         _mk_contact(
             client, admin_headers, name="פעיל", last_name="רואה",
             contact_type="shliach", email="sees@x.com",

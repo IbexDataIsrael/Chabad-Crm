@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { SearchableSelect } from "@/components/SearchableSelect";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
@@ -113,18 +114,12 @@ export function ApartmentPicker({
       );
     }
     return (
-      <select
-        className={inputClass}
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
-      >
-        <option value="">{t("apt.choose_apartment", "בחר דירה…")}</option>
-        {apartments.map((a) => (
-          <option key={a.id} value={a.id}>
-            {apartmentTitle(a)}
-          </option>
-        ))}
-      </select>
+      <SearchableSelect
+        value={value}
+        onChange={onChange}
+        options={apartments.map((a) => ({ id: a.id, label: apartmentTitle(a) }))}
+        placeholder={t("apt.choose_apartment", "בחר דירה…")}
+      />
     );
   }
 
@@ -143,36 +138,24 @@ export function ApartmentPicker({
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <select
-          className={inputClass}
-          value={buildingId}
-          onChange={(e) => {
-            setBuildingId(e.target.value === "" ? "" : Number(e.target.value));
+        <SearchableSelect
+          value={buildingId === "" ? null : buildingId}
+          onChange={(id) => {
+            setBuildingId(id ?? "");
             onChange(null); // building changed → clear apartment
             setAdding(false);
           }}
-        >
-          <option value="">{t("apt.choose_building", "בחר בניין…")}</option>
-          {buildings.map((b) => (
-            <option key={b.id} value={b.id}>
-              {buildingDisplayName(b)}
-            </option>
-          ))}
-        </select>
+          options={buildings.map((b) => ({ id: b.id, label: buildingDisplayName(b) }))}
+          placeholder={t("apt.choose_building", "בחר בניין…")}
+        />
 
-        <select
-          className={inputClass}
-          value={value ?? ""}
+        <SearchableSelect
+          value={value}
+          onChange={onChange}
           disabled={buildingId === ""}
-          onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
-        >
-          <option value="">{t("apt.choose_apartment", "בחר דירה…")}</option>
-          {apartments.map((a) => (
-            <option key={a.id} value={a.id}>
-              {apartmentTitle(a)}
-            </option>
-          ))}
-        </select>
+          options={apartments.map((a) => ({ id: a.id, label: apartmentTitle(a) }))}
+          placeholder={t("apt.choose_apartment", "בחר דירה…")}
+        />
       </div>
 
       {buildingId !== "" &&

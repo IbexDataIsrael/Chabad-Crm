@@ -19,6 +19,8 @@ export default function SettingsPage() {
   const [name, setName] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [mapInEnglish, setMapInEnglish] = useState(false);
+  // fixes18 §6: shliach contacts-visibility permission (default off).
+  const [shliachViewContacts, setShliachViewContacts] = useState(false);
   const [lat, setLat] = useState<string>("");
   const [lng, setLng] = useState<string>("");
   const [zoom, setZoom] = useState<string>("13");
@@ -32,6 +34,7 @@ export default function SettingsPage() {
         setName(o.name);
         setLogoUrl(o.logo_url);
         setMapInEnglish(o.map_in_english);
+        setShliachViewContacts(o.shliach_can_view_contacts ?? false);
         setLat(o.default_lat?.toString() ?? "");
         setLng(o.default_lng?.toString() ?? "");
         setZoom(o.default_zoom?.toString() ?? "13");
@@ -50,6 +53,7 @@ export default function SettingsPage() {
           name,
           logo_url: logoUrl,
           map_in_english: mapInEnglish,
+          shliach_can_view_contacts: shliachViewContacts,
           default_lat: lat === "" ? null : Number(lat),
           default_lng: lng === "" ? null : Number(lng),
           default_zoom: zoom === "" ? 13 : Number(zoom),
@@ -104,6 +108,22 @@ export default function SettingsPage() {
         </label>
         <p className="text-xs text-gray-400">
           {t("page.map_in_english_hint", "כאשר מסומן, הצעות הכתובת מ-Google יוחזרו באנגלית במקום בעברית.")}
+        </p>
+
+        {/* fixes18 §6: shliach contacts-visibility permission (default off). */}
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={shliachViewContacts}
+            onChange={(e) => setShliachViewContacts(e.target.checked)}
+          />
+          {t("page.shliach_view_contacts", "פעילים רשאים לצפות באנשי קשר")}
+        </label>
+        <p className="text-xs text-gray-400">
+          {t(
+            "page.shliach_view_contacts_hint",
+            "כאשר כבוי (ברירת המחדל), משתמשי פעיל אינם רואים את רשימת אנשי הקשר.",
+          )}
         </p>
 
         <div className="border-t border-gray-100 pt-4 space-y-2">

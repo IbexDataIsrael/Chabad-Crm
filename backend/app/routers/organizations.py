@@ -37,6 +37,12 @@ def update_my_org(
         org.logo_url = data["logo_url"]
     if "map_in_english" in data and data["map_in_english"] is not None:
         org.map_in_english = data["map_in_english"]
+    # fixes18 §6: the shliach contacts-visibility switch.
+    if (
+        "shliach_can_view_contacts" in data
+        and data["shliach_can_view_contacts"] is not None
+    ):
+        org.shliach_can_view_contacts = data["shliach_can_view_contacts"]
     for field in ("default_lat", "default_lng", "default_zoom"):
         if field in data:
             setattr(org, field, data[field])

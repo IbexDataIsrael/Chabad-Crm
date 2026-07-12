@@ -204,7 +204,7 @@ export default function ContactDetailPage() {
               contact.contact_type === "mekurav" ? (
                 <div className="space-y-6 border-t border-gray-100 pt-4">
                   <section>
-                    <h3 className="text-sm font-semibold mb-3">{t("community_checklists", "מצוות קהילה")}</h3>
+                    <h3 className="text-sm font-semibold mb-3">{t("community_checklists", "מבצעים")}</h3>
                     <ChecklistFields value={checklist} onChange={setChecklist} />
                   </section>
                   {customFields.length > 0 && (
@@ -246,17 +246,21 @@ export default function ContactDetailPage() {
         </section>
       )}
 
-      {isAdmin && (
+      {/* fixes18 §3.1: donations + interactions are mekurav relationship data —
+          a shliach profile no longer shows these sections. */}
+      {isAdmin && contact.contact_type === "mekurav" && (
         <section className="bg-white rounded-xl shadow-sm p-6">
           <h2 className="font-semibold mb-4">{t("donation.history", "היסטורית תרומות")}</h2>
           <DonationsEditor contactId={contact.id} />
         </section>
       )}
 
-      <section className="bg-white rounded-xl shadow-sm p-6">
-        <h2 className="font-semibold mb-4">{t("interactions", "אינטראקציות")}</h2>
-        <InteractionsTimeline contactId={contact.id} />
-      </section>
+      {contact.contact_type === "mekurav" && (
+        <section className="bg-white rounded-xl shadow-sm p-6">
+          <h2 className="font-semibold mb-4">{t("interactions", "אינטראקציות")}</h2>
+          <InteractionsTimeline contactId={contact.id} />
+        </section>
+      )}
     </div>
   );
 }

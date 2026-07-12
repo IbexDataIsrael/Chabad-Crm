@@ -44,6 +44,15 @@ logger = logging.getLogger("app.contacts")
 
 
 # --- Shliach scoping --------------------------------------------------------
+def _shliach_contacts_blocked(db: Session, user: models.User) -> bool:
+    """fixes18 §6: unless the org opted in (shliach_can_view_contacts, off by
+    default), shliach users may not view mekurav contacts at all."""
+    if user.role != "shliach":
+        return False
+    org = db.get(models.Organization, user.organization_id)
+    return not (org and org.shliach_can_view_contacts)
+
+
 def _get_contact_or_404(
     contact_id: int, user: models.User, db: Session
 ) -> models.Contact:
@@ -58,6 +67,11 @@ def _get_contact_or_404(
     if not contact:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Contact not found")
     if user.role == "shliach" and not _can_shliach_see(db, user, contact):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Contact not found")
+    if (
+        contact.contact_type == "mekurav"
+        and _shliach_contacts_blocked(db, user)
+    ):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Contact not found")
     return contact
 
@@ -424,6 +438,7 @@ def _contacts_query(
     has_mitzvot: bool = False,
     mitzvot: Optional[list[str]] = None,
     tzedaka_potential: Optional[str] = None,
+    admin_area_ids: Optional[list[int]] = None,
 ):
     """The org-scoped, filtered, shliach-aware contacts query (shared by the
     plain list, the paginated list and the bulk-email address list).
@@ -433,7 +448,9 @@ def _contacts_query(
     apartment's building, a shliach through its coverage links; `has_mitzvot`
     keeps only contacts with at least one community-mitzvah checked.
     fixes17 §2.2: `mitzvot` names specific checklist booleans that must ALL be
-    checked; `tzedaka_potential` text-matches the mekurav field."""
+    checked. fixes18 §3: `tzedaka_potential` is an exact match (the value comes
+    from the aggregated dropdown); `admin_area_ids` narrows to mekuravim linked
+    to those admin areas."""
     query = db.query(models.Contact).filter(
         models.Contact.organization_id == current_user.organization_id
     )
@@ -548,9 +565,17 @@ def _contacts_query(
         query = query.filter(
             models.Contact.id.in_(
                 select(models.ContactMekurav.contact_id).where(
-                    models.ContactMekurav.tzedaka_potential.ilike(
-                        f"%{tzedaka_potential.strip()}%"
-                    )
+                    func.trim(models.ContactMekurav.tzedaka_potential)
+                    == tzedaka_potential.strip()
+                )
+            )
+        )
+    # fixes18 §3.5: filter by the mekurav's admin-area link.
+    if admin_area_ids:
+        query = query.filter(
+            models.Contact.id.in_(
+                select(models.ContactMekurav.contact_id).where(
+                    models.ContactMekurav.admin_area_id.in_(admin_area_ids)
                 )
             )
         )
@@ -565,6 +590,10 @@ def _contacts_query(
             (models.Contact.assigned_user_id == current_user.guid)
             | (models.ContactShliach.user_id == current_user.id)
         )
+        # fixes18 §6: without the org's opt-in, mekurav contacts vanish
+        # entirely (their own shliach record keeps resolving).
+        if _shliach_contacts_blocked(db, current_user):
+            query = query.filter(models.Contact.contact_type == "shliach")
     return query
 
 
@@ -591,6 +620,9 @@ def _list_item(contact: models.Contact) -> ContactOut:
         out.building_name = building_display_name(apartment.building)
         if apartment.building.area:
             out.area_name = apartment.building.area.area_name
+    # fixes18 §3.4: the admin-area link feeds the optional grid column.
+    if contact.mekurav and contact.mekurav.admin_area:
+        out.admin_area_name = contact.mekurav.admin_area.name
     return out
 
 
@@ -607,6 +639,7 @@ def list_contacts_paginated(
     has_mitzvot: bool = False,
     mitzvot: Optional[list[str]] = Query(None),
     tzedaka_potential: Optional[str] = None,
+    admin_area_ids: Optional[list[int]] = Query(None),
     sort: Literal["name", "created"] = "name",
     dir: Literal["asc", "desc"] = "asc",
     page: int = Query(1, ge=1),
@@ -625,6 +658,7 @@ def list_contacts_paginated(
         db, current_user, pipeline_status, contact_type, assigned_user_id,
         q=q, area_ids=area_ids, building_ids=building_ids, has_mitzvot=has_mitzvot,
         mitzvot=mitzvot, tzedaka_potential=tzedaka_potential,
+        admin_area_ids=admin_area_ids,
     )
     total = query.count()
     key = models.Contact.created_at if sort == "created" else models.Contact.name
@@ -657,6 +691,7 @@ def list_contact_emails(
     has_mitzvot: bool = False,
     mitzvot: Optional[list[str]] = Query(None),
     tzedaka_potential: Optional[str] = None,
+    admin_area_ids: Optional[list[int]] = Query(None),
 ):
     """The distinct email addresses of every contact matching the same filter
     set as /list (fixes15 §5.2) — feeds the bulk `mailto:` BCC action, so it
@@ -665,6 +700,7 @@ def list_contact_emails(
         db, current_user, pipeline_status, contact_type, assigned_user_id,
         q=q, area_ids=area_ids, building_ids=building_ids, has_mitzvot=has_mitzvot,
         mitzvot=mitzvot, tzedaka_potential=tzedaka_potential,
+        admin_area_ids=admin_area_ids,
     )
     rows = (
         query.filter(models.Contact.email.isnot(None), models.Contact.email != "")
@@ -679,6 +715,28 @@ def list_contact_emails(
             seen.add(key)
             emails.append(c.email.strip())
     return emails
+
+
+@router.get("/tzedaka-values", response_model=list[str])
+def list_tzedaka_values(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """The distinct non-empty tzedaka-potential values in the org (fixes18 §3.2)
+    — feeds the contacts page's dropdown filter. Scoped like the list itself,
+    so a shliach only aggregates values from contacts they can see."""
+    query = _contacts_query(db, current_user, None, "mekurav", None)
+    rows = (
+        query.join(
+            models.ContactMekurav,
+            models.ContactMekurav.contact_id == models.Contact.id,
+        )
+        .with_entities(models.ContactMekurav.tzedaka_potential)
+        .filter(models.ContactMekurav.tzedaka_potential.isnot(None))
+        .distinct()
+        .all()
+    )
+    return sorted({r[0].strip() for r in rows if r[0] and r[0].strip()})
 
 
 @router.post("", response_model=ContactDetailOut, status_code=status.HTTP_201_CREATED)

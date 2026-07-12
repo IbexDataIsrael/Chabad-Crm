@@ -187,6 +187,8 @@ def list_apartments_enriched(
     apartment_id: Optional[int] = None,
     shliach_contact_id: Optional[int] = None,
     q: Optional[str] = None,
+    jewish_status: Optional[list[str]] = Query(None),
+    mezuzah_status: Optional[list[str]] = Query(None),
     sort: Literal["floor", "label", "resident", "building", "created"] = "floor",
     dir: Literal["asc", "desc"] = "asc",
     page: int = Query(1, ge=1),
@@ -197,7 +199,8 @@ def list_apartments_enriched(
 
     Filters: `building_id` / `area_id` bound the list (fixes8 §2A lazy loading);
     `apartment_id` returns a single enriched row (detail page); `q` matches the
-    street name in the parent building address (plus label / resident name).
+    street name in the parent building address (plus label / resident name);
+    fixes18 §5.2: `jewish_status` / `mezuzah_status` match the picklist columns.
     Sorting (fixes8 §1D) defaults to floor, then apartment number within a floor;
     `dir` flips the primary key only. Pagination (fixes8 §2C) is server-side."""
     if page_size not in (20, 50, 100):
@@ -246,6 +249,11 @@ def list_apartments_enriched(
                 models.Apartment.name.ilike(like),
             )
         )
+    # fixes18 §5.2: picklist-column filters (multi-select, OR within a field).
+    if jewish_status:
+        query = query.filter(models.Apartment.jewish_status.in_(jewish_status))
+    if mezuzah_status:
+        query = query.filter(models.Apartment.mezuzah_status.in_(mezuzah_status))
 
     total = query.count()
 

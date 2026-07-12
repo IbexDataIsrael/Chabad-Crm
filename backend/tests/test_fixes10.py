@@ -51,6 +51,11 @@ def superadmin_headers(client, db_session):
 def shliach_headers(client, db_session, admin_headers):
     """An active shliach login inside the admin's org."""
     org_id = _me(client, admin_headers)["organization_id"]
+    # fixes18 §6: these tests exercise the fixes10 ownership-scoped contact
+    # visibility, which now requires the org's opt-in (the default is off).
+    db_session.query(models.Organization).filter(
+        models.Organization.id == org_id
+    ).update({"shliach_can_view_contacts": True})
     user = models.User(
         organization_id=org_id,
         username="shliach10",

@@ -54,6 +54,11 @@ class Organization(Base):
     default_lat = Column(Float, nullable=True)
     default_lng = Column(Float, nullable=True)
     default_zoom = Column(Integer, nullable=False, default=13)
+    # fixes18 §6: may shliach users view (mekurav) contacts? Off by default —
+    # an admin opts the org in from the settings page.
+    shliach_can_view_contacts = Column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     # Platform-level enable/disable (superadmin). A disabled org's users can't log in.
     is_active = Column(Boolean, nullable=False, default=True, server_default=text("true"))
     # Signup approval workflow: 'pending' (awaiting superadmin approval) | 'approved'.

@@ -195,7 +195,7 @@ export function ContactView({
       {isMekurav && (
         <div>
           <h3 className="text-sm font-semibold mb-2">
-            {t("community_checklists", "מצוות קהילה")}
+            {t("community_checklists", "מבצעים")}
           </h3>
           <ul className="space-y-1">
             {CHECKLIST_ROWS.map(({ bool, note }) => (

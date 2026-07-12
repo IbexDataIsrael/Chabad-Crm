@@ -6,9 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app import models
+from app.core.geo import point_in_polygon, polygon_ring
 from app.database import get_db
 from app.deps import get_current_user, require_admin
-from app.schemas import AreaCreate, AreaOut, AreaUpdate, ContactOut
+from app.schemas import AreaCreate, AreaOut, AreaShliachAdd, AreaUpdate, BuildingOut, ContactOut
 
 router = APIRouter(prefix="/api/areas", tags=["areas"])
 
@@ -172,3 +173,81 @@ def area_shluchim(
         .order_by(models.Contact.name)
         .all()
     )
+
+
+@router.post(
+    "/{area_id}/shluchim",
+    response_model=list[ContactOut],
+    status_code=status.HTTP_201_CREATED,
+)
+def add_area_shliach(
+    area_id: int,
+    payload: AreaShliachAdd,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    """fixes18 §4.2: assign an existing shliach contact to cover this area —
+    the area page's "add activist" dropdown. Idempotent: re-adding an already
+    covering shliach is a no-op. Returns the updated covering list."""
+    area = _get_or_404(area_id, admin.organization_id, db)
+    contact = (
+        db.query(models.Contact)
+        .filter(
+            models.Contact.id == payload.contact_id,
+            models.Contact.organization_id == admin.organization_id,
+            models.Contact.contact_type == "shliach",
+        )
+        .first()
+    )
+    if not contact or not contact.shliach:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "contact_id is not a shliach contact"
+        )
+    exists = (
+        db.query(models.ContactShliachArea)
+        .filter(
+            models.ContactShliachArea.contact_shliach_id == contact.shliach.id,
+            models.ContactShliachArea.area_id == area.id,
+        )
+        .first()
+    )
+    if not exists:
+        db.add(
+            models.ContactShliachArea(
+                organization_id=admin.organization_id,
+                contact_shliach_id=contact.shliach.id,
+                area_id=area.id,
+            )
+        )
+        db.commit()
+    return area_shluchim(area_id, db, admin)
+
+
+@router.get("/{area_id}/eligible-buildings", response_model=list[BuildingOut])
+def area_eligible_buildings(
+    area_id: int,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    """fixes18 §4.3: the org's buildings whose coordinates fall inside this
+    area's polygon and that aren't already assigned to it — the only options
+    the area page's "add building" dropdown offers. Empty when the area has no
+    (valid) polygon or no positioned building lies within it."""
+    area = _get_or_404(area_id, admin.organization_id, db)
+    ring = polygon_ring(area.area_polygon)
+    if not ring:
+        return []
+    candidates = (
+        db.query(models.Building)
+        .filter(
+            models.Building.organization_id == admin.organization_id,
+            models.Building.area_id != area.id,
+            models.Building.latitude.isnot(None),
+            models.Building.longitude.isnot(None),
+        )
+        .order_by(models.Building.building_address, models.Building.id)
+        .all()
+    )
+    return [
+        b for b in candidates if point_in_polygon(b.longitude, b.latitude, ring)
+    ]

@@ -107,7 +107,7 @@ export default function NewContactPage() {
             extra={
               <div className="space-y-6 border-t border-gray-100 pt-4">
                 <section>
-                  <h3 className="text-sm font-semibold mb-3">{t("community_checklists", "מצוות קהילה")}</h3>
+                  <h3 className="text-sm font-semibold mb-3">{t("community_checklists", "מבצעים")}</h3>
                   <ChecklistFields value={checklist} onChange={setChecklist} />
                 </section>
                 {customFields.length > 0 && (

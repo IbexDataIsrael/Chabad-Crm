@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
+import { SearchableSelect } from "@/components/SearchableSelect";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { rowStyle } from "@/lib/colors";
@@ -18,6 +19,7 @@ import { useToast } from "@/lib/toast";
 import {
   CHECKLIST_BOOLEANS,
   contactFullName,
+  type AdminArea,
   type Area,
   type Building,
   type Checklist,
@@ -28,12 +30,14 @@ import {
 
 type SortKey = "created" | "name";
 
-/** Optional grid columns (fixes15 §5.1); name + actions are always shown. */
+/** Optional grid columns (fixes15 §5.1); name + actions are always shown.
+ * fixes18 §3: the geographic "area" column is gone (stale saved selections are
+ * ignored by the COLUMN_KEYS intersection); "admin_area" replaces it. */
 const COLUMN_KEYS = [
   "phone",
   "email",
   "owner",
-  "area",
+  "admin_area",
   "building",
   "created",
   "status",
@@ -66,6 +70,10 @@ export default function ContactsPage() {
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
+  // fixes18 §3.5: admin areas feed the new filter + optional column.
+  const [adminAreas, setAdminAreas] = useState<AdminArea[]>([]);
+  // fixes18 §3.2: unique DB values feed the tzedaka-potential dropdown.
+  const [tzedakaValues, setTzedakaValues] = useState<string[]>([]);
   // fixes15 §1.2: every filter/sort/page selection survives navigation.
   const [statusFilter, setStatusFilter] = usePersistentState(
     "crm.contacts.status", "",
@@ -80,8 +88,12 @@ export default function ContactsPage() {
   const [buildingIds, setBuildingIds] = usePersistentState<number[]>(
     "crm.contacts.buildingIds", [],
   );
+  const [adminAreaIds, setAdminAreaIds] = usePersistentState<number[]>(
+    "crm.contacts.adminAreaIds", [],
+  );
   const [query, setQuery] = usePersistentState("crm.contacts.q", "");
-  // fixes17 §2.2: per-mitzvah checkboxes (AND) + tzedaka-potential text.
+  // fixes17 §2.2: per-mitzvah checkboxes (AND); fixes18 §3.2: the tzedaka
+  // filter is now an exact value picked from the aggregated dropdown.
   const [mitzvotFilter, setMitzvotFilter] = usePersistentState<string[]>(
     "crm.contacts.mitzvotFields", [],
   );
@@ -102,17 +114,25 @@ export default function ContactsPage() {
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  // Debounce the text filters; the `debounced*` values hit the server.
+  // Debounce the text filter; the `debouncedQ` value hits the server.
   const [debouncedQ, setDebouncedQ] = useState(query);
-  const [debouncedTzedaka, setDebouncedTzedaka] = useState(tzedaka);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const tzedakaDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Users directory feeds the owner column + filter (admin/staff only).
+  // Users directory feeds the owner column + filter (admin/staff only); the
+  // admin-areas directory feeds the new filter (blocked for shliach, fixes10).
   useEffect(() => {
     if (isShliach || !user) return;
     apiFetch<UserSummary[]>("/api/users").then(setUsers).catch(() => {});
+    apiFetch<AdminArea[]>("/api/admin-areas").then(setAdminAreas).catch(() => {});
   }, [isShliach, user]);
+
+  // fixes18 §3.2: aggregate the org's existing tzedaka-potential values.
+  useEffect(() => {
+    if (!user) return;
+    apiFetch<string[]>("/api/contacts/tzedaka-values")
+      .then(setTzedakaValues)
+      .catch(() => {});
+  }, [user]);
 
   // Areas + buildings feed the geographic multi-select filters (fixes15 §5.1).
   useEffect(() => {
@@ -155,13 +175,6 @@ export default function ContactsPage() {
     debounceRef.current = setTimeout(() => setDebouncedQ(v), 300);
   }
 
-  function onTzedakaChange(v: string) {
-    setTzedaka(v);
-    setPage(1);
-    if (tzedakaDebounceRef.current) clearTimeout(tzedakaDebounceRef.current);
-    tzedakaDebounceRef.current = setTimeout(() => setDebouncedTzedaka(v), 300);
-  }
-
   function listParams(): URLSearchParams {
     const params = new URLSearchParams();
     params.set("contact_type", "mekurav"); // contacts page shows mekuravim only
@@ -170,10 +183,13 @@ export default function ContactsPage() {
     if (debouncedQ.trim()) params.set("q", debouncedQ.trim());
     areaIds.forEach((id) => params.append("area_ids", String(id)));
     buildingIds.forEach((id) => params.append("building_ids", String(id)));
-    // fixes17 §2.2: individual mitzvah checkboxes + tzedaka-potential text.
+    // fixes18 §3.5: admin-area filter.
+    adminAreaIds.forEach((id) => params.append("admin_area_ids", String(id)));
+    // fixes17 §2.2: individual mitzvah checkboxes; fixes18 §3.2: the tzedaka
+    // value is an exact selection from the aggregated dropdown.
     mitzvotFilter.forEach((m) => params.append("mitzvot", m));
-    if (debouncedTzedaka.trim()) {
-      params.set("tzedaka_potential", debouncedTzedaka.trim());
+    if (tzedaka.trim()) {
+      params.set("tzedaka_potential", tzedaka.trim());
     }
     return params;
   }
@@ -200,7 +216,7 @@ export default function ContactsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     statusFilter, assignedFilter, debouncedQ, areaIds, buildingIds,
-    mitzvotFilter, debouncedTzedaka, sort, dir, page, pageSize,
+    adminAreaIds, mitzvotFilter, tzedaka, sort, dir, page, pageSize,
   ]);
 
   // fixes15 §5.2: mass email to the WHOLE filtered set via mailto: BCC.
@@ -226,7 +242,8 @@ export default function ContactsPage() {
     phone: true,
     email: vis("contacts.email"),
     owner: !isShliach,
-    area: true,
+    // fixes18 §3.4: the admin-areas section is blocked for shliach (fixes10).
+    admin_area: !isShliach && vis("contact_mekurav.admin_area_id"),
     building: true,
     created: true,
     status: vis("contacts.pipeline_status"),
@@ -237,7 +254,7 @@ export default function ContactsPage() {
     phone: t("contacts.phone", "טלפון"),
     email: t("contacts.email", "אימייל"),
     owner: t("contacts.assigned_user_id", "משויך ל"),
-    area: t("contacts.area", "אזור"),
+    admin_area: t("contact_mekurav.admin_area_id", "אזור מנהל"),
     building: t("contacts.building", "בניין"),
     created: t("contacts.created_at", "נוצר בתאריך"),
     status: t("contacts.pipeline_status", "סטטוס"),
@@ -264,8 +281,8 @@ export default function ContactsPage() {
         return <span dir="ltr">{c.email ?? ""}</span>;
       case "owner":
         return ownerName(c.assigned_user_id);
-      case "area":
-        return c.area_name ?? "—";
+      case "admin_area":
+        return c.admin_area_name ?? "—";
       case "building":
         return c.building_name ?? "—";
       case "created":
@@ -350,6 +367,18 @@ export default function ContactsPage() {
             setPage(1);
           }}
         />
+        {/* fixes18 §3.5: admin-area filter (admin/staff — blocked for shliach). */}
+        {!isShliach && (
+          <MultiSelectFilter
+            allLabel={t("filter.all_admin_areas", "כל אזורי המנהל")}
+            options={adminAreas.map((a) => ({ id: a.id, label: a.name }))}
+            value={adminAreaIds}
+            onChange={(ids) => {
+              setAdminAreaIds(ids);
+              setPage(1);
+            }}
+          />
+        )}
         <input
           className={`${selectClass} flex-1 min-w-[12rem]`}
           placeholder={t("filter.search_contacts", "חיפוש לפי שם, טלפון או אימייל…")}
@@ -358,7 +387,7 @@ export default function ContactsPage() {
         />
         {/* fixes17 §2.2: one checkbox per mitzvah (bilingual labels). */}
         <MultiSelectFilter
-          allLabel={t("filter.all_mitzvot", "מצוות קהילה")}
+          allLabel={t("filter.all_mitzvot", "מבצעים")}
           options={MITZVAH_KEYS.map((m) => ({
             id: m,
             label: t(`community_checklists.${m}`, m),
@@ -369,12 +398,19 @@ export default function ContactsPage() {
             setPage(1);
           }}
         />
-        {/* fixes17 §2.2: tzedaka-potential text filter. */}
-        <input
-          className={`${selectClass} w-40`}
+        {/* fixes18 §3.2: tzedaka-potential dropdown over the org's values. */}
+        <SearchableSelect
+          className="w-44"
+          value={tzedaka === "" ? null : tzedaka}
+          onChange={(v) => {
+            setTzedaka(v ?? "");
+            setPage(1);
+          }}
+          options={[...new Set([...tzedakaValues, ...(tzedaka ? [tzedaka] : [])])].map(
+            (v) => ({ id: v, label: v }),
+          )}
           placeholder={t("filter.tzedaka_ph", "פוטנציאל לצדקה…")}
-          value={tzedaka}
-          onChange={(e) => onTzedakaChange(e.target.value)}
+          emptyLabel={t("filter.all_tzedaka", "כל פוטנציאל לצדקה")}
         />
       </div>
 

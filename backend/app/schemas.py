@@ -58,6 +58,8 @@ class OrganizationOut(BaseModel):
     default_lat: Optional[float] = None
     default_lng: Optional[float] = None
     default_zoom: int = 13
+    # fixes18 §6: shliach users may view (mekurav) contacts. Default false.
+    shliach_can_view_contacts: bool = False
 
 
 class OrganizationUpdate(BaseModel):
@@ -67,6 +69,7 @@ class OrganizationUpdate(BaseModel):
     default_lat: Optional[float] = None
     default_lng: Optional[float] = None
     default_zoom: Optional[int] = None
+    shliach_can_view_contacts: Optional[bool] = None
 
 
 class UserOut(BaseModel):
@@ -418,6 +421,12 @@ class AreaOut(AreaBase):
 
     id: int
     guid: str
+
+
+class AreaShliachAdd(BaseModel):
+    """fixes18 §4.2: assign an existing shliach contact to cover an area."""
+
+    contact_id: int
 
 
 class FloorOut(BaseModel):
@@ -772,9 +781,11 @@ class ContactOut(ContactBase):
     created_at: datetime
     updated_at: datetime
     # Enriched by /list only (fixes15 §5.1 optional grid columns): the mekurav
-    # apartment's building display name + its area name. None elsewhere.
+    # apartment's building display name + its area name (+ fixes18: the linked
+    # admin-area name). None elsewhere.
     building_name: Optional[str] = None
     area_name: Optional[str] = None
+    admin_area_name: Optional[str] = None
 
 
 class ContactDetailOut(ContactOut):

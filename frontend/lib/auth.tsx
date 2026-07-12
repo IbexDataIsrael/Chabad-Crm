@@ -28,6 +28,8 @@ export interface Organization {
   default_lat: number | null;
   default_lng: number | null;
   default_zoom: number;
+  /** fixes18 §6: may shliach users view (mekurav) contacts? Default false. */
+  shliach_can_view_contacts?: boolean;
 }
 
 export interface User {

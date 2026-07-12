@@ -13,6 +13,7 @@ from app.core.display import apartment_title, building_display_name
 from app.database import get_db
 from app.deps import get_current_user
 from app.routers.areas import _shliach_area_ids
+from app.routers.contacts import _shliach_contacts_blocked
 from app.schemas import SearchHit, SearchOut
 
 router = APIRouter(prefix="/api/search", tags=["search"])
@@ -58,6 +59,10 @@ def global_search(
             (models.Contact.assigned_user_id == current_user.guid)
             | models.Contact.id.in_(own)
         )
+        # fixes18 §6: without the org's opt-in, mekurav contacts don't
+        # surface in search either.
+        if _shliach_contacts_blocked(db, current_user):
+            contacts = contacts.filter(models.Contact.contact_type == "shliach")
     for c in contacts.order_by(models.Contact.name).limit(MAX_PER_TYPE).all():
         full_name = f"{c.name} {c.last_name}".strip() if c.last_name else c.name
         results.append(

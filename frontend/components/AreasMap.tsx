@@ -37,7 +37,7 @@ export function geoJSONToPath(geojson: string): { lat: number; lng: number }[] |
  */
 export function AreasMap({ areas }: { areas: Area[] }) {
   const { user } = useAuth();
-  const { t } = useLocalization();
+  const { t, lang, loading: locLoading } = useLocalization();
   const ref = useRef<HTMLDivElement>(null);
 
   const zones = useMemo(
@@ -97,8 +97,11 @@ export function AreasMap({ areas }: { areas: Area[] }) {
       .catch(() => {
         /* leave the container empty on load failure */
       });
+    // fixes18 §loc: the info-window content captures `t` at build time — rebuild
+    // when the localization data or language changes so the "view area" label
+    // renders localized instead of its pre-load fallback.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signature]);
+  }, [signature, lang, locLoading]);
 
   if (!mapsKey) {
     return (

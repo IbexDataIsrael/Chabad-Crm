@@ -105,9 +105,11 @@ export interface Contact {
   special_dates?: SignificantDate[];
   /** Dynamic picklist selections, keyed by system_name. */
   picklist_values?: Record<string, string>;
-  /** Enriched by /api/contacts/list only (fixes15 §5.1 grid columns). */
+  /** Enriched by /api/contacts/list only (fixes15 §5.1 grid columns;
+   *  fixes18 §3.4 adds the linked admin-area name). */
   building_name?: string | null;
   area_name?: string | null;
+  admin_area_name?: string | null;
 }
 
 /** One server-side page of the contacts list (fixes8 §2C pattern). */
@@ -212,9 +214,9 @@ export function buildingDisplayName(b: {
 }
 
 /**
- * Computed apartment title: label - floor — label "A" on floor "1" renders
- * "A - 1" (fixes17 §3.1: a space-isolated hyphen separates the parts) — with
- * fallbacks to whichever part exists, then the resident name, then the id.
+ * Computed apartment title: the apartment's own label (fixes18 §5.1 — the
+ * fixes17 "label - floor" hyphen concatenation is gone; the floor renders in
+ * its own column/sort), with fallbacks: floor → resident name → id.
  * Mirrors backend core/display.py.
  */
 export function apartmentTitle(a: {
@@ -225,7 +227,6 @@ export function apartmentTitle(a: {
 }): string {
   const label = (a.apartment_name ?? "").trim();
   const floor = (a.floor ?? "").trim();
-  if (label && floor) return `${label} - ${floor}`;
   if (label || floor) return label || floor;
   return (a.name ?? "").trim() || `#${a.id}`;
 }
@@ -290,6 +291,8 @@ export interface OrgDetails {
   default_lat: number | null;
   default_lng: number | null;
   default_zoom: number;
+  /** fixes18 §6: may shliach users view (mekurav) contacts? Default false. */
+  shliach_can_view_contacts: boolean;
 }
 
 /** One org restore point (fixes16) — metadata only, the blob stays server-side. */

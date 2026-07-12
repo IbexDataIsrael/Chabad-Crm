@@ -5,6 +5,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { EmailInput } from "@/components/EmailInput";
 import { PhoneInput } from "@/components/PhoneInput";
 import { PicklistSelect } from "@/components/PicklistSelect";
+import { SearchableSelect } from "@/components/SearchableSelect";
 import { apiFetch } from "@/lib/api";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
@@ -143,22 +144,15 @@ export function ApartmentEditor({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block space-y-1">
           <span className="block text-sm font-medium">{t("apartments.building_id", "בניין")}</span>
-          <select
-            className={inputClass}
-            value={buildingId}
-            onChange={(e) => {
-              setBuildingId(e.target.value === "" ? "" : Number(e.target.value));
+          <SearchableSelect
+            value={buildingId === "" ? null : buildingId}
+            onChange={(id) => {
+              setBuildingId(id ?? "");
               setFloor("");
             }}
-            required
-          >
-            <option value="">{t("apt.choose_building", "בחר בניין…")}</option>
-            {buildings.map((b) => (
-              <option key={b.id} value={b.id}>
-                {buildingDisplayName(b)}
-              </option>
-            ))}
-          </select>
+            options={buildings.map((b) => ({ id: b.id, label: buildingDisplayName(b) }))}
+            placeholder={t("apt.choose_building", "בחר בניין…")}
+          />
         </label>
         {/* The apartment label (apartment_name) renders before the floor so
             the two can't be conflated — the label is the apartment's identity,
@@ -272,18 +266,12 @@ export function ApartmentEditor({
             <span className="block text-sm font-medium">
               {t("apt.associate_contact", "שייך איש קשר קיים (לא חובה)")}
             </span>
-            <select
-              className={inputClass}
-              value={contactId}
-              onChange={(e) => setContactId(e.target.value === "" ? "" : Number(e.target.value))}
-            >
-              <option value="">—</option>
-              {contacts.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {contactFullName(c)}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={contactId === "" ? null : contactId}
+              onChange={(id) => setContactId(id ?? "")}
+              options={contacts.map((c) => ({ id: c.id, label: contactFullName(c) }))}
+              placeholder="—"
+            />
           </label>
         )}
       </div>

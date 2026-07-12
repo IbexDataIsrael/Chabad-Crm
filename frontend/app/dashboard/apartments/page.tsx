@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
+import { SearchableSelect } from "@/components/SearchableSelect";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
@@ -60,6 +61,13 @@ export default function ApartmentsPage() {
   const [filterBuilding, setFilterBuilding] = usePersistentState(
     "crm.apartments.building", "",
   );
+  // fixes18 §5.2: picklist filters (multi-select technical values).
+  const [jewishFilter, setJewishFilter] = usePersistentState<string[]>(
+    "crm.apartments.jewish", [],
+  );
+  const [mezuzahFilter, setMezuzahFilter] = usePersistentState<string[]>(
+    "crm.apartments.mezuzah", [],
+  );
   const [query, setQuery] = usePersistentState("crm.apartments.q", "");
   const [sort, setSort] = usePersistentState<SortKey>("crm.apartments.sort", "floor");
   const [dir, setDir] = usePersistentState<SortDir>("crm.apartments.dir", "asc");
@@ -83,6 +91,8 @@ export default function ApartmentsPage() {
     const params = new URLSearchParams();
     areaIds.forEach((id) => params.append("area_ids", String(id)));
     if (filterBuilding) params.set("building_id", filterBuilding);
+    jewishFilter.forEach((v) => params.append("jewish_status", v));
+    mezuzahFilter.forEach((v) => params.append("mezuzah_status", v));
     if (debouncedQ.trim()) params.set("q", debouncedQ.trim());
     params.set("sort", sort);
     params.set("dir", dir);
@@ -114,7 +124,10 @@ export default function ApartmentsPage() {
       })
       .finally(() => setBusy(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, areaIds, filterBuilding, debouncedQ, sort, dir, page, pageSize]);
+  }, [
+    loading, areaIds, filterBuilding, jewishFilter, mezuzahFilter, debouncedQ,
+    sort, dir, page, pageSize,
+  ]);
 
   // Debounced dynamic search (street name / label / resident).
   function onQueryChange(v: string) {
@@ -258,18 +271,36 @@ export default function ApartmentsPage() {
           value={areaIds}
           onChange={onAreasChange}
         />
-        <select
-          className={inputClass}
-          value={filterBuilding}
-          onChange={(e) => onBuildingChange(e.target.value)}
-        >
-          <option value="">{t("filter.all_buildings", "כל הבניינים")}</option>
-          {visibleBuildings.map((b) => (
-            <option key={b.id} value={b.id}>
-              {buildingDisplayName(b)}
-            </option>
-          ))}
-        </select>
+        {/* fixes18 §general: searchable building filter. */}
+        <SearchableSelect
+          className="w-56"
+          value={filterBuilding === "" ? null : Number(filterBuilding)}
+          onChange={(id) => onBuildingChange(id == null ? "" : String(id))}
+          options={visibleBuildings.map((b) => ({
+            id: b.id,
+            label: buildingDisplayName(b),
+          }))}
+          placeholder={t("filter.all_buildings", "כל הבניינים")}
+        />
+        {/* fixes18 §5.2: Jewish-status + mezuzah picklist filters. */}
+        <MultiSelectFilter
+          allLabel={t("filter.all_jewish", "כל סטטוסי היהדות")}
+          options={jewish.options.map((o) => ({ id: o.value, label: jewish.display(o) }))}
+          value={jewishFilter}
+          onChange={(vals) => {
+            setJewishFilter(vals);
+            setPage(1);
+          }}
+        />
+        <MultiSelectFilter
+          allLabel={t("filter.all_mezuzah", "כל סטטוסי המזוזה")}
+          options={mezuzah.options.map((o) => ({ id: o.value, label: mezuzah.display(o) }))}
+          value={mezuzahFilter}
+          onChange={(vals) => {
+            setMezuzahFilter(vals);
+            setPage(1);
+          }}
+        />
         <input
           className={`${inputClass} flex-1 min-w-[12rem]`}
           placeholder={t("apt.street_search", "חיפוש לפי שם רחוב…")}
@@ -572,18 +603,12 @@ function BatchModal({
 
         <label className="block space-y-1">
           <span className="block text-sm font-medium">{t("apartments.building_id", "בניין")}</span>
-          <select
-            className={`${inputClass} w-full`}
-            value={buildingId}
-            onChange={(e) => setBuildingId(e.target.value === "" ? "" : Number(e.target.value))}
-          >
-            <option value="">{t("apt.choose_building", "בחר בניין…")}</option>
-            {buildings.map((b) => (
-              <option key={b.id} value={b.id}>
-                {buildingDisplayName(b)}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            value={buildingId === "" ? null : buildingId}
+            onChange={(id) => setBuildingId(id ?? "")}
+            options={buildings.map((b) => ({ id: b.id, label: buildingDisplayName(b) }))}
+            placeholder={t("apt.choose_building", "בחר בניין…")}
+          />
         </label>
 
         {buildingId !== "" && (

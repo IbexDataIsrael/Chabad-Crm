@@ -24,7 +24,16 @@ export function MultiSelectFilter<Id extends number | string>({
 }) {
   const { t } = useLocalization();
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement | null>(null);
+
+  // fixes18 §general: long entity lists (e.g. buildings) are typeable inline.
+  const searchable = options.length > 8;
+  const visible = query.trim()
+    ? options.filter((o) =>
+        o.label.toLowerCase().includes(query.trim().toLowerCase()),
+      )
+    : options;
 
   useEffect(() => {
     if (!open) return;
@@ -63,10 +72,22 @@ export function MultiSelectFilter<Id extends number | string>({
       </button>
       {open && (
         <div className="absolute z-30 mt-1 min-w-[12rem] max-h-64 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg p-2 space-y-1 text-sm">
+          {searchable && (
+            <input
+              className="w-full rounded-md border border-gray-300 px-2 py-1.5 focus:border-status-magenta focus:outline-none"
+              placeholder={t("select.search_ph", "הקלד לחיפוש…")}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          )}
           {options.length === 0 ? (
             <p className="px-2 py-1 text-gray-400">—</p>
+          ) : visible.length === 0 ? (
+            <p className="px-2 py-1 text-gray-400">
+              {t("select.no_matches", "אין תוצאות")}
+            </p>
           ) : (
-            options.map((o) => (
+            visible.map((o) => (
               <label
                 key={o.id}
                 className="flex items-center gap-2 rounded px-2 py-1 cursor-pointer hover:bg-gray-50"

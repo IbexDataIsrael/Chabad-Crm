@@ -22,7 +22,7 @@ logger = logging.getLogger("app.seed")
 LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("table", "users", "משתמשים", "Users"),
     ("table", "contacts", "אנשי קשר", "Contacts"),
-    ("table", "community_checklists", "מצוות קהילה", "Community mitzvot"),
+    ("table", "community_checklists", "מבצעים", "Mivtzoim"),
     ("table", "interactions", "אינטראקציות", "Interactions"),
     ("table", "areas", "אזורים", "Areas"),
     ("table", "buildings", "בניינים", "Buildings"),
@@ -566,7 +566,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("geo", "geo.check_hint", "בדוק את הכתובת או בחר אזור אחר.", "Check the address or pick a different area."),
     # --- fixes15: filters / columns / quick actions / superadmin modals ---
     ("filter", "filter.search_contacts", "חיפוש לפי שם, טלפון או אימייל…", "Search by name, phone or email…"),
-    ("filter", "filter.mitzvot_only", "רק עם מצוות קהילה", "Community-mitzvot only"),
+    ("filter", "filter.mitzvot_only", "רק עם מבצעים", "Mivtzoim only"),
     ("filter", "filter.areas_multi", "אזורים", "Areas"),
     ("filter", "filter.buildings_multi", "בניינים", "Buildings"),
     ("filter", "filter.n_selected", "{n} נבחרו", "{n} selected"),
@@ -624,9 +624,35 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("backup", "backup.restored", "השחזור הושלם", "Restore completed"),
     ("backup", "backup.restore_failed", "השחזור נכשל — הנתונים לא שונו", "Restore failed — the data was not changed"),
     # --- fixes17: mitzvot/tzedaka filters + apartments table ---
-    ("filter", "filter.all_mitzvot", "מצוות קהילה", "Community mitzvot"),
+    ("filter", "filter.all_mitzvot", "מבצעים", "Mivtzoim"),
     ("filter", "filter.tzedaka_ph", "פוטנציאל לצדקה…", "Tzedaka potential…"),
     ("column", "apartments.contact", "איש קשר", "Contact"),
+    # --- fixes18: logo + map-hint strings that rendered from hardcoded fallbacks ---
+    ("logo", "signup.org_logo", "לוגו הארגון", "Organization logo"),
+    ("logo", "logo.alt", "לוגו הארגון", "Organization logo"),
+    ("logo", "logo.upload", "העלה לוגו", "Upload logo"),
+    ("logo", "logo.upload_failed", "העלאת הלוגו נכשלה", "Logo upload failed"),
+    ("settings", "settings.map_pick_hint", "לחץ על המפה כדי לבחור את מרכז ברירת המחדל, או גרור את הסמן לכוונון.", "Click the map to pick the default center, or drag the marker to fine-tune."),
+    # --- fixes18: searchable selects ---
+    ("select", "select.search_ph", "הקלד לחיפוש…", "Type to search…"),
+    ("select", "select.no_matches", "אין תוצאות", "No matches"),
+    # --- fixes18: contacts filters ---
+    ("filter", "filter.all_tzedaka", "כל פוטנציאל לצדקה", "All tzedaka potentials"),
+    ("filter", "filter.all_admin_areas", "כל אזורי המנהל", "All admin areas"),
+    ("filter", "filter.all_jewish", "כל סטטוסי היהדות", "All Jewish statuses"),
+    ("filter", "filter.all_mezuzah", "כל סטטוסי המזוזה", "All mezuzah statuses"),
+    # --- fixes18: area detail — add-activist / add-building dropdowns ---
+    ("areas", "areas.add_activist_pick", "בחר פעיל להוספה…", "Pick an activist to add…"),
+    ("areas", "areas.add_building_pick", "בחר בניין להוספה…", "Pick a building to add…"),
+    ("areas", "areas.no_eligible_buildings", "אין בניינים בתוך תחום האזור.", "No buildings inside the area boundary."),
+    ("areas", "areas.no_polygon_for_buildings", "לאזור אין תחום מוגדר — הגדר תחום כדי לבחור בניינים לפי מיקום.", "The area has no boundary — draw one to pick buildings by location."),
+    ("areas", "areas.create_new_shliach", "או צור פעיל חדש »", "Or create a new activist »"),
+    ("areas", "areas.create_new_building", "או צור בניין חדש »", "Or create a new building »"),
+    ("areas", "areas.activist_added", "הפעיל נוסף לאזור", "Activist added to the area"),
+    ("areas", "areas.building_added", "הבניין שויך לאזור", "Building assigned to the area"),
+    # --- fixes18: shliach contacts-visibility permission ---
+    ("page", "page.shliach_view_contacts", "פעילים רשאים לצפות באנשי קשר", "Activists may view contacts"),
+    ("page", "page.shliach_view_contacts_hint", "כאשר כבוי (ברירת המחדל), משתמשי פעיל אינם רואים את רשימת אנשי הקשר.", "When off (the default), activist users do not see the contacts list."),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)
@@ -748,6 +774,16 @@ LOCALIZATION_RENAMES: dict[str, tuple[set, str, set, str]] = {
     # key: (old hebrew variants, new hebrew, old english variants, new english)
     "apartments.apartment_name": (
         {"כותרת", "תווית"}, "מספר דירה", {"Title", "Label"}, "Apartment number",
+    ),
+    # fixes18 §general: "מצוות קהילה" is now branded "מבצעים" (3 rows).
+    "community_checklists": (
+        {"מצוות קהילה"}, "מבצעים", {"Community mitzvot"}, "Mivtzoim",
+    ),
+    "filter.mitzvot_only": (
+        {"רק עם מצוות קהילה"}, "רק עם מבצעים", {"Community-mitzvot only"}, "Mivtzoim only",
+    ),
+    "filter.all_mitzvot": (
+        {"מצוות קהילה"}, "מבצעים", {"Community mitzvot"}, "Mivtzoim",
     ),
 }
 

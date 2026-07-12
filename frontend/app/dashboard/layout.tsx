@@ -29,8 +29,13 @@ function DashboardChrome({ children }: { children: ReactNode }) {
   const adminOnly = (items: (NavMenuItem & { admin?: boolean })[]): NavMenuItem[] =>
     items.filter((it) => isAdmin || !it.admin).map(({ href, label }) => ({ href, label }));
 
+  // fixes18 §6: a shliach only gets the contacts entry when the org opted in.
+  const shliachContactsBlocked =
+    isShliach && !user?.organization?.shliach_can_view_contacts;
   const peopleItems = adminOnly([
-    { href: "/dashboard/contacts", label: t("nav.contacts", "אנשי קשר") },
+    ...(shliachContactsBlocked
+      ? []
+      : [{ href: "/dashboard/contacts", label: t("nav.contacts", "אנשי קשר") }]),
     { href: "/dashboard/shluchim", label: t("nav.shluchim", "פעילים"), admin: true },
     { href: "/dashboard/users", label: t("nav.users", "משתמשים"), admin: true },
     { href: "/dashboard/visits", label: t("nav.visits", "ביקורים"), admin: true },
