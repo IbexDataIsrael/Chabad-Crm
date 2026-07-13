@@ -21,3 +21,6 @@ backend/.env.*
 # OS / editor
 .DS_Store
 Thumbs.db
+
+# Local production DB dumps (never commit)
+backups/
