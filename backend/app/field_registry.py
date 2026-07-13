@@ -26,6 +26,9 @@ TOGGLEABLE_FIELDS: list[tuple[str, str, str]] = [
     ("contacts.color_tag", "contacts.color_tag", "contact"),
     ("contacts.priority_score", "contacts.priority_score", "contact"),
     ("contacts.address", "contacts.address", "contact"),
+    # fixes20 §2: the read-only coordinates readout gets its own toggle
+    # (previously it rode on contacts.address). Default-hidden.
+    ("contacts.coordinates", "contacts.coordinates", "contact"),
     # Mekurav-specific
     ("contact_mekurav.apartment_id", "contact_mekurav.apartment_id", "contact_mekurav"),
     ("contact_mekurav.first_visit", "contact_mekurav.first_visit", "contact_mekurav"),
@@ -96,6 +99,11 @@ DEFAULT_HIDDEN: set[str] = {
     # fixes19 §5: the mekurav layout area ships invisible; an admin opts the
     # org in from the fields configuration page.
     "contact_mekurav.section",
+    # fixes20 §2: assigned-to, coordinates and color ship hidden; admins unhide
+    # them from the fields configuration page.
+    "contacts.assigned_user_id",
+    "contacts.coordinates",
+    "contacts.color_tag",
 }
 
 TOGGLEABLE_KEYS: set[str] = {f[0] for f in TOGGLEABLE_FIELDS}

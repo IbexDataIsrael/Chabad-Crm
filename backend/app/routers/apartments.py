@@ -69,9 +69,10 @@ def _validate_report_number(data: dict, org_id: int, db: Session) -> None:
 
 
 def _shliach_apartment_ids(db: Session, user: models.User) -> list[int]:
-    """Apartment ids visible to a shliach user (fixes19: derived from the areas
-    they cover — the apartment-coverage bridge was dropped): apartments of
-    buildings inside their covered areas."""
+    """Apartment ids visible to a shliach user: apartments whose report number
+    is assigned to them (fixes20 §4 — the point of the report-number
+    association) plus apartments of buildings inside their covered areas
+    (fixes19)."""
     shliach = (
         db.query(models.ContactShliach)
         .filter(models.ContactShliach.user_id == user.id)
@@ -79,21 +80,35 @@ def _shliach_apartment_ids(db: Session, user: models.User) -> list[int]:
     )
     if not shliach:
         return []
+    ids: set[int] = set()
+    report_number_ids = [
+        row.report_number_id
+        for row in db.query(models.ReportNumberContactShliach.report_number_id)
+        .filter(models.ReportNumberContactShliach.contact_shliach_id == shliach.id)
+        .all()
+    ]
+    if report_number_ids:
+        ids.update(
+            row.id
+            for row in db.query(models.Apartment.id)
+            .filter(models.Apartment.report_number_id.in_(report_number_ids))
+            .all()
+        )
     area_ids = [
         row.area_id
         for row in db.query(models.ContactShliachArea.area_id)
         .filter(models.ContactShliachArea.contact_shliach_id == shliach.id)
         .all()
     ]
-    if not area_ids:
-        return []
-    return [
-        row.id
-        for row in db.query(models.Apartment.id)
-        .join(models.Building, models.Building.id == models.Apartment.building_id)
-        .filter(models.Building.area_id.in_(area_ids))
-        .all()
-    ]
+    if area_ids:
+        ids.update(
+            row.id
+            for row in db.query(models.Apartment.id)
+            .join(models.Building, models.Building.id == models.Apartment.building_id)
+            .filter(models.Building.area_id.in_(area_ids))
+            .all()
+        )
+    return sorted(ids)
 
 
 def _enrich(a: models.Apartment) -> ApartmentListOut:
@@ -110,6 +125,8 @@ def _enrich(a: models.Apartment) -> ApartmentListOut:
     out.area_name = area.area_name if area else None
     out.contact_id = contact.id if contact else None
     out.contact_name = contact_name
+    # fixes20 §3: the linked report number's name for the table column.
+    out.report_number_name = a.report_number.name if a.report_number else None
     return out
 
 
@@ -224,6 +241,7 @@ def list_apartments_enriched(
     area_id: Optional[int] = None,
     area_ids: Optional[list[int]] = Query(None),
     apartment_id: Optional[int] = None,
+    report_number_ids: Optional[list[int]] = Query(None),
     q: Optional[str] = None,
     jewish_status: Optional[list[str]] = Query(None),
     mezuzah_status: Optional[list[str]] = Query(None),
@@ -268,6 +286,11 @@ def list_apartments_enriched(
         query = query.filter(models.Building.area_id.in_(area_ids))
     if apartment_id is not None:
         query = query.filter(models.Apartment.id == apartment_id)
+    # fixes20 §3: searchable report-number filter (multi-select).
+    if report_number_ids:
+        query = query.filter(
+            models.Apartment.report_number_id.in_(report_number_ids)
+        )
     if q:
         like = f"%{q.strip()}%"
         query = query.filter(

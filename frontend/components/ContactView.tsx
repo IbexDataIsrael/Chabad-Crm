@@ -106,11 +106,6 @@ export function ContactView({
           <ApartmentLabel key="ap" id={mk.apartment_id} />,
         ],
         [
-          "contact_mekurav.admin_area_id",
-          t("contact_mekurav.admin_area_id", "אזור מנהל"),
-          <AdminAreaLabel key="aa" id={mk.admin_area_id} />,
-        ],
-        [
           "contact_mekurav.first_visit",
           t("contact_mekurav.first_visit", "ביקור ראשון"),
           mk.first_visit ? new Date(mk.first_visit).toLocaleString("he-IL") : "—",
@@ -146,10 +141,23 @@ export function ContactView({
         ]
       : [];
 
+  // fixes20 §2: admin_area is a top-level administrative grouping shown
+  // independently of the mekurav section toggle (its own field toggle,
+  // default-visible), so it stays visible even when the section is hidden.
+  const mekuravAdminArea: [string | null, string, ReactNode][] = mk
+    ? [
+        [
+          "contact_mekurav.admin_area_id",
+          t("contact_mekurav.admin_area_id", "אזור מנהל"),
+          <AdminAreaLabel key="aa" id={mk.admin_area_id} />,
+        ],
+      ]
+    : [];
+
   const allFields = (
     contact.contact_type === "shliach"
       ? shliachFields
-      : [...fields, ...mekuravFields]
+      : [...fields, ...mekuravAdminArea, ...mekuravFields]
   ).filter(([key]) => key === null || vis(key));
 
   return (

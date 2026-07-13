@@ -199,8 +199,8 @@ class TestApartmentSorting17:
         )
         hits = client.get("/api/search?q=לוי", headers=admin_headers).json()["results"]
         apt = [h for h in hits if h["type"] == "apartment"]
-        # fixes18 §5.1: the title is the bare label — no "- floor" suffix.
-        assert apt and apt[0]["title"] == "A"
+        # fixes20 §3: the title concatenates "[number] - [floor]".
+        assert apt and apt[0]["title"] == "A - 1"
 
 
 # --- §1.3 org-branded email + tenant_verification template ---------------------------

@@ -297,23 +297,52 @@ export function ContactForm({
             </Field>
           </div>
 
-          <div className="sm:col-span-2">
-            <Field label={t("contacts.coordinates", "קואורדינטות")}>
-              {/* Read-only, minimal x,y — coords come from the address picker / geocoding. */}
-              <span
-                dir="ltr"
-                className="block rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600"
-              >
-                {formatCoords(values.latitude, values.longitude) || "—"}
-              </span>
-            </Field>
-          </div>
+          {/* fixes20 §2: coordinates get their own visibility toggle
+              (default-hidden) rather than riding on the address field. */}
+          {vis("contacts.coordinates") && (
+            <div className="sm:col-span-2">
+              <Field label={t("contacts.coordinates", "קואורדינטות")}>
+                {/* Read-only, minimal x,y — coords come from the address picker / geocoding. */}
+                <span
+                  dir="ltr"
+                  className="block rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600"
+                >
+                  {formatCoords(values.latitude, values.longitude) || "—"}
+                </span>
+              </Field>
+            </div>
+          )}
         </>
       )}
 
-      {/* fixes19 §5: the whole mekurav layout area rides on one section-level
-          visibility switch (hidden by default; admins opt in from the fields
-          configuration page). */}
+      {/* fixes20 §2: admin_area is a top-level administrative grouping, shown
+          independently of the mekurav section toggle (its own field toggle,
+          default-visible) so it stays visible even when the section is hidden. */}
+      {isMekurav && vis("contact_mekurav.admin_area_id") && !isShliachUser && (
+        <Field label={t("contact_mekurav.admin_area_id", "אזור מנהל")}>
+          <select
+            className={inputClass}
+            value={values.mekurav.admin_area_id ?? ""}
+            onChange={(e) =>
+              setMekurav(
+                "admin_area_id",
+                e.target.value === "" ? null : Number(e.target.value),
+              )
+            }
+          >
+            <option value="">—</option>
+            {adminAreas.map((aa) => (
+              <option key={aa.id} value={aa.id}>
+                {aa.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+
+      {/* fixes19 §5: the rest of the mekurav layout area rides on one
+          section-level visibility switch (hidden by default; admins opt in from
+          the fields configuration page). */}
       {isMekurav && vis("contact_mekurav.section") && (
         <>
           {vis("contact_mekurav.apartment_id") && (
@@ -335,28 +364,6 @@ export function ContactForm({
                 withTime
                 className={inputClass}
               />
-            </Field>
-          )}
-
-          {vis("contact_mekurav.admin_area_id") && !isShliachUser && (
-            <Field label={t("contact_mekurav.admin_area_id", "אזור מנהל")}>
-              <select
-                className={inputClass}
-                value={values.mekurav.admin_area_id ?? ""}
-                onChange={(e) =>
-                  setMekurav(
-                    "admin_area_id",
-                    e.target.value === "" ? null : Number(e.target.value),
-                  )
-                }
-              >
-                <option value="">—</option>
-                {adminAreas.map((aa) => (
-                  <option key={aa.id} value={aa.id}>
-                    {aa.name}
-                  </option>
-                ))}
-              </select>
             </Field>
           )}
 

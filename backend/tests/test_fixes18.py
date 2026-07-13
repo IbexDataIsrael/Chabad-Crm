@@ -324,17 +324,17 @@ class TestEligibleBuildings:
         assert r.json() == []
 
 
-# --- §5.1 hyphen-free apartment titles ------------------------------------------------
+# --- §5.1 apartment titles (fixes20 §3: number + floor concatenation) -----------------
 class TestApartmentTitle:
-    def test_label_only_no_floor_concatenation(self):
+    def test_number_and_floor_concatenated(self):
+        # fixes20 §3 reinstated "[number] - [floor]" concatenation.
         class A:
             id = 7
             apartment_name = "A"
             floor = "1"
             name = "משפחה"
 
-        assert apartment_title(A()) == "A"
-        assert "-" not in apartment_title(A())
+        assert apartment_title(A()) == "A - 1"
 
     def test_fallbacks(self):
         class A:
@@ -343,11 +343,20 @@ class TestApartmentTitle:
             floor = "2"
             name = "משפחה"
 
-        assert apartment_title(A()) == "2"
+        assert apartment_title(A()) == "2"  # only floor
         A.floor = ""
-        assert apartment_title(A()) == "משפחה"
+        assert apartment_title(A()) == "משפחה"  # resident
         A.name = ""
-        assert apartment_title(A()) == "#7"
+        assert apartment_title(A()) == "#7"  # id
+
+    def test_number_only(self):
+        class A:
+            id = 7
+            apartment_name = "5"
+            floor = ""
+            name = ""
+
+        assert apartment_title(A()) == "5"
 
 
 # --- §5.2 apartment picklist filters --------------------------------------------------

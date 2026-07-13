@@ -654,6 +654,8 @@ class ApartmentListOut(ApartmentOut):
     area_name: Optional[str] = None
     contact_id: Optional[int] = None
     contact_name: Optional[str] = None
+    # fixes20 §3: the linked report number's name (the id is on ApartmentOut).
+    report_number_name: Optional[str] = None
 
 
 class ApartmentPageOut(BaseModel):

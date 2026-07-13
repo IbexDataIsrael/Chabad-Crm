@@ -195,6 +195,8 @@ export interface ApartmentListItem extends Apartment {
   area_name: string | null;
   contact_id: number | null;
   contact_name: string | null;
+  /** fixes20 §3: the linked report number's name (the id is on Apartment). */
+  report_number_name: string | null;
 }
 
 /** One server-side page of the buildings list (fixes12 §3.3). */
@@ -236,10 +238,9 @@ export function buildingDisplayName(b: {
 }
 
 /**
- * Computed apartment title: the apartment's own label (fixes18 §5.1 — the
- * fixes17 "label - floor" hyphen concatenation is gone; the floor renders in
- * its own column/sort), with fallbacks: floor → resident name → id.
- * Mirrors backend core/display.py.
+ * Computed apartment title (fixes20 §3): concatenate "[apartment number] -
+ * [floor]". Both present → "5 - 3"; only one → that one; neither → resident
+ * name → id. Mirrors backend core/display.py apartment_title.
  */
 export function apartmentTitle(a: {
   id: number;
@@ -249,6 +250,7 @@ export function apartmentTitle(a: {
 }): string {
   const label = (a.apartment_name ?? "").trim();
   const floor = (a.floor ?? "").trim();
+  if (label && floor) return `${label} - ${floor}`;
   if (label || floor) return label || floor;
   return (a.name ?? "").trim() || `#${a.id}`;
 }

@@ -20,6 +20,7 @@ import {
   type Area,
   type Building,
   type Floor,
+  type ReportNumber,
 } from "@/lib/types";
 
 const inputClass =
@@ -36,6 +37,7 @@ const FIELD_KEYS = [
   "resident",
   "building",
   "area",
+  "report_number",
   "notes",
   "phone",
   "email",
@@ -54,6 +56,11 @@ export default function ApartmentsPage() {
   const [total, setTotal] = useState(0);
   const [areas, setAreas] = useState<Area[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
+  // fixes20 §3: report-number filter source + selection.
+  const [reportNumbers, setReportNumbers] = useState<ReportNumber[]>([]);
+  const [reportNumberId, setReportNumberId] = usePersistentState<number | "">(
+    "crm.apartments.reportNumber", "",
+  );
   // fixes15 §1.2: filters/sort/page survive navigation; §7.1: multi-area.
   const [areaIds, setAreaIds] = usePersistentState<number[]>(
     "crm.apartments.areaIds", [],
@@ -91,6 +98,7 @@ export default function ApartmentsPage() {
     const params = new URLSearchParams();
     areaIds.forEach((id) => params.append("area_ids", String(id)));
     if (filterBuilding) params.set("building_id", filterBuilding);
+    if (reportNumberId !== "") params.set("report_number_ids", String(reportNumberId));
     jewishFilter.forEach((v) => params.append("jewish_status", v));
     mezuzahFilter.forEach((v) => params.append("mezuzah_status", v));
     if (debouncedQ.trim()) params.set("q", debouncedQ.trim());
@@ -111,6 +119,9 @@ export default function ApartmentsPage() {
     apiFetch<Building[]>("/api/buildings")
       .then(setBuildings)
       .catch(() => setBuildings([]));
+    apiFetch<ReportNumber[]>("/api/report-numbers")
+      .then(setReportNumbers)
+      .catch(() => setReportNumbers([]));
   }, [loading]);
 
   // One server-side page per filter/sort/page change.
@@ -125,8 +136,8 @@ export default function ApartmentsPage() {
       .finally(() => setBusy(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    loading, areaIds, filterBuilding, jewishFilter, mezuzahFilter, debouncedQ,
-    sort, dir, page, pageSize,
+    loading, areaIds, filterBuilding, reportNumberId, jewishFilter, mezuzahFilter,
+    debouncedQ, sort, dir, page, pageSize,
   ]);
 
   // Debounced dynamic search (street name / label / resident).
@@ -184,6 +195,7 @@ export default function ApartmentsPage() {
     resident: t("apartments.name", "שם דייר"),
     building: t("apartments.building_id", "בניין"),
     area: t("buildings.area_id", "אזור"),
+    report_number: t("apartments.report_number_id", "מספר דוח"),
     notes: t("apartments.apartment_notes", "הערות"),
     phone: t("apartments.phone", "טלפון"),
     email: t("apartments.email", "אימייל"),
@@ -207,6 +219,8 @@ export default function ApartmentsPage() {
         });
       case "area":
         return a.area_name ?? "—";
+      case "report_number":
+        return a.report_number_name ?? "—";
       case "notes":
         return a.apartment_notes ?? "—";
       case "phone":
@@ -282,6 +296,19 @@ export default function ApartmentsPage() {
           }))}
           placeholder={t("filter.all_buildings", "כל הבניינים")}
         />
+        {/* fixes20 §3: searchable report-number filter. */}
+        {reportNumbers.length > 0 && (
+          <SearchableSelect
+            className="w-48"
+            value={reportNumberId === "" ? null : Number(reportNumberId)}
+            onChange={(id) => {
+              setReportNumberId(id == null ? "" : Number(id));
+              setPage(1);
+            }}
+            options={reportNumbers.map((rn) => ({ id: rn.id, label: rn.name }))}
+            placeholder={t("filter.all_report_numbers", "כל מספרי הדוח")}
+          />
+        )}
         {/* fixes18 §5.2: Jewish-status + mezuzah picklist filters. */}
         <MultiSelectFilter
           allLabel={t("filter.all_jewish", "כל סטטוסי היהדות")}

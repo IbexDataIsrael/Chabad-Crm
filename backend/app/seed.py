@@ -663,6 +663,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("report", "report.delete_confirm", "למחוק את מספר הדוח? השיוכים לדירות ולפעילים יוסרו.", "Delete this report number? Its apartment and activist links will be removed."),
     ("column", "apartments.report_number_id", "מספר דוח", "Report number"),
     ("apt", "apt.choose_report_number", "בחר מספר דוח…", "Pick a report number…"),
+    ("filter", "filter.all_report_numbers", "כל מספרי הדוח", "All report numbers"),
     # --- fixes19: apartment edit history ---
     ("apt", "apt.history", "היסטוריית שינויים", "Edit history"),
     ("apt", "apt.history_pick", "בחר גרסה קודמת…", "Pick a previous version…"),

@@ -29,11 +29,14 @@ def building_display_name(building) -> str:
 
 
 def apartment_title(apartment) -> str:
-    """Computed title: the apartment's own label (fixes18 §5.1 — the fixes17
-    "label - floor" hyphen concatenation is gone; the floor renders in its own
-    column/sort), with fallbacks: floor → resident name → id."""
+    """Computed title (fixes20 §3): concatenate "[apartment number] - [floor]".
+
+    Both present → "5 - 3"; only one → that one; neither → resident name → id.
+    Keep in sync with the frontend twin (frontend/lib/types.ts apartmentTitle)."""
     label = (getattr(apartment, "apartment_name", None) or "").strip()
     floor = (getattr(apartment, "floor", None) or "").strip()
+    if label and floor:
+        return f"{label} - {floor}"
     if label or floor:
         return label or floor
     resident = (getattr(apartment, "name", None) or "").strip()
