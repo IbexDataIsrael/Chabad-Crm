@@ -147,6 +147,9 @@ def _validate_apartment(apartment_id: Optional[int], org_id: int, db: Session) -
         .filter(
             models.Apartment.id == apartment_id,
             models.Apartment.organization_id == org_id,
+            # fixes19 §3: only the active version is linkable — historical
+            # apartment rows are read-only snapshots.
+            models.Apartment.is_display.is_(True),
         )
         .first()
     )
@@ -241,7 +244,9 @@ def _build_detail(contact: models.Contact, db: Session) -> ContactDetailOut:
             contact_id=contact.shliach.contact_id,
             user_id=contact.shliach.user_id,
             notes=contact.shliach.notes,
-            apartment_ids=[a.apartment_id for a in contact.shliach.apartments],
+            report_number_ids=[
+                r.report_number_id for r in contact.shliach.report_numbers
+            ],
             area_ids=[a.area_id for a in contact.shliach.areas],
         )
     detail.picklist_values = _picklist_values_map(db, contact)
@@ -371,19 +376,38 @@ def _provision_shliach_user(
     return user
 
 
-def _set_shliach_apartments(
-    db: Session, shliach: models.ContactShliach, apartment_ids: list[int], org_id: int
+def _validate_report_number(report_number_id: int, org_id: int, db: Session) -> None:
+    ok = (
+        db.query(models.ReportNumber)
+        .filter(
+            models.ReportNumber.id == report_number_id,
+            models.ReportNumber.organization_id == org_id,
+        )
+        .first()
+    )
+    if not ok:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "report_number_id does not exist"
+        )
+
+
+def _set_shliach_report_numbers(
+    db: Session,
+    shliach: models.ContactShliach,
+    report_number_ids: list[int],
+    org_id: int,
 ) -> None:
-    for ap in shliach.apartments:
-        db.delete(ap)
+    """fixes19: replace-all semantics, like the shliach area links."""
+    for link in shliach.report_numbers:
+        db.delete(link)
     db.flush()
-    for ap_id in dict.fromkeys(apartment_ids):  # de-dupe, keep order
-        _validate_apartment(ap_id, org_id, db)
+    for rn_id in dict.fromkeys(report_number_ids):  # de-dupe, keep order
+        _validate_report_number(rn_id, org_id, db)
         db.add(
-            models.ContactShliachApartment(
+            models.ReportNumberContactShliach(
                 organization_id=org_id,
                 contact_shliach_id=shliach.id,
-                apartment_id=ap_id,
+                report_number_id=rn_id,
             )
         )
 
@@ -486,20 +510,22 @@ def _contacts_query(
                 )
             )
         if building_ids:
+            # fixes19: the shliach↔apartment bridge is gone — a shliach relates
+            # to geography through covered areas only, so a building filter
+            # matches shluchim covering the building's area.
             query = query.filter(
                 models.Contact.id.in_(
                     select(models.ContactShliach.contact_id)
                     .join(
-                        models.ContactShliachApartment,
-                        models.ContactShliachApartment.contact_shliach_id
+                        models.ContactShliachArea,
+                        models.ContactShliachArea.contact_shliach_id
                         == models.ContactShliach.id,
                     )
                     .join(
-                        models.Apartment,
-                        models.Apartment.id
-                        == models.ContactShliachApartment.apartment_id,
+                        models.Building,
+                        models.Building.area_id == models.ContactShliachArea.area_id,
                     )
-                    .where(models.Apartment.building_id.in_(building_ids))
+                    .where(models.Building.id.in_(building_ids))
                 )
             )
     else:
@@ -789,8 +815,8 @@ def create_contact(
             shliach.user_id = user.id
         db.add(shliach)
         db.flush()
-        if sh and sh.apartment_ids:
-            _set_shliach_apartments(db, shliach, sh.apartment_ids, org_id)
+        if sh and sh.report_number_ids:
+            _set_shliach_report_numbers(db, shliach, sh.report_number_ids, org_id)
         if sh and sh.area_ids:
             _set_shliach_areas(db, shliach, sh.area_ids, org_id)
         # Email the new shliach their access link (admin-triggered).
@@ -911,7 +937,9 @@ def update_contact(
             login_user = db.get(models.User, contact.shliach.user_id)
             if login_user:
                 login_user.password_hash = hash_password(sh_data.password)
-        _set_shliach_apartments(db, contact.shliach, sh_data.apartment_ids, org_id)
+        _set_shliach_report_numbers(
+            db, contact.shliach, sh_data.report_number_ids, org_id
+        )
         _set_shliach_areas(db, contact.shliach, sh_data.area_ids, org_id)
 
     # Keep the shliach's *login user* in sync with the contact. The user's

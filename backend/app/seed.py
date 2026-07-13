@@ -283,7 +283,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("action", "common.name", "שם", "Name"),
     ("action", "action.open_edit", "פתח / עריכה ›", "Open / edit ›"),
     ("column", "contacts.email_for_login", "להתחברות", "for sign-in"),
-    ("column", "contact_shliach.apartments", "דירות באחריות הפעיל", "Apartments covered by the activist"),
+    ("column", "contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל", "Report numbers covered by the activist"),
     ("column", "contact_shliach.areas", "אזורים באחריות הפעיל", "Areas covered by the activist"),
     ("msg", "msg.delete_contact_confirm", "למחוק את איש הקשר? פעולה זו אינה הפיכה.", "Delete this contact? This action cannot be undone."),
     ("action", "action.create_contact", "צור איש קשר", "Create contact"),
@@ -380,7 +380,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("shliach", "shliach.no_buildings_in_area", "אין בניינים באזורים שנבחרו.", "No buildings in the selected areas."),
     # --- User-facing error messages (editable in the localization page) ---
     ("error", "error.no_areas_for_shliach", "נא להוסיף לפחות אזור אחד למערכת", "Please add at least 1 area to the system"),
-    ("column", "contact_shliach.relate_building", "שייך בניין (יוסיף את כל דירותיו)", "Relate a building (adds all its apartments)"),
     # fixes14: shliach login password (set from the contact form)
     ("column", "contact_shliach.password", "סיסמה למערכת (לא חובה)", "System password (optional)"),
     ("column", "contact_shliach.password_hint", "עם סיסמה הפעיל מתחבר עם האימייל והסיסמה; ללא סיסמה — עם Google בלבד. שדה ריק לא משנה סיסמה קיימת.", "With a password the activist signs in with their email and password; without one — Google only. Leaving it blank keeps the current password."),
@@ -587,7 +586,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("sort", "sort.address", "כתובת", "Address"),
     ("sort", "sort.area", "אזור", "Area"),
     ("page", "page.shliach_details", "פרטי פעיל", "Activist details"),
-    ("page", "page.no_covered_apartments", "אין דירות משויכות לפעיל זה.", "No apartments assigned to this activist."),
     ("admin", "admin.delete_user_title", "מחיקת משתמש", "Delete user"),
     ("admin", "admin.confirm_sure", "בטוח ?", "Are you sure?"),
     ("admin", "admin.deps_intro", "למשתמש זה קיימים נתונים מקושרים במערכת:", "This user has connected data in the system:"),
@@ -595,7 +593,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("admin", "admin.deps_assigned_contacts", "אנשי קשר משויכים: {n}", "Assigned contacts: {n}"),
     ("admin", "admin.deps_interactions", "אינטראקציות שנוצרו: {n}", "Interactions created: {n}"),
     ("admin", "admin.deps_shliach_contact", "מקושר לכרטיס פעיל: {name}", "Linked activist card: {name}"),
-    ("admin", "admin.deps_apartments", "דירות באחריות: {n}", "Apartments covered: {n}"),
+    ("admin", "admin.deps_report_numbers", "מספרי דוח באחריות: {n}", "Report numbers covered: {n}"),
     ("admin", "admin.deps_areas", "אזורים באחריות: {n}", "Areas covered: {n}"),
     ("admin", "admin.deps_note", "בעת המחיקה השיוכים יוסרו והנתונים יישארו ללא משתמש מקושר.", "On deletion the links are removed; the data remains without a linked user."),
     ("admin", "admin.template.shliach_welcome", "מייל קבלת פנים (פעיל / משתמש חדש)", "Welcome email (new activist / user)"),
@@ -653,6 +651,30 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     # --- fixes18: shliach contacts-visibility permission ---
     ("page", "page.shliach_view_contacts", "פעילים רשאים לצפות באנשי קשר", "Activists may view contacts"),
     ("page", "page.shliach_view_contacts_hint", "כאשר כבוי (ברירת המחדל), משתמשי פעיל אינם רואים את רשימת אנשי הקשר.", "When off (the default), activist users do not see the contacts list."),
+    # --- fixes19: report numbers (מספר דוח) ---
+    ("table", "report_number", "מספר דוח", "Report number"),
+    ("column", "report_number.name", "שם", "Name"),
+    ("nav", "nav.report_numbers", "מספרי דוח", "Report numbers"),
+    ("page", "page.report_numbers", "מספרי דוח", "Report numbers"),
+    ("page", "page.report_numbers_intro", "ניהול מספרי הדוח של הארגון — משמשים לשיוך דירות ופעילים.", "Manage the organization's report numbers — used to associate apartments and activists."),
+    ("report", "report.add", "מספר דוח חדש", "New report number"),
+    ("report", "report.none", "אין מספרי דוח עדיין.", "No report numbers yet."),
+    ("report", "report.name_ph", "שם / מספר…", "Name / number…"),
+    ("report", "report.delete_confirm", "למחוק את מספר הדוח? השיוכים לדירות ולפעילים יוסרו.", "Delete this report number? Its apartment and activist links will be removed."),
+    ("column", "apartments.report_number_id", "מספר דוח", "Report number"),
+    ("apt", "apt.choose_report_number", "בחר מספר דוח…", "Pick a report number…"),
+    # --- fixes19: apartment edit history ---
+    ("apt", "apt.history", "היסטוריית שינויים", "Edit history"),
+    ("apt", "apt.history_pick", "בחר גרסה קודמת…", "Pick a previous version…"),
+    ("apt", "apt.history_none", "אין גרסאות קודמות.", "No previous versions."),
+    ("apt", "apt.history_snapshot", "תצוגת גרסה היסטורית (לקריאה בלבד)", "Historical version (read-only)"),
+    ("apt", "apt.history_back_current", "חזרה לגרסה הנוכחית", "Back to the current version"),
+    ("apt", "apt.history_unknown_editor", "עורך לא ידוע", "Unknown editor"),
+    # --- fixes19: town houses ---
+    ("column", "buildings.is_town_house", "בית פרטי", "Town house"),
+    ("buildings", "buildings.town_house_hint", "בבית פרטי לא נוצרות קומות — נוצרת דירה אחת אוטומטית.", "A town house gets no floors — a single unit is created automatically."),
+    # --- fixes19 §5: the mekurav layout-area visibility switch ---
+    ("column", "contact_mekurav.section", "אזור פרטי מקורב (כל המקטע)", "Mekurav details area (whole section)"),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)

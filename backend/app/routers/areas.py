@@ -26,8 +26,9 @@ def _get_or_404(area_id: int, org_id: int, db: Session) -> models.Area:
 
 
 def _shliach_area_ids(user: models.User, db: Session) -> set[int]:
-    """Area ids a shliach user covers — assigned directly (contact_shliach_area)
-    or via an apartment whose building sits in the area."""
+    """Area ids a shliach user covers — assigned directly (contact_shliach_area).
+    fixes19: the apartment-coverage bridge is gone, so direct assignment is the
+    only source."""
     cs_ids = [
         row[0]
         for row in db.query(models.ContactShliach.id)
@@ -42,16 +43,7 @@ def _shliach_area_ids(user: models.User, db: Session) -> set[int]:
     direct = db.query(models.ContactShliachArea.area_id).filter(
         models.ContactShliachArea.contact_shliach_id.in_(cs_ids)
     )
-    via_apartment = (
-        db.query(models.Building.area_id)
-        .join(models.Apartment, models.Apartment.building_id == models.Building.id)
-        .join(
-            models.ContactShliachApartment,
-            models.ContactShliachApartment.apartment_id == models.Apartment.id,
-        )
-        .filter(models.ContactShliachApartment.contact_shliach_id.in_(cs_ids))
-    )
-    return {r[0] for r in direct.all()} | {r[0] for r in via_apartment.all()}
+    return {r[0] for r in direct.all()}
 
 
 @router.get("", response_model=list[AreaOut])
@@ -131,26 +123,11 @@ def area_shluchim(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """Shliach contacts covering this area — directly (contact_shliach_area) or via
-    an apartment within the area."""
+    """Shliach contacts covering this area (contact_shliach_area). fixes19: the
+    apartment-coverage bridge is gone, so direct assignment is the only source."""
     org_id = current_user.organization_id
     _get_or_404(area_id, org_id, db)
 
-    # Shliach records that cover an apartment in this area.
-    via_apartment = (
-        db.query(models.ContactShliach.contact_id)
-        .join(
-            models.ContactShliachApartment,
-            models.ContactShliachApartment.contact_shliach_id == models.ContactShliach.id,
-        )
-        .join(
-            models.Apartment,
-            models.Apartment.id == models.ContactShliachApartment.apartment_id,
-        )
-        .join(models.Building, models.Building.id == models.Apartment.building_id)
-        .filter(models.Building.area_id == area_id)
-    )
-    # Shliach records assigned to the area directly.
     via_area = (
         db.query(models.ContactShliach.contact_id)
         .join(
@@ -159,9 +136,7 @@ def area_shluchim(
         )
         .filter(models.ContactShliachArea.area_id == area_id)
     )
-    contact_ids = {row[0] for row in via_apartment.all()} | {
-        row[0] for row in via_area.all()
-    }
+    contact_ids = {row[0] for row in via_area.all()}
     if not contact_ids:
         return []
     return (

@@ -18,7 +18,7 @@ def _mk_shliach(client, headers, email, password=None, **overrides):
         "phone": f"050-77{_phone[0]:05d}",
         "contact_type": "shliach",
         "email": email,
-        "shliach": {"area_ids": [], "apartment_ids": []},
+        "shliach": {"area_ids": []},
     }
     if password:
         payload["shliach"]["password"] = password
@@ -233,7 +233,7 @@ def test_shliach_password_enables_login(client, admin_headers, db_session):
     # An admin sets the password from the contact form afterwards.
     r = client.put(
         f"/api/contacts/{contact['id']}",
-        json={"shliach": {"area_ids": [], "apartment_ids": [], "password": "Later456"}},
+        json={"shliach": {"area_ids": [], "password": "Later456"}},
         headers=admin_headers,
     )
     assert r.status_code == 200, r.text

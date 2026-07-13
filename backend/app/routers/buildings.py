@@ -7,6 +7,7 @@ from sqlalchemy import nullslast
 from sqlalchemy.orm import Session
 
 from app import models
+from app.core.display import building_display_name
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.schemas import (
@@ -136,18 +137,29 @@ def create_building(
     b = models.Building(**data, organization_id=admin.organization_id)
     db.add(b)
     db.flush()
-    # Creation hook (fixes7 §3): auto-populate the building's floor records.
-    for index, floor_name in enumerate(payload.floors):
-        if not floor_name.strip():
-            continue
+    if b.is_town_house:
+        # fixes19 §4: a town house (בית פרטי) gets no floors — spawn exactly
+        # one apartment unit named "<building name>-th" instead.
         db.add(
-            models.Floor(
+            models.Apartment(
                 organization_id=admin.organization_id,
                 building_id=b.id,
-                name=floor_name.strip(),
-                sort_order=index,
+                apartment_name=f"{building_display_name(b)}-th",
             )
         )
+    else:
+        # Creation hook (fixes7 §3): auto-populate the building's floor records.
+        for index, floor_name in enumerate(payload.floors):
+            if not floor_name.strip():
+                continue
+            db.add(
+                models.Floor(
+                    organization_id=admin.organization_id,
+                    building_id=b.id,
+                    name=floor_name.strip(),
+                    sort_order=index,
+                )
+            )
     db.commit()
     db.refresh(b)
     return b

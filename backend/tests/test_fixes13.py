@@ -34,14 +34,16 @@ def test_apartment_language_roundtrip_and_validation(client, admin_headers, db_s
     assert r.status_code == 201, r.text
     apt = r.json()
     assert apt["language"] == "russian"
-    # Update to another valid value.
+    # Update to another valid value. fixes19: an update returns a NEW active
+    # version (the old id becomes a historical snapshot) — follow the new id.
     r = client.put(
         f"/api/apartments/{apt['id']}", json={"language": "yiddish"}, headers=admin_headers
     )
     assert r.status_code == 200 and r.json()["language"] == "yiddish"
+    current_id = r.json()["id"]
     # Unknown value is rejected against the org's picklist.
     r = client.put(
-        f"/api/apartments/{apt['id']}", json={"language": "klingon"}, headers=admin_headers
+        f"/api/apartments/{current_id}", json={"language": "klingon"}, headers=admin_headers
     )
     assert r.status_code == 400
 

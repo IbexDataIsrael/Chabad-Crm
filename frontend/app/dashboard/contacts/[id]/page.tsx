@@ -10,7 +10,6 @@ import { ContactView } from "@/components/ContactView";
 import { CustomFieldsEditor } from "@/components/CustomFieldsEditor";
 import { DonationsEditor } from "@/components/DonationsEditor";
 import { InteractionsTimeline } from "@/components/InteractionsTimeline";
-import { ShliachApartmentsGrid } from "@/components/ShliachApartmentsGrid";
 import { SignificantDatesEditor } from "@/components/SignificantDatesEditor";
 import { VisitHistoryEditor } from "@/components/VisitHistoryEditor";
 import { apiFetch } from "@/lib/api";
@@ -222,15 +221,8 @@ export default function ContactDetailPage() {
         )}
       </section>
 
-      {/* fixes15 §4.2: the apartments assigned to this shliach, as a sub-grid. */}
-      {contact.contact_type === "shliach" && (
-        <section className="bg-white rounded-xl shadow-sm p-6">
-          <h2 className="font-semibold mb-4">
-            {t("contact_shliach.apartments", "דירות באחריות הפעיל")}
-          </h2>
-          <ShliachApartmentsGrid contactId={contact.id} />
-        </section>
-      )}
+      {/* fixes19 §2: the "apartments covered by the activist" grid is gone —
+          shluchim associate with report numbers (shown in the details card). */}
 
       {contact.contact_type === "mekurav" && (
         <section className="bg-white rounded-xl shadow-sm p-6">

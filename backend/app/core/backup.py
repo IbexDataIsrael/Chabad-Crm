@@ -34,13 +34,14 @@ AUTO_PRE_RESTORE_NOTE = "אוטומטי — לפני שחזור"
 SNAPSHOT_MODELS = [
     models.Area,
     models.AdminArea,
+    models.ReportNumber,  # before Apartment (apartments.report_number_id FK)
     models.Building,
     models.Floor,
     models.Apartment,
     models.Contact,
     models.ContactMekurav,
     models.ContactShliach,
-    models.ContactShliachApartment,
+    models.ReportNumberContactShliach,
     models.ContactShliachArea,
     models.CommunityChecklist,  # contact-scoped (no organization_id column)
     models.CustomFieldDefinition,
@@ -184,6 +185,10 @@ def restore_snapshot(
         ]
         if not rows:
             continue
+        if model is models.Apartment:
+            # fixes19: root_id is a self-FK; a version's root always has the
+            # smaller id, so id order inserts parents first.
+            rows.sort(key=lambda r: r.get("id") or 0)
         for row in rows:
             # Snapshots are server-created for this same org, but force the
             # tenant scope anyway — a snapshot must never write another org.
@@ -199,6 +204,12 @@ def restore_snapshot(
                 *valid_user_ids,
             ):
                 row["user_id"] = None
+            elif model is models.Apartment and row.get("editor_id") not in (
+                None,
+                *valid_user_ids,
+            ):
+                # fixes19: the version-history editor stamp is a user link.
+                row["editor_id"] = None
             elif model is models.Interaction and row.get("created_by") not in valid_user_ids:
                 # created_by is NOT NULL — keep the interaction, owned by the
                 # admin performing the restore.

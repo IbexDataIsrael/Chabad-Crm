@@ -16,6 +16,7 @@ import {
   type Building,
   type Contact,
   type Floor,
+  type ReportNumber,
 } from "@/lib/types";
 
 const inputClass =
@@ -37,7 +38,8 @@ export function ApartmentEditor({
    *  the add view in a building's context via ?building=<id>). */
   initialBuildingId?: number;
   onClose: () => void;
-  onSaved: () => Promise<void>;
+  /** fixes19: editing returns a NEW active version — `saved` carries its id. */
+  onSaved: (saved: Apartment) => Promise<void>;
 }) {
   const { t } = useLocalization();
   const { isFieldVisible: vis } = useFieldSettings();
@@ -64,11 +66,19 @@ export function ApartmentEditor({
   const [language, setLanguage] = useState<string | null>(apt?.language ?? null);
   const [notes, setNotes] = useState(apt?.apartment_notes ?? "");
   const [contactId, setContactId] = useState<number | "">("");
+  // fixes19: linked report number (searchable dropdown).
+  const [reportNumbers, setReportNumbers] = useState<ReportNumber[]>([]);
+  const [reportNumberId, setReportNumberId] = useState<number | "">(
+    apt?.report_number_id ?? "",
+  );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     apiFetch<Building[]>("/api/buildings").then(setBuildings).catch(() => {});
+    apiFetch<ReportNumber[]>("/api/report-numbers")
+      .then(setReportNumbers)
+      .catch(() => {});
     if (!apt) {
       apiFetch<Contact[]>("/api/contacts?contact_type=mekurav")
         .then(setContacts)
@@ -112,15 +122,18 @@ export function ApartmentEditor({
       mezuzah_status: mezuzahStatus,
       language,
       apartment_notes: notes || null,
+      report_number_id: reportNumberId === "" ? null : Number(reportNumberId),
     };
     try {
+      let saved: Apartment;
       if (apt) {
-        await apiFetch(`/api/apartments/${apt.id}`, {
+        // fixes19: the PUT retires this version and returns the NEW active one.
+        saved = await apiFetch<Apartment>(`/api/apartments/${apt.id}`, {
           method: "PUT",
           body: JSON.stringify(payload),
         });
       } else {
-        await apiFetch("/api/apartments", {
+        saved = await apiFetch<Apartment>("/api/apartments", {
           method: "POST",
           body: JSON.stringify({
             ...payload,
@@ -128,7 +141,7 @@ export function ApartmentEditor({
           }),
         });
       }
-      await onSaved();
+      await onSaved(saved);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
     } finally {
@@ -250,6 +263,20 @@ export function ApartmentEditor({
               fieldKey="apartment.language"
               value={language}
               onChange={setLanguage}
+            />
+          </label>
+        )}
+        {/* fixes19: searchable report-number dropdown (מספר דוח). */}
+        {vis("apartments.report_number_id") && (
+          <label className="block space-y-1">
+            <span className="block text-sm font-medium">
+              {t("apartments.report_number_id", "מספר דוח")}
+            </span>
+            <SearchableSelect
+              value={reportNumberId === "" ? null : reportNumberId}
+              onChange={(id) => setReportNumberId(id ?? "")}
+              options={reportNumbers.map((rn) => ({ id: rn.id, label: rn.name }))}
+              placeholder={t("apt.choose_report_number", "בחר מספר דוח…")}
             />
           </label>
         )}

@@ -336,7 +336,7 @@ export interface AdminUserDependencies {
   interactions: number;
   shliach_contact_id: number | null;
   shliach_contact_name: string | null;
-  covered_apartments: number;
+  covered_report_numbers: number; // fixes19 (was covered apartments)
   covered_areas: number;
   has_dependencies: boolean;
 }

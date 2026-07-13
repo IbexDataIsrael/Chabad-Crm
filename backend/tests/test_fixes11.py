@@ -43,27 +43,41 @@ def shliach_headers(client, db_session, admin_headers):
 
 
 # --- §1.2 plain apartments list scoped for shliach ------------------------------
+# fixes19: scope derives from the shliach's covered areas (the apartment
+# coverage bridge was dropped) — apartments of buildings inside those areas.
 def test_plain_apartments_list_scoped_for_shliach(
     client, admin_headers, shliach_headers, db_session
 ):
     area = client.post("/api/areas", json={"area_name": "א"}, headers=admin_headers).json()
+    other_area = client.post(
+        "/api/areas", json={"area_name": "ב"}, headers=admin_headers
+    ).json()
     b = client.post(
         "/api/buildings",
         json={"area_id": area["id"], "building_address": "1 Scope St", "floors": ["1"]},
         headers=admin_headers,
     ).json()
-    covered = client.post(
-        "/api/apartments",
-        json={"building_id": b["id"], "apartment_name": "COVERED"},
+    b2 = client.post(
+        "/api/buildings",
+        json={
+            "area_id": other_area["id"],
+            "building_address": "2 Other St",
+            "floors": ["1"],
+        },
         headers=admin_headers,
     ).json()
     client.post(
         "/api/apartments",
-        json={"building_id": b["id"], "apartment_name": "OTHER"},
+        json={"building_id": b["id"], "apartment_name": "COVERED"},
+        headers=admin_headers,
+    )
+    client.post(
+        "/api/apartments",
+        json={"building_id": b2["id"], "apartment_name": "OTHER"},
         headers=admin_headers,
     )
 
-    # Link a shliach contact record (with one covered apartment) to the login.
+    # Link a shliach contact record (covering one area) to the login.
     _phone[0] += 1
     sh = client.post(
         "/api/contacts",
@@ -72,7 +86,7 @@ def test_plain_apartments_list_scoped_for_shliach(
             "phone": f"050-99{_phone[0]:05d}",
             "contact_type": "shliach",
             "email": "sh11@example.com",
-            "shliach": {"apartment_ids": [covered["id"]], "area_ids": []},
+            "shliach": {"area_ids": [area["id"]]},
         },
         headers=admin_headers,
     ).json()

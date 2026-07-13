@@ -47,7 +47,7 @@ def _seed_world(client, headers):
             "phone": "050-7770002",
             "contact_type": "shliach",
             "email": "twin.shliach@example.com",
-            "shliach": {"area_ids": [area_id], "apartment_ids": []},
+            "shliach": {"area_ids": [area_id]},
         },
         headers=headers,
     ).json()["id"]

@@ -77,7 +77,15 @@ function EditApartmentInner() {
         <ApartmentEditor
           apt={apt}
           onClose={() => router.push(returnTo)}
-          onSaved={async () => router.push(returnTo)}
+          onSaved={async (saved) =>
+            // fixes19: saving mints a NEW active version — a return path that
+            // pointed at this (now historical) id must follow the new one.
+            router.push(
+              returnTo === `/dashboard/apartments/${apartmentId}`
+                ? `/dashboard/apartments/${saved.id}`
+                : returnTo,
+            )
+          }
         />
       </div>
     </div>

@@ -60,6 +60,7 @@ from app.routers import (
     organizations,
     picklists,
     preferences,
+    report_numbers,
     search,
     uploads,
     users,
@@ -116,6 +117,7 @@ app.include_router(organizations.router)
 app.include_router(custom_fields.router)
 app.include_router(field_settings.router)
 app.include_router(admin_areas.router)
+app.include_router(report_numbers.router)
 app.include_router(areas.router)
 app.include_router(buildings.router)
 app.include_router(apartments.router)

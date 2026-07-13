@@ -578,8 +578,13 @@ function DeleteUserModal({
         ...(deps.assigned_contacts > 0
           ? [n(t("admin.deps_assigned_contacts", "אנשי קשר משויכים: {n}"), deps.assigned_contacts)]
           : []),
-        ...(deps.covered_apartments > 0
-          ? [n(t("admin.deps_apartments", "דירות באחריות: {n}"), deps.covered_apartments)]
+        ...(deps.covered_report_numbers > 0
+          ? [
+              n(
+                t("admin.deps_report_numbers", "מספרי דוח באחריות: {n}"),
+                deps.covered_report_numbers,
+              ),
+            ]
           : []),
         ...(deps.covered_areas > 0
           ? [n(t("admin.deps_areas", "אזורים באחריות: {n}"), deps.covered_areas)]

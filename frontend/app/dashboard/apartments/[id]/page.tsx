@@ -16,7 +16,9 @@ import {
   buildingDisplayName,
   type Apartment,
   type ApartmentPage,
+  type ApartmentVersion,
   type Building,
+  type ReportNumber,
 } from "@/lib/types";
 
 /** Apartment card: view + edit, the same structural flow as a CRM contact
@@ -36,6 +38,10 @@ export default function ApartmentDetailPage() {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
+  // fixes19: report-number name + admin edit history (previous versions).
+  const [reportNumbers, setReportNumbers] = useState<ReportNumber[]>([]);
+  const [history, setHistory] = useState<ApartmentVersion[]>([]);
+  const [snapshot, setSnapshot] = useState<ApartmentVersion | null>(null);
 
   const { labelFor: jewishLabel } = usePicklist("apartment.Jewish_status");
   const { labelFor: campaignLabel } = usePicklist("apartment.campaign_status");
@@ -55,6 +61,16 @@ export default function ApartmentDetailPage() {
     setLinked(
       row?.contact_id ? { id: row.contact_id, name: row.contact_name ?? "" } : null,
     );
+    setReportNumbers(
+      await apiFetch<ReportNumber[]>("/api/report-numbers").catch(() => []),
+    );
+    if (isAdmin) {
+      setHistory(
+        await apiFetch<ApartmentVersion[]>(
+          `/api/apartments/${apartmentId}/history`,
+        ).catch(() => []),
+      );
+    }
   }
 
   useEffect(() => {
@@ -197,6 +213,12 @@ export default function ApartmentDetailPage() {
               "שפה",
               languageLabel(apt.language),
             )}
+            {field(
+              "apartments.report_number_id",
+              "apartments.report_number_id",
+              "מספר דוח",
+              reportNumbers.find((rn) => rn.id === apt.report_number_id)?.name ?? null,
+            )}
             {building?.building_address && (
               <div className="sm:col-span-2">
                 <dt className="text-gray-500">{t("buildings.building_address", "כתובת בניין")}</dt>
@@ -212,6 +234,77 @@ export default function ApartmentDetailPage() {
           </dl>
         </div>
 
+      {/* fixes19 §3: admin edit history — pick a previous version to view a
+          read-only snapshot (Wikipedia-revisions style). */}
+      {isAdmin && (
+        <section className="bg-white rounded-xl shadow-sm p-5 space-y-3">
+          <h2 className="text-sm font-semibold text-gray-500">
+            {t("apt.history", "היסטוריית שינויים")}
+          </h2>
+          {history.length === 0 ? (
+            <p className="text-sm text-gray-400">
+              {t("apt.history_none", "אין גרסאות קודמות.")}
+            </p>
+          ) : (
+            <>
+              <select
+                className="w-full sm:w-auto rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+                value={snapshot?.id ?? ""}
+                onChange={(e) => {
+                  const id = Number(e.target.value);
+                  setSnapshot(history.find((h) => h.id === id) ?? null);
+                }}
+              >
+                <option value="">{t("apt.history_pick", "בחר גרסה קודמת…")}</option>
+                {history.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {(h.editor_name || t("apt.history_unknown_editor", "עורך לא ידוע")) +
+                      " — " +
+                      (h.last_edit ? new Date(h.last_edit).toLocaleString("he-IL") : "")}
+                  </option>
+                ))}
+              </select>
+              {snapshot && (
+                <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-gray-500">
+                      {t("apt.history_snapshot", "תצוגת גרסה היסטורית (לקריאה בלבד)")}
+                    </p>
+                    <button
+                      onClick={() => setSnapshot(null)}
+                      className="text-xs text-status-magenta hover:underline"
+                    >
+                      {t("apt.history_back_current", "חזרה לגרסה הנוכחית")}
+                    </button>
+                  </div>
+                  <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                    <SnapRow label={t("apartments.apartment_name", "מספר דירה")} value={snapshot.apartment_name} />
+                    <SnapRow label={t("apartments.floor", "קומה")} value={snapshot.floor} />
+                    <SnapRow label={t("apartments.name", "שם דייר")} value={snapshot.name} />
+                    <SnapRow label={t("apartments.phone", "טלפון")} value={snapshot.phone} dir="ltr" />
+                    <SnapRow label={t("apartments.email", "אימייל")} value={snapshot.email} dir="ltr" />
+                    <SnapRow label={t("picklist.apartment.Jewish_status", "יהדות")} value={jewishLabel(snapshot.jewish_status)} />
+                    <SnapRow label={t("picklist.apartment.campaign_status", "סטטוס קמפיין")} value={campaignLabel(snapshot.campaign_status)} />
+                    <SnapRow label={t("picklist.apartment.mezuzah_status", "מזוזה")} value={mezuzahLabel(snapshot.mezuzah_status)} />
+                    <SnapRow label={t("picklist.apartment.language", "שפה")} value={languageLabel(snapshot.language)} />
+                    <SnapRow
+                      label={t("apartments.report_number_id", "מספר דוח")}
+                      value={
+                        reportNumbers.find((rn) => rn.id === snapshot.report_number_id)
+                          ?.name ?? null
+                      }
+                    />
+                    <div className="sm:col-span-2">
+                      <SnapRow label={t("apartments.apartment_notes", "הערות")} value={snapshot.apartment_notes} />
+                    </div>
+                  </dl>
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
       {/* Linked contact (mekurav) — name links to their contact page. */}
       <section className="bg-white rounded-xl shadow-sm p-5 space-y-2">
         <h2 className="text-sm font-semibold text-gray-500">{t("apt.contact", "איש קשר")}</h2>
@@ -226,6 +319,26 @@ export default function ApartmentDetailPage() {
           <p className="text-sm text-gray-400">{t("apt.no_contact", "ללא איש קשר")}</p>
         )}
       </section>
+    </div>
+  );
+}
+
+/** One label/value row of a read-only historical snapshot (fixes19 §3). */
+function SnapRow({
+  label,
+  value,
+  dir,
+}: {
+  label: string;
+  value: string | null | undefined;
+  dir?: "ltr";
+}) {
+  return (
+    <div>
+      <dt className="text-gray-500">{label}</dt>
+      <dd className="font-medium" dir={dir}>
+        {value || "—"}
+      </dd>
     </div>
   );
 }

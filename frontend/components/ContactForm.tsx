@@ -17,14 +17,13 @@ import {
   type UserSummary,
 } from "@/lib/types";
 import { AddressAutocomplete } from "./AddressAutocomplete";
-import { ApartmentMultiSelect } from "./ApartmentMultiSelect";
 import { ApartmentPicker } from "./ApartmentPicker";
 import { AreaMultiSelect } from "./AreaMultiSelect";
-import { BuildingMultiSelect } from "./BuildingMultiSelect";
 import { DatePicker } from "./DatePicker";
 import { EmailInput } from "./EmailInput";
 import { PhoneInput } from "./PhoneInput";
 import { PicklistSelect } from "./PicklistSelect";
+import { ReportNumberMultiSelect } from "./ReportNumberMultiSelect";
 
 export interface MekuravFormValues {
   apartment_id: number | null;
@@ -39,7 +38,8 @@ export interface MekuravFormValues {
 
 export interface ShliachFormValues {
   notes: string | null;
-  apartment_ids: number[];
+  /** fixes19: report numbers replace the apartment coverage links. */
+  report_number_ids: number[];
   area_ids: number[];
   /** fixes14: optional login password — empty keeps the existing one. */
   password: string | null;
@@ -109,7 +109,7 @@ export function ContactForm({
     },
     shliach: {
       notes: initial?.shliach?.notes ?? null,
-      apartment_ids: initial?.shliach?.apartment_ids ?? [],
+      report_number_ids: initial?.shliach?.report_number_ids ?? [],
       area_ids: initial?.shliach?.area_ids ?? [],
       password: null,
     },
@@ -144,17 +144,6 @@ export function ContactForm({
 
   function setShliach<K extends keyof ShliachFormValues>(key: K, v: ShliachFormValues[K]) {
     setValues((prev) => ({ ...prev, shliach: { ...prev.shliach, [key]: v } }));
-  }
-
-  // Relating a building bulk-adds all its apartments (deduped) to the shliach.
-  function addShliachApartments(ids: number[]) {
-    setValues((prev) => ({
-      ...prev,
-      shliach: {
-        ...prev.shliach,
-        apartment_ids: Array.from(new Set([...prev.shliach.apartment_ids, ...ids])),
-      },
-    }));
   }
 
   function setPicklistValue(systemName: string, v: string | null) {
@@ -322,7 +311,10 @@ export function ContactForm({
         </>
       )}
 
-      {isMekurav && (
+      {/* fixes19 §5: the whole mekurav layout area rides on one section-level
+          visibility switch (hidden by default; admins opt in from the fields
+          configuration page). */}
+      {isMekurav && vis("contact_mekurav.section") && (
         <>
           {vis("contact_mekurav.apartment_id") && (
             <div className="sm:col-span-2">
@@ -452,36 +444,21 @@ export function ContactForm({
             </div>
           )}
 
-          {vis("contact_shliach.apartments") && (
-            <div className="sm:col-span-2 space-y-3">
-              {values.shliach.area_ids.length === 0 ? (
-                // Buildings/apartments only become selectable after an area is
-                // chosen — and then only those within the shliach's area(s).
-                <p className="text-sm text-gray-500">
-                  {t("shliach.select_area_first", "יש לבחור אזור תחילה")}
-                </p>
-              ) : (
-                <>
-                  <Field
-                    label={t(
-                      "contact_shliach.relate_building",
-                      "שייך בניין (יוסיף את כל דירותיו)",
-                    )}
-                  >
-                    <BuildingMultiSelect
-                      areaIds={values.shliach.area_ids}
-                      onAddApartments={addShliachApartments}
-                    />
-                  </Field>
-                  <Field label={t("contact_shliach.apartments", "דירות באחריות הפעיל")}>
-                    <ApartmentMultiSelect
-                      areaIds={values.shliach.area_ids}
-                      value={values.shliach.apartment_ids}
-                      onChange={(ids) => setShliach("apartment_ids", ids)}
-                    />
-                  </Field>
-                </>
-              )}
+          {/* fixes19: shluchim are associated with report numbers (the
+              apartment coverage picker is gone). */}
+          {vis("contact_shliach.report_numbers") && (
+            <div className="sm:col-span-2">
+              <Field
+                label={t(
+                  "contact_shliach.report_numbers",
+                  "מספרי דוח באחריות הפעיל",
+                )}
+              >
+                <ReportNumberMultiSelect
+                  value={values.shliach.report_number_ids}
+                  onChange={(ids) => setShliach("report_number_ids", ids)}
+                />
+              </Field>
             </div>
           )}
 

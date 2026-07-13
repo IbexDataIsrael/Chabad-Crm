@@ -49,6 +49,12 @@ function DashboardChrome({ children }: { children: ReactNode }) {
     { href: "/dashboard/areas", label: t("nav.areas", "אזורים") },
     { href: "/dashboard/buildings", label: t("nav.buildings", "בניינים"), admin: true },
     { href: "/dashboard/apartments", label: t("nav.apartments", "דירות") },
+    // fixes19: report-number management (admin-only CRUD).
+    {
+      href: "/dashboard/report-numbers",
+      label: t("nav.report_numbers", "מספרי דוח"),
+      admin: true,
+    },
   ]);
   const moreItems = adminOnly([
     { href: "/dashboard", label: t("nav.home", "בית") },

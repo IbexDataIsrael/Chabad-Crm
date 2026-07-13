@@ -59,8 +59,17 @@ export interface Shliach {
   contact_id: number;
   user_id: number | null;
   notes: string | null;
-  apartment_ids: number[];
+  /** fixes19: report numbers replace the apartment coverage links. */
+  report_number_ids: number[];
   area_ids: number[];
+}
+
+/** A report number (מספר דוח, fixes19) — org-scoped, admin-managed. */
+export interface ReportNumber {
+  id: number;
+  guid: string;
+  name: string;
+  created_at?: string | null;
 }
 
 export interface Reminder {
@@ -147,6 +156,8 @@ export interface Building {
   building_address: string | null;
   longitude: number | null;
   latitude: number | null;
+  /** fixes19 §4: a town house gets no floors — one auto "<name>-th" unit. */
+  is_town_house?: boolean;
   floors?: Floor[];
 }
 
@@ -164,6 +175,17 @@ export interface Apartment {
   name: string | null; // resident name
   phone: string | null;
   email: string | null;
+  /** fixes19: linked report number (מספר דוח). */
+  report_number_id?: number | null;
+  /** fixes19 §3 versioning: false = a historical (read-only) snapshot. */
+  is_display?: boolean;
+  last_edit?: string | null;
+  root_id?: number | null;
+}
+
+/** One historical apartment version (admin history view, fixes19 §3). */
+export interface ApartmentVersion extends Apartment {
+  editor_name: string | null;
 }
 
 /** Apartment enriched with building/area context + linked contact (apartments page). */

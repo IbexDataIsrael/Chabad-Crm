@@ -191,7 +191,7 @@ def test_shliach_area_multi(client, admin_headers):
             "phone": f"050-66{_phone[0]:05d}",
             "contact_type": "shliach",
             "email": "sh.area@example.com",
-            "shliach": {"area_ids": [a1, a2], "apartment_ids": []},
+            "shliach": {"area_ids": [a1, a2]},
         },
         headers=admin_headers,
     )
@@ -221,7 +221,7 @@ def test_shliach_sees_only_covered_areas(client, admin_headers, db_session):
             "phone": f"050-55{_phone[0]:05d}",
             "contact_type": "shliach",
             "email": "sh.covered@example.com",
-            "shliach": {"area_ids": [a1], "apartment_ids": []},
+            "shliach": {"area_ids": [a1]},
         },
         headers=admin_headers,
     ).json()

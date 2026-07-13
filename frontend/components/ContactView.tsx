@@ -15,6 +15,7 @@ import {
   type Area,
   type Contact,
   type ContactCustomField,
+  type ReportNumber,
   type UserSummary,
 } from "@/lib/types";
 import { ContactMap } from "./ContactMap";
@@ -94,8 +95,11 @@ export function ContactView({
     ],
   ];
 
-  const mekuravFields: [string | null, string, ReactNode][] = mk
-    ? [
+  // fixes19 §5: the whole mekurav layout area rides on one section-level
+  // visibility switch (hidden by default).
+  const mekuravFields: [string | null, string, ReactNode][] =
+    mk && vis("contact_mekurav.section")
+      ? [
         [
           "contact_mekurav.apartment_id",
           t("contact_mekurav.apartment_id", "דירה"),
@@ -134,13 +138,13 @@ export function ContactView({
           t("picklist.affiliation"),
           affiliation.labelFor(contact.picklist_values?.["affiliation"]) || "—",
         ],
-        [
-          "language",
-          t("picklist.language"),
-          language.labelFor(contact.picklist_values?.["language"]) || "—",
-        ],
-      ]
-    : [];
+          [
+            "language",
+            t("picklist.language"),
+            language.labelFor(contact.picklist_values?.["language"]) || "—",
+          ],
+        ]
+      : [];
 
   const allFields = (
     contact.contact_type === "shliach"
@@ -174,8 +178,18 @@ export function ContactView({
                 </dd>
               </div>
             )}
-            {/* The covered apartments now render as a dedicated sub-grid on
-                the profile page (fixes15 §4.2) instead of an inline list. */}
+            {/* fixes19: shluchim associate with report numbers (the covered
+                apartments grid is gone). */}
+            {vis("contact_shliach.report_numbers") && (
+              <div className="flex flex-col">
+                <dt className="text-xs text-gray-500">
+                  {t("contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל")}
+                </dt>
+                <dd className="text-sm">
+                  <ReportNumbersLabel ids={contact.shliach.report_number_ids} />
+                </dd>
+              </div>
+            )}
             {vis("contact_shliach.notes") && (
               <div className="flex flex-col">
                 <dt className="text-xs text-gray-500">{t("contact_shliach.notes", "הערות")}</dt>
@@ -282,6 +296,32 @@ function AdminAreaLabel({ id }: { id: number | null }) {
 
   if (id == null) return <>—</>;
   return <>{label ?? "…"}</>;
+}
+
+/** Resolves the shliach's report-number ids to their names (fixes19). */
+function ReportNumbersLabel({ ids }: { ids: number[] }) {
+  const [names, setNames] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    if (ids.length === 0) {
+      setNames([]);
+      return;
+    }
+    let active = true;
+    apiFetch<ReportNumber[]>("/api/report-numbers")
+      .then((all) => {
+        if (!active) return;
+        const byId = new Map(all.map((rn) => [rn.id, rn.name]));
+        setNames(ids.map((id) => byId.get(id) ?? `#${id}`));
+      })
+      .catch(() => active && setNames([]));
+    return () => {
+      active = false;
+    };
+  }, [ids]);
+
+  if (ids.length === 0) return <>—</>;
+  return <>{names === null ? "…" : names.join(", ") || "—"}</>;
 }
 
 /** Resolves an area id to its name for display. */

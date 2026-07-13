@@ -3,7 +3,14 @@
 Apartments are created inline from the contact forms, so create/update are open to
 any authenticated user; delete is admin-only. The batch endpoint (fixes7 §5)
 creates the Cartesian product of selected floors × labels in one transaction.
+
+fixes19 §3 — versioning: an update never overwrites a row. The current row is
+retired (is_display=False, stamped with last_edit + editor_id) and a new active
+row is inserted; `root_id` chains a lineage together. Every list/read is scoped
+to active rows; only admins may read historical snapshots (the history view).
 """
+import datetime
+
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -22,6 +29,7 @@ from app.schemas import (
     ApartmentOut,
     ApartmentPageOut,
     ApartmentUpdate,
+    ApartmentVersionOut,
 )
 
 router = APIRouter(prefix="/api/apartments", tags=["apartments"])
@@ -41,8 +49,29 @@ def _validate_apartment_picklists(data: dict, org_id: int, db: Session) -> None:
             validate_picklist_value(db, org_id, field_key, data[field])
 
 
+def _validate_report_number(data: dict, org_id: int, db: Session) -> None:
+    """fixes19: the linked report number must exist within the org."""
+    rn_id = data.get("report_number_id")
+    if rn_id is None:
+        return
+    ok = (
+        db.query(models.ReportNumber)
+        .filter(
+            models.ReportNumber.id == rn_id,
+            models.ReportNumber.organization_id == org_id,
+        )
+        .first()
+    )
+    if not ok:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "report_number_id does not exist"
+        )
+
+
 def _shliach_apartment_ids(db: Session, user: models.User) -> list[int]:
-    """Apartment ids covered by the shliach contact linked to this user."""
+    """Apartment ids visible to a shliach user (fixes19: derived from the areas
+    they cover — the apartment-coverage bridge was dropped): apartments of
+    buildings inside their covered areas."""
     shliach = (
         db.query(models.ContactShliach)
         .filter(models.ContactShliach.user_id == user.id)
@@ -50,10 +79,19 @@ def _shliach_apartment_ids(db: Session, user: models.User) -> list[int]:
     )
     if not shliach:
         return []
+    area_ids = [
+        row.area_id
+        for row in db.query(models.ContactShliachArea.area_id)
+        .filter(models.ContactShliachArea.contact_shliach_id == shliach.id)
+        .all()
+    ]
+    if not area_ids:
+        return []
     return [
-        row.apartment_id
-        for row in db.query(models.ContactShliachApartment.apartment_id)
-        .filter(models.ContactShliachApartment.contact_shliach_id == shliach.id)
+        row.id
+        for row in db.query(models.Apartment.id)
+        .join(models.Building, models.Building.id == models.Apartment.building_id)
+        .filter(models.Building.area_id.in_(area_ids))
         .all()
     ]
 
@@ -111,7 +149,8 @@ def list_apartments(
     q: Optional[str] = None,
 ):
     query = db.query(models.Apartment).filter(
-        models.Apartment.organization_id == current_user.organization_id
+        models.Apartment.organization_id == current_user.organization_id,
+        models.Apartment.is_display.is_(True),  # active versions only (fixes19)
     )
     # fixes11 §1.2: a shliach only gets the apartments they cover (the enriched
     # /list endpoint was already scoped; the plain list feeds the pickers).
@@ -185,7 +224,6 @@ def list_apartments_enriched(
     area_id: Optional[int] = None,
     area_ids: Optional[list[int]] = Query(None),
     apartment_id: Optional[int] = None,
-    shliach_contact_id: Optional[int] = None,
     q: Optional[str] = None,
     jewish_status: Optional[list[str]] = Query(None),
     mezuzah_status: Optional[list[str]] = Query(None),
@@ -201,6 +239,7 @@ def list_apartments_enriched(
     `apartment_id` returns a single enriched row (detail page); `q` matches the
     street name in the parent building address (plus label / resident name);
     fixes18 §5.2: `jewish_status` / `mezuzah_status` match the picklist columns.
+    fixes19: only active versions (is_display) are returned.
     Sorting (fixes8 §1D) defaults to floor, then apartment number within a floor;
     `dir` flips the primary key only. Pagination (fixes8 §2C) is server-side."""
     if page_size not in (20, 50, 100):
@@ -210,7 +249,10 @@ def list_apartments_enriched(
     query = (
         db.query(models.Apartment)
         .join(models.Building, models.Building.id == models.Apartment.building_id)
-        .filter(models.Apartment.organization_id == current_user.organization_id)
+        .filter(
+            models.Apartment.organization_id == current_user.organization_id,
+            models.Apartment.is_display.is_(True),  # active versions only (fixes19)
+        )
     )
     if current_user.role == "shliach":
         ids = _shliach_apartment_ids(db, current_user)
@@ -226,19 +268,6 @@ def list_apartments_enriched(
         query = query.filter(models.Building.area_id.in_(area_ids))
     if apartment_id is not None:
         query = query.filter(models.Apartment.id == apartment_id)
-    # fixes15 §4.2: the apartments covered by one shliach contact (profile grid).
-    if shliach_contact_id is not None:
-        query = query.filter(
-            models.Apartment.id.in_(
-                select(models.ContactShliachApartment.apartment_id)
-                .join(
-                    models.ContactShliach,
-                    models.ContactShliach.id
-                    == models.ContactShliachApartment.contact_shliach_id,
-                )
-                .where(models.ContactShliach.contact_id == shliach_contact_id)
-            )
-        )
     if q:
         like = f"%{q.strip()}%"
         query = query.filter(
@@ -288,6 +317,7 @@ def create_apartment(
     data = payload.model_dump()
     contact_id = data.pop("contact_id", None)
     _validate_apartment_picklists(data, org_id, db)
+    _validate_report_number(data, org_id, db)
     a = models.Apartment(**data, organization_id=org_id)
     db.add(a)
     db.flush()
@@ -348,7 +378,10 @@ def batch_create_apartments(
     existing = {
         (ap.floor or "", ap.apartment_name or "")
         for ap in db.query(models.Apartment)
-        .filter(models.Apartment.building_id == building.id)
+        .filter(
+            models.Apartment.building_id == building.id,
+            models.Apartment.is_display.is_(True),  # active versions only (fixes19)
+        )
         .all()
     }
     created = 0
@@ -371,13 +404,69 @@ def batch_create_apartments(
     return ApartmentBatchResult(created=created, skipped=skipped)
 
 
+# The data columns copied from a retired version into its successor (fixes19).
+_VERSIONED_COLUMNS = (
+    "building_id",
+    "apartment_name",
+    "apartment_notes",
+    "floor",
+    "jewish_status",
+    "campaign_status",
+    "mezuzah_status",
+    "language",
+    "name",
+    "phone",
+    "email",
+    "report_number_id",
+)
+
+
+@router.get("/{apartment_id}/history", response_model=list[ApartmentVersionOut])
+def apartment_history(
+    apartment_id: int,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    """Previous versions of this apartment's lineage, newest first — the admin
+    history view (fixes19 §3). Each row is a full read-only snapshot plus the
+    editor's name and the retirement time."""
+    a = _get_or_404(apartment_id, admin.organization_id, db)
+    root_id = a.root_id or a.id
+    versions = (
+        db.query(models.Apartment)
+        .filter(
+            models.Apartment.organization_id == admin.organization_id,
+            models.Apartment.is_display.is_(False),
+            or_(
+                models.Apartment.root_id == root_id,
+                models.Apartment.id == root_id,
+            ),
+        )
+        .order_by(
+            models.Apartment.last_edit.desc().nullslast(), models.Apartment.id.desc()
+        )
+        .all()
+    )
+    out = []
+    for v in versions:
+        item = ApartmentVersionOut.model_validate(v)
+        item.editor_name = v.editor.full_name if v.editor else None
+        out.append(item)
+    return out
+
+
 @router.get("/{apartment_id}", response_model=ApartmentOut)
 def get_apartment(
     apartment_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    return _get_or_404(apartment_id, current_user.organization_id, db)
+    a = _get_or_404(apartment_id, current_user.organization_id, db)
+    # fixes19 §3: historical versions are admin-only (the mekurav-facing views
+    # must never see anything but the current version).
+    if not a.is_display and current_user.role != "admin":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Apartment not found")
+    return a
 
 
 @router.put("/{apartment_id}", response_model=ApartmentOut)
@@ -387,16 +476,50 @@ def update_apartment(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    a = _get_or_404(apartment_id, current_user.organization_id, db)
+    """Versioned update (fixes19 §3): the current row is retired
+    (is_display=False + last_edit/editor_id stamp) and a new active row with the
+    updated values is inserted and returned. References from mekurav contacts
+    follow the new row."""
+    org_id = current_user.organization_id
+    a = _get_or_404(apartment_id, org_id, db)
+    if not a.is_display:
+        # Historical snapshots are immutable.
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Apartment not found")
     data = payload.model_dump(exclude_unset=True)
     if "building_id" in data and data["building_id"] is not None:
-        _validate_building(data["building_id"], current_user.organization_id, db)
-    _validate_apartment_picklists(data, current_user.organization_id, db)
+        _validate_building(data["building_id"], org_id, db)
+    _validate_apartment_picklists(data, org_id, db)
+    _validate_report_number(data, org_id, db)
+
+    # 1. Retire the current version.
+    a.is_display = False
+    a.last_edit = datetime.datetime.utcnow()
+    a.editor_id = current_user.id
+
+    # 2. Insert the new active version (copy + updates applied). The original
+    #    created_at is carried over — it's the apartment's creation date, not
+    #    the version's.
+    values = {col: getattr(a, col) for col in _VERSIONED_COLUMNS}
     for field, value in data.items():
-        setattr(a, field, value)
+        values[field] = value
+    new = models.Apartment(
+        **values,
+        organization_id=org_id,
+        is_display=True,
+        root_id=a.root_id or a.id,
+        created_at=a.created_at,
+    )
+    db.add(new)
+    db.flush()
+
+    # 3. Contact links follow the active version.
+    db.query(models.ContactMekurav).filter(
+        models.ContactMekurav.apartment_id == a.id
+    ).update({models.ContactMekurav.apartment_id: new.id}, synchronize_session=False)
+
     db.commit()
-    db.refresh(a)
-    return a
+    db.refresh(new)
+    return new
 
 
 @router.delete("/{apartment_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -406,5 +529,20 @@ def delete_apartment(
     admin: models.User = Depends(require_admin),
 ):
     a = _get_or_404(apartment_id, admin.organization_id, db)
-    db.delete(a)
+    # fixes19: remove the whole lineage — historical versions must not linger
+    # (invisibly) after their apartment is gone.
+    root_id = a.root_id or a.id
+    lineage = (
+        db.query(models.Apartment)
+        .filter(
+            models.Apartment.organization_id == admin.organization_id,
+            or_(
+                models.Apartment.root_id == root_id,
+                models.Apartment.id == root_id,
+            ),
+        )
+        .all()
+    )
+    for row in lineage:
+        db.delete(row)
     db.commit()

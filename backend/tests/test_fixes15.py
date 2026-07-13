@@ -127,7 +127,7 @@ class TestContactGeoFilters:
             name="פעיל א",
             contact_type="shliach",
             email="sh1@x.com",
-            shliach={"apartment_ids": [ap["id"]], "area_ids": [area1["id"]]},
+            shliach={"area_ids": [area1["id"]]},
         )
         _mk_contact(
             client,
@@ -141,6 +141,8 @@ class TestContactGeoFilters:
             client, admin_headers, f"?contact_type=shliach&area_ids={area1['id']}"
         )
         assert [c["id"] for c in by_area["items"]] == [sh1["id"]]
+        # fixes19: a building filter matches shluchim covering the building's
+        # area (the apartment-coverage bridge is gone).
         by_building = _list(
             client, admin_headers, f"?contact_type=shliach&building_ids={b1['id']}"
         )
@@ -241,24 +243,8 @@ class TestApartmentFilters:
         )
         assert {a["id"] for a in r.json()["items"]} == {ap1["id"], ap2["id"]}
 
-    def test_shliach_contact_id_filter(self, client, admin_headers):
-        a1 = _mk_area(client, admin_headers, "מרכז")
-        b1 = _mk_building(client, admin_headers, a1["id"], "5 Mid St, City")
-        ap1 = _mk_apartment(client, admin_headers, b1["id"], apartment_name="1")
-        _mk_apartment(client, admin_headers, b1["id"], apartment_name="2")
-        sh = _mk_contact(
-            client,
-            admin_headers,
-            name="פעיל",
-            contact_type="shliach",
-            email="cover@x.com",
-            shliach={"apartment_ids": [ap1["id"]]},
-        )
-        r = client.get(
-            f"/api/apartments/list?shliach_contact_id={sh['id']}",
-            headers=admin_headers,
-        )
-        assert [a["id"] for a in r.json()["items"]] == [ap1["id"]]
+    # fixes19: the shliach_contact_id filter (and the covered-apartments grid
+    # it fed) was removed together with the shliach↔apartment bridge.
 
 
 # --- §2.2 superadmin user dependencies -------------------------------------------
@@ -292,8 +278,10 @@ class TestUserDependencies:
         self, client, admin_headers, superadmin_headers, db_session
     ):
         area = _mk_area(client, admin_headers, "תלוי")
-        b = _mk_building(client, admin_headers, area["id"], "7 Dep St, City")
-        ap = _mk_apartment(client, admin_headers, b["id"], apartment_name="1")
+        # fixes19: coverage ties are report numbers, not apartments.
+        rn = client.post(
+            "/api/report-numbers", json={"name": "דוח 15"}, headers=admin_headers
+        ).json()
         sh = _mk_contact(
             client,
             admin_headers,
@@ -301,7 +289,7 @@ class TestUserDependencies:
             last_name="פעילי",
             contact_type="shliach",
             email="dep@x.com",
-            shliach={"apartment_ids": [ap["id"]], "area_ids": [area["id"]]},
+            shliach={"report_number_ids": [rn["id"]], "area_ids": [area["id"]]},
         )
         user_id = (
             db_session.query(models.ContactShliach)
@@ -317,7 +305,7 @@ class TestUserDependencies:
         assert body["has_dependencies"] is True
         assert body["shliach_contact_id"] == sh["id"]
         assert "נח" in body["shliach_contact_name"]
-        assert body["covered_apartments"] == 1
+        assert body["covered_report_numbers"] == 1
         assert body["covered_areas"] == 1
 
     def test_clean_user_reports_none(self, client, superadmin_headers, db_session):

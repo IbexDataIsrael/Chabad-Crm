@@ -111,7 +111,7 @@ def test_org_delete_purges_every_org_scoped_table(
             "phone": f"050-88{_phone[0]:05d}",
             "contact_type": "shliach",
             "email": "cascade.sh@example.com",
-            "shliach": {"area_ids": [area["id"]], "apartment_ids": []},
+            "shliach": {"area_ids": [area["id"]]},
         },
         headers=admin_headers,
     )

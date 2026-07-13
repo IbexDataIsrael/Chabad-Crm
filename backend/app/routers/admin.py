@@ -108,7 +108,7 @@ def _delete_organization_cascade(db: Session, org_id: int) -> None:
         models.ContactPicklistValue,
         models.ContactMekuravSpecialDate,
         models.SignificantDateReminder,
-        models.ContactShliachApartment,
+        models.ReportNumberContactShliach,
         models.ContactShliachArea,
         models.VisitHistory,
         models.Donation,
@@ -120,6 +120,7 @@ def _delete_organization_cascade(db: Session, org_id: int) -> None:
         models.PicklistDefinition,
         models.SignificantDate,
         models.Apartment,
+        models.ReportNumber,  # after Apartment, which references it
         models.Floor,  # before Building (FK); DB-level cascade only covers PG
         models.Building,
         models.Area,
@@ -357,7 +358,7 @@ def user_dependencies(
             out.shliach_contact_name = " ".join(
                 filter(None, [shliach.contact.last_name, shliach.contact.name])
             )
-        out.covered_apartments = len(shliach.apartments)
+        out.covered_report_numbers = len(shliach.report_numbers)
         out.covered_areas = len(shliach.areas)
     out.has_dependencies = bool(
         assigned

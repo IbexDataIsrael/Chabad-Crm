@@ -42,6 +42,9 @@ function AddBuildingInner() {
   const [coords, setCoords] = useState("");
   // fixes8 §1A: new buildings start with 8 floors unless the user overrides.
   const [numFloors, setNumFloors] = useState("8");
+  // fixes19 §4: a town house (בית פרטי) skips floor generation entirely — the
+  // server spawns a single "<name>-th" apartment instead.
+  const [isTownHouse, setIsTownHouse] = useState(false);
   const [error, setError] = useState("");
   // Geofence interceptor (fixes7 §7B).
   const [geoWarning, setGeoWarning] = useState(false);
@@ -98,7 +101,7 @@ function AddBuildingInner() {
     setBusy(true);
     const n = Number(numFloors);
     const floors =
-      Number.isFinite(n) && n > 0
+      !isTownHouse && Number.isFinite(n) && n > 0
         ? Array.from({ length: Math.min(n, 200) }, (_, i) => String(i + 1))
         : [];
     try {
@@ -110,6 +113,7 @@ function AddBuildingInner() {
           building_address: address,
           latitude: lat,
           longitude: lng,
+          is_town_house: isTownHouse,
           floors,
         }),
       });
@@ -203,23 +207,41 @@ function AddBuildingInner() {
                 {t("buildings.coords_hint", "פורמט: longitude,latitude — לדוגמה 35.2137,31.7683")}
               </span>
             </label>
-            <label className="block space-y-1">
-              <span className="block text-sm font-medium">{t("buildings.num_floors", "מספר קומות")}</span>
+            {/* fixes19 §4: town house — no floors, one auto apartment. */}
+            <label className="flex items-center gap-2 text-sm sm:col-span-2">
               <input
-                type="number"
-                min="0"
-                dir="ltr"
-                className={inputClass}
-                value={numFloors}
-                onChange={(e) => setNumFloors(e.target.value)}
+                type="checkbox"
+                checked={isTownHouse}
+                onChange={(e) => setIsTownHouse(e.target.checked)}
               />
-              <span className="block text-xs text-gray-400">
-                {t(
-                  "buildings.num_floors_hint",
-                  "בעת יצירת הבניין ייווצרו קומות 1 עד המספר שנבחר.",
-                )}
-              </span>
+              {t("buildings.is_town_house", "בית פרטי")}
             </label>
+            {isTownHouse ? (
+              <p className="text-xs text-gray-400 sm:col-span-2">
+                {t(
+                  "buildings.town_house_hint",
+                  "בבית פרטי לא נוצרות קומות — נוצרת דירה אחת אוטומטית.",
+                )}
+              </p>
+            ) : (
+              <label className="block space-y-1">
+                <span className="block text-sm font-medium">{t("buildings.num_floors", "מספר קומות")}</span>
+                <input
+                  type="number"
+                  min="0"
+                  dir="ltr"
+                  className={inputClass}
+                  value={numFloors}
+                  onChange={(e) => setNumFloors(e.target.value)}
+                />
+                <span className="block text-xs text-gray-400">
+                  {t(
+                    "buildings.num_floors_hint",
+                    "בעת יצירת הבניין ייווצרו קומות 1 עד המספר שנבחר.",
+                  )}
+                </span>
+              </label>
+            )}
           </div>
 
           {geoWarning && (

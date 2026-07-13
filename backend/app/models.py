@@ -262,8 +262,8 @@ class ContactShliach(Base):
 
     contact = relationship("Contact", back_populates="shliach")
     user = relationship("User")
-    apartments = relationship(
-        "ContactShliachApartment",
+    report_numbers = relationship(
+        "ReportNumberContactShliach",
         back_populates="shliach",
         cascade="all, delete-orphan",
     )
@@ -274,13 +274,35 @@ class ContactShliach(Base):
     )
 
 
-class ContactShliachApartment(Base):
-    """M2M: which apartments a shliach covers."""
+class ReportNumber(Base):
+    """A report number (מספר דוח, fixes19) — an org-scoped named entity that
+    shluchim (M2M) and apartments (FK) are associated with."""
 
-    __tablename__ = "contact_shliach_apartment"
+    __tablename__ = "report_number"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    name = Column(String(150), nullable=False)  # שם
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    shluchim = relationship(
+        "ReportNumberContactShliach",
+        back_populates="report_number",
+        cascade="all, delete-orphan",
+    )
+
+
+class ReportNumberContactShliach(Base):
+    """M2M: which report numbers a shliach covers (fixes19 — replaces the
+    dropped contact_shliach_apartment coverage)."""
+
+    __tablename__ = "report_number_contact_shliach"
     __table_args__ = (
         UniqueConstraint(
-            "contact_shliach_id", "apartment_id", name="uq_shliach_apartment"
+            "report_number_id", "contact_shliach_id", name="uq_report_shliach"
         ),
     )
 
@@ -289,15 +311,21 @@ class ContactShliachApartment(Base):
     organization_id = Column(
         Integer, ForeignKey("organizations.id"), nullable=False, index=True
     )
-    contact_shliach_id = Column(
-        Integer, ForeignKey("contact_shliach.id"), nullable=False, index=True
+    report_number_id = Column(
+        Integer,
+        ForeignKey("report_number.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
-    apartment_id = Column(
-        Integer, ForeignKey("apartments.id"), nullable=False, index=True
+    contact_shliach_id = Column(
+        Integer,
+        ForeignKey("contact_shliach.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
-    shliach = relationship("ContactShliach", back_populates="apartments")
-    apartment = relationship("Apartment", back_populates="shluchim")
+    report_number = relationship("ReportNumber", back_populates="shluchim")
+    shliach = relationship("ContactShliach", back_populates="report_numbers")
 
 
 class ContactShliachArea(Base):
@@ -373,6 +401,11 @@ class Building(Base):
     building_address = Column(Text, nullable=True)  # כתובת בניין (required at the API)
     longitude = Column(Float, nullable=True)
     latitude = Column(Float, nullable=True)
+    # fixes19 §4: a town house (בית פרטי) gets no floors — creation spawns a
+    # single "<name>-th" apartment instead.
+    is_town_house = Column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     area = relationship("Area", back_populates="buildings")
@@ -412,6 +445,12 @@ class Floor(Base):
 
 
 class Apartment(Base):
+    """An apartment. Versioned (fixes19 §3): an update retires the current row
+    (`is_display=False`, stamped with `last_edit`/`editor_id`) and inserts a new
+    active row. `root_id` chains every version to the lineage's first row
+    (NULL = the row is its own root); exactly one row per lineage has
+    `is_display=True`."""
+
     __tablename__ = "apartments"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -433,11 +472,32 @@ class Apartment(Base):
     name = Column(String(150), nullable=True)  # שם דייר (resident)
     phone = Column(String(50), nullable=True)  # טלפון (validated at the API)
     email = Column(String(255), nullable=True)  # אימייל (validated at the API)
+    # fixes19 §1: linked report number (מספר דוח).
+    report_number_id = Column(
+        Integer, ForeignKey("report_number.id"), nullable=True, index=True
+    )
+    # fixes19 §3 — versioning columns. Both FKs SET NULL at the DB level:
+    # editor_id must never block a user delete, and root_id is self-referential
+    # — bulk/cascade deletes would otherwise trip over row ordering.
+    is_display = Column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+    last_edit = Column(DateTime, nullable=True)  # when this version was retired
+    editor_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )  # who retired it
+    root_id = Column(
+        Integer,
+        ForeignKey("apartments.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     building = relationship("Building", back_populates="apartments")
     mekuravim = relationship("ContactMekurav", back_populates="apartment")
-    shluchim = relationship("ContactShliachApartment", back_populates="apartment")
+    report_number = relationship("ReportNumber")
+    editor = relationship("User", foreign_keys=[editor_id])
 
 
 class SignificantDate(Base):

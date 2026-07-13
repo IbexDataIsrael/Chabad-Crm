@@ -190,7 +190,7 @@ class AdminUserDependenciesOut(BaseModel):
     interactions: int = 0
     shliach_contact_id: Optional[int] = None
     shliach_contact_name: Optional[str] = None
-    covered_apartments: int = 0
+    covered_report_numbers: int = 0  # fixes19 (was covered apartments)
     covered_areas: int = 0
     has_dependencies: bool = False
 
@@ -399,6 +399,39 @@ class AdminAreaOut(BaseModel):
     created_at: Optional[datetime] = None  # feeds date sorting (fixes15 §6)
 
 
+# --- Report numbers (מספר דוח, fixes19) -------------------------------------
+class ReportNumberCreate(BaseModel):
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def _check_name(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Name is required")
+        return v.strip()
+
+
+class ReportNumberUpdate(BaseModel):
+    name: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def _check_name(cls, v: Optional[str]) -> Optional[str]:
+        # An explicit empty name is rejected; omitting the field is fine.
+        if v is not None and not v.strip():
+            raise ValueError("Name is required")
+        return v.strip() if v is not None else None
+
+
+class ReportNumberOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    guid: str
+    name: str
+    created_at: Optional[datetime] = None
+
+
 # --- Areas / Buildings / Apartments ----------------------------------------
 class AreaBase(BaseModel):
     area_name: str
@@ -456,6 +489,8 @@ class BuildingBase(BaseModel):
     building_address: str
     longitude: Optional[float] = None
     latitude: Optional[float] = None
+    # fixes19 §4: town house (בית פרטי) — no floors, one auto "<name>-th" unit.
+    is_town_house: bool = False
 
     @field_validator("building_address")
     @classmethod
@@ -480,6 +515,7 @@ class BuildingUpdate(BaseModel):
     building_address: Optional[str] = None
     longitude: Optional[float] = None
     latitude: Optional[float] = None
+    is_town_house: Optional[bool] = None
 
     @field_validator("building_address")
     @classmethod
@@ -500,6 +536,7 @@ class BuildingOut(BaseModel):
     building_address: Optional[str] = None
     longitude: Optional[float] = None
     latitude: Optional[float] = None
+    is_town_house: bool = False
     floors: list[FloorOut] = []
 
 
@@ -536,6 +573,7 @@ class ApartmentBase(BaseModel):
     name: Optional[str] = None  # resident name
     phone: Optional[str] = None
     email: Optional[str] = None
+    report_number_id: Optional[int] = None  # מספר דוח (fixes19)
 
     @field_validator("phone")
     @classmethod
@@ -565,6 +603,7 @@ class ApartmentUpdate(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+    report_number_id: Optional[int] = None
 
     @field_validator("phone")
     @classmethod
@@ -593,6 +632,18 @@ class ApartmentOut(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+    report_number_id: Optional[int] = None
+    # Versioning metadata (fixes19 §3):
+    is_display: bool = True
+    last_edit: Optional[datetime] = None
+    root_id: Optional[int] = None
+
+
+class ApartmentVersionOut(ApartmentOut):
+    """One historical apartment version (admin history view, fixes19 §3):
+    the full snapshot plus who retired it and when."""
+
+    editor_name: Optional[str] = None
 
 
 class ApartmentListOut(ApartmentOut):
@@ -695,7 +746,9 @@ class MekuravOut(MekuravData):
 
 class ShliachData(BaseModel):
     notes: Optional[str] = None
-    apartment_ids: list[int] = []
+    # fixes19: shluchim are associated with report numbers (the apartment
+    # coverage bridge was dropped).
+    report_number_ids: list[int] = []
     area_ids: list[int] = []
     # fixes14: optional password for the shliach's login user. Without one the
     # account is Google-only — which locks the shliach out entirely when
@@ -710,7 +763,7 @@ class ShliachOut(BaseModel):
     contact_id: int
     user_id: Optional[int] = None
     notes: Optional[str] = None
-    apartment_ids: list[int] = []
+    report_number_ids: list[int] = []
     area_ids: list[int] = []
 
 

@@ -15,6 +15,9 @@ row means "use the field's default", so no org backfill is ever needed.
 """
 
 TOGGLEABLE_FIELDS: list[tuple[str, str, str]] = [
+    # fixes19 §5: the entire mekurav layout area (one section-level switch,
+    # hidden by default — see DEFAULT_HIDDEN).
+    ("contact_mekurav.section", "contact_mekurav.section", "contact_mekurav"),
     # Core contact
     ("contacts.last_name", "contacts.last_name", "contact"),
     ("contacts.email", "contacts.email", "contact"),
@@ -59,7 +62,12 @@ TOGGLEABLE_FIELDS: list[tuple[str, str, str]] = [
     ("language", "picklist.language", "contact_mekurav"),
     # Shliach-specific
     ("contact_shliach.areas", "contact_shliach.areas", "contact_shliach"),
-    ("contact_shliach.apartments", "contact_shliach.apartments", "contact_shliach"),
+    # fixes19: report numbers replace the apartment coverage links.
+    (
+        "contact_shliach.report_numbers",
+        "contact_shliach.report_numbers",
+        "contact_shliach",
+    ),
     ("contact_shliach.notes", "contact_shliach.notes", "contact_shliach"),
     # Building (fixes7 §2)
     ("buildings.building_name", "buildings.building_name", "building"),
@@ -74,6 +82,8 @@ TOGGLEABLE_FIELDS: list[tuple[str, str, str]] = [
     ("apartment.campaign_status", "picklist.apartment.campaign_status", "apartment"),
     ("apartment.mezuzah_status", "picklist.apartment.mezuzah_status", "apartment"),
     ("apartment.language", "picklist.apartment.language", "apartment"),  # fixes13
+    # fixes19: linked report number (מספר דוח).
+    ("apartments.report_number_id", "apartments.report_number_id", "apartment"),
 ]
 
 # Fields concealed by default (an explicit field_settings row overrides this).
@@ -83,6 +93,9 @@ TOGGLEABLE_FIELDS: list[tuple[str, str, str]] = [
 # visible by default again (hotfix after fixes12).
 DEFAULT_HIDDEN: set[str] = {
     "buildings.building_name",
+    # fixes19 §5: the mekurav layout area ships invisible; an admin opts the
+    # org in from the fields configuration page.
+    "contact_mekurav.section",
 }
 
 TOGGLEABLE_KEYS: set[str] = {f[0] for f in TOGGLEABLE_FIELDS}

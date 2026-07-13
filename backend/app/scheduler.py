@@ -44,7 +44,11 @@ def _fire_at(
 
 
 def _recipients(db: Session, sd: models.SignificantDate) -> list[str]:
-    """Assigned user(s) and covering shliach(s) of the mekuravim on this date."""
+    """Assigned user(s) and covering shliach(s) of the mekuravim on this date.
+
+    fixes19: the shliach↔apartment bridge is gone — a shliach covers the
+    mekurav when their covered areas include the area of the mekurav's
+    apartment's building."""
     emails: set[str] = set()
     for link in sd.mekuravim:
         contact = link.mekurav.contact
@@ -59,12 +63,20 @@ def _recipients(db: Session, sd: models.SignificantDate) -> list[str]:
                     models.ContactShliach.user_id == models.User.id,
                 )
                 .join(
-                    models.ContactShliachApartment,
-                    models.ContactShliachApartment.contact_shliach_id
+                    models.ContactShliachArea,
+                    models.ContactShliachArea.contact_shliach_id
                     == models.ContactShliach.id,
                 )
+                .join(
+                    models.Building,
+                    models.Building.area_id == models.ContactShliachArea.area_id,
+                )
+                .join(
+                    models.Apartment,
+                    models.Apartment.building_id == models.Building.id,
+                )
                 .filter(
-                    models.ContactShliachApartment.apartment_id == apartment_id,
+                    models.Apartment.id == apartment_id,
                     models.User.email.isnot(None),
                 )
                 .all()
