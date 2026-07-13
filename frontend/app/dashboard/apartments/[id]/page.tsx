@@ -25,7 +25,7 @@ import {
  *  (fixes7 §2 — fetch detail, edit button → form → PUT → refreshed view). */
 export default function ApartmentDetailPage() {
   const router = useRouter();
-  const { loading, isAdmin, isShliach } = useAuth();
+  const { loading, isAdmin } = useAuth();
   const { t } = useLocalization();
   const { isFieldVisible: vis } = useFieldSettings();
   const { success } = useToast();
@@ -92,6 +92,21 @@ export default function ApartmentDetailPage() {
     router.push("/dashboard/apartments");
   }
 
+  // fixes22 §2: roll one field back to the selected historical version. The
+  // restore is itself a versioned edit → a new active apartment id, so follow it.
+  async function restoreField(fieldKey: string) {
+    if (!snapshot) return;
+    const updated = await apiFetch<Apartment>(
+      `/api/apartments/${apartmentId}/restore-field`,
+      {
+        method: "POST",
+        body: JSON.stringify({ version_id: snapshot.id, field: fieldKey }),
+      },
+    );
+    success(t("apt.field_restored", "השדה שוחזר"));
+    router.push(`/dashboard/apartments/${updated.id}`);
+  }
+
   if (loading || !loaded) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
   if (error || !apt) {
     return (
@@ -130,8 +145,10 @@ export default function ApartmentDetailPage() {
         </Link>
         <div className="flex items-center gap-2">
           {/* fixes12 §2.4: this page is a clean read-only reference view —
-              editing lives on the dedicated /apartments/edit/{id} route. */}
-          {!isShliach && (
+              editing lives on the dedicated /apartments/edit/{id} route.
+              fixes22 §2: shluchim may now edit apartments assigned to them
+              (the backend scopes their edits + versions them like anyone's). */}
+          {(
             <Link
               href={`/dashboard/apartments/edit/${apartmentId}?return=${encodeURIComponent(
                 `/dashboard/apartments/${apartmentId}`,
@@ -277,25 +294,33 @@ export default function ApartmentDetailPage() {
                       {t("apt.history_back_current", "חזרה לגרסה הנוכחית")}
                     </button>
                   </div>
+                  {/* fixes22 §2: each field can be restored to this version's
+                      value (a new active version is created on restore). */}
+                  <p className="text-xs text-gray-400">
+                    {t("apt.restore_hint", "לחץ \"שחזר\" ליד שדה כדי להחזיר את ערכו לגרסה זו.")}
+                  </p>
                   <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                    <SnapRow label={t("apartments.apartment_name", "מספר דירה")} value={snapshot.apartment_name} />
-                    <SnapRow label={t("apartments.floor", "קומה")} value={snapshot.floor} />
-                    <SnapRow label={t("apartments.name", "שם דייר")} value={snapshot.name} />
-                    <SnapRow label={t("apartments.phone", "טלפון")} value={snapshot.phone} dir="ltr" />
-                    <SnapRow label={t("apartments.email", "אימייל")} value={snapshot.email} dir="ltr" />
-                    <SnapRow label={t("picklist.apartment.Jewish_status", "יהדות")} value={jewishLabel(snapshot.jewish_status)} />
-                    <SnapRow label={t("picklist.apartment.campaign_status", "סטטוס קמפיין")} value={campaignLabel(snapshot.campaign_status)} />
-                    <SnapRow label={t("picklist.apartment.mezuzah_status", "מזוזה")} value={mezuzahLabel(snapshot.mezuzah_status)} />
-                    <SnapRow label={t("picklist.apartment.language", "שפה")} value={languageLabel(snapshot.language)} />
+                    <SnapRow label={t("apartments.apartment_name", "מספר דירה")} value={snapshot.apartment_name} field="apartment_name" onRestore={restoreField} t={t} />
+                    <SnapRow label={t("apartments.floor", "קומה")} value={snapshot.floor} field="floor" onRestore={restoreField} t={t} />
+                    <SnapRow label={t("apartments.name", "שם דייר")} value={snapshot.name} field="name" onRestore={restoreField} t={t} />
+                    <SnapRow label={t("apartments.phone", "טלפון")} value={snapshot.phone} dir="ltr" field="phone" onRestore={restoreField} t={t} />
+                    <SnapRow label={t("apartments.email", "אימייל")} value={snapshot.email} dir="ltr" field="email" onRestore={restoreField} t={t} />
+                    <SnapRow label={t("picklist.apartment.Jewish_status", "יהדות")} value={jewishLabel(snapshot.jewish_status)} field="jewish_status" onRestore={restoreField} t={t} />
+                    <SnapRow label={t("picklist.apartment.campaign_status", "סטטוס קמפיין")} value={campaignLabel(snapshot.campaign_status)} field="campaign_status" onRestore={restoreField} t={t} />
+                    <SnapRow label={t("picklist.apartment.mezuzah_status", "מזוזה")} value={mezuzahLabel(snapshot.mezuzah_status)} field="mezuzah_status" onRestore={restoreField} t={t} />
+                    <SnapRow label={t("picklist.apartment.language", "שפה")} value={languageLabel(snapshot.language)} field="language" onRestore={restoreField} t={t} />
                     <SnapRow
                       label={t("apartments.report_number_id", "מספר דוח")}
                       value={
                         reportNumbers.find((rn) => rn.id === snapshot.report_number_id)
                           ?.name ?? null
                       }
+                      field="report_number_id"
+                      onRestore={restoreField}
+                      t={t}
                     />
                     <div className="sm:col-span-2">
-                      <SnapRow label={t("apartments.apartment_notes", "הערות")} value={snapshot.apartment_notes} />
+                      <SnapRow label={t("apartments.apartment_notes", "הערות")} value={snapshot.apartment_notes} field="apartment_notes" onRestore={restoreField} t={t} />
                     </div>
                   </dl>
                 </div>
@@ -323,19 +348,48 @@ export default function ApartmentDetailPage() {
   );
 }
 
-/** One label/value row of a read-only historical snapshot (fixes19 §3). */
+/** One label/value row of a read-only historical snapshot (fixes19 §3), with an
+ *  optional per-field Restore action (fixes22 §2). */
 function SnapRow({
   label,
   value,
   dir,
+  field,
+  onRestore,
+  t,
 }: {
   label: string;
   value: string | null | undefined;
   dir?: "ltr";
+  field?: string;
+  onRestore?: (field: string) => Promise<void>;
+  t?: (key: string, fallback?: string) => string;
 }) {
+  const [busy, setBusy] = useState(false);
+  async function restore() {
+    if (!field || !onRestore) return;
+    setBusy(true);
+    try {
+      await onRestore(field);
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <div>
-      <dt className="text-gray-500">{label}</dt>
+      <dt className="text-gray-500 flex items-center justify-between gap-2">
+        <span>{label}</span>
+        {field && onRestore && (
+          <button
+            type="button"
+            onClick={restore}
+            disabled={busy}
+            className="text-[11px] text-status-magenta hover:underline disabled:opacity-50"
+          >
+            {busy ? "…" : t?.("apt.restore", "שחזר") ?? "Restore"}
+          </button>
+        )}
+      </dt>
       <dd className="font-medium" dir={dir}>
         {value || "—"}
       </dd>

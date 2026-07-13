@@ -29,6 +29,7 @@ from app.schemas import (
     ApartmentListOut,
     ApartmentOut,
     ApartmentPageOut,
+    ApartmentRestoreField,
     ApartmentUpdate,
     ApartmentVersionOut,
 )
@@ -477,6 +478,55 @@ def apartment_history(
     return out
 
 
+# Data columns an admin may roll back per-field (building_id is excluded — a
+# restore should not silently move an apartment to a different building).
+_RESTORABLE_FIELDS = tuple(c for c in _VERSIONED_COLUMNS if c != "building_id")
+
+
+@router.post("/{apartment_id}/restore-field", response_model=ApartmentOut)
+def restore_apartment_field(
+    apartment_id: int,
+    payload: ApartmentRestoreField,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    """fixes22 §2: roll one field of the active apartment back to the value it
+    held in a previous version. Applied as a normal versioned edit — a new
+    active version is created carrying the restored field, and the pre-restore
+    state itself becomes a history entry. Admin only."""
+    org_id = admin.organization_id
+    active = _get_or_404(apartment_id, org_id, db)
+    if not active.is_display:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Apartment not found")
+    if payload.field not in _RESTORABLE_FIELDS:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, f"field '{payload.field}' cannot be restored"
+        )
+    # The source version must belong to this apartment's lineage.
+    root_id = active.root_id or active.id
+    version = (
+        db.query(models.Apartment)
+        .filter(
+            models.Apartment.id == payload.version_id,
+            models.Apartment.organization_id == org_id,
+            or_(
+                models.Apartment.root_id == root_id,
+                models.Apartment.id == root_id,
+            ),
+        )
+        .first()
+    )
+    if not version:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "version not found in this apartment's history"
+        )
+    restored_value = getattr(version, payload.field)
+    changes = {payload.field: restored_value}
+    _validate_apartment_picklists(changes, org_id, db)
+    _validate_report_number(changes, org_id, db)
+    return _apply_versioned_update(db, active, changes, admin)
+
+
 @router.get("/{apartment_id}", response_model=ApartmentOut)
 def get_apartment(
     apartment_id: int,
@@ -491,6 +541,39 @@ def get_apartment(
     return a
 
 
+def _apply_versioned_update(
+    db: Session,
+    active: models.Apartment,
+    changes: dict,
+    editor: models.User,
+) -> models.Apartment:
+    """Core of the fixes19 §3 versioning: retire the active row (is_display=False
+    + last_edit/editor_id stamp) and insert a new active row carrying `changes`.
+    Mekurav contact links follow the new row. Commits and returns the new row."""
+    org_id = active.organization_id
+    active.is_display = False
+    active.last_edit = datetime.datetime.utcnow()
+    active.editor_id = editor.id
+
+    values = {col: getattr(active, col) for col in _VERSIONED_COLUMNS}
+    values.update(changes)  # the original created_at is carried over below
+    new = models.Apartment(
+        **values,
+        organization_id=org_id,
+        is_display=True,
+        root_id=active.root_id or active.id,
+        created_at=active.created_at,
+    )
+    db.add(new)
+    db.flush()
+    db.query(models.ContactMekurav).filter(
+        models.ContactMekurav.apartment_id == active.id
+    ).update({models.ContactMekurav.apartment_id: new.id}, synchronize_session=False)
+    db.commit()
+    db.refresh(new)
+    return new
+
+
 @router.put("/{apartment_id}", response_model=ApartmentOut)
 def update_apartment(
     apartment_id: int,
@@ -501,47 +584,25 @@ def update_apartment(
     """Versioned update (fixes19 §3): the current row is retired
     (is_display=False + last_edit/editor_id stamp) and a new active row with the
     updated values is inserted and returned. References from mekurav contacts
-    follow the new row."""
+    follow the new row. fixes22 §2: a shliach may edit only apartments assigned
+    to them (their edits version + stamp editor_id like anyone else's)."""
     org_id = current_user.organization_id
     a = _get_or_404(apartment_id, org_id, db)
     if not a.is_display:
         # Historical snapshots are immutable.
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Apartment not found")
+    if current_user.role == "shliach" and a.id not in _shliach_apartment_ids(
+        db, current_user
+    ):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "You can only edit apartments assigned to you"
+        )
     data = payload.model_dump(exclude_unset=True)
     if "building_id" in data and data["building_id"] is not None:
         _validate_building(data["building_id"], org_id, db)
     _validate_apartment_picklists(data, org_id, db)
     _validate_report_number(data, org_id, db)
-
-    # 1. Retire the current version.
-    a.is_display = False
-    a.last_edit = datetime.datetime.utcnow()
-    a.editor_id = current_user.id
-
-    # 2. Insert the new active version (copy + updates applied). The original
-    #    created_at is carried over — it's the apartment's creation date, not
-    #    the version's.
-    values = {col: getattr(a, col) for col in _VERSIONED_COLUMNS}
-    for field, value in data.items():
-        values[field] = value
-    new = models.Apartment(
-        **values,
-        organization_id=org_id,
-        is_display=True,
-        root_id=a.root_id or a.id,
-        created_at=a.created_at,
-    )
-    db.add(new)
-    db.flush()
-
-    # 3. Contact links follow the active version.
-    db.query(models.ContactMekurav).filter(
-        models.ContactMekurav.apartment_id == a.id
-    ).update({models.ContactMekurav.apartment_id: new.id}, synchronize_session=False)
-
-    db.commit()
-    db.refresh(new)
-    return new
+    return _apply_versioned_update(db, a, data, current_user)
 
 
 @router.delete("/{apartment_id}", status_code=status.HTTP_204_NO_CONTENT)

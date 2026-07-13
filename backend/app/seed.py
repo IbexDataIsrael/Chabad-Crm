@@ -630,6 +630,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("logo", "logo.alt", "לוגו הארגון", "Organization logo"),
     ("logo", "logo.upload", "העלה לוגו", "Upload logo"),
     ("logo", "logo.upload_failed", "העלאת הלוגו נכשלה", "Logo upload failed"),
+    ("logo", "logo.uploading", "מעלה לוגו…", "Uploading logo…"),
     ("settings", "settings.map_pick_hint", "לחץ על המפה כדי לבחור את מרכז ברירת המחדל, או גרור את הסמן לכוונון.", "Click the map to pick the default center, or drag the marker to fine-tune."),
     # --- fixes18: searchable selects ---
     ("select", "select.search_ph", "הקלד לחיפוש…", "Type to search…"),
@@ -671,6 +672,10 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("apt", "apt.history_snapshot", "תצוגת גרסה היסטורית (לקריאה בלבד)", "Historical version (read-only)"),
     ("apt", "apt.history_back_current", "חזרה לגרסה הנוכחית", "Back to the current version"),
     ("apt", "apt.history_unknown_editor", "עורך לא ידוע", "Unknown editor"),
+    # fixes22 §2: per-field restore from history.
+    ("apt", "apt.restore", "שחזר", "Restore"),
+    ("apt", "apt.restore_hint", "לחץ \"שחזר\" ליד שדה כדי להחזיר את ערכו לגרסה זו.", "Click \"Restore\" next to a field to roll its value back to this version."),
+    ("apt", "apt.field_restored", "השדה שוחזר", "Field restored"),
     # --- fixes19: town houses ---
     ("column", "buildings.is_town_house", "בית פרטי", "Town house"),
     ("buildings", "buildings.town_house_hint", "בבית פרטי לא נוצרות קומות — נוצרת דירה אחת אוטומטית.", "A town house gets no floors — a single unit is created automatically."),

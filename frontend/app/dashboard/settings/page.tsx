@@ -27,6 +27,9 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // fixes22 §1: block Save while the logo upload is still in flight, so we
+  // never persist the old logo_url over a just-picked (not-yet-uploaded) one.
+  const [logoUploading, setLogoUploading] = useState(false);
 
   useEffect(() => {
     apiFetch<OrgDetails>("/api/organizations/me")
@@ -95,7 +98,11 @@ export default function SettingsPage() {
 
         <div className="space-y-1">
           <span className="block text-sm font-medium">{t("signup.org_logo", "לוגו הארגון")}</span>
-          <LogoUpload value={logoUrl} onChange={setLogoUrl} />
+          <LogoUpload
+            value={logoUrl}
+            onChange={setLogoUrl}
+            onUploadingChange={setLogoUploading}
+          />
         </div>
 
         <label className="flex items-center gap-2 text-sm">
@@ -174,10 +181,14 @@ export default function SettingsPage() {
         <div className="flex items-center gap-3">
           <button
             type="submit"
-            disabled={busy}
+            disabled={busy || logoUploading}
             className="rounded-md bg-status-magenta text-white px-5 py-2 font-medium hover:opacity-90 disabled:opacity-50"
           >
-            {busy ? t("action.saving", "שומר…") : t("action.save", "שמור")}
+            {busy
+              ? t("action.saving", "שומר…")
+              : logoUploading
+                ? t("logo.uploading", "מעלה לוגו…")
+                : t("action.save", "שמור")}
           </button>
           {saved && <span className="text-sm text-status-green">{t("action.saved", "נשמר ✓")}</span>}
         </div>

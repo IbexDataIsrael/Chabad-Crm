@@ -646,6 +646,14 @@ class ApartmentVersionOut(ApartmentOut):
     editor_name: Optional[str] = None
 
 
+class ApartmentRestoreField(BaseModel):
+    """Restore one field of the active apartment to a historical version's value
+    (fixes22 §2 admin per-field restore)."""
+
+    version_id: int  # the historical apartment row to read the value from
+    field: str  # which restorable data column to roll back
+
+
 class ApartmentListOut(ApartmentOut):
     """Apartment enriched with its building/area context + a linked contact (if any)."""
 

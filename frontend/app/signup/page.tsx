@@ -30,6 +30,8 @@ export default function SignupPage() {
   const [done, setDone] = useState(false);
   const [email, setEmail] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  // fixes22 §1: block submit while the logo upload is still in flight.
+  const [logoUploading, setLogoUploading] = useState(false);
   const [form, setForm] = useState({
     organization_name: "",
     first_name: "",
@@ -182,14 +184,14 @@ export default function SignupPage() {
             />
           </Field>
           <Field label={t("signup.org_logo", "לוגו הארגון")}>
-            <LogoUpload value={logoUrl} onChange={setLogoUrl} />
+            <LogoUpload value={logoUrl} onChange={setLogoUrl} onUploadingChange={setLogoUploading} />
           </Field>
           {error && (
             <p className="text-sm text-status-darkred bg-red-50 rounded-md px-3 py-2">{error}</p>
           )}
           <button
             type="submit"
-            disabled={busy}
+            disabled={busy || logoUploading}
             className="w-full rounded-md bg-status-magenta text-white py-2 font-medium hover:opacity-90 disabled:opacity-50"
           >
             {busy ? t("signup.creating", "שולח…") : t("signup.submit_request", "שלח בקשה")}
@@ -219,7 +221,7 @@ export default function SignupPage() {
           />
         </Field>
         <Field label={t("signup.org_logo", "לוגו הארגון")}>
-          <LogoUpload value={logoUrl} onChange={setLogoUrl} />
+          <LogoUpload value={logoUrl} onChange={setLogoUrl} onUploadingChange={setLogoUploading} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label={t("contacts.name", "שם פרטי")}>
@@ -252,7 +254,7 @@ export default function SignupPage() {
         )}
         <button
           type="submit"
-          disabled={busy}
+          disabled={busy || logoUploading}
           className="w-full rounded-md bg-status-magenta text-white py-2 font-medium hover:opacity-90 disabled:opacity-50"
         >
           {busy ? t("signup.creating", "שולח…") : t("signup.submit_request", "שלח בקשה")}

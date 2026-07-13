@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ChangeEvent } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 
 import { uploadLogo } from "@/lib/api";
 import { useLocalization } from "@/lib/localization";
@@ -9,17 +9,28 @@ import { useLocalization } from "@/lib/localization";
  * Organization logo picker. Always a file **upload**: the chosen image is sent
  * to our backend, which stores it on Cloudinary and returns the URL. The value
  * is that Cloudinary URL (or null) — no data URLs, no URL pasting.
+ *
+ * `onUploadingChange` lets the surrounding form disable its Save button while an
+ * upload is in flight — otherwise a user who clicks Save before the upload
+ * finishes persists the *old* value and loses the just-picked logo (fixes22 §1).
  */
 export function LogoUpload({
   value,
   onChange,
+  onUploadingChange,
 }: {
   value: string | null;
   onChange: (url: string | null) => void;
+  onUploadingChange?: (uploading: boolean) => void;
 }) {
   const { t } = useLocalization();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  // Surface the upload-in-progress state to the parent form.
+  useEffect(() => {
+    onUploadingChange?.(busy);
+  }, [busy, onUploadingChange]);
 
   async function onFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
