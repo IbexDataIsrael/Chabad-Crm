@@ -18,6 +18,7 @@ from sqlalchemy import case, func, nullslast, or_, select
 from sqlalchemy.orm import Session
 
 from app import models
+from app.core.shliach import resolve_shliach
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.picklist_utils import validate_picklist_value
@@ -72,12 +73,10 @@ def _shliach_apartment_ids(db: Session, user: models.User) -> list[int]:
     """Apartment ids visible to a shliach user: apartments whose report number
     is assigned to them (fixes20 §4 — the point of the report-number
     association) plus apartments of buildings inside their covered areas
-    (fixes19)."""
-    shliach = (
-        db.query(models.ContactShliach)
-        .filter(models.ContactShliach.user_id == user.id)
-        .first()
-    )
+    (fixes19). fixes21 §1: the shliach contact is resolved by the user_id link
+    *or* by matching email, so an unlinked (e.g. imported) shliach still sees
+    their apartments."""
+    shliach = resolve_shliach(db, user)
     if not shliach:
         return []
     ids: set[int] = set()

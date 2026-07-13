@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.core.geo import point_in_polygon, polygon_ring
+from app.core.shliach import resolve_shliach
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.schemas import AreaCreate, AreaOut, AreaShliachAdd, AreaUpdate, BuildingOut, ContactOut
@@ -28,20 +29,13 @@ def _get_or_404(area_id: int, org_id: int, db: Session) -> models.Area:
 def _shliach_area_ids(user: models.User, db: Session) -> set[int]:
     """Area ids a shliach user covers — assigned directly (contact_shliach_area).
     fixes19: the apartment-coverage bridge is gone, so direct assignment is the
-    only source."""
-    cs_ids = [
-        row[0]
-        for row in db.query(models.ContactShliach.id)
-        .filter(
-            models.ContactShliach.user_id == user.id,
-            models.ContactShliach.organization_id == user.organization_id,
-        )
-        .all()
-    ]
-    if not cs_ids:
+    only source. fixes21 §1: the shliach contact is resolved by the user_id link
+    or by matching email (imported/unlinked shliachim)."""
+    shliach = resolve_shliach(db, user)
+    if not shliach:
         return set()
     direct = db.query(models.ContactShliachArea.area_id).filter(
-        models.ContactShliachArea.contact_shliach_id.in_(cs_ids)
+        models.ContactShliachArea.contact_shliach_id == shliach.id
     )
     return {r[0] for r in direct.all()}
 

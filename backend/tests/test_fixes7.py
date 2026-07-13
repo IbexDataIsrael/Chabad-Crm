@@ -346,8 +346,8 @@ class TestSearchDisplayNames:
         assert building_hits and building_hits[0]["title"] == "770 Eastern Pkwy"
 
         # Apartments are searchable by resident name; the hit title concatenates
-        # "[number] - [floor]" (fixes20 §3).
+        # "[number][floor]" with no separator (fixes21 §2).
         hits = client.get("/api/search?q=כהן", headers=admin_headers).json()["results"]
         apt_hits = [h for h in hits if h["type"] == "apartment"]
-        assert apt_hits and apt_hits[0]["title"] == "A - 1"
+        assert apt_hits and apt_hits[0]["title"] == "A1"
         assert apt_hits[0]["subtitle"] == "770 Eastern Pkwy"

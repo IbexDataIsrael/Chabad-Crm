@@ -238,9 +238,10 @@ export function buildingDisplayName(b: {
 }
 
 /**
- * Computed apartment title (fixes20 §3): concatenate "[apartment number] -
- * [floor]". Both present → "5 - 3"; only one → that one; neither → resident
- * name → id. Mirrors backend core/display.py apartment_title.
+ * Computed apartment title (fixes21 §2): concatenate "[apartment number][floor]"
+ * with no separator — number "A" + floor "2" → "A2". Both present → "A2"; only
+ * one → that one; neither → resident name → id. Mirrors backend
+ * core/display.py apartment_title.
  */
 export function apartmentTitle(a: {
   id: number;
@@ -250,7 +251,7 @@ export function apartmentTitle(a: {
 }): string {
   const label = (a.apartment_name ?? "").trim();
   const floor = (a.floor ?? "").trim();
-  if (label && floor) return `${label} - ${floor}`;
+  if (label && floor) return `${label}${floor}`;
   if (label || floor) return label || floor;
   return (a.name ?? "").trim() || `#${a.id}`;
 }
