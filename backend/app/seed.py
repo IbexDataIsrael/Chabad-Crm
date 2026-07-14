@@ -681,6 +681,23 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("buildings", "buildings.town_house_hint", "בבית פרטי לא נוצרות קומות — נוצרת דירה אחת אוטומטית.", "A town house gets no floors — a single unit is created automatically."),
     # --- fixes19 §5: the mekurav layout-area visibility switch ---
     ("column", "contact_mekurav.section", "אזור פרטי מקורב (כל המקטע)", "Mekurav details area (whole section)"),
+    # --- fixes23 §1/§2: multi-select search filter + apartment filters ---
+    ("filter", "filter.n_of_total", "{n}/{total}", "{n}/{total}"),
+    ("filter", "filter.select_all_shown", "בחר את המוצגים", "Select shown"),
+    ("filter", "filter.search_buildings", "חיפוש בניין…", "Search building…"),
+    ("filter", "filter.search_report_numbers", "חיפוש מספר דוח…", "Search report number…"),
+    # --- fixes23 §3: apartments bulk editing ---
+    ("bulkedit", "bulkedit.open", "עריכה מרובה", "Bulk edit"),
+    ("bulkedit", "bulkedit.open_hint", "עריכה מרובה של כל הדירות המסוננות", "Bulk-edit all filtered apartments"),
+    ("bulkedit", "bulkedit.title", "עריכה מרובה של דירות", "Bulk edit apartments"),
+    ("bulkedit", "bulkedit.intro", "השינויים יחולו על כל {total} הדירות התואמות לסינון הנוכחי.", "Changes apply to all {total} apartments matching the current filters."),
+    ("bulkedit", "bulkedit.set_report", "עדכן מספר דוח", "Update report number"),
+    ("bulkedit", "bulkedit.choose_report", "בחר מספר דוח…", "Choose report number…"),
+    ("bulkedit", "bulkedit.clear_hint", "השאר ריק כדי להסיר את מספר הדוח מהדירות.", "Leave empty to clear the report number from the apartments."),
+    ("bulkedit", "bulkedit.set_notes", "עדכן הערות", "Update notes"),
+    ("bulkedit", "bulkedit.pick_field", "יש לבחור לפחות שדה אחד לעדכון", "Select at least one field to update"),
+    ("bulkedit", "bulkedit.apply", "החל שינויים", "Apply changes"),
+    ("bulkedit", "bulkedit.result", "{n} דירות עודכנו", "{n} apartments updated"),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)

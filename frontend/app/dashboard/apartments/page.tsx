@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
@@ -15,12 +16,14 @@ import { useToast } from "@/lib/toast";
 import {
   apartmentTitle,
   buildingDisplayName,
+  type ApartmentBulkUpdateResult,
   type ApartmentListItem,
   type ApartmentPage,
   type Area,
   type Building,
   type Floor,
   type ReportNumber,
+  type ReportNumberBuildingLink,
 } from "@/lib/types";
 
 const inputClass =
@@ -56,17 +59,23 @@ export default function ApartmentsPage() {
   const [total, setTotal] = useState(0);
   const [areas, setAreas] = useState<Area[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
-  // fixes20 §3: report-number filter source + selection.
+  // fixes20 §3 / fixes23 §2: report-number filter source + multi-selection.
   const [reportNumbers, setReportNumbers] = useState<ReportNumber[]>([]);
-  const [reportNumberId, setReportNumberId] = usePersistentState<number | "">(
-    "crm.apartments.reportNumber", "",
+  const [reportNumberIds, setReportNumberIds] = usePersistentState<number[]>(
+    "crm.apartments.reportNumberIds", [],
   );
+  // fixes23 §2: (report number → building) links drive the conditional building
+  // filter — a building shows only while it holds a matching apartment.
+  const [reportBuildingLinks, setReportBuildingLinks] = useState<
+    ReportNumberBuildingLink[]
+  >([]);
   // fixes15 §1.2: filters/sort/page survive navigation; §7.1: multi-area.
   const [areaIds, setAreaIds] = usePersistentState<number[]>(
     "crm.apartments.areaIds", [],
   );
-  const [filterBuilding, setFilterBuilding] = usePersistentState(
-    "crm.apartments.building", "",
+  // fixes23 §2: multi-select building filter (was single-select).
+  const [buildingIds, setBuildingIds] = usePersistentState<number[]>(
+    "crm.apartments.buildingIds", [],
   );
   // fixes18 §5.2: picklist filters (multi-select technical values).
   const [jewishFilter, setJewishFilter] = usePersistentState<string[]>(
@@ -87,6 +96,7 @@ export default function ApartmentsPage() {
   const [fieldsOpen, setFieldsOpen] = useState(false);
   const [debouncedQ, setDebouncedQ] = useState(query);
   const [batchOpen, setBatchOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [busy, setBusy] = useState(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const language = usePicklist("apartment.language");
@@ -97,8 +107,8 @@ export default function ApartmentsPage() {
   async function reload() {
     const params = new URLSearchParams();
     areaIds.forEach((id) => params.append("area_ids", String(id)));
-    if (filterBuilding) params.set("building_id", filterBuilding);
-    if (reportNumberId !== "") params.set("report_number_ids", String(reportNumberId));
+    buildingIds.forEach((id) => params.append("building_ids", String(id)));
+    reportNumberIds.forEach((id) => params.append("report_number_ids", String(id)));
     jewishFilter.forEach((v) => params.append("jewish_status", v));
     mezuzahFilter.forEach((v) => params.append("mezuzah_status", v));
     if (debouncedQ.trim()) params.set("q", debouncedQ.trim());
@@ -122,6 +132,10 @@ export default function ApartmentsPage() {
     apiFetch<ReportNumber[]>("/api/report-numbers")
       .then(setReportNumbers)
       .catch(() => setReportNumbers([]));
+    // fixes23 §2: which buildings each report number appears in.
+    apiFetch<ReportNumberBuildingLink[]>("/api/apartments/report-number-buildings")
+      .then(setReportBuildingLinks)
+      .catch(() => setReportBuildingLinks([]));
   }, [loading]);
 
   // One server-side page per filter/sort/page change.
@@ -136,7 +150,7 @@ export default function ApartmentsPage() {
       .finally(() => setBusy(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    loading, areaIds, filterBuilding, reportNumberId, jewishFilter, mezuzahFilter,
+    loading, areaIds, buildingIds, reportNumberIds, jewishFilter, mezuzahFilter,
     debouncedQ, sort, dir, page, pageSize,
   ]);
 
@@ -148,21 +162,46 @@ export default function ApartmentsPage() {
     debounceRef.current = setTimeout(() => setDebouncedQ(v), 300);
   }
 
+  // fixes23 §2: buildings that hold an apartment carrying a selected report
+  // number. null = no report filter active, so no building restriction.
+  const buildingIdsForReports =
+    reportNumberIds.length === 0
+      ? null
+      : new Set(
+          reportBuildingLinks
+            .filter((l) => reportNumberIds.includes(l.report_number_id))
+            .map((l) => l.building_id),
+        );
+
   function onAreasChange(ids: number[]) {
     setAreaIds(ids);
-    // Drop a building selection that fell outside the chosen areas.
-    if (
-      filterBuilding &&
-      ids.length > 0 &&
-      !buildings.some((b) => String(b.id) === filterBuilding && ids.includes(b.area_id))
-    ) {
-      setFilterBuilding("");
+    // Drop building selections that fell outside the chosen areas.
+    if (buildingIds.length > 0 && ids.length > 0) {
+      const kept = buildingIds.filter((id) =>
+        buildings.some((b) => b.id === id && ids.includes(b.area_id)),
+      );
+      if (kept.length !== buildingIds.length) setBuildingIds(kept);
     }
     setPage(1);
   }
 
-  function onBuildingChange(v: string) {
-    setFilterBuilding(v);
+  function onBuildingsChange(ids: number[]) {
+    setBuildingIds(ids);
+    setPage(1);
+  }
+
+  function onReportNumbersChange(ids: number[]) {
+    setReportNumberIds(ids);
+    // Drop building selections that no longer contain a matching apartment.
+    if (buildingIds.length > 0 && ids.length > 0) {
+      const allowed = new Set(
+        reportBuildingLinks
+          .filter((l) => ids.includes(l.report_number_id))
+          .map((l) => l.building_id),
+      );
+      const kept = buildingIds.filter((id) => allowed.has(id));
+      if (kept.length !== buildingIds.length) setBuildingIds(kept);
+    }
     setPage(1);
   }
 
@@ -239,7 +278,11 @@ export default function ApartmentsPage() {
   }
 
   const visibleBuildings = buildings.filter(
-    (b) => areaIds.length === 0 || areaIds.includes(b.area_id),
+    (b) =>
+      (areaIds.length === 0 || areaIds.includes(b.area_id)) &&
+      // fixes23 §2: when report numbers are selected, only buildings that hold a
+      // matching apartment remain choosable.
+      (buildingIdsForReports === null || buildingIdsForReports.has(b.id)),
   );
 
   const lastPage = Math.max(1, Math.ceil(total / pageSize));
@@ -285,28 +328,27 @@ export default function ApartmentsPage() {
           value={areaIds}
           onChange={onAreasChange}
         />
-        {/* fixes18 §general: searchable building filter. */}
-        <SearchableSelect
+        {/* fixes23 §2: multi-select searchable building filter. */}
+        <MultiSelectSearchFilter
           className="w-56"
-          value={filterBuilding === "" ? null : Number(filterBuilding)}
-          onChange={(id) => onBuildingChange(id == null ? "" : String(id))}
+          allLabel={t("filter.all_buildings", "כל הבניינים")}
           options={visibleBuildings.map((b) => ({
             id: b.id,
             label: buildingDisplayName(b),
           }))}
-          placeholder={t("filter.all_buildings", "כל הבניינים")}
+          value={buildingIds}
+          onChange={onBuildingsChange}
+          searchPlaceholder={t("filter.search_buildings", "חיפוש בניין…")}
         />
-        {/* fixes20 §3: searchable report-number filter. */}
+        {/* fixes23 §2: multi-select searchable report-number filter. */}
         {reportNumbers.length > 0 && (
-          <SearchableSelect
+          <MultiSelectSearchFilter
             className="w-48"
-            value={reportNumberId === "" ? null : Number(reportNumberId)}
-            onChange={(id) => {
-              setReportNumberId(id == null ? "" : Number(id));
-              setPage(1);
-            }}
+            allLabel={t("filter.all_report_numbers", "כל מספרי הדוח")}
             options={reportNumbers.map((rn) => ({ id: rn.id, label: rn.name }))}
-            placeholder={t("filter.all_report_numbers", "כל מספרי הדוח")}
+            value={reportNumberIds}
+            onChange={onReportNumbersChange}
+            searchPlaceholder={t("filter.search_report_numbers", "חיפוש מספר דוח…")}
           />
         )}
         {/* fixes18 §5.2: Jewish-status + mezuzah picklist filters. */}
@@ -366,6 +408,19 @@ export default function ApartmentsPage() {
         >
           ⚙ {t("columns.fields_configure", "התאמת שדות")}
         </button>
+        {/* fixes23 §3: bulk edit the apartments matching the active filters —
+            enabled only while there are matching rows to change. */}
+        {!isShliach && (
+          <button
+            type="button"
+            onClick={() => setBulkOpen(true)}
+            disabled={busy || total === 0}
+            className="rounded-md border border-status-magenta text-status-magenta px-3 py-2 font-medium hover:bg-status-magenta/10 disabled:opacity-40 disabled:cursor-not-allowed"
+            title={t("bulkedit.open_hint", "עריכה מרובה של כל הדירות המסוננות")}
+          >
+            ✎ {t("bulkedit.open", "עריכה מרובה")}
+          </button>
+        )}
         <span className="ms-auto text-gray-500">{t("pager.page_size", "בעמוד:")}</span>
         <select
           className={inputClass}
@@ -424,6 +479,26 @@ export default function ApartmentsPage() {
           onClose={() => setBatchOpen(false)}
           onDone={async () => {
             setBatchOpen(false);
+            await reload();
+          }}
+        />
+      )}
+
+      {bulkOpen && (
+        <BulkEditModal
+          total={total}
+          reportNumbers={reportNumbers}
+          filters={{
+            building_ids: buildingIds,
+            area_ids: areaIds,
+            report_number_ids: reportNumberIds,
+            jewish_status: jewishFilter,
+            mezuzah_status: mezuzahFilter,
+            q: debouncedQ.trim() || undefined,
+          }}
+          onClose={() => setBulkOpen(false)}
+          onDone={async () => {
+            setBulkOpen(false);
             await reload();
           }}
         />
@@ -738,6 +813,169 @@ function BatchModal({
             className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
             {busy ? t("action.saving", "שומר…") : t("batch.create", "צור דירות")}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+          >
+            {t("action.cancel", "ביטול")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The active-filter snapshot passed to the bulk editor — mirrors the query
+ *  params sent to /api/apartments/list (fixes23 §3). */
+type BulkFilters = {
+  building_ids: number[];
+  area_ids: number[];
+  report_number_ids: number[];
+  jewish_status: string[];
+  mezuzah_status: string[];
+  q?: string;
+};
+
+/** Bulk apartment editor (fixes23 §3): apply a new report number and/or notes
+ *  to *every* apartment matching the page's current filters, in one request.
+ *  Each field carries an explicit "update this field" toggle so an untouched
+ *  field is left alone (rather than silently cleared). */
+function BulkEditModal({
+  total,
+  reportNumbers,
+  filters,
+  onClose,
+  onDone,
+}: {
+  total: number;
+  reportNumbers: ReportNumber[];
+  filters: BulkFilters;
+  onClose: () => void;
+  onDone: () => Promise<void>;
+}) {
+  const { t } = useLocalization();
+  const { success, error: toastError } = useToast();
+  const [updateReport, setUpdateReport] = useState(false);
+  const [reportNumberId, setReportNumberId] = useState<number | null>(null);
+  const [updateNotes, setUpdateNotes] = useState(false);
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function apply() {
+    setError("");
+    if (!updateReport && !updateNotes) {
+      setError(t("bulkedit.pick_field", "יש לבחור לפחות שדה אחד לעדכון"));
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await apiFetch<ApartmentBulkUpdateResult>(
+        "/api/apartments/bulk-update",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            building_ids: filters.building_ids,
+            area_ids: filters.area_ids,
+            report_number_ids: filters.report_number_ids,
+            jewish_status: filters.jewish_status,
+            mezuzah_status: filters.mezuzah_status,
+            q: filters.q,
+            set_report_number: updateReport,
+            report_number_id: updateReport ? reportNumberId : null,
+            set_notes: updateNotes,
+            apartment_notes: updateNotes ? notes : null,
+          }),
+        },
+      );
+      success(
+        t("bulkedit.result", "{n} דירות עודכנו").replace("{n}", String(res.updated)),
+      );
+      await onDone();
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה");
+      setError(msg);
+      toastError(msg);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-lg bg-white rounded-xl shadow-xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div>
+          <h2 className="text-lg font-bold">
+            {t("bulkedit.title", "עריכה מרובה של דירות")}
+          </h2>
+          <p className="text-sm text-gray-500">
+            {t(
+              "bulkedit.intro",
+              "השינויים יחולו על כל {total} הדירות התואמות לסינון הנוכחי.",
+            ).replace("{total}", String(total))}
+          </p>
+        </div>
+
+        {/* Report number */}
+        <div className="space-y-1 rounded-lg border border-gray-200 p-3">
+          <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+            <input
+              type="checkbox"
+              className="accent-status-magenta"
+              checked={updateReport}
+              onChange={(e) => setUpdateReport(e.target.checked)}
+            />
+            {t("bulkedit.set_report", "עדכן מספר דוח")}
+          </label>
+          {updateReport && (
+            <div className="pt-1 space-y-1">
+              <SearchableSelect
+                value={reportNumberId}
+                onChange={(id) => setReportNumberId(id)}
+                options={reportNumbers.map((rn) => ({ id: rn.id, label: rn.name }))}
+                placeholder={t("bulkedit.choose_report", "בחר מספר דוח…")}
+              />
+              <p className="text-xs text-gray-400">
+                {t("bulkedit.clear_hint", "השאר ריק כדי להסיר את מספר הדוח מהדירות.")}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Notes */}
+        <div className="space-y-1 rounded-lg border border-gray-200 p-3">
+          <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+            <input
+              type="checkbox"
+              className="accent-status-magenta"
+              checked={updateNotes}
+              onChange={(e) => setUpdateNotes(e.target.checked)}
+            />
+            {t("bulkedit.set_notes", "עדכן הערות")}
+          </label>
+          {updateNotes && (
+            <textarea
+              className={`${inputClass} w-full`}
+              rows={3}
+              placeholder={t("apartments.apartment_notes", "הערות")}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          )}
+        </div>
+
+        {error && <p className="text-sm text-status-darkred">{error}</p>}
+        <div className="flex items-center gap-2 pt-1">
+          <button
+            type="button"
+            onClick={apply}
+            disabled={busy || total === 0}
+            className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
+          >
+            {busy ? t("action.saving", "שומר…") : t("bulkedit.apply", "החל שינויים")}
           </button>
           <button
             type="button"

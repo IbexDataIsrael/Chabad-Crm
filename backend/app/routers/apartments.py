@@ -25,6 +25,8 @@ from app.picklist_utils import validate_picklist_value
 from app.schemas import (
     ApartmentBatchCreate,
     ApartmentBatchResult,
+    ApartmentBulkUpdate,
+    ApartmentBulkUpdateResult,
     ApartmentCreate,
     ApartmentListOut,
     ApartmentOut,
@@ -32,6 +34,7 @@ from app.schemas import (
     ApartmentRestoreField,
     ApartmentUpdate,
     ApartmentVersionOut,
+    ReportNumberBuildingLink,
 )
 
 router = APIRouter(prefix="/api/apartments", tags=["apartments"])
@@ -233,11 +236,62 @@ def _sort_keys(sort: str, db: Session) -> list:
     return [_floor_rank(), *_natural(models.Apartment.floor, db)]
 
 
+def _apply_apartment_filters(
+    query,
+    *,
+    building_id: Optional[int] = None,
+    building_ids: Optional[list[int]] = None,
+    area_id: Optional[int] = None,
+    area_ids: Optional[list[int]] = None,
+    apartment_id: Optional[int] = None,
+    report_number_ids: Optional[list[int]] = None,
+    q: Optional[str] = None,
+    jewish_status: Optional[list[str]] = None,
+    mezuzah_status: Optional[list[str]] = None,
+):
+    """Apply the shared apartment-list filters (fixes8/15/18/20/23). The caller's
+    query must already be joined to `models.Building` (area/street filters need
+    it). Used by both the paged list and the bulk-update endpoint so they always
+    resolve to the same set of rows."""
+    if building_id is not None:
+        query = query.filter(models.Apartment.building_id == building_id)
+    # fixes23 §2: multi-select building filter (repeated ?building_ids=… params).
+    if building_ids:
+        query = query.filter(models.Apartment.building_id.in_(building_ids))
+    if area_id is not None:
+        query = query.filter(models.Building.area_id == area_id)
+    # fixes15 §7.1: multi-select area filter (repeated ?area_ids=… params).
+    if area_ids:
+        query = query.filter(models.Building.area_id.in_(area_ids))
+    if apartment_id is not None:
+        query = query.filter(models.Apartment.id == apartment_id)
+    # fixes20 §3: searchable report-number filter (multi-select).
+    if report_number_ids:
+        query = query.filter(models.Apartment.report_number_id.in_(report_number_ids))
+    if q:
+        like = f"%{q.strip()}%"
+        query = query.filter(
+            or_(
+                models.Building.building_address.ilike(like),
+                models.Building.building_name.ilike(like),
+                models.Apartment.apartment_name.ilike(like),
+                models.Apartment.name.ilike(like),
+            )
+        )
+    # fixes18 §5.2: picklist-column filters (multi-select, OR within a field).
+    if jewish_status:
+        query = query.filter(models.Apartment.jewish_status.in_(jewish_status))
+    if mezuzah_status:
+        query = query.filter(models.Apartment.mezuzah_status.in_(mezuzah_status))
+    return query
+
+
 @router.get("/list", response_model=ApartmentPageOut)
 def list_apartments_enriched(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
     building_id: Optional[int] = None,
+    building_ids: Optional[list[int]] = Query(None),
     area_id: Optional[int] = None,
     area_ids: Optional[list[int]] = Query(None),
     apartment_id: Optional[int] = None,
@@ -277,35 +331,18 @@ def list_apartments_enriched(
         if not ids:
             return ApartmentPageOut(items=[], total=0, page=page, page_size=page_size)
         query = query.filter(models.Apartment.id.in_(ids))
-    if building_id is not None:
-        query = query.filter(models.Apartment.building_id == building_id)
-    if area_id is not None:
-        query = query.filter(models.Building.area_id == area_id)
-    # fixes15 §7.1: multi-select area filter (repeated ?area_ids=… params).
-    if area_ids:
-        query = query.filter(models.Building.area_id.in_(area_ids))
-    if apartment_id is not None:
-        query = query.filter(models.Apartment.id == apartment_id)
-    # fixes20 §3: searchable report-number filter (multi-select).
-    if report_number_ids:
-        query = query.filter(
-            models.Apartment.report_number_id.in_(report_number_ids)
-        )
-    if q:
-        like = f"%{q.strip()}%"
-        query = query.filter(
-            or_(
-                models.Building.building_address.ilike(like),
-                models.Building.building_name.ilike(like),
-                models.Apartment.apartment_name.ilike(like),
-                models.Apartment.name.ilike(like),
-            )
-        )
-    # fixes18 §5.2: picklist-column filters (multi-select, OR within a field).
-    if jewish_status:
-        query = query.filter(models.Apartment.jewish_status.in_(jewish_status))
-    if mezuzah_status:
-        query = query.filter(models.Apartment.mezuzah_status.in_(mezuzah_status))
+    query = _apply_apartment_filters(
+        query,
+        building_id=building_id,
+        building_ids=building_ids,
+        area_id=area_id,
+        area_ids=area_ids,
+        apartment_id=apartment_id,
+        report_number_ids=report_number_ids,
+        q=q,
+        jewish_status=jewish_status,
+        mezuzah_status=mezuzah_status,
+    )
 
     total = query.count()
 
@@ -425,6 +462,121 @@ def batch_create_apartments(
             created += 1
     db.commit()  # single transaction for the whole matrix
     return ApartmentBatchResult(created=created, skipped=skipped)
+
+
+@router.get(
+    "/report-number-buildings", response_model=list[ReportNumberBuildingLink]
+)
+def report_number_buildings(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """fixes23 §2: distinct (report number → building) pairs across the org's
+    active apartments. The apartments page uses these to conditionally narrow the
+    building filter — a building shows only while it holds an apartment carrying a
+    selected report number. Shliach users get only their visible apartments."""
+    query = db.query(
+        models.Apartment.report_number_id, models.Apartment.building_id
+    ).filter(
+        models.Apartment.organization_id == current_user.organization_id,
+        models.Apartment.is_display.is_(True),
+        models.Apartment.report_number_id.isnot(None),
+    )
+    if current_user.role == "shliach":
+        ids = _shliach_apartment_ids(db, current_user)
+        if not ids:
+            return []
+        query = query.filter(models.Apartment.id.in_(ids))
+    return [
+        ReportNumberBuildingLink(report_number_id=rn_id, building_id=b_id)
+        for rn_id, b_id in query.distinct().all()
+    ]
+
+
+def _bulk_versioned_update(
+    db: Session,
+    apartments: list[models.Apartment],
+    changes: dict,
+    editor: models.User,
+) -> int:
+    """Apply `changes` to a list of active apartments as fixes19 §3 versioned
+    edits, in a single transaction: retire each current row and insert its
+    successor carrying the change, re-pointing any mekurav link. Returns the
+    number of apartments updated."""
+    for active in apartments:
+        active.is_display = False
+        active.last_edit = datetime.datetime.utcnow()
+        active.editor_id = editor.id
+        values = {col: getattr(active, col) for col in _VERSIONED_COLUMNS}
+        values.update(changes)
+        new = models.Apartment(
+            **values,
+            organization_id=active.organization_id,
+            is_display=True,
+            root_id=active.root_id or active.id,
+            created_at=active.created_at,
+        )
+        db.add(new)
+        db.flush()
+        db.query(models.ContactMekurav).filter(
+            models.ContactMekurav.apartment_id == active.id
+        ).update(
+            {models.ContactMekurav.apartment_id: new.id}, synchronize_session=False
+        )
+    db.commit()
+    return len(apartments)
+
+
+@router.post("/bulk-update", response_model=ApartmentBulkUpdateResult)
+def bulk_update_apartments(
+    payload: ApartmentBulkUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """fixes23 §3: apply a change (report number and/or notes) to every active
+    apartment matching the page's current filters, as versioned edits. The filter
+    block mirrors GET /api/apartments/list, so "all apartments currently matching
+    the active filters" resolves to the exact same rows the user sees. Shliach
+    users only touch apartments assigned to them."""
+    org_id = current_user.organization_id
+    changes: dict = {}
+    if payload.set_report_number:
+        _validate_report_number(
+            {"report_number_id": payload.report_number_id}, org_id, db
+        )
+        changes["report_number_id"] = payload.report_number_id
+    if payload.set_notes:
+        changes["apartment_notes"] = payload.apartment_notes
+    if not changes:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Select at least one field to update"
+        )
+
+    query = (
+        db.query(models.Apartment)
+        .join(models.Building, models.Building.id == models.Apartment.building_id)
+        .filter(
+            models.Apartment.organization_id == org_id,
+            models.Apartment.is_display.is_(True),
+        )
+    )
+    if current_user.role == "shliach":
+        ids = _shliach_apartment_ids(db, current_user)
+        if not ids:
+            return ApartmentBulkUpdateResult(updated=0)
+        query = query.filter(models.Apartment.id.in_(ids))
+    query = _apply_apartment_filters(
+        query,
+        building_ids=payload.building_ids,
+        area_ids=payload.area_ids,
+        report_number_ids=payload.report_number_ids,
+        q=payload.q,
+        jewish_status=payload.jewish_status,
+        mezuzah_status=payload.mezuzah_status,
+    )
+    apartments = query.all()
+    updated = _bulk_versioned_update(db, apartments, changes, current_user)
+    return ApartmentBulkUpdateResult(updated=updated)
 
 
 # The data columns copied from a retired version into its successor (fixes19).

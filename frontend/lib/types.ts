@@ -215,6 +215,18 @@ export interface ApartmentPage {
   page_size: number;
 }
 
+/** fixes23 §2: a distinct (report number → building) pair, driving the
+ *  conditional building filter on the apartments page. */
+export interface ReportNumberBuildingLink {
+  report_number_id: number;
+  building_id: number;
+}
+
+/** fixes23 §3: outcome of a bulk apartment update. */
+export interface ApartmentBulkUpdateResult {
+  updated: number;
+}
+
 /** The "[number] [street]" segment of a formatted address (first comma part). */
 export function streetPart(address: string | null | undefined): string | null {
   if (!address) return null;

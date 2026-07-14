@@ -688,6 +688,38 @@ class ApartmentBatchResult(BaseModel):
     skipped: int
 
 
+class ReportNumberBuildingLink(BaseModel):
+    """fixes23 §2: a distinct (report number → building) pair, driving the
+    conditional building filter — a building appears only while it holds an
+    apartment carrying one of the selected report numbers."""
+
+    report_number_id: int
+    building_id: int
+
+
+class ApartmentBulkUpdate(BaseModel):
+    """fixes23 §3: apply a change to every active apartment matching the page's
+    current filters. The filter block mirrors the /list query params; the
+    `set_*` flags disambiguate "leave unchanged" from "clear to empty"."""
+
+    # Filters (same semantics as GET /api/apartments/list).
+    building_ids: Optional[list[int]] = None
+    area_ids: Optional[list[int]] = None
+    report_number_ids: Optional[list[int]] = None
+    jewish_status: Optional[list[str]] = None
+    mezuzah_status: Optional[list[str]] = None
+    q: Optional[str] = None
+    # New values — each only applied when its companion flag is true.
+    set_report_number: bool = False
+    report_number_id: Optional[int] = None
+    set_notes: bool = False
+    apartment_notes: Optional[str] = None
+
+
+class ApartmentBulkUpdateResult(BaseModel):
+    updated: int
+
+
 # --- Significant dates + reminders -----------------------------------------
 class ReminderIn(BaseModel):
     offset_minutes: int = 0
