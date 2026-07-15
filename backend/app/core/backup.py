@@ -43,23 +43,22 @@ SNAPSHOT_MODELS = [
     models.ContactShliach,
     models.ReportNumberContactShliach,
     models.ContactShliachArea,
-    models.CommunityChecklist,  # contact-scoped (no organization_id column)
     models.CustomFieldDefinition,
-    models.CustomFieldValue,  # contact-scoped (no organization_id column)
     models.SignificantDate,
     models.ContactMekuravSpecialDate,
     models.SignificantDateReminder,
     models.VisitHistory,
+    models.CustomFieldValue,  # visit-scoped, after VisitHistory (fixes25)
     models.Donation,
-    models.Interaction,
     models.PicklistDefinition,
     models.PicklistValue,
     models.ContactPicklistValue,
     models.FieldSetting,
 ]
 
-# Models scoped through their contact rather than an organization_id column.
-_CONTACT_SCOPED = (models.CommunityChecklist, models.CustomFieldValue)
+# Models scoped through their visit rather than an organization_id column
+# (fixes25 — custom-field values moved from contacts onto visits).
+_VISIT_SCOPED = (models.CustomFieldValue,)
 
 # What the counts summary reports (tablename → summary key).
 _COUNT_TABLES = {
@@ -69,13 +68,12 @@ _COUNT_TABLES = {
     "areas": "areas",
     "visit_history": "visits",
     "donations": "donations",
-    "interactions": "interactions",
 }
 
 
-def _dump_rows(db: Session, model, org_id: int, contact_ids: list[int]) -> list[dict]:
-    if model in _CONTACT_SCOPED:
-        query = db.query(model).filter(model.contact_id.in_(contact_ids))
+def _dump_rows(db: Session, model, org_id: int, visit_ids: list[int]) -> list[dict]:
+    if model in _VISIT_SCOPED:
+        query = db.query(model).filter(model.visit_id.in_(visit_ids))
     else:
         query = db.query(model).filter(model.organization_id == org_id)
     rows = []
@@ -92,14 +90,14 @@ def _dump_rows(db: Session, model, org_id: int, contact_ids: list[int]) -> list[
 
 def create_snapshot(db: Session, org_id: int) -> dict:
     """The org's CRM data as one JSON-serializable document."""
-    contact_ids = [
-        cid
-        for (cid,) in db.query(models.Contact.id)
-        .filter(models.Contact.organization_id == org_id)
+    visit_ids = [
+        vid
+        for (vid,) in db.query(models.VisitHistory.id)
+        .filter(models.VisitHistory.organization_id == org_id)
         .all()
     ]
     tables = {
-        model.__tablename__: _dump_rows(db, model, org_id, contact_ids)
+        model.__tablename__: _dump_rows(db, model, org_id, visit_ids)
         for model in SNAPSHOT_MODELS
     }
     return {
@@ -156,13 +154,13 @@ def restore_snapshot(
     tables = snapshot.get("tables", {})
 
     # Wipe the current org rows, children first.
-    contact_ids_query = db.query(models.Contact.id).filter(
-        models.Contact.organization_id == org_id
+    visit_ids_query = db.query(models.VisitHistory.id).filter(
+        models.VisitHistory.organization_id == org_id
     )
     for model in reversed(SNAPSHOT_MODELS):
-        if model in _CONTACT_SCOPED:
+        if model in _VISIT_SCOPED:
             db.query(model).filter(
-                model.contact_id.in_(contact_ids_query)
+                model.visit_id.in_(visit_ids_query)
             ).delete(synchronize_session=False)
         else:
             db.query(model).filter(model.organization_id == org_id).delete(
@@ -183,6 +181,10 @@ def restore_snapshot(
         rows = [
             _parse_row(model, dict(r)) for r in tables.get(model.__tablename__, [])
         ]
+        if model is models.CustomFieldValue:
+            # Pre-fixes25 snapshots stored contact-scoped values (no visit_id);
+            # those rows can't satisfy the NOT NULL visit FK — skip them.
+            rows = [r for r in rows if r.get("visit_id") is not None]
         if not rows:
             continue
         if model is models.Apartment:
@@ -210,10 +212,6 @@ def restore_snapshot(
             ):
                 # fixes19: the version-history editor stamp is a user link.
                 row["editor_id"] = None
-            elif model is models.Interaction and row.get("created_by") not in valid_user_ids:
-                # created_by is NOT NULL — keep the interaction, owned by the
-                # admin performing the restore.
-                row["created_by"] = acting_user.id
         db.execute(model.__table__.insert(), rows)
     db.flush()
 

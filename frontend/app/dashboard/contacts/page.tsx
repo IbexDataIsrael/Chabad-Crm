@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { DatePicker } from "@/components/DatePicker";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { apiFetch } from "@/lib/api";
@@ -17,12 +18,11 @@ import { usePicklist } from "@/lib/picklists";
 import { useDbPreference } from "@/lib/preferences";
 import { useToast } from "@/lib/toast";
 import {
-  CHECKLIST_BOOLEANS,
+  MIVTZOIM_FLAGS,
   contactFullName,
   type AdminArea,
   type Area,
   type Building,
-  type Checklist,
   type Contact,
   type ContactPage,
   type UserSummary,
@@ -50,8 +50,9 @@ type ColumnKey = (typeof COLUMN_KEYS)[number];
 // which the page always showed until now).
 const DEFAULT_COLUMNS: ColumnKey[] = ["phone", "owner", "created"];
 
-/** The mitzvah checkbox filters (fixes17 §2.2), typed as checklist booleans. */
-const MITZVAH_KEYS = CHECKLIST_BOOLEANS as (keyof Checklist & string)[];
+/** The mitzvah checkbox filters (fixes17 §2.2); fixes25: the flags live on
+ * visits — a contact matches through any of its visits. */
+const MITZVAH_KEYS: string[] = [...MIVTZOIM_FLAGS];
 
 export default function ContactsPage() {
   const router = useRouter();
@@ -98,6 +99,14 @@ export default function ContactsPage() {
     "crm.contacts.mitzvotFields", [],
   );
   const [tzedaka, setTzedaka] = usePersistentState("crm.contacts.tzedaka", "");
+  // fixes25 §4: visit date range (טווח תאריכי ביקור) — only contacts holding a
+  // visit inside the range.
+  const [visitFrom, setVisitFrom] = usePersistentState<string | null>(
+    "crm.contacts.visitFrom", null,
+  );
+  const [visitTo, setVisitTo] = usePersistentState<string | null>(
+    "crm.contacts.visitTo", null,
+  );
   const [sort, setSort] = usePersistentState<SortKey>(
     "crm.contacts.sort", "created", // fixes11 §2.3 default
   );
@@ -191,6 +200,9 @@ export default function ContactsPage() {
     if (tzedaka.trim()) {
       params.set("tzedaka_potential", tzedaka.trim());
     }
+    // fixes25 §4: visit date range.
+    if (visitFrom) params.set("visit_from", visitFrom);
+    if (visitTo) params.set("visit_to", visitTo);
     return params;
   }
 
@@ -216,7 +228,8 @@ export default function ContactsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     statusFilter, assignedFilter, debouncedQ, areaIds, buildingIds,
-    adminAreaIds, mitzvotFilter, tzedaka, sort, dir, page, pageSize,
+    adminAreaIds, mitzvotFilter, tzedaka, visitFrom, visitTo, sort, dir, page,
+    pageSize,
   ]);
 
   // fixes15 §5.2: mass email to the WHOLE filtered set via mailto: BCC.
@@ -385,12 +398,12 @@ export default function ContactsPage() {
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
         />
-        {/* fixes17 §2.2: one checkbox per mitzvah (bilingual labels). */}
+        {/* fixes17 §2.2: one checkbox per mitzvah (fixes25: visit-level flags). */}
         <MultiSelectFilter
           allLabel={t("filter.all_mitzvot", "מבצעים")}
           options={MITZVAH_KEYS.map((m) => ({
             id: m,
-            label: t(`community_checklists.${m}`, m),
+            label: t(`visits.${m}`, m),
           }))}
           value={mitzvotFilter}
           onChange={(ids) => {
@@ -412,6 +425,28 @@ export default function ContactsPage() {
           placeholder={t("filter.tzedaka_ph", "פוטנציאל לצדקה…")}
           emptyLabel={t("filter.all_tzedaka", "כל פוטנציאל לצדקה")}
         />
+        {/* fixes25 §4: visit date-range filter (טווח תאריכי ביקור). */}
+        <span className="flex items-center gap-2">
+          <span className="text-gray-500">{t("visits.date_range", "טווח תאריכי ביקור")}:</span>
+          <DatePicker
+            value={visitFrom}
+            onChange={(v) => {
+              setVisitFrom(v);
+              setPage(1);
+            }}
+            className={`${selectClass} w-36`}
+            placeholder={t("visits.date_from", "מתאריך")}
+          />
+          <DatePicker
+            value={visitTo}
+            onChange={(v) => {
+              setVisitTo(v);
+              setPage(1);
+            }}
+            className={`${selectClass} w-36`}
+            placeholder={t("visits.date_to", "עד תאריך")}
+          />
+        </span>
       </div>
 
       <div className="flex flex-wrap gap-3">

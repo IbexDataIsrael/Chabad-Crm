@@ -187,7 +187,6 @@ class AdminUserDependenciesOut(BaseModel):
     modal so the superadmin sees the data ties before deleting a shliach."""
 
     assigned_contacts: int = 0
-    interactions: int = 0
     shliach_contact_id: Optional[int] = None
     shliach_contact_name: Optional[str] = None
     covered_report_numbers: int = 0  # fixes19 (was covered apartments)
@@ -292,35 +291,8 @@ class ChangePasswordRequest(BaseModel):
 
 
 # --- Community checklist ---------------------------------------------------
-class ChecklistOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    contact_id: int
-    tefillin: bool
-    tefillin_notes: Optional[str] = None
-    tzedakah: bool
-    charity_note: Optional[str] = None
-    shabbat_candles: bool
-    shabbat_candles_notes: Optional[str] = None
-    torah_pamphlet: bool
-    torah_pamphlet_notes: Optional[str] = None
-    torah_thought: Optional[str] = None
-    torah_letter: bool
-    letter_torah_notes: Optional[str] = None
-
-
-class ChecklistUpdate(BaseModel):
-    tefillin: Optional[bool] = None
-    tefillin_notes: Optional[str] = None
-    tzedakah: Optional[bool] = None
-    charity_note: Optional[str] = None
-    shabbat_candles: Optional[bool] = None
-    shabbat_candles_notes: Optional[str] = None
-    torah_pamphlet: Optional[bool] = None
-    torah_pamphlet_notes: Optional[str] = None
-    torah_thought: Optional[str] = None
-    torah_letter: Optional[bool] = None
-    letter_torah_notes: Optional[str] = None
+# fixes25: the community checklist (Mivtzoim) schemas are gone — the flags
+# live on visits now (see VisitCreate/VisitOut).
 
 
 # --- Custom checklist fields (per-org, admin-defined) ----------------------
@@ -348,7 +320,9 @@ class CustomFieldDefinitionOut(BaseModel):
 
 
 class ContactCustomFieldOut(BaseModel):
-    """A custom field merged with a contact's value (for display/editing)."""
+    """A custom field merged with a visit's value (for display/editing).
+
+    fixes25: values attach to visits (the name is kept for wire compatibility)."""
 
     definition_id: int
     field_key: str
@@ -774,7 +748,7 @@ class MekuravData(BaseModel):
     tzedaka_potential: Optional[str] = None  # פוטנציאל לצדקה (fixes9 §3, free text)
     first_visit: Optional[datetime] = None
     potential_next_step: Optional[str] = None
-    rebbe_connection: Optional[str] = None
+    # fixes25: rebbe_connection moved to the visit (connection_to_rebbe).
     recommendations: Optional[str] = None
     background: Optional[str] = None
 
@@ -884,7 +858,6 @@ class ContactOut(ContactBase):
 
 
 class ContactDetailOut(ContactOut):
-    checklist: Optional[ChecklistOut] = None
     mekurav: Optional[MekuravOut] = None
     shliach: Optional[ShliachOut] = None
     special_dates: list[SignificantDateOut] = []
@@ -901,28 +874,8 @@ class ContactPageOut(BaseModel):
     page_size: int
 
 
-# --- Interactions ----------------------------------------------------------
-class InteractionCreate(BaseModel):
-    contact_id: int
-    category: str
-    note: str
-
-
-class InteractionUpdate(BaseModel):
-    category: Optional[str] = None
-    note: Optional[str] = None
-
-
-class InteractionOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    guid: str
-    contact_id: int
-    created_by: int
-    category: str
-    note: str
-    created_at: datetime
+# fixes25: the standalone Interaction schemas are gone — interactions are a
+# JSON log on the visit (see VisitInteraction).
 
 
 # --- Picklists -------------------------------------------------------------
@@ -1012,12 +965,31 @@ class LocalizationCreate(BaseModel):
 
 
 # --- Visit history ---------------------------------------------------------
+class VisitInteraction(BaseModel):
+    """One entry of a visit's interaction log (fixes25 — stored as JSON on the
+    visit). `created_at`/`author_name` are stamped server-side when missing."""
+
+    category: str
+    note: str
+    created_at: Optional[str] = None  # ISO string inside the JSON payload
+    author_name: Optional[str] = None
+
+
 class VisitCreate(BaseModel):
     contact_id: Optional[int] = None
     visit_date: datetime
     visit_type: Optional[str] = None
     location: Optional[str] = None
     notes: Optional[str] = None
+    # fixes25: visit-level engagement data.
+    interactions: list[VisitInteraction] = []
+    tefillin: bool = False
+    tzedakah: bool = False
+    shabbat_candles: bool = False
+    torah_pamphlet: bool = False
+    letter_in_torah: bool = False
+    torah_thought: Optional[str] = None
+    connection_to_rebbe: Optional[str] = None
 
 
 class VisitUpdate(BaseModel):
@@ -1026,6 +998,14 @@ class VisitUpdate(BaseModel):
     visit_type: Optional[str] = None
     location: Optional[str] = None
     notes: Optional[str] = None
+    interactions: Optional[list[VisitInteraction]] = None
+    tefillin: Optional[bool] = None
+    tzedakah: Optional[bool] = None
+    shabbat_candles: Optional[bool] = None
+    torah_pamphlet: Optional[bool] = None
+    letter_in_torah: Optional[bool] = None
+    torah_thought: Optional[str] = None
+    connection_to_rebbe: Optional[str] = None
 
 
 class VisitOut(BaseModel):
@@ -1039,6 +1019,14 @@ class VisitOut(BaseModel):
     visit_type: Optional[str] = None
     location: Optional[str] = None
     notes: Optional[str] = None
+    interactions: list[VisitInteraction] = []
+    tefillin: bool = False
+    tzedakah: bool = False
+    shabbat_candles: bool = False
+    torah_pamphlet: bool = False
+    letter_in_torah: bool = False
+    torah_thought: Optional[str] = None
+    connection_to_rebbe: Optional[str] = None
 
 
 # --- Donations -------------------------------------------------------------

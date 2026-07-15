@@ -107,16 +107,17 @@ class TestBackupCreate:
 class TestRestore:
     def test_restore_replaces_current_data(self, client, admin_headers):
         # World at backup time: area→building→apartment, a contact linked to
-        # the apartment with a checked mitzvah + a significant date reminder.
+        # the apartment with a mitzvah-flagged visit + a significant date
+        # reminder (fixes25: the flag lives on the visit).
         area = _mk_area(client, admin_headers)
         building = _mk_building(client, admin_headers, area["id"])
         apt = _mk_apartment(client, admin_headers, building["id"], apartment_name="1")
         a = _mk_contact(
             client, admin_headers, name="ישן", mekurav={"apartment_id": apt["id"]}
         )
-        client.put(
-            f"/api/contacts/{a['id']}/checklist",
-            json={"tzedakah": True},
+        client.post(
+            f"/api/contacts/{a['id']}/visits",
+            json={"visit_date": "2026-06-01T00:00:00", "tzedakah": True},
             headers=admin_headers,
         )
         r = client.post(
@@ -152,7 +153,10 @@ class TestRestore:
         assert restored.status_code == 200
         body = restored.json()
         assert body["name"] == "ישן"
-        assert body["checklist"]["tzedakah"] is True
+        visits = client.get(
+            f"/api/contacts/{a['id']}/visits", headers=admin_headers
+        ).json()
+        assert len(visits) == 1 and visits[0]["tzedakah"] is True
         assert body["mekurav"]["apartment_id"] == apt["id"]
         assert body["special_dates"][0]["reminders"][0]["offset_minutes"] == 60
         # …and the post-backup contact is gone. (Compared by name, not id —
@@ -192,43 +196,47 @@ class TestRestore:
         # The snapshot pointed at a user that no longer exists → link nulled.
         assert restored["assigned_user_id"] is None
 
-    def test_restore_reassigns_orphan_interactions(
-        self, client, admin_headers, db_session
-    ):
+    def test_restore_roundtrips_visit_engagement_data(self, client, admin_headers):
+        """fixes25: the visit's interactions JSON + custom-field values survive
+        a backup/restore round-trip (the author rides along as plain text, so
+        no user re-owning is needed anymore)."""
         c = _mk_contact(client, admin_headers, name="עם אינטראקציה")
-        staff = client.post(
-            "/api/users",
-            json={"full_name": "כותב", "email": "author@x.com", "role": "staff"},
+        vid = client.post(
+            f"/api/contacts/{c['id']}/visits",
+            json={
+                "visit_date": "2026-06-01T00:00:00",
+                "interactions": [{"category": "call", "note": "שיחה"}],
+            },
             headers=admin_headers,
-        ).json()
-        # The staff user was created without a password (Google-only), so the
-        # interaction is written via the ORM instead of logging them in.
-        db_session.add(
-            models.Interaction(
-                organization_id=db_session.get(models.User, staff["id"]).organization_id,
-                contact_id=c["id"],
-                created_by=staff["id"],
-                category="call",
-                note="שיחה",
-            )
+        ).json()["id"]
+        did = client.post(
+            "/api/custom-fields",
+            json={"field_key": "restore_field", "hebrew_label": "שדה"},
+            headers=admin_headers,
+        ).json()["id"]
+        client.put(
+            f"/api/visits/{vid}/custom-fields",
+            json=[{"definition_id": did, "checked": True, "note": "כן"}],
+            headers=admin_headers,
         )
-        db_session.commit()
 
         b = _backup(client, admin_headers)
         assert (
-            client.delete(f"/api/users/{staff['id']}", headers=admin_headers).status_code
+            client.delete(f"/api/contacts/{c['id']}", headers=admin_headers).status_code
             == 204
         )
         r = client.post(f"/api/backups/{b['id']}/restore", headers=admin_headers)
         assert r.status_code == 200, r.text
-        row = (
-            db_session.query(models.Interaction)
-            .filter(models.Interaction.contact_id == c["id"])
-            .one()
-        )
-        # created_by is NOT NULL → reassigned to the restoring admin.
-        assert row.created_by != staff["id"]
-        assert db_session.get(models.User, row.created_by).role == "admin"
+
+        visits = client.get(
+            f"/api/contacts/{c['id']}/visits", headers=admin_headers
+        ).json()
+        assert len(visits) == 1
+        assert visits[0]["interactions"][0]["note"] == "שיחה"
+        fields = client.get(
+            f"/api/visits/{visits[0]['id']}/custom-fields", headers=admin_headers
+        ).json()
+        assert fields[0]["checked"] is True and fields[0]["note"] == "כן"
 
 
 # --- Retention -------------------------------------------------------------------

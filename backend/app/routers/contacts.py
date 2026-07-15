@@ -1,11 +1,15 @@
-"""Contact CRUD + sub-resources (checklist, custom fields, significant dates).
+"""Contact CRUD + sub-resources (significant dates).
 
 Contacts are split: the `contacts` row carries core CRM data + a `contact_type`
 (מקורב | פעיל). Mekurav/shliach specifics live in their own tables. Creating a
 shliach also provisions a login `User` (role 'shliach') linked by email.
 
 Shliach users see only mekuravim in apartments they cover (scoped reads).
+
+fixes25: the community checklist (Mivtzoim), interactions and custom-field
+values moved to the visit level — the related sub-resources live on visits.
 """
+import datetime
 import logging
 from typing import Literal, Optional
 
@@ -22,15 +26,11 @@ from app.database import get_db
 from app.deps import get_current_user
 from app.picklist_utils import validate_picklist_value
 from app.schemas import (
-    ChecklistOut,
-    ChecklistUpdate,
     ContactCreate,
-    ContactCustomFieldOut,
     ContactDetailOut,
     ContactOut,
     ContactPageOut,
     ContactUpdate,
-    CustomFieldValueIn,
     MekuravOut,
     ReminderOut,
     ShliachOut,
@@ -440,13 +440,14 @@ def _set_shliach_areas(
 
 
 # --- CRUD -------------------------------------------------------------------
-# The mekurav mitzvot booleans a "has mitzvot" filter checks (fixes15 §5.1).
+# The Mivtzoim booleans a "has mitzvot" filter checks (fixes15 §5.1). fixes25:
+# these live on visits now — a contact matches through any of its visits.
 _MITZVAH_COLUMNS = (
     "tefillin",
     "tzedakah",
     "shabbat_candles",
     "torah_pamphlet",
-    "torah_letter",
+    "letter_in_torah",
 )
 
 
@@ -463,6 +464,8 @@ def _contacts_query(
     mitzvot: Optional[list[str]] = None,
     tzedaka_potential: Optional[str] = None,
     admin_area_ids: Optional[list[int]] = None,
+    visit_from: Optional[datetime.datetime] = None,
+    visit_to: Optional[datetime.datetime] = None,
 ):
     """The org-scoped, filtered, shliach-aware contacts query (shared by the
     plain list, the paginated list and the bulk-email address list).
@@ -558,18 +561,19 @@ def _contacts_query(
     if has_mitzvot:
         query = query.filter(
             models.Contact.id.in_(
-                select(models.CommunityChecklist.contact_id).where(
+                select(models.VisitHistory.contact_id).where(
+                    models.VisitHistory.contact_id.isnot(None),
                     or_(
                         *[
-                            getattr(models.CommunityChecklist, col).is_(True)
+                            getattr(models.VisitHistory, col).is_(True)
                             for col in _MITZVAH_COLUMNS
                         ]
-                    )
+                    ),
                 )
             )
         )
-    # fixes17 §2.2: specific mitzvot, AND semantics — every named checkbox
-    # must be checked on the contact's checklist.
+    # fixes17 §2.2: specific mitzvot, AND semantics — every named flag must be
+    # checked on at least one of the contact's visits (fixes25).
     if mitzvot:
         for col in mitzvot:
             if col not in _MITZVAH_COLUMNS:
@@ -577,16 +581,13 @@ def _contacts_query(
                     status.HTTP_422_UNPROCESSABLE_ENTITY,
                     f"'{col}' is not a mitzvah field",
                 )
-        query = query.filter(
-            models.Contact.id.in_(
-                select(models.CommunityChecklist.contact_id).where(
-                    *[
-                        getattr(models.CommunityChecklist, col).is_(True)
-                        for col in mitzvot
-                    ]
+            query = query.filter(
+                models.Contact.id.in_(
+                    select(models.VisitHistory.contact_id).where(
+                        getattr(models.VisitHistory, col).is_(True)
+                    )
                 )
             )
-        )
     if tzedaka_potential and tzedaka_potential.strip():
         query = query.filter(
             models.Contact.id.in_(
@@ -604,6 +605,23 @@ def _contacts_query(
                     models.ContactMekurav.admin_area_id.in_(admin_area_ids)
                 )
             )
+        )
+    # fixes25 §4: visit date range (טווח תאריכי ביקור) — only contacts holding
+    # at least one visit inside the range (the spec's inner-join semantics).
+    if visit_from is not None or visit_to is not None:
+        conds = [models.VisitHistory.contact_id.isnot(None)]
+        if visit_from is not None:
+            conds.append(models.VisitHistory.visit_date >= visit_from)
+        if visit_to is not None:
+            # A date-only bound means "through the end of that day".
+            upper = visit_to
+            if upper.time() == datetime.time.min:
+                upper = upper + datetime.timedelta(days=1)
+                conds.append(models.VisitHistory.visit_date < upper)
+            else:
+                conds.append(models.VisitHistory.visit_date <= upper)
+        query = query.filter(
+            models.Contact.id.in_(select(models.VisitHistory.contact_id).where(*conds))
         )
 
     if current_user.role == "shliach":
@@ -666,6 +684,8 @@ def list_contacts_paginated(
     mitzvot: Optional[list[str]] = Query(None),
     tzedaka_potential: Optional[str] = None,
     admin_area_ids: Optional[list[int]] = Query(None),
+    visit_from: Optional[datetime.datetime] = None,
+    visit_to: Optional[datetime.datetime] = None,
     sort: Literal["name", "created"] = "name",
     dir: Literal["asc", "desc"] = "asc",
     page: int = Query(1, ge=1),
@@ -684,7 +704,7 @@ def list_contacts_paginated(
         db, current_user, pipeline_status, contact_type, assigned_user_id,
         q=q, area_ids=area_ids, building_ids=building_ids, has_mitzvot=has_mitzvot,
         mitzvot=mitzvot, tzedaka_potential=tzedaka_potential,
-        admin_area_ids=admin_area_ids,
+        admin_area_ids=admin_area_ids, visit_from=visit_from, visit_to=visit_to,
     )
     total = query.count()
     key = models.Contact.created_at if sort == "created" else models.Contact.name
@@ -852,7 +872,6 @@ def create_contact(
                 organization_id=org_id, contact_id=contact.id, **mk_data
             )
         )
-        contact.checklist = models.CommunityChecklist()
 
     if payload.picklist_values:
         _apply_picklist_values(db, org_id, contact, payload.picklist_values)
@@ -982,116 +1001,9 @@ def delete_contact(
     db.commit()
 
 
-# --- Community checklist sub-resource --------------------------------------
-@router.get("/{contact_id}/checklist", response_model=ChecklistOut)
-def get_checklist(
-    contact_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    contact = _get_contact_or_404(contact_id, current_user, db)
-    if contact.checklist is None:
-        contact.checklist = models.CommunityChecklist()
-        db.commit()
-        db.refresh(contact)
-    return contact.checklist
-
-
-@router.put("/{contact_id}/checklist", response_model=ChecklistOut)
-def update_checklist(
-    contact_id: int,
-    payload: ChecklistUpdate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    contact = _get_contact_or_404(contact_id, current_user, db)
-    if contact.checklist is None:
-        contact.checklist = models.CommunityChecklist()
-        db.flush()
-    data = payload.model_dump(exclude_unset=True)
-    if "torah_thought" in data:
-        validate_picklist_value(
-            db, current_user.organization_id, "checklist.torah_thought",
-            data["torah_thought"],
-        )
-    for field, value in data.items():
-        setattr(contact.checklist, field, value)
-    db.commit()
-    db.refresh(contact.checklist)
-    return contact.checklist
-
-
-# --- Custom checklist fields (per-contact values) --------------------------
-@router.get("/{contact_id}/custom-fields", response_model=list[ContactCustomFieldOut])
-def get_custom_fields(
-    contact_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    org_id = current_user.organization_id
-    contact = _get_contact_or_404(contact_id, current_user, db)
-    defs = (
-        db.query(models.CustomFieldDefinition)
-        .filter(
-            models.CustomFieldDefinition.organization_id == org_id,
-            models.CustomFieldDefinition.is_active.is_(True),
-        )
-        .order_by(models.CustomFieldDefinition.sort_order, models.CustomFieldDefinition.id)
-        .all()
-    )
-    values = {v.definition_id: v for v in contact.custom_values}
-    result = []
-    for d in defs:
-        v = values.get(d.id)
-        result.append(
-            ContactCustomFieldOut(
-                definition_id=d.id,
-                field_key=d.field_key,
-                hebrew_label=d.hebrew_label,
-                checked=v.checked if v else False,
-                note=v.note if v else None,
-            )
-        )
-    return result
-
-
-@router.put("/{contact_id}/custom-fields", response_model=list[ContactCustomFieldOut])
-def set_custom_fields(
-    contact_id: int,
-    payload: list[CustomFieldValueIn],
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    org_id = current_user.organization_id
-    contact = _get_contact_or_404(contact_id, current_user, db)
-    valid_ids = {
-        d.id
-        for d in db.query(models.CustomFieldDefinition.id)
-        .filter(models.CustomFieldDefinition.organization_id == org_id)
-        .all()
-    }
-    existing = {v.definition_id: v for v in contact.custom_values}
-    for item in payload:
-        if item.definition_id not in valid_ids:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                f"definition_id {item.definition_id} does not exist",
-            )
-        v = existing.get(item.definition_id)
-        if v:
-            v.checked = item.checked
-            v.note = item.note
-        else:
-            db.add(
-                models.CustomFieldValue(
-                    contact_id=contact.id,
-                    definition_id=item.definition_id,
-                    checked=item.checked,
-                    note=item.note,
-                )
-            )
-    db.commit()
-    return get_custom_fields(contact_id, db, current_user)
+# fixes25: the checklist + custom-fields sub-resources moved to visits — see
+# routers/visits.py (/api/visits/{id}/custom-fields; Mivtzoim flags are plain
+# visit columns).
 
 
 # --- Significant dates sub-resource (mekurav only) -------------------------

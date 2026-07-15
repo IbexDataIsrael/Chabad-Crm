@@ -40,9 +40,13 @@ export default function PicklistsPage() {
       .finally(() => setLoaded(true));
   }, []);
 
-  // A definition's display name in the current language.
+  // A definition's display name in the current language. fixes25 §5: system
+  // lists carry Hebrew-only registry labels (e.g. "סוג איש קשר"), so English
+  // mode consults the seeded picklist_def.* translations before falling back.
   const defLabel = (f: PicklistField) =>
-    (lang === "en" ? f.english_label || f.label : f.label) || f.field_key;
+    (lang === "en"
+      ? f.english_label || t(`picklist_def.${f.field_key}`, "") || f.label
+      : f.label || t(`picklist_def.${f.field_key}`, "")) || f.field_key;
 
   if (loading || !loaded) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
   if (!isAdmin) {
@@ -166,11 +170,15 @@ function DefinitionEditor({
         {def.field_key}
       </code>
       <label className="space-y-1">
-        <span className="block text-xs text-gray-500">עברית</span>
+        <span className="block text-xs text-gray-500">
+          {t("common.hebrew_label", "עברית")}
+        </span>
         <input dir="rtl" className={input} value={he} onChange={(e) => setHe(e.target.value)} />
       </label>
       <label className="space-y-1">
-        <span className="block text-xs text-gray-500">English</span>
+        <span className="block text-xs text-gray-500">
+          {t("common.english_label", "English")}
+        </span>
         <input dir="ltr" className={input} value={en} onChange={(e) => setEn(e.target.value)} />
       </label>
       <button

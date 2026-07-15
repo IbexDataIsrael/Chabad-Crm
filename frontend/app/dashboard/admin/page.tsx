@@ -589,9 +589,7 @@ function DeleteUserModal({
         ...(deps.covered_areas > 0
           ? [n(t("admin.deps_areas", "אזורים באחריות: {n}"), deps.covered_areas)]
           : []),
-        ...(deps.interactions > 0
-          ? [n(t("admin.deps_interactions", "אינטראקציות שנוצרו: {n}"), deps.interactions)]
-          : []),
+        // fixes25: interaction rows are gone (they live inside visit JSON).
       ]
     : [];
 

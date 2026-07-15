@@ -5,6 +5,7 @@
                           email verification (Phase 8) and for the demo org.
 - `seed_all`           — global labels + a demo organization with admin + sample data.
 """
+import datetime
 import logging
 
 from sqlalchemy.orm import Session
@@ -46,7 +47,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("column", "contact_mekurav.apartment_id", "דירה", "Apartment"),
     ("column", "contact_mekurav.first_visit", "ביקור ראשון", "First visit"),
     ("column", "contact_mekurav.potential_next_step", "פוטנציאל לצעד", "Potential next step"),
-    ("column", "contact_mekurav.rebbe_connection", "קשר לרבי", "Connection to the Rebbe"),
     ("column", "contact_mekurav.recommendations", "המלצות", "Recommendations"),
     ("column", "contact_mekurav.background", "רקע", "Background"),
     ("column", "contact_shliach.notes", "הערות", "Notes"),
@@ -400,7 +400,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("apm", "apm.clear_boundary", "נקה תחום", "Clear boundary"),
     # --- Custom fields page ---
     ("cf", "cf.title", "שדות מותאמים אישית", "Custom fields"),
-    ("cf", "cf.intro", "כל שדה הוא תיבת סימון + הערה, ויופיע בכרטיס איש הקשר. לדוגמה: מסיבת חנוכה.", "Each field is a checkbox + note shown on the contact card. e.g. Hanukkah party."),
+    ("cf", "cf.intro", "כל שדה הוא תיבת סימון + הערה, ויופיע בטופס הביקור. לדוגמה: מסיבת חנוכה.", "Each field is a checkbox + note logged on each visit. e.g. Hanukkah party."),
     ("cf", "cf.none", "אין שדות מותאמים עדיין.", "No custom fields yet."),
     ("cf", "cf.disabled", "מושבת", "Disabled"),
     ("cf", "cf.activate", "הפעל", "Activate"),
@@ -712,6 +712,44 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("reports", "reports.apartment_notes", "הערות", "Notes"),
     ("reports", "reports.no_data", "לא נמצאו נתונים עבור הדוחות שנבחרו", "No data found for the selected reports"),
     ("reports", "reports.pdf_title", "דוח ריכוז דירות", "Apartment Summary Report"),
+    # --- fixes25: VISITS namespace (visit-level Mivtzoim / interactions / fields) ---
+    ("visits", "visits.details", "פרטי ביקור", "Visit details"),
+    ("visits", "visits.mivtzoim", "מבצעים", "Mivtzoim"),
+    ("visits", "visits.tefillin", "תפילין", "Tefillin"),
+    ("visits", "visits.tzedakah", "צדקה", "Tzedakah"),
+    ("visits", "visits.shabbat_candles", "נרות", "Shabbat candles"),
+    ("visits", "visits.torah_pamphlet", "עלון", "Torah pamphlet"),
+    ("visits", "visits.letter_in_torah", "אות בספר", "Letter in a Torah"),
+    ("visits", "visits.torah_thought", "דבר תורה", "Torah thought"),
+    ("visits", "visits.connection_to_rebbe", "קשר לרבי", "Connection to the Rebbe"),
+    ("visits", "visits.interactions", "אינטראקציות", "Interactions"),
+    ("visits", "visits.no_interactions", "אין אינטראקציות עדיין.", "No interactions yet."),
+    ("visits", "visits.add_interaction", "הוסף", "Add"),
+    ("visits", "visits.interaction_category_ph", "קטגוריה…", "Category…"),
+    ("visits", "visits.interaction_note_ph", "הוסף הערה…", "Add a note…"),
+    ("visits", "visits.extra_fields", "שדות נוספים", "Extra fields"),
+    ("visits", "visits.date_range", "טווח תאריכי ביקור", "Visit date range"),
+    ("visits", "visits.date_from", "מתאריך", "From"),
+    ("visits", "visits.date_to", "עד תאריך", "To"),
+    # --- fixes25 §5: bilingual names for the system picklists (the backend
+    # registry labels are Hebrew-only, so English mode showed Hebrew) ---
+    ("picklist_def", "picklist_def.contact.contact_type", "סוג איש קשר", "Contact type"),
+    ("picklist_def", "picklist_def.contact.pipeline_status", "סטטוס", "Status"),
+    ("picklist_def", "picklist_def.contact.color_tag", "צבע", "Color"),
+    ("picklist_def", "picklist_def.contact.potential_next_step", "פוטנציאל לצעד", "Potential next step"),
+    ("picklist_def", "picklist_def.checklist.torah_thought", "דבר תורה", "Torah thought"),
+    ("picklist_def", "picklist_def.interaction.category", "קטגוריה", "Category"),
+    ("picklist_def", "picklist_def.visit.type", "סוג ביקור", "Visit type"),
+    ("picklist_def", "picklist_def.significant_date.type", "סוג תאריך", "Date type"),
+    ("picklist_def", "picklist_def.Jewish_status", "יהדות", "Jewish status"),
+    ("picklist_def", "picklist_def.affiliation", "השתייכות דתית", "Religious affiliation"),
+    ("picklist_def", "picklist_def.language", "שפה", "Language"),
+    ("picklist_def", "picklist_def.apartment.Jewish_status", "יהדות (דירה)", "Jewish status (apartment)"),
+    ("picklist_def", "picklist_def.apartment.campaign_status", "סטטוס קמפיין", "Campaign status"),
+    ("picklist_def", "picklist_def.apartment.mezuzah_status", "מזוזה", "Mezuzah"),
+    ("picklist_def", "picklist_def.apartment.language", "שפה", "Language"),
+    ("common", "common.hebrew_label", "עברית", "Hebrew"),
+    ("common", "common.english_label", "English", "English"),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)
@@ -843,6 +881,13 @@ LOCALIZATION_RENAMES: dict[str, tuple[set, str, set, str]] = {
     ),
     "filter.all_mitzvot": (
         {"מצוות קהילה"}, "מבצעים", {"Community mitzvot"}, "Mivtzoim",
+    ),
+    # fixes25: custom fields are logged per visit, not on the contact card.
+    "cf.intro": (
+        {"כל שדה הוא תיבת סימון + הערה, ויופיע בכרטיס איש הקשר. לדוגמה: מסיבת חנוכה."},
+        "כל שדה הוא תיבת סימון + הערה, ויופיע בטופס הביקור. לדוגמה: מסיבת חנוכה.",
+        {"Each field is a checkbox + note shown on the contact card. e.g. Hanukkah party."},
+        "Each field is a checkbox + note logged on each visit. e.g. Hanukkah party.",
     ),
 }
 
@@ -1041,9 +1086,6 @@ def _seed_sample_data(db: Session, org: models.Organization, admin: models.User)
         priority_score=5,
         color_tag="magenta",
     )
-    c1.checklist = models.CommunityChecklist(
-        tefillin=True, tzedakah=True, torah_thought="given"
-    )
     c1.mekurav = models.ContactMekurav(
         organization_id=org.id,
         potential_next_step="high",
@@ -1061,7 +1103,6 @@ def _seed_sample_data(db: Session, org: models.Organization, admin: models.User)
         priority_score=3,
         color_tag="green",
     )
-    c2.checklist = models.CommunityChecklist(torah_thought="not_given")
     c2.mekurav = models.ContactMekurav(
         organization_id=org.id, potential_next_step="medium"
     )
@@ -1069,15 +1110,25 @@ def _seed_sample_data(db: Session, org: models.Organization, admin: models.User)
     db.add_all([c1, c2])
     db.flush()
 
-    db.add(
-        models.Interaction(
-            organization_id=org.id,
-            contact_id=c1.id,
-            created_by=admin.id,
-            category="heart_connection",
-            note="עשיתי, לבדוק שמה",
-        )
+    # fixes25: engagement data (Mivtzoim / interactions / custom fields) is
+    # logged per visit, not on the contact.
+    v1 = models.VisitHistory(
+        organization_id=org.id,
+        contact_id=c1.id,
+        visit_date=datetime.datetime.utcnow(),
+        tefillin=True,
+        tzedakah=True,
+        torah_thought="given",
+        interactions=[
+            {
+                "category": "heart_connection",
+                "note": "עשיתי, לבדוק שמה",
+                "created_at": datetime.datetime.utcnow().isoformat(),
+                "author_name": admin.full_name,
+            }
+        ],
     )
+    db.add(v1)
 
     # Example custom checklist field for the demo org.
     cf = models.CustomFieldDefinition(
@@ -1090,7 +1141,7 @@ def _seed_sample_data(db: Session, org: models.Organization, admin: models.User)
     db.flush()
     db.add(
         models.CustomFieldValue(
-            contact_id=c1.id, definition_id=cf.id, checked=True, note="הגיע עם המשפחה"
+            visit_id=v1.id, definition_id=cf.id, checked=True, note="הגיע עם המשפחה"
         )
     )
     db.commit()

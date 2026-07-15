@@ -84,18 +84,18 @@ export function VisitHistoryEditor({ contactId }: { contactId: number }) {
           contacts={[]}
           lockedContactId={contactId}
           onCancel={() => setEditing(null)}
-          onSave={async (payload) => {
-            if (editing.id != null) {
-              await apiFetch(`/api/contacts/${contactId}/visits/${editing.id}`, {
-                method: "PUT",
-                body: JSON.stringify(payload),
-              });
-            } else {
-              await apiFetch(`/api/contacts/${contactId}/visits`, {
-                method: "POST",
-                body: JSON.stringify(payload),
-              });
-            }
+          onSave={(payload) =>
+            editing.id != null
+              ? apiFetch<Visit>(`/api/contacts/${contactId}/visits/${editing.id}`, {
+                  method: "PUT",
+                  body: JSON.stringify(payload),
+                })
+              : apiFetch<Visit>(`/api/contacts/${contactId}/visits`, {
+                  method: "POST",
+                  body: JSON.stringify(payload),
+                })
+          }
+          onDone={async () => {
             setEditing(null);
             await reload();
           }}

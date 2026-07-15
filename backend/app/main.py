@@ -12,6 +12,7 @@ from alembic import command
 from alembic.config import Config as AlembicConfig
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect
 
 from app import models  # noqa: F401 — ensures models register on Base.metadata
@@ -54,7 +55,6 @@ from app.routers import (
     custom_fields,
     donations,
     field_settings,
-    interactions,
     localization,
     metadata,
     organizations,
@@ -108,7 +108,6 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(contacts.router)
-app.include_router(interactions.router)
 app.include_router(metadata.router)
 app.include_router(localization.router)
 app.include_router(picklists.router)
@@ -130,6 +129,11 @@ app.include_router(backups.router)
 app.include_router(preferences.router)
 app.include_router(search.router)
 app.include_router(ai.router)
+
+# fixes25 §6: locally stored uploads (logo fallback when Cloudinary is
+# unavailable) are served straight from the data volume.
+os.makedirs(settings.upload_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
 
 
 @app.get("/api/health", tags=["health"])

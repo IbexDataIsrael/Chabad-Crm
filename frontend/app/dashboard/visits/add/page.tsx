@@ -8,7 +8,7 @@ import { VisitForm } from "@/components/VisitForm";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
-import type { Contact } from "@/lib/types";
+import type { Contact, Visit } from "@/lib/types";
 
 /** Dedicated add-visit page (admin). Contact is optional. */
 export default function AddVisitPage() {
@@ -42,13 +42,13 @@ export default function AddVisitPage() {
       <VisitForm
         contacts={contacts}
         onCancel={() => router.push("/dashboard/visits")}
-        onSave={async (payload) => {
-          await apiFetch("/api/visits", {
+        onSave={(payload) =>
+          apiFetch<Visit>("/api/visits", {
             method: "POST",
             body: JSON.stringify(payload),
-          });
-          router.push("/dashboard/visits");
-        }}
+          })
+        }
+        onDone={() => router.push("/dashboard/visits")}
       />
     </div>
   );

@@ -1,17 +1,5 @@
-export interface Checklist {
-  contact_id: number;
-  tefillin: boolean;
-  tefillin_notes: string | null;
-  tzedakah: boolean;
-  charity_note: string | null;
-  shabbat_candles: boolean;
-  shabbat_candles_notes: string | null;
-  torah_pamphlet: boolean;
-  torah_pamphlet_notes: string | null;
-  torah_thought: string | null;
-  torah_letter: boolean;
-  letter_torah_notes: string | null;
-}
+// fixes25: the contact-level Checklist type is gone — Mivtzoim flags live on
+// the visit (see Visit / MIVTZOIM_FLAGS).
 
 export interface CustomFieldDefinition {
   id: number;
@@ -40,7 +28,7 @@ export interface Mekurav {
   tzedaka_potential: string | null; // פוטנציאל לצדקה (fixes9)
   first_visit: string | null;
   potential_next_step: string | null;
-  rebbe_connection: string | null;
+  // fixes25: rebbe_connection moved to the visit (connection_to_rebbe).
   recommendations: string | null;
   background: string | null;
 }
@@ -108,7 +96,6 @@ export interface Contact {
   priority_score: number | null;
   created_at: string;
   updated_at: string;
-  checklist?: Checklist | null;
   mekurav?: Mekurav | null;
   shliach?: Shliach | null;
   special_dates?: SignificantDate[];
@@ -268,13 +255,12 @@ export function apartmentTitle(a: {
   return (a.name ?? "").trim() || `#${a.id}`;
 }
 
-export interface Interaction {
-  id: number;
-  contact_id: number;
-  created_by: number;
+/** One entry of a visit's interaction log (fixes25 — JSON on the visit). */
+export interface VisitInteraction {
   category: string;
   note: string;
-  created_at: string;
+  created_at?: string | null;
+  author_name?: string | null;
 }
 
 export interface Visit {
@@ -286,7 +272,26 @@ export interface Visit {
   visit_type: string | null;
   location: string | null;
   notes: string | null;
+  // fixes25: visit-level engagement data.
+  interactions: VisitInteraction[];
+  tefillin: boolean;
+  tzedakah: boolean;
+  shabbat_candles: boolean;
+  torah_pamphlet: boolean;
+  letter_in_torah: boolean;
+  torah_thought: string | null;
+  connection_to_rebbe: string | null;
 }
+
+/** The visit's Mivtzoim boolean flags, with their visits.* label keys. */
+export const MIVTZOIM_FLAGS = [
+  "tefillin",
+  "tzedakah",
+  "shabbat_candles",
+  "torah_pamphlet",
+  "letter_in_torah",
+] as const;
+export type MivtzoimFlag = (typeof MIVTZOIM_FLAGS)[number];
 
 export interface Donation {
   id: number;
@@ -352,32 +357,6 @@ export interface UserSummary {
   created_at: string;
 }
 
-export function emptyChecklist(contactId = 0): Checklist {
-  return {
-    contact_id: contactId,
-    tefillin: false,
-    tefillin_notes: null,
-    tzedakah: false,
-    charity_note: null,
-    shabbat_candles: false,
-    shabbat_candles_notes: null,
-    torah_pamphlet: false,
-    torah_pamphlet_notes: null,
-    torah_thought: null,
-    torah_letter: false,
-    letter_torah_notes: null,
-  };
-}
-
-/** Boolean + matching note column pairs, in display order. */
-export const CHECKLIST_ROWS: { bool: keyof Checklist; note: keyof Checklist }[] = [
-  { bool: "tefillin", note: "tefillin_notes" },
-  { bool: "tzedakah", note: "charity_note" },
-  { bool: "shabbat_candles", note: "shabbat_candles_notes" },
-  { bool: "torah_pamphlet", note: "torah_pamphlet_notes" },
-  { bool: "torah_letter", note: "letter_torah_notes" },
-];
-
 /** Composed display name: "<last> <first>" (falls back to whichever exists). */
 export function contactFullName(c: { name: string; last_name?: string | null }): string {
   return [c.last_name, c.name].filter(Boolean).join(" ");
@@ -401,11 +380,3 @@ export function roundCoord(n: number | null | undefined): number | null {
   return n == null ? null : Number(n.toFixed(5));
 }
 
-/** Boolean mitzvot fields, in display order. */
-export const CHECKLIST_BOOLEANS: (keyof Checklist)[] = [
-  "tefillin",
-  "tzedakah",
-  "shabbat_candles",
-  "torah_pamphlet",
-  "torah_letter",
-];

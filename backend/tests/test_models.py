@@ -12,13 +12,16 @@ def test_all_tables_created():
         "organizations",
         "users",
         "contacts",
-        "community_checklists",
-        "interactions",
+        "visit_history",
         "field_localization",
         "picklist_values",
     }
     assert expected.issubset(tables)
     assert "regions" not in tables  # replaced by the areas table
+    # fixes25: the contact-level checklist + interaction tables are gone —
+    # engagement data lives on visits.
+    assert "community_checklists" not in tables
+    assert "interactions" not in tables
 
 
 def test_contact_has_new_fields():
@@ -35,8 +38,29 @@ def test_contact_has_new_fields():
         "first_visit",
         "potential_next_step",
         "background",
-        "rebbe_connection",
     }.issubset(mekurav_cols)
+    # fixes25: rebbe_connection moved to visit_history.connection_to_rebbe.
+    assert "rebbe_connection" not in mekurav_cols
+
+
+def test_visit_has_engagement_fields():
+    """fixes25: visits carry the Mivtzoim flags, the interactions JSON log and
+    the moved contact-level extras."""
+    Base.metadata.create_all(bind=engine)
+    visit_cols = {c["name"] for c in inspect(engine).get_columns("visit_history")}
+    assert {
+        "interactions",
+        "tefillin",
+        "tzedakah",
+        "shabbat_candles",
+        "torah_pamphlet",
+        "letter_in_torah",
+        "torah_thought",
+        "connection_to_rebbe",
+    }.issubset(visit_cols)
+    value_cols = {c["name"] for c in inspect(engine).get_columns("custom_field_values")}
+    assert "visit_id" in value_cols
+    assert "contact_id" not in value_cols
 
 
 def test_every_table_has_guid():
@@ -45,8 +69,7 @@ def test_every_table_has_guid():
         "organizations",
         "users",
         "contacts",
-        "community_checklists",
-        "interactions",
+        "visit_history",
         "field_localization",
         "picklist_values",
     ]:

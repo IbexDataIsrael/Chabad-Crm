@@ -3,9 +3,18 @@
 Two routers over the same `VisitHistory` entity:
 - `router`      — per-contact sub-resource (/api/contacts/{id}/visits), open to any
                   authenticated org member; powers the contact page's visit section.
-- `all_router`  — top-level (/api/visits), **admin-only**; the org-wide visits page
-                  with an optional ?contact_id filter. Visits may be contact-less.
+- `all_router`  — top-level (/api/visits): CRUD is **admin-only** (the org-wide
+                  visits page); the custom-fields sub-resource is open to any org
+                  member (it backs the contact-page visit editor too).
+
+fixes25: a visit carries the engagement data that used to live on the contact —
+an `interactions` JSON log (picklist `interaction.category`), the Mivtzoim
+boolean flags, `torah_thought` (picklist `checklist.torah_thought`) and
+`connection_to_rebbe`. Custom-field values attach to visits
+(`/api/visits/{id}/custom-fields`).
 """
+import datetime
+
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -15,10 +24,26 @@ from app import models
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.picklist_utils import validate_picklist_value
-from app.schemas import VisitCreate, VisitOut, VisitUpdate
+from app.schemas import (
+    ContactCustomFieldOut,
+    CustomFieldValueIn,
+    VisitCreate,
+    VisitOut,
+    VisitUpdate,
+)
 
 router = APIRouter(prefix="/api/contacts", tags=["visits"])
 all_router = APIRouter(prefix="/api/visits", tags=["visits"])
+
+# Visit fields settable straight from a payload dict (picklist-validated ones
+# are handled explicitly).
+_MIVTZOIM_FLAGS = (
+    "tefillin",
+    "tzedakah",
+    "shabbat_candles",
+    "torah_pamphlet",
+    "letter_in_torah",
+)
 
 
 def _out(v: models.VisitHistory) -> VisitOut:
@@ -33,6 +58,14 @@ def _out(v: models.VisitHistory) -> VisitOut:
         visit_type=v.visit_type,
         location=v.location,
         notes=v.notes,
+        interactions=v.interactions or [],
+        tefillin=v.tefillin,
+        tzedakah=v.tzedakah,
+        shabbat_candles=v.shabbat_candles,
+        torah_pamphlet=v.torah_pamphlet,
+        letter_in_torah=v.letter_in_torah,
+        torah_thought=v.torah_thought,
+        connection_to_rebbe=v.connection_to_rebbe,
     )
 
 
@@ -71,6 +104,47 @@ def _visit_or_404(
     return v
 
 
+def _prepare_interactions(
+    entries, db: Session, org_id: int, current_user: models.User
+) -> list[dict]:
+    """Validate + normalize an interactions payload into the stored JSON shape.
+    Missing timestamps/author names are stamped from the current request."""
+    now = datetime.datetime.utcnow().isoformat()
+    out = []
+    for e in entries:
+        validate_picklist_value(db, org_id, "interaction.category", e.category)
+        out.append(
+            {
+                "category": e.category,
+                "note": e.note,
+                "created_at": e.created_at or now,
+                "author_name": e.author_name or current_user.full_name,
+            }
+        )
+    return out
+
+
+def _apply_payload(
+    v: models.VisitHistory,
+    data: dict,
+    db: Session,
+    org_id: int,
+    current_user: models.User,
+) -> None:
+    """Set validated payload fields on a visit (shared by create/update)."""
+    if "visit_type" in data:
+        validate_picklist_value(db, org_id, "visit.type", data["visit_type"])
+    if "torah_thought" in data:
+        validate_picklist_value(
+            db, org_id, "checklist.torah_thought", data["torah_thought"]
+        )
+    interactions = data.pop("interactions", None)
+    if interactions is not None:
+        v.interactions = interactions  # already normalized by the caller
+    for field, value in data.items():
+        setattr(v, field, value)
+
+
 # --- Per-contact sub-resource (contact page) -------------------------------
 @router.get("/{contact_id}/visits", response_model=list[VisitOut])
 def list_visits(
@@ -100,15 +174,13 @@ def add_visit(
 ):
     org_id = current_user.organization_id
     _contact_or_404(contact_id, org_id, db)
-    validate_picklist_value(db, org_id, "visit.type", payload.visit_type)
-    v = models.VisitHistory(
-        organization_id=org_id,
-        contact_id=contact_id,
-        visit_date=payload.visit_date,
-        visit_type=payload.visit_type,
-        location=payload.location,
-        notes=payload.notes,
+    data = payload.model_dump()
+    data["contact_id"] = contact_id  # locked to the path
+    data["interactions"] = _prepare_interactions(
+        payload.interactions, db, org_id, current_user
     )
+    v = models.VisitHistory(organization_id=org_id)
+    _apply_payload(v, data, db, org_id, current_user)
     db.add(v)
     db.commit()
     db.refresh(v)
@@ -126,12 +198,13 @@ def update_visit(
     org_id = current_user.organization_id
     v = _visit_or_404(visit_id, org_id, db, contact_id=contact_id)
     data = payload.model_dump(exclude_unset=True)
-    if "visit_type" in data:
-        validate_picklist_value(db, org_id, "visit.type", data["visit_type"])
     # contact_id stays locked to the path on the sub-resource.
     data.pop("contact_id", None)
-    for field, value in data.items():
-        setattr(v, field, value)
+    if payload.interactions is not None:
+        data["interactions"] = _prepare_interactions(
+            payload.interactions, db, org_id, current_user
+        )
+    _apply_payload(v, data, db, org_id, current_user)
     db.commit()
     db.refresh(v)
     return _out(v)
@@ -173,15 +246,12 @@ def create_visit(
 ):
     org_id = admin.organization_id
     _validate_contact(payload.contact_id, org_id, db)
-    validate_picklist_value(db, org_id, "visit.type", payload.visit_type)
-    v = models.VisitHistory(
-        organization_id=org_id,
-        contact_id=payload.contact_id,
-        visit_date=payload.visit_date,
-        visit_type=payload.visit_type,
-        location=payload.location,
-        notes=payload.notes,
+    data = payload.model_dump()
+    data["interactions"] = _prepare_interactions(
+        payload.interactions, db, org_id, admin
     )
+    v = models.VisitHistory(organization_id=org_id)
+    _apply_payload(v, data, db, org_id, admin)
     db.add(v)
     db.commit()
     db.refresh(v)
@@ -200,10 +270,11 @@ def update_any_visit(
     data = payload.model_dump(exclude_unset=True)
     if "contact_id" in data:
         _validate_contact(data["contact_id"], org_id, db)
-    if "visit_type" in data:
-        validate_picklist_value(db, org_id, "visit.type", data["visit_type"])
-    for field, value in data.items():
-        setattr(v, field, value)
+    if payload.interactions is not None:
+        data["interactions"] = _prepare_interactions(
+            payload.interactions, db, org_id, admin
+        )
+    _apply_payload(v, data, db, org_id, admin)
     db.commit()
     db.refresh(v)
     return _out(v)
@@ -218,3 +289,76 @@ def delete_any_visit(
     v = _visit_or_404(visit_id, admin.organization_id, db)
     db.delete(v)
     db.commit()
+
+
+# --- Custom fields (per-visit values, fixes25) ------------------------------
+@all_router.get("/{visit_id}/custom-fields", response_model=list[ContactCustomFieldOut])
+def get_visit_custom_fields(
+    visit_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    org_id = current_user.organization_id
+    v = _visit_or_404(visit_id, org_id, db)
+    defs = (
+        db.query(models.CustomFieldDefinition)
+        .filter(
+            models.CustomFieldDefinition.organization_id == org_id,
+            models.CustomFieldDefinition.is_active.is_(True),
+        )
+        .order_by(models.CustomFieldDefinition.sort_order, models.CustomFieldDefinition.id)
+        .all()
+    )
+    values = {val.definition_id: val for val in v.custom_values}
+    result = []
+    for d in defs:
+        val = values.get(d.id)
+        result.append(
+            ContactCustomFieldOut(
+                definition_id=d.id,
+                field_key=d.field_key,
+                hebrew_label=d.hebrew_label,
+                checked=val.checked if val else False,
+                note=val.note if val else None,
+            )
+        )
+    return result
+
+
+@all_router.put("/{visit_id}/custom-fields", response_model=list[ContactCustomFieldOut])
+def set_visit_custom_fields(
+    visit_id: int,
+    payload: list[CustomFieldValueIn],
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    org_id = current_user.organization_id
+    v = _visit_or_404(visit_id, org_id, db)
+    valid_ids = {
+        d.id
+        for d in db.query(models.CustomFieldDefinition.id)
+        .filter(models.CustomFieldDefinition.organization_id == org_id)
+        .all()
+    }
+    existing = {val.definition_id: val for val in v.custom_values}
+    for item in payload:
+        if item.definition_id not in valid_ids:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"definition_id {item.definition_id} does not exist",
+            )
+        val = existing.get(item.definition_id)
+        if val:
+            val.checked = item.checked
+            val.note = item.note
+        else:
+            db.add(
+                models.CustomFieldValue(
+                    visit_id=v.id,
+                    definition_id=item.definition_id,
+                    checked=item.checked,
+                    note=item.note,
+                )
+            )
+    db.commit()
+    return get_visit_custom_fields(visit_id, db, current_user)

@@ -10,7 +10,16 @@ This document defines the database schema, relational structures, and complete S
 > **GUIDs:** every table has a `guid` column (unique, auto-generated UUID) alongside its integer
 > `id`. Integer ids stay the internal/route key; GUIDs are for external references/sync.
 >
-> **Contact key:** `contacts.phone` is **required** and **unique per organization**.
+> **Contact key:** `contacts.phone` is **optional** (nullable since the data import) and
+> **unique per organization** when present.
+>
+> **fixes25 (visit restructuring):** the `interactions` and `community_checklists` tables were
+> **dropped**. Engagement data lives on `visit_history`: an `interactions` JSON log, the Mivtzoim
+> booleans (`tefillin`, `tzedakah`, `shabbat_candles`, `torah_pamphlet`, `letter_in_torah`),
+> `torah_thought` and `connection_to_rebbe` (moved from `contact_mekurav.rebbe_connection`).
+> `custom_field_values` re-pointed from contacts to visits (`visit_id`). Sections below that
+> mention the old contact-level structures are historical — `backend/app/models.py` is
+> authoritative.
 
 ## Relational Schema Diagram
 

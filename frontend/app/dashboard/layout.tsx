@@ -38,7 +38,8 @@ function DashboardChrome({ children }: { children: ReactNode }) {
       : [{ href: "/dashboard/contacts", label: t("nav.contacts", "אנשי קשר") }]),
     { href: "/dashboard/shluchim", label: t("nav.shluchim", "פעילים"), admin: true },
     { href: "/dashboard/users", label: t("nav.users", "משתמשים"), admin: true },
-    { href: "/dashboard/visits", label: t("nav.visits", "ביקורים"), admin: true },
+    // fixes25 §4: the Visits menu entry is retired (visit logging happens from
+    // the contact page); /dashboard/visits still serves by direct URL.
     // fixes24 §2: donations moved from a standalone header link into People.
     { href: "/dashboard/donations", label: t("nav.donations", "תרומות"), admin: true },
   ]);

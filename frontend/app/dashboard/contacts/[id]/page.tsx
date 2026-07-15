@@ -4,12 +4,9 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { ChecklistFields } from "@/components/ChecklistFields";
 import { ContactForm, type ContactFormValues } from "@/components/ContactForm";
 import { ContactView } from "@/components/ContactView";
-import { CustomFieldsEditor } from "@/components/CustomFieldsEditor";
 import { DonationsEditor } from "@/components/DonationsEditor";
-import { InteractionsTimeline } from "@/components/InteractionsTimeline";
 import { SignificantDatesEditor } from "@/components/SignificantDatesEditor";
 import { VisitHistoryEditor } from "@/components/VisitHistoryEditor";
 import { apiFetch } from "@/lib/api";
@@ -18,14 +15,7 @@ import { useConfirm } from "@/lib/confirm";
 import { telHref, waHref } from "@/lib/contactActions";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
-import {
-  contactFullName,
-  emptyChecklist,
-  type Checklist,
-  type Contact,
-  type ContactCustomField,
-  type UserSummary,
-} from "@/lib/types";
+import { contactFullName, type Contact, type UserSummary } from "@/lib/types";
 
 export default function ContactDetailPage() {
   const params = useParams<{ id: string }>();
@@ -38,58 +28,26 @@ export default function ContactDetailPage() {
 
   const [contact, setContact] = useState<Contact | null>(null);
   const [users, setUsers] = useState<UserSummary[]>([]);
-  const [checklist, setChecklist] = useState<Checklist>(emptyChecklist(contactId));
-  const [customFields, setCustomFields] = useState<ContactCustomField[]>([]);
   const [editing, setEditing] = useState(false);
   const [notFound, setNotFound] = useState(false);
-
-  async function loadCustomFields() {
-    setCustomFields(
-      await apiFetch<ContactCustomField[]>(`/api/contacts/${contactId}/custom-fields`),
-    );
-  }
 
   useEffect(() => {
     apiFetch<UserSummary[]>("/api/users").then(setUsers).catch(() => {});
     apiFetch<Contact>(`/api/contacts/${contactId}`)
-      .then((c) => {
-        setContact(c);
-        setChecklist(c.checklist ?? emptyChecklist(c.id));
-      })
+      .then(setContact)
       .catch(() => setNotFound(true));
-    loadCustomFields().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contactId]);
 
   async function save(values: ContactFormValues) {
+    // fixes25: Mivtzoim / interactions / custom fields are logged per visit —
+    // the contact save carries only the contact's own data.
     await apiFetch<Contact>(`/api/contacts/${contactId}`, {
       method: "PUT",
       body: JSON.stringify(values),
     });
-    // Checklist + custom fields apply to mekurav contacts only.
-    if (values.contact_type === "mekurav") {
-      await apiFetch(`/api/contacts/${contactId}/checklist`, {
-        method: "PUT",
-        body: JSON.stringify(checklist),
-      });
-      if (customFields.length > 0) {
-        await apiFetch(`/api/contacts/${contactId}/custom-fields`, {
-          method: "PUT",
-          body: JSON.stringify(
-            customFields.map((c) => ({
-              definition_id: c.definition_id,
-              checked: c.checked,
-              note: c.note,
-            })),
-          ),
-        });
-      }
-    }
-    // Reload fresh state.
     const fresh = await apiFetch<Contact>(`/api/contacts/${contactId}`);
     setContact(fresh);
-    setChecklist(fresh.checklist ?? emptyChecklist(fresh.id));
-    await loadCustomFields();
     setEditing(false);
     success(t("msg.saved", "נשמר בהצלחה"));
   }
@@ -125,11 +83,7 @@ export default function ContactDetailPage() {
         <div className="flex items-center gap-2">
           {editing ? (
             <button
-              onClick={() => {
-                setEditing(false);
-                setChecklist(contact.checklist ?? emptyChecklist(contact.id));
-                loadCustomFields();
-              }}
+              onClick={() => setEditing(false)}
               className="text-sm border border-gray-300 rounded-md px-3 py-1 hover:bg-gray-50"
             >
               {t("action.cancel", "ביטול")}
@@ -199,25 +153,9 @@ export default function ContactDetailPage() {
             users={users}
             onSubmit={save}
             submitLabel={t("action.save_changes", "שמור שינויים")}
-            extra={
-              contact.contact_type === "mekurav" ? (
-                <div className="space-y-6 border-t border-gray-100 pt-4">
-                  <section>
-                    <h3 className="text-sm font-semibold mb-3">{t("community_checklists", "מבצעים")}</h3>
-                    <ChecklistFields value={checklist} onChange={setChecklist} />
-                  </section>
-                  {customFields.length > 0 && (
-                    <section>
-                      <h3 className="text-sm font-semibold mb-3">{t("page.extra_fields", "שדות נוספים")}</h3>
-                      <CustomFieldsEditor items={customFields} onChange={setCustomFields} />
-                    </section>
-                  )}
-                </div>
-              ) : undefined
-            }
           />
         ) : (
-          <ContactView contact={contact} users={users} customFields={customFields} />
+          <ContactView contact={contact} users={users} />
         )}
       </section>
 
@@ -238,19 +176,13 @@ export default function ContactDetailPage() {
         </section>
       )}
 
-      {/* fixes18 §3.1: donations + interactions are mekurav relationship data —
-          a shliach profile no longer shows these sections. */}
+      {/* fixes18 §3.1: donations are mekurav relationship data — a shliach
+          profile no longer shows this section. fixes25: interactions moved
+          into the visit log above. */}
       {isAdmin && contact.contact_type === "mekurav" && (
         <section className="bg-white rounded-xl shadow-sm p-6">
           <h2 className="font-semibold mb-4">{t("donation.history", "היסטורית תרומות")}</h2>
           <DonationsEditor contactId={contact.id} />
-        </section>
-      )}
-
-      {contact.contact_type === "mekurav" && (
-        <section className="bg-white rounded-xl shadow-sm p-6">
-          <h2 className="font-semibold mb-4">{t("interactions", "אינטראקציות")}</h2>
-          <InteractionsTimeline contactId={contact.id} />
         </section>
       )}
     </div>

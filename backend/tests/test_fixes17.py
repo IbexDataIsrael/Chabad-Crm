@@ -100,14 +100,21 @@ class TestContactFilters17:
     def test_mitzvot_and_semantics(self, client, admin_headers):
         c1 = _mk_contact(client, admin_headers, name="שתיים")
         c2 = _mk_contact(client, admin_headers, name="אחת")
-        client.put(
-            f"/api/contacts/{c1['id']}/checklist",
-            json={"tefillin": True, "tzedakah": True},
+        # fixes25: flags live on visits — c1 even splits them across two visits
+        # (AND semantics hold across the contact's whole visit history).
+        client.post(
+            f"/api/contacts/{c1['id']}/visits",
+            json={"visit_date": "2026-07-01T00:00:00", "tefillin": True},
             headers=admin_headers,
         )
-        client.put(
-            f"/api/contacts/{c2['id']}/checklist",
-            json={"tzedakah": True},
+        client.post(
+            f"/api/contacts/{c1['id']}/visits",
+            json={"visit_date": "2026-07-02T00:00:00", "tzedakah": True},
+            headers=admin_headers,
+        )
+        client.post(
+            f"/api/contacts/{c2['id']}/visits",
+            json={"visit_date": "2026-07-01T00:00:00", "tzedakah": True},
             headers=admin_headers,
         )
         both = _list(client, admin_headers, "?mitzvot=tzedakah")
@@ -139,13 +146,13 @@ class TestContactFilters17:
     def test_emails_respect_new_filters(self, client, admin_headers):
         c = _mk_contact(client, admin_headers, name="עם", email="with@x.com")
         _mk_contact(client, admin_headers, name="בלי", email="without@x.com")
-        client.put(
-            f"/api/contacts/{c['id']}/checklist",
-            json={"torah_letter": True},
+        client.post(
+            f"/api/contacts/{c['id']}/visits",
+            json={"visit_date": "2026-07-01T00:00:00", "letter_in_torah": True},
             headers=admin_headers,
         )
         r = client.get(
-            "/api/contacts/emails?mitzvot=torah_letter", headers=admin_headers
+            "/api/contacts/emails?mitzvot=letter_in_torah", headers=admin_headers
         )
         assert r.json() == ["with@x.com"]
 

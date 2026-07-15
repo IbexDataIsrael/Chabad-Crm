@@ -9,40 +9,35 @@ import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
 import {
   apartmentTitle,
-  CHECKLIST_ROWS,
   type AdminArea,
   type Apartment,
   type Area,
   type Contact,
-  type ContactCustomField,
   type ReportNumber,
   type UserSummary,
 } from "@/lib/types";
 import { ContactMap } from "./ContactMap";
 
-/** Read-only display of every contact field, checklist (with notes), and custom fields. */
+/** Read-only display of every contact field. fixes25: the Mivtzoim checklist
+ *  and custom fields moved to the visit log. */
 export function ContactView({
   contact,
   users,
-  customFields,
 }: {
   contact: Contact;
   users: UserSummary[];
-  customFields: ContactCustomField[];
 }) {
   const { t } = useLocalization();
   const { isFieldVisible: vis } = useFieldSettings();
   const status = usePicklist("contact.pipeline_status");
   const potential = usePicklist("contact.potential_next_step");
   const color = usePicklist("contact.color_tag");
-  const torah = usePicklist("checklist.torah_thought");
   const contactType = usePicklist("contact.contact_type");
   const jewishStatus = usePicklist("Jewish_status");
   const affiliation = usePicklist("affiliation");
   const language = usePicklist("language");
 
   const assignee = users.find((u) => u.guid === contact.assigned_user_id);
-  const cl = contact.checklist ?? null;
   const mk = contact.mekurav ?? null;
   const isMekurav = contact.contact_type === "mekurav";
   const hasCoords = contact.latitude != null && contact.longitude != null;
@@ -120,7 +115,6 @@ export function ContactView({
           t("contact_mekurav.tzedaka_potential", "פוטנציאל לצדקה"),
           mk.tzedaka_potential || "—",
         ],
-        ["contact_mekurav.rebbe_connection", t("contact_mekurav.rebbe_connection", "קשר לרבי"), mk.rebbe_connection || "—"],
         ["contact_mekurav.recommendations", t("contact_mekurav.recommendations", "המלצות"), mk.recommendations || "—"],
         ["contact_mekurav.background", t("contact_mekurav.background", "רקע"), mk.background || "—"],
         [
@@ -213,46 +207,8 @@ export function ContactView({
         <ContactMap lat={contact.latitude as number} lng={contact.longitude as number} />
       )}
 
-      {/* Checklist + custom fields are mekurav-only — never shown for a shliach. */}
-      {isMekurav && (
-        <div>
-          <h3 className="text-sm font-semibold mb-2">
-            {t("community_checklists", "מבצעים")}
-          </h3>
-          <ul className="space-y-1">
-            {CHECKLIST_ROWS.map(({ bool, note }) => (
-              <Row
-                key={bool}
-                label={t(`community_checklists.${bool}`)}
-                on={Boolean(cl?.[bool])}
-                note={(cl?.[note] as string | null) ?? null}
-              />
-            ))}
-            <li className="text-sm">
-              <span className="text-gray-500">
-                {t("community_checklists.torah_thought", "דבר תורה")}:{" "}
-              </span>
-              {torah.labelFor(cl?.torah_thought) || "—"}
-            </li>
-          </ul>
-        </div>
-      )}
-
-      {isMekurav && customFields.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold mb-2">{t("page.extra_fields", "שדות נוספים")}</h3>
-          <ul className="space-y-1">
-            {customFields.map((f) => (
-              <Row
-                key={f.definition_id}
-                label={f.hebrew_label}
-                on={f.checked}
-                note={f.note}
-              />
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* fixes25: the Mivtzoim checklist + custom fields moved to the visit
+          log (each visit records what happened on it). */}
 
       <p className="text-xs text-gray-300" dir="ltr">
         GUID: {contact.guid}
@@ -349,21 +305,3 @@ function AreaLabel({ id }: { id: number }) {
   return <>{label ?? "…"}</>;
 }
 
-function Row({
-  label,
-  on,
-  note,
-}: {
-  label: string;
-  on: boolean;
-  note: string | null;
-}) {
-  return (
-    <li className="text-sm flex flex-wrap items-center gap-x-2">
-      <span className={on ? "text-status-green" : "text-gray-400"}>
-        {on ? "✓" : "✗"} {label}
-      </span>
-      {note && <span className="text-gray-500">— {note}</span>}
-    </li>
-  );
-}

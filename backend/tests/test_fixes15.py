@@ -154,12 +154,13 @@ class TestMitzvotFilter:
     def test_has_mitzvot_keeps_only_checked_contacts(self, client, admin_headers):
         c1 = _mk_contact(client, admin_headers, name="עם מצווה")
         _mk_contact(client, admin_headers, name="בלי מצווה")
-        r = client.put(
-            f"/api/contacts/{c1['id']}/checklist",
-            json={"tzedakah": True},
+        # fixes25: Mivtzoim flags are logged per visit.
+        r = client.post(
+            f"/api/contacts/{c1['id']}/visits",
+            json={"visit_date": "2026-07-01T00:00:00", "tzedakah": True},
             headers=admin_headers,
         )
-        assert r.status_code == 200, r.text
+        assert r.status_code == 201, r.text
         got = _list(client, admin_headers, "?has_mitzvot=true")
         assert [c["id"] for c in got["items"]] == [c1["id"]]
         # Without the flag both come back.

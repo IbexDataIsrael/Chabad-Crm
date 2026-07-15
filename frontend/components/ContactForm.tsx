@@ -31,7 +31,7 @@ export interface MekuravFormValues {
   tzedaka_potential: string | null; // פוטנציאל לצדקה (fixes9)
   first_visit: string | null;
   potential_next_step: string | null;
-  rebbe_connection: string | null;
+  // fixes25: rebbe_connection moved to the visit form (connection_to_rebbe).
   recommendations: string | null;
   background: string | null;
 }
@@ -103,7 +103,6 @@ export function ContactForm({
       tzedaka_potential: initial?.mekurav?.tzedaka_potential ?? null,
       first_visit: initial?.mekurav?.first_visit ?? null,
       potential_next_step: initial?.mekurav?.potential_next_step ?? null,
-      rebbe_connection: initial?.mekurav?.rebbe_connection ?? null,
       recommendations: initial?.mekurav?.recommendations ?? null,
       background: initial?.mekurav?.background ?? null,
     },
@@ -387,18 +386,7 @@ export function ContactForm({
             </Field>
           )}
 
-          {vis("contact_mekurav.rebbe_connection") && (
-            <div className="sm:col-span-2">
-              <Field label={t("contact_mekurav.rebbe_connection", "קשר לרבי")}>
-                <textarea
-                  className={inputClass}
-                  rows={2}
-                  value={values.mekurav.rebbe_connection ?? ""}
-                  onChange={(e) => setMekurav("rebbe_connection", e.target.value || null)}
-                />
-              </Field>
-            </div>
-          )}
+          {/* fixes25: "קשר לרבי" moved to the visit form (connection_to_rebbe). */}
 
           {vis("contact_mekurav.recommendations") && (
             <div className="sm:col-span-2">

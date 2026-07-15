@@ -87,20 +87,15 @@ def _delete_organization_cascade(db: Session, org_id: int) -> None:
     """Delete an org and every row that belongs to it, children first.
 
     The FKs to `organizations` have no DB-level ON DELETE CASCADE, so we remove
-    dependents in an order that never violates a foreign key. Two tables
-    (custom_field_values, community_checklists) carry no organization_id — they
-    are scoped through their contact.
+    dependents in an order that never violates a foreign key. One table
+    (custom_field_values) carries no organization_id — it is scoped through
+    its visit (fixes25).
     """
-    contact_ids = db.query(models.Contact.id).filter(
-        models.Contact.organization_id == org_id
+    visit_ids = db.query(models.VisitHistory.id).filter(
+        models.VisitHistory.organization_id == org_id
     )
-
-    # Tables scoped via contact (no organization_id column of their own).
     db.query(models.CustomFieldValue).filter(
-        models.CustomFieldValue.contact_id.in_(contact_ids)
-    ).delete(synchronize_session=False)
-    db.query(models.CommunityChecklist).filter(
-        models.CommunityChecklist.contact_id.in_(contact_ids)
+        models.CustomFieldValue.visit_id.in_(visit_ids)
     ).delete(synchronize_session=False)
 
     # Org-scoped tables, leaves → roots.
@@ -112,7 +107,6 @@ def _delete_organization_cascade(db: Session, org_id: int) -> None:
         models.ContactShliachArea,
         models.VisitHistory,
         models.Donation,
-        models.Interaction,
         models.ContactMekurav,
         models.ContactShliach,
         models.CustomFieldDefinition,
@@ -339,14 +333,8 @@ def user_dependencies(
         .filter(models.Contact.assigned_user_id == user.guid)
         .scalar()
     ) or 0
-    interactions = (
-        db.query(func.count(models.Interaction.id))
-        .filter(models.Interaction.created_by == user_id)
-        .scalar()
-    ) or 0
-    out = AdminUserDependenciesOut(
-        assigned_contacts=assigned, interactions=interactions
-    )
+    # fixes25: interaction rows are gone (visit JSON, author as plain text).
+    out = AdminUserDependenciesOut(assigned_contacts=assigned)
     shliach = (
         db.query(models.ContactShliach)
         .filter(models.ContactShliach.user_id == user_id)
@@ -360,11 +348,7 @@ def user_dependencies(
             )
         out.covered_report_numbers = len(shliach.report_numbers)
         out.covered_areas = len(shliach.areas)
-    out.has_dependencies = bool(
-        assigned
-        or interactions
-        or shliach is not None
-    )
+    out.has_dependencies = bool(assigned or shliach is not None)
     return out
 
 
@@ -375,10 +359,7 @@ def delete_user(
     admin: models.User = Depends(require_superadmin),
 ):
     user = _get_manageable_user(db, user_id, admin)
-    # Interactions/contacts reference users; null the soft links, hard-delete the rest.
-    db.query(models.Interaction).filter(
-        models.Interaction.created_by == user_id
-    ).delete(synchronize_session=False)
+    # Contacts reference users; null the soft links, hard-delete the rest.
     db.query(models.Contact).filter(
         models.Contact.assigned_user_id == user.guid
     ).update({models.Contact.assigned_user_id: None}, synchronize_session=False)

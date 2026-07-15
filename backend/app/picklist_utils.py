@@ -37,8 +37,9 @@ FIELD_KEY_TO_COLUMN: dict[str, tuple[type, str]] = {
     "contact.pipeline_status": (models.Contact, "pipeline_status"),
     "contact.color_tag": (models.Contact, "color_tag"),
     "contact.potential_next_step": (models.ContactMekurav, "potential_next_step"),
-    "checklist.torah_thought": (models.CommunityChecklist, "torah_thought"),
-    "interaction.category": (models.Interaction, "category"),
+    # fixes25: torah_thought lives on the visit; interaction categories live
+    # inside the visit's JSON log (no countable column — usage reads as 0).
+    "checklist.torah_thought": (models.VisitHistory, "torah_thought"),
     "visit.type": (models.VisitHistory, "visit_type"),
     "significant_date.type": (models.SignificantDate, "special_date_type"),
     "apartment.Jewish_status": (models.Apartment, "jewish_status"),
@@ -100,12 +101,13 @@ def count_usage(
             .count()
         )
     model, attr = mapping
-    query = db.query(model).filter(getattr(model, attr) == value)
-    if hasattr(model, "organization_id"):
-        query = query.filter(model.organization_id == organization_id)
-    else:
-        # Checklist is scoped via its contact.
-        query = query.join(
-            models.Contact, models.Contact.id == models.CommunityChecklist.contact_id
-        ).filter(models.Contact.organization_id == organization_id)
-    return query.count()
+    # Every mapped model carries organization_id (fixes25: the contact-scoped
+    # checklist special case is gone).
+    return (
+        db.query(model)
+        .filter(
+            getattr(model, attr) == value,
+            model.organization_id == organization_id,
+        )
+        .count()
+    )

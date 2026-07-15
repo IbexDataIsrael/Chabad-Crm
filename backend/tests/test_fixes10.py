@@ -115,17 +115,18 @@ def test_org_delete_purges_every_org_scoped_table(
         },
         headers=admin_headers,
     )
-    client.post(
+    visit = client.post(
         f"/api/contacts/{mekurav['id']}/visits",
-        json={"visit_date": "2026-07-01T00:00:00", "notes": "ביקור"},
+        json={
+            "visit_date": "2026-07-01T00:00:00",
+            "notes": "ביקור",
+            # fixes25: engagement data rides on the visit.
+            "tefillin": True,
+            "interactions": [{"category": "call", "note": "שיחה"}],
+        },
         headers=admin_headers,
-    )
-    # ...and directly for the fiddly rest (donation, interaction, dates).
-    admin_user = (
-        db_session.query(models.User)
-        .filter(models.User.organization_id == org_id, models.User.role == "admin")
-        .first()
-    )
+    ).json()
+    # ...and directly for the fiddly rest (donation, custom value, dates).
     db_session.add(
         models.Donation(
             organization_id=org_id,
@@ -134,13 +135,14 @@ def test_org_delete_purges_every_org_scoped_table(
             amount=180,
         )
     )
+    cf_def = models.CustomFieldDefinition(
+        organization_id=org_id, field_key="purge_field", hebrew_label="שדה"
+    )
+    db_session.add(cf_def)
+    db_session.flush()
     db_session.add(
-        models.Interaction(
-            organization_id=org_id,
-            contact_id=mekurav["id"],
-            created_by=admin_user.id,
-            category="call",
-            note="שיחה",
+        models.CustomFieldValue(
+            visit_id=visit["id"], definition_id=cf_def.id, checked=True
         )
     )
     sd = models.SignificantDate(
@@ -187,9 +189,8 @@ def test_org_delete_purges_every_org_scoped_table(
         if count:
             leftovers.append((model.__tablename__, count))
     assert leftovers == [], f"orphaned rows after org delete: {leftovers}"
-    # Contact-scoped tables without organization_id are empty too (only this
+    # The visit-scoped table without organization_id is empty too (only this
     # org created data in this test DB).
-    assert db_session.query(models.CommunityChecklist).count() == 0
     assert db_session.query(models.CustomFieldValue).count() == 0
 
 

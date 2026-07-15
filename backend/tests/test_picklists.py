@@ -138,15 +138,19 @@ def test_out_of_picklist_value_rejected(client, admin_headers, db_session):
         headers=admin_headers,
     )
     assert bad.status_code == 400
-    # interaction category not in the picklist
+    # interaction category not in the picklist (fixes25: entries ride on the
+    # visit's interactions log)
     cid = client.post(
         "/api/contacts",
         json={"name": "y", "phone": "050-7100002", "pipeline_status": "new"},
         headers=admin_headers,
     ).json()["id"]
     bad_ix = client.post(
-        "/api/interactions",
-        json={"contact_id": cid, "category": "nope", "note": "n"},
+        f"/api/contacts/{cid}/visits",
+        json={
+            "visit_date": "2026-07-01T00:00:00",
+            "interactions": [{"category": "nope", "note": "n"}],
+        },
         headers=admin_headers,
     )
     assert bad_ix.status_code == 400

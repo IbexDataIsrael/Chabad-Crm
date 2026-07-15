@@ -37,11 +37,7 @@ TOGGLEABLE_FIELDS: list[tuple[str, str, str]] = [
         "contact_mekurav.potential_next_step",
         "contact_mekurav",
     ),
-    (
-        "contact_mekurav.rebbe_connection",
-        "contact_mekurav.rebbe_connection",
-        "contact_mekurav",
-    ),
+    # fixes25: rebbe_connection moved to visits (connection_to_rebbe).
     (
         "contact_mekurav.recommendations",
         "contact_mekurav.recommendations",

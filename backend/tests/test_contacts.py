@@ -55,14 +55,13 @@ def test_contacts_require_auth(client):
     assert client.get("/api/contacts").status_code == 401
 
 
-def test_contact_crud_and_checklist_autocreated(client, auth_headers):
+def test_contact_crud(client, auth_headers):
     r = _make_contact(client, auth_headers, pipeline_status="קולח", color_tag="magenta")
     assert r.status_code == 201
     body = r.json()
     cid = body["id"]
-    # Checklist is auto-created and nested on detail responses.
-    assert body["checklist"]["contact_id"] == cid
-    assert body["checklist"]["tefillin"] is False
+    # fixes25: no contact-level checklist anymore (Mivtzoim live on visits).
+    assert "checklist" not in body
 
     # Update
     upd = client.put(
@@ -101,7 +100,6 @@ def test_contact_new_fields_roundtrip(client, auth_headers):
         last_name="ריכמן",
         mekurav={
             "first_visit": "2026-01-15T10:00:00",
-            "rebbe_connection": "קשר חזק",
             "recommendations": "ממליץ",
             "background": "רקע כללי",
         },
@@ -114,34 +112,80 @@ def test_contact_new_fields_roundtrip(client, auth_headers):
     assert body["latitude"] == 32.0809
     assert body["longitude"] == 34.7738
     mk = body["mekurav"]
-    assert mk["rebbe_connection"] == "קשר חזק"
     assert mk["recommendations"] == "ממליץ"
     assert mk["background"] == "רקע כללי"
     assert mk["first_visit"].startswith("2026-01-15")
 
 
-def test_checklist_update(client, auth_headers):
+def test_visit_mivtzoim_roundtrip(client, auth_headers):
+    """fixes25: the Mivtzoim flags + engagement extras live on the visit."""
     cid = _make_contact(client, auth_headers).json()["id"]
-    upd = client.put(
-        f"/api/contacts/{cid}/checklist",
-        json={"tefillin": True, "shabbat_candles": True},
+    r = client.post(
+        f"/api/contacts/{cid}/visits",
+        json={
+            "visit_date": "2026-02-01T10:00:00",
+            "tefillin": True,
+            "shabbat_candles": True,
+            "connection_to_rebbe": "קשר חזק",
+        },
         headers=auth_headers,
     )
-    assert upd.status_code == 200
-    body = upd.json()
+    assert r.status_code == 201, r.text
+    body = r.json()
     assert body["tefillin"] is True
     assert body["shabbat_candles"] is True
     assert body["tzedakah"] is False
+    assert body["letter_in_torah"] is False
+    assert body["connection_to_rebbe"] == "קשר חזק"
 
-    # New note + picklist fields on the checklist.
-    upd2 = client.put(
-        f"/api/contacts/{cid}/checklist",
-        json={"charity_note": "נתן בעין יפה", "letter_torah_notes": "נרכש"},
+    # Partial update flips one flag and leaves the others alone.
+    upd = client.put(
+        f"/api/contacts/{cid}/visits/{body['id']}",
+        json={"tzedakah": True},
         headers=auth_headers,
     )
-    assert upd2.status_code == 200
-    assert upd2.json()["charity_note"] == "נתן בעין יפה"
-    assert upd2.json()["letter_torah_notes"] == "נרכש"
+    assert upd.status_code == 200
+    assert upd.json()["tzedakah"] is True
+    assert upd.json()["tefillin"] is True
+
+    # The contact-level checklist endpoint is gone.
+    assert (
+        client.put(
+            f"/api/contacts/{cid}/checklist", json={"tefillin": True}, headers=auth_headers
+        ).status_code
+        == 404
+    )
+
+
+def test_visit_interactions_log(client, auth_headers):
+    """fixes25: interactions are a JSON log on the visit; missing timestamps
+    and author names are stamped server-side."""
+    cid = _make_contact(client, auth_headers).json()["id"]
+    r = client.post(
+        f"/api/contacts/{cid}/visits",
+        json={
+            "visit_date": "2026-02-01T10:00:00",
+            "interactions": [{"category": "background", "note": "פתק"}],
+        },
+        headers=auth_headers,
+    )
+    assert r.status_code == 201, r.text
+    entries = r.json()["interactions"]
+    assert len(entries) == 1
+    assert entries[0]["category"] == "background"
+    assert entries[0]["note"] == "פתק"
+    assert entries[0]["created_at"]  # stamped
+    assert entries[0]["author_name"]  # stamped
+
+    # The old standalone interactions API is gone.
+    assert (
+        client.post(
+            "/api/interactions",
+            json={"contact_id": cid, "category": "background", "note": "x"},
+            headers=auth_headers,
+        ).status_code
+        == 404
+    )
 
 
 def test_geocode_fallback_fills_coords(client, auth_headers, monkeypatch):
@@ -182,17 +226,34 @@ def test_geocode_fallback_on_update(client, auth_headers, monkeypatch):
     assert upd.json()["longitude"] == 4.4
 
 
-def test_delete_contact_cascades_interactions(client, auth_headers):
+def test_delete_contact_cascades_visit_custom_values(client, auth_headers, db_session):
+    """fixes25: deleting a contact removes its visits, and the visit delete
+    cascades the visit-scoped custom-field values."""
+    from app import models
+
     cid = _make_contact(client, auth_headers).json()["id"]
-    client.post(
-        "/api/interactions",
-        json={"contact_id": cid, "category": "background", "note": "פתק"},
+    vid = client.post(
+        f"/api/contacts/{cid}/visits",
+        json={"visit_date": "2026-02-01T10:00:00"},
+        headers=auth_headers,
+    ).json()["id"]
+    org_id = db_session.get(models.Contact, cid).organization_id
+    cf = models.CustomFieldDefinition(
+        organization_id=org_id, field_key="test_field", hebrew_label="שדה"
+    )
+    db_session.add(cf)
+    db_session.commit()
+    r = client.put(
+        f"/api/visits/{vid}/custom-fields",
+        json=[{"definition_id": cf.id, "checked": True, "note": "כן"}],
         headers=auth_headers,
     )
-    assert len(client.get(f"/api/interactions?contact_id={cid}", headers=auth_headers).json()) == 1
+    assert r.status_code == 200, r.text
+    assert db_session.query(models.CustomFieldValue).count() == 1
+
     client.delete(f"/api/contacts/{cid}", headers=auth_headers)
-    # Interactions for the deleted contact are gone (cascade).
-    assert client.get(f"/api/interactions?contact_id={cid}", headers=auth_headers).json() == []
+    assert db_session.query(models.VisitHistory).filter_by(contact_id=cid).count() == 0
+    assert db_session.query(models.CustomFieldValue).count() == 0
 
 
 def test_delete_contact_cascades_visits_and_picklists_but_keeps_donations(

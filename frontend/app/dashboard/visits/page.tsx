@@ -141,11 +141,13 @@ export default function VisitsPage() {
                         initial={v}
                         contacts={contacts}
                         onCancel={() => setEditingId(null)}
-                        onSave={async (payload) => {
-                          await apiFetch(`/api/visits/${v.id}`, {
+                        onSave={(payload) =>
+                          apiFetch<Visit>(`/api/visits/${v.id}`, {
                             method: "PUT",
                             body: JSON.stringify(payload),
-                          });
+                          })
+                        }
+                        onDone={async () => {
                           setEditingId(null);
                           await reload();
                         }}

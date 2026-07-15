@@ -12,6 +12,7 @@ import datetime
 from uuid import uuid4
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     Date,
@@ -108,7 +109,6 @@ class User(Base):
         back_populates="assigned_user",
         foreign_keys="Contact.assigned_user_id",
     )
-    interactions = relationship("Interaction", back_populates="author")
 
 
 class Contact(Base):
@@ -154,22 +154,8 @@ class Contact(Base):
     assigned_user = relationship(
         "User", back_populates="contacts", foreign_keys=[assigned_user_id]
     )
-    checklist = relationship(
-        "CommunityChecklist",
-        back_populates="contact",
-        uselist=False,
-        cascade="all, delete-orphan",
-    )
-    interactions = relationship(
-        "Interaction",
-        back_populates="contact",
-        cascade="all, delete-orphan",
-    )
-    custom_values = relationship(
-        "CustomFieldValue",
-        back_populates="contact",
-        cascade="all, delete-orphan",
-    )
+    # fixes25: the community checklist (Mivtzoim), interactions and custom-field
+    # values moved to the visit level — every visit logs what happened on it.
     mekurav = relationship(
         "ContactMekurav",
         back_populates="contact",
@@ -224,7 +210,7 @@ class ContactMekurav(Base):
     tzedaka_potential = Column(Text, nullable=True)  # פוטנציאל לצדקה (fixes9 §3)
     first_visit = Column(DateTime, nullable=True)  # ביקור ראשון
     potential_next_step = Column(String(50), nullable=True)  # picklist (פוטנציאל לצעד)
-    rebbe_connection = Column(Text, nullable=True)  # קשר לרבי
+    # fixes25: rebbe_connection moved to visit_history.connection_to_rebbe.
     recommendations = Column(Text, nullable=True)  # המלצות
     background = Column(Text, nullable=True)  # רקע
     # NOTE (fixes4): picklist-backed attributes (Jewish_status, affiliation, language,
@@ -581,7 +567,12 @@ class SignificantDateReminder(Base):
 
 
 class VisitHistory(Base):
-    """A visit (היסטורית ביקורים). Many per contact; may be unlinked to a contact."""
+    """A visit (היסטורית ביקורים). Many per contact; may be unlinked to a contact.
+
+    fixes25: visits carry the engagement data that used to sit on the contact —
+    an `interactions` JSON log, the Mivtzoim boolean flags, the torah thought
+    and the connection-to-the-Rebbe note. Custom-field values hang off visits.
+    """
 
     __tablename__ = "visit_history"
 
@@ -597,9 +588,23 @@ class VisitHistory(Base):
     visit_type = Column(String, nullable=True)  # סוג ביקור (picklist: visit.type)
     location = Column(Text, nullable=True)  # מיקום
     notes = Column(Text, nullable=True)  # הערות
+    # fixes25: [{category, note, created_at, author_name}] (picklist interaction.category)
+    interactions = Column(JSON, nullable=True)
+    tefillin = Column(Boolean, default=False, nullable=False)  # תפילין
+    tzedakah = Column(Boolean, default=False, nullable=False)  # צדקה
+    shabbat_candles = Column(Boolean, default=False, nullable=False)  # נרות
+    torah_pamphlet = Column(Boolean, default=False, nullable=False)  # עלון
+    letter_in_torah = Column(Boolean, default=False, nullable=False)  # אות בספר
+    torah_thought = Column(String(50), nullable=True)  # picklist checklist.torah_thought
+    connection_to_rebbe = Column(Text, nullable=True)  # קשר לרבי
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     contact = relationship("Contact", back_populates="visits")
+    custom_values = relationship(
+        "CustomFieldValue",
+        back_populates="visit",
+        cascade="all, delete-orphan",
+    )
 
 
 class Donation(Base):
@@ -625,44 +630,9 @@ class Donation(Base):
     contact = relationship("Contact", back_populates="donations")
 
 
-class CommunityChecklist(Base):
-    """Mitzvot checklist — only populated for mekurav contacts (scoped via contact)."""
-
-    __tablename__ = "community_checklists"
-
-    contact_id = Column(Integer, ForeignKey("contacts.id"), primary_key=True)
-    guid = _guid_column()
-    tefillin = Column(Boolean, default=False, nullable=False)  # תפילין
-    tefillin_notes = Column(Text, nullable=True)  # הערה תפילין
-    tzedakah = Column(Boolean, default=False, nullable=False)  # צדקה
-    charity_note = Column(Text, nullable=True)  # הערה צדקה
-    shabbat_candles = Column(Boolean, default=False, nullable=False)  # נרות
-    shabbat_candles_notes = Column(Text, nullable=True)  # הערה נרות
-    torah_pamphlet = Column(Boolean, default=False, nullable=False)  # עלון
-    torah_pamphlet_notes = Column(Text, nullable=True)  # הערה עלון
-    torah_thought = Column(String(50), nullable=True)  # picklist checklist.torah_thought (דבר תורה)
-    torah_letter = Column(Boolean, default=False, nullable=False)  # אות בספר
-    letter_torah_notes = Column(Text, nullable=True)  # הערה אות בספר
-
-    contact = relationship("Contact", back_populates="checklist")
-
-
-class Interaction(Base):
-    __tablename__ = "interactions"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    guid = _guid_column()
-    organization_id = Column(
-        Integer, ForeignKey("organizations.id"), nullable=False, index=True
-    )
-    contact_id = Column(Integer, ForeignKey("contacts.id"), nullable=False)
-    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
-    category = Column(String(50), nullable=False)
-    note = Column(Text, nullable=False)  # Stored in Hebrew
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-    contact = relationship("Contact", back_populates="interactions")
-    author = relationship("User", back_populates="interactions")
+# fixes25: `CommunityChecklist` (Mivtzoim) and `Interaction` were contact-level
+# tables; both moved onto `visit_history` (boolean columns / JSON log) and the
+# tables were dropped by the fixes25 migration.
 
 
 class EmailTemplate(Base):
@@ -793,25 +763,29 @@ class CustomFieldDefinition(Base):
 
 
 class CustomFieldValue(Base):
-    """A contact's value for a custom field definition (checkbox + note)."""
+    """A visit's value for a custom field definition (checkbox + note).
+
+    fixes25: values used to attach to contacts; they now attach to visits."""
 
     __tablename__ = "custom_field_values"
     __table_args__ = (
         UniqueConstraint(
-            "contact_id", "definition_id", name="uq_customval_contact_def"
+            "visit_id", "definition_id", name="uq_customval_visit_def"
         ),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     guid = _guid_column()
-    contact_id = Column(Integer, ForeignKey("contacts.id"), nullable=False, index=True)
+    visit_id = Column(
+        Integer, ForeignKey("visit_history.id"), nullable=False, index=True
+    )
     definition_id = Column(
         Integer, ForeignKey("custom_field_definitions.id"), nullable=False, index=True
     )
     checked = Column(Boolean, default=False, nullable=False)
     note = Column(Text, nullable=True)
 
-    contact = relationship("Contact", back_populates="custom_values")
+    visit = relationship("VisitHistory", back_populates="custom_values")
     definition = relationship("CustomFieldDefinition", back_populates="values")
 
 

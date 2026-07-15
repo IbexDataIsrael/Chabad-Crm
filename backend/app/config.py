@@ -54,6 +54,10 @@ class Settings(BaseSettings):
             and self.cloudinary_api_secret
         )
 
+    # fixes25 §6: local-disk fallback for logo uploads when Cloudinary is
+    # unconfigured or unreachable. Served by the backend at /uploads/*.
+    upload_dir: str = "./data/uploads"
+
     # Google Sign-In (GIS token flow): the backend verifies ID tokens against this.
     google_client_id: str = ""
     google_client_secret: str = ""
