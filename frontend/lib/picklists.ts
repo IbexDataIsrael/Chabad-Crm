@@ -3,11 +3,22 @@
 import { useEffect, useState } from "react";
 
 import { apiFetch } from "./api";
-import { useLocalization } from "./localization";
+import { useLocalization, type Lang } from "./localization";
 import type { PicklistValue } from "./types";
 
 // Simple module-level cache so multiple selects don't refetch the same field.
 const cache: Record<string, PicklistValue[]> = {};
+
+/** Render a picklist option in the given language (English value falls back
+ *  to Hebrew). Shared by the hook and non-hook callers (fixes24: the PDF
+ *  generator fetches its picklists imperatively). */
+export function displayPicklistValue(o: PicklistValue, lang: Lang): string {
+  return (
+    (lang === "en" ? o.english_value || o.hebrew_label : o.hebrew_label) ||
+    o.english_value ||
+    o.value
+  );
+}
 
 export function usePicklist(fieldKey: string) {
   const { lang } = useLocalization();
@@ -28,11 +39,7 @@ export function usePicklist(fieldKey: string) {
     };
   }, [fieldKey]);
 
-  // Render an option in the current language (English value falls back to Hebrew).
-  const display = (o: PicklistValue): string =>
-    (lang === "en" ? o.english_value || o.hebrew_label : o.hebrew_label) ||
-    o.english_value ||
-    o.value;
+  const display = (o: PicklistValue): string => displayPicklistValue(o, lang);
 
   const labelFor = (value: string | null | undefined): string => {
     const o = options.find((opt) => opt.value === value);

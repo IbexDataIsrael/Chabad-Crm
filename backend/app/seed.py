@@ -698,6 +698,20 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("bulkedit", "bulkedit.pick_field", "יש לבחור לפחות שדה אחד לעדכון", "Select at least one field to update"),
     ("bulkedit", "bulkedit.apply", "החל שינויים", "Apply changes"),
     ("bulkedit", "bulkedit.result", "{n} דירות עודכנו", "{n} apartments updated"),
+    # --- fixes24: reports menu + create-reports page (PDF) ---
+    ("reports", "reports.menu_title", "דוחות", "Reports"),
+    ("reports", "reports.create_reports", "יצירת דוחות", "Create Reports"),
+    ("reports", "reports.report_numbers", "מספרי דוחות", "Report Numbers"),
+    ("reports", "reports.select_reports_placeholder", "בחר מספר דוח אחד או יותר", "Select one or more report numbers"),
+    ("reports", "reports.generate_pdf", "הפק דוח PDF", "Generate PDF Report"),
+    ("reports", "reports.floor", "קומה", "Floor"),
+    ("reports", "reports.apartment_name", "מספר דירה", "Apartment Number"),
+    ("reports", "reports.jewish_status", "מצב יהדות", "Jewish Status"),
+    ("reports", "reports.mezuzah_status", "מזוזה", "Mezuzah Status"),
+    ("reports", "reports.language", "שפה", "Language"),
+    ("reports", "reports.apartment_notes", "הערות", "Notes"),
+    ("reports", "reports.no_data", "לא נמצאו נתונים עבור הדוחות שנבחרו", "No data found for the selected reports"),
+    ("reports", "reports.pdf_title", "דוח ריכוז דירות", "Apartment Summary Report"),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)

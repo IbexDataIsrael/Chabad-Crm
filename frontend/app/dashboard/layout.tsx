@@ -39,6 +39,8 @@ function DashboardChrome({ children }: { children: ReactNode }) {
     { href: "/dashboard/shluchim", label: t("nav.shluchim", "פעילים"), admin: true },
     { href: "/dashboard/users", label: t("nav.users", "משתמשים"), admin: true },
     { href: "/dashboard/visits", label: t("nav.visits", "ביקורים"), admin: true },
+    // fixes24 §2: donations moved from a standalone header link into People.
+    { href: "/dashboard/donations", label: t("nav.donations", "תרומות"), admin: true },
   ]);
   const placeItems = adminOnly([
     // fixes9 §2B: Admin Area sits immediately before Areas; hidden from
@@ -49,7 +51,11 @@ function DashboardChrome({ children }: { children: ReactNode }) {
     { href: "/dashboard/areas", label: t("nav.areas", "אזורים") },
     { href: "/dashboard/buildings", label: t("nav.buildings", "בניינים"), admin: true },
     { href: "/dashboard/apartments", label: t("nav.apartments", "דירות") },
-    // fixes19: report-number management (admin-only CRUD).
+  ]);
+  // fixes24 §2: dedicated Reports group — PDF generation plus the
+  // report-number management page (moved out of Places; still admin-only).
+  const reportItems = adminOnly([
+    { href: "/dashboard/reports/create", label: t("reports.create_reports", "יצירת דוחות") },
     {
       href: "/dashboard/report-numbers",
       label: t("nav.report_numbers", "מספרי דוח"),
@@ -108,14 +114,7 @@ function DashboardChrome({ children }: { children: ReactNode }) {
                 <>
                   <NavMenu label={t("nav.group.people", "אנשים")} items={peopleItems} />
                   <NavMenu label={t("nav.group.places", "מקומות")} items={placeItems} />
-                  {isAdmin && (
-                    <Link
-                      href="/dashboard/donations"
-                      className="rounded-md px-2.5 py-1.5 text-gray-700 transition-colors hover:bg-gray-100"
-                    >
-                      {t("nav.donations", "תרומות")}
-                    </Link>
-                  )}
+                  <NavMenu label={t("reports.menu_title", "דוחות")} items={reportItems} />
                   <NavMenu label={t("nav.group.more", "עוד")} items={moreItems} />
                 </>
               )}
