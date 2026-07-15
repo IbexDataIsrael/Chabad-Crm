@@ -750,6 +750,15 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("picklist_def", "picklist_def.apartment.language", "שפה", "Language"),
     ("common", "common.hebrew_label", "עברית", "Hebrew"),
     ("common", "common.english_label", "English", "English"),
+    # --- fixes26: inline editing, visit view mode, shliach login recovery ---
+    ("action", "action.view", "הצג", "View"),
+    ("inline", "inline.click_to_edit", "לחץ לעריכה", "Click to edit"),
+    ("field", "validation.name_required", "יש להזין שם פרטי", "First name is required"),
+    ("field", "validation.phone_invalid", "מספר טלפון לא תקין", "Invalid phone number"),
+    ("shliach", "contact_shliach.password_set", "קבע סיסמה חדשה", "Set a new password"),
+    ("users", "users.login_suspended", "הכניסה למערכת הושעתה", "System access is suspended"),
+    ("users", "users.recreate_user", "צור משתמש מחדש", "Re-create user"),
+    ("users", "users.user_recreated", "המשתמש נוצר מחדש", "The user was re-created"),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)

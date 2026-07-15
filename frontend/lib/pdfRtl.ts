@@ -19,6 +19,87 @@ import type { jsPDF } from "jspdf";
 
 export const HEBREW_FONT = "Alef";
 
+/** Vertical space reserved for the per-page header (fixes26 §1) — content and
+ *  autotable pages must start at/below this. */
+export const PDF_CONTENT_TOP = 64;
+
+export interface PdfHeaderLogo {
+  dataUrl: string; // PNG re-encode (canvas), safe for jsPDF.addImage
+  width: number;
+  height: number;
+}
+
+/** Fetch the org logo and re-encode it as PNG via canvas so jsPDF gets a
+ *  format it always understands (Cloudinary/local logos may be webp/gif).
+ *  Best-effort: any failure returns null and the header renders name-only. */
+export async function loadHeaderLogo(
+  url: string | null | undefined,
+): Promise<PdfHeaderLogo | null> {
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blobUrl = URL.createObjectURL(await res.blob());
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const i = new Image();
+        i.onload = () => resolve(i);
+        i.onerror = reject;
+        i.src = blobUrl;
+      });
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext("2d")?.drawImage(img, 0, 0);
+      return {
+        dataUrl: canvas.toDataURL("image/png"),
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+      };
+    } finally {
+      URL.revokeObjectURL(blobUrl);
+    }
+  } catch {
+    return null;
+  }
+}
+
+/** Draw the organization header (name right / RTL, logo left, hairline) on
+ *  every page of the finished document (fixes26 §1). Call after layout so no
+ *  page is missed. */
+export function drawPdfHeaders(
+  doc: jsPDF,
+  margin: number,
+  orgName: string,
+  logo: PdfHeaderLogo | null,
+): void {
+  const pageW = doc.internal.pageSize.getWidth();
+  const pages = doc.getNumberOfPages();
+  for (let p = 1; p <= pages; p += 1) {
+    doc.setPage(p);
+    if (orgName) {
+      doc.setFont(HEBREW_FONT, "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(55, 65, 81);
+      doc.text(orgName, pageW - margin, 34, { align: "right" });
+      doc.setTextColor(0);
+    }
+    if (logo && logo.width > 0 && logo.height > 0) {
+      // Scale into a 26pt-high band, capped at 100pt wide.
+      let h = 26;
+      let w = (logo.width / logo.height) * h;
+      if (w > 100) {
+        h = (100 / w) * h;
+        w = 100;
+      }
+      doc.addImage(logo.dataUrl, "PNG", margin, 30 - h / 2, w, h);
+    }
+    doc.setDrawColor(209, 213, 219);
+    doc.line(margin, 48, pageW - margin, 48);
+  }
+  doc.setPage(pages);
+}
+
 // Bidi-engine flags consumed by jsPDF's postProcessText hook (they ride on
 // the regular text options object): logical input → visual LTR-canvas output.
 const BIDI_OPTIONS = {

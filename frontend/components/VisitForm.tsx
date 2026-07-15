@@ -269,13 +269,16 @@ export function VisitForm({
 }
 
 /** Controlled editor for the visit's interaction log (fixes25 — the standalone
- *  contact timeline is gone; entries ride on the visit payload). */
-function InteractionsFields({
+ *  contact timeline is gone; entries ride on the visit payload). fixes26:
+ *  exported for the visit details card; `readOnly` renders the list only. */
+export function InteractionsFields({
   value,
   onChange,
+  readOnly = false,
 }: {
   value: VisitInteraction[];
   onChange: (items: VisitInteraction[]) => void;
+  readOnly?: boolean;
 }) {
   const { t } = useLocalization();
   const { labelFor } = usePicklist("interaction.category");
@@ -312,17 +315,20 @@ function InteractionsFields({
                   <span className="ms-2 text-xs text-gray-400">— {it.author_name}</span>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={() => onChange(value.filter((_, j) => j !== i))}
-                className="text-xs text-status-darkred hover:underline shrink-0"
-              >
-                {t("action.delete", "מחק")}
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => onChange(value.filter((_, j) => j !== i))}
+                  className="text-xs text-status-darkred hover:underline shrink-0"
+                >
+                  {t("action.delete", "מחק")}
+                </button>
+              )}
             </li>
           ))}
         </ul>
       )}
+      {readOnly ? null : (
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="sm:w-48">
           <PicklistSelect
@@ -353,6 +359,7 @@ function InteractionsFields({
           + {t("visits.add_interaction", "הוסף")}
         </button>
       </div>
+      )}
     </section>
   );
 }

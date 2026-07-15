@@ -20,7 +20,7 @@ from app.core.email import send_shliach_welcome
 from app.core.security import hash_password
 from app.database import get_db
 from app.deps import require_admin, require_staff_or_admin
-from app.schemas import OrgUserCreate, OrgUserUpdate, UserOut
+from app.schemas import OrgUserCreate, OrgUserUpdate, UserOut, UserRecreateIn
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -194,6 +194,86 @@ def update_user(
     return user
 
 
+@router.post("/recreate", response_model=UserOut)
+def recreate_user(
+    payload: UserRecreateIn,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    """fixes26 §4: one-click recovery of a shliach's login. Reactivates the
+    same-org account with the contact's email, or provisions a fresh
+    role='shliach' user, and re-links the ContactShliach record."""
+    email = payload.email or ""
+    if not email:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email is required")
+    org_id = admin.organization_id
+    contact = (
+        db.query(models.Contact)
+        .filter(
+            models.Contact.organization_id == org_id,
+            models.Contact.contact_type == "shliach",
+            func.lower(models.Contact.email) == email,
+        )
+        .first()
+    )
+    if not contact:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "No shliach contact with this email"
+        )
+
+    user = (
+        db.query(models.User)
+        .filter(
+            models.User.organization_id == org_id,
+            func.lower(models.User.email) == email,
+        )
+        .first()
+    )
+    if user:
+        # The account may serve another shliach contact — never steal a login.
+        linked_elsewhere = (
+            db.query(models.ContactShliach)
+            .filter(
+                models.ContactShliach.user_id == user.id,
+                models.ContactShliach.contact_id != contact.id,
+            )
+            .first()
+        )
+        if linked_elsewhere:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "כתובת אימייל זו כבר משויכת לפעיל אחר בארגון",
+            )
+        user.is_active = True
+    else:
+        full_name = " ".join(filter(None, [contact.last_name, contact.name]))
+        user = models.User(
+            organization_id=org_id,
+            username=contact.email,
+            full_name=full_name or contact.name,
+            email=contact.email,
+            first_name=contact.name,
+            last_name=contact.last_name,
+            phone=contact.phone,
+            # No password: Google-only until the admin sets one on the contact.
+            password_hash=None,
+            role="shliach",
+            is_active=True,
+            email_verified=True,
+        )
+        db.add(user)
+        db.flush()
+
+    if contact.shliach is None:
+        contact.shliach = models.ContactShliach(
+            organization_id=org_id, contact_id=contact.id
+        )
+    contact.shliach.user_id = user.id
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(
     user_id: int,
@@ -210,6 +290,11 @@ def delete_user(
     db.query(models.ContactShliach).filter(
         models.ContactShliach.user_id == user.id
     ).update({models.ContactShliach.user_id: None}, synchronize_session=False)
+    # fixes26 §4: saved UI preferences (fixes17) are a NOT-NULL FK — any user
+    # who ever logged in couldn't be deleted (FK violation → 500).
+    db.query(models.UserPreference).filter(
+        models.UserPreference.user_id == user.id
+    ).delete(synchronize_session=False)
     # fixes25: interactions live inside visit JSON (the author survives as a
     # plain-text name) — no user-owned interaction rows to re-home anymore.
     db.delete(user)

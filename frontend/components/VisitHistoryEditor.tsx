@@ -7,16 +7,22 @@ import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
 import type { Visit } from "@/lib/types";
 import { useConfirm } from "@/lib/confirm";
+import { VisitDetails } from "./VisitDetails";
 import { VisitForm } from "./VisitForm";
 
-/** Per-contact visit history (date, type, location, notes), newest first. */
+/** Per-contact visit history (date, type, location, notes), newest first.
+ *  fixes26 §2: a visit opens read-only ("הצג") or in the inline per-field
+ *  editor ("ערוך"); creation still uses the visit form. */
 export function VisitHistoryEditor({ contactId }: { contactId: number }) {
   const { t } = useLocalization();
   const confirmDialog = useConfirm();
   const { labelFor } = usePicklist("visit.type");
   const [visits, setVisits] = useState<Visit[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState<{ id: number | null } | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [expanded, setExpanded] = useState<{ id: number; mode: "view" | "edit" } | null>(
+    null,
+  );
 
   async function reload() {
     setVisits(await apiFetch<Visit[]>(`/api/contacts/${contactId}/visits`));
@@ -35,75 +41,87 @@ export function VisitHistoryEditor({ contactId }: { contactId: number }) {
     await reload();
   }
 
-  const editingVisit =
-    editing && editing.id != null ? visits.find((v) => v.id === editing.id) : undefined;
-
   if (loading) return <p className="text-sm text-gray-400">{t("action.loading", "טוען…")}</p>;
 
   return (
     <div className="space-y-3">
-      {visits.map((v) => (
-        <div
-          key={v.id}
-          className="flex flex-wrap items-center gap-2 rounded-md border border-gray-100 px-3 py-2"
-        >
-          <span className="font-medium" dir="ltr">
-            {new Date(v.visit_date).toLocaleDateString("he-IL")}
-          </span>
-          {v.visit_type && (
-            <span className="rounded bg-gray-100 text-gray-600 text-xs px-2 py-0.5">
-              {labelFor(v.visit_type)}
+      {visits.map((v) =>
+        expanded?.id === v.id ? (
+          <VisitDetails
+            key={v.id}
+            visit={v}
+            readOnly={expanded.mode === "view"}
+            onPatch={async (partial) => {
+              await apiFetch<Visit>(`/api/contacts/${contactId}/visits/${v.id}`, {
+                method: "PATCH",
+                body: JSON.stringify(partial),
+              });
+              await reload();
+            }}
+            onClose={() => setExpanded(null)}
+          />
+        ) : (
+          <div
+            key={v.id}
+            className="flex flex-wrap items-center gap-2 rounded-md border border-gray-100 px-3 py-2"
+          >
+            <span className="font-medium" dir="ltr">
+              {new Date(v.visit_date).toLocaleDateString("he-IL")}
             </span>
-          )}
-          {v.location && <span className="text-sm text-gray-500">📍 {v.location}</span>}
-          {v.notes && <span className="text-sm text-gray-600">— {v.notes}</span>}
-          <div className="flex items-center gap-2 ms-auto">
-            <button
-              onClick={() => setEditing({ id: v.id })}
-              className="text-sm text-status-magenta hover:underline"
-            >
-              {t("action.edit", "ערוך")}
-            </button>
-            <button
-              onClick={() => remove(v.id)}
-              className="text-sm text-status-darkred hover:underline"
-            >
-              {t("action.delete", "מחק")}
-            </button>
+            {v.visit_type && (
+              <span className="rounded bg-gray-100 text-gray-600 text-xs px-2 py-0.5">
+                {labelFor(v.visit_type)}
+              </span>
+            )}
+            {v.location && <span className="text-sm text-gray-500">📍 {v.location}</span>}
+            {v.notes && <span className="text-sm text-gray-600">— {v.notes}</span>}
+            <div className="flex items-center gap-2 ms-auto">
+              <button
+                onClick={() => setExpanded({ id: v.id, mode: "view" })}
+                className="text-sm text-status-magenta hover:underline"
+              >
+                {t("action.view", "הצג")}
+              </button>
+              <button
+                onClick={() => setExpanded({ id: v.id, mode: "edit" })}
+                className="text-sm text-status-magenta hover:underline"
+              >
+                {t("action.edit", "ערוך")}
+              </button>
+              <button
+                onClick={() => remove(v.id)}
+                className="text-sm text-status-darkred hover:underline"
+              >
+                {t("action.delete", "מחק")}
+              </button>
+            </div>
           </div>
-        </div>
-      ))}
-      {visits.length === 0 && !editing && (
+        ),
+      )}
+      {visits.length === 0 && !adding && (
         <p className="text-sm text-gray-400">{t("visit.none", "אין ביקורים עדיין.")}</p>
       )}
 
-      {editing ? (
+      {adding ? (
         <VisitForm
-          key={editing.id ?? "new"}
-          initial={editingVisit}
           contacts={[]}
           lockedContactId={contactId}
-          onCancel={() => setEditing(null)}
+          onCancel={() => setAdding(false)}
           onSave={(payload) =>
-            editing.id != null
-              ? apiFetch<Visit>(`/api/contacts/${contactId}/visits/${editing.id}`, {
-                  method: "PUT",
-                  body: JSON.stringify(payload),
-                })
-              : apiFetch<Visit>(`/api/contacts/${contactId}/visits`, {
-                  method: "POST",
-                  body: JSON.stringify(payload),
-                })
+            apiFetch<Visit>(`/api/contacts/${contactId}/visits`, {
+              method: "POST",
+              body: JSON.stringify(payload),
+            })
           }
           onDone={async () => {
-            setEditing(null);
+            setAdding(false);
             await reload();
           }}
         />
       ) : (
         <button
           type="button"
-          onClick={() => setEditing({ id: null })}
+          onClick={() => setAdding(true)}
           className="text-sm text-status-magenta hover:underline"
         >
           + {t("visit.add", "הוסף ביקור")}

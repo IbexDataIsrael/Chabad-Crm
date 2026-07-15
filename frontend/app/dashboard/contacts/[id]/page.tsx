@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { ContactForm, type ContactFormValues } from "@/components/ContactForm";
-import { ContactView } from "@/components/ContactView";
+import { ContactView, type ContactPatch } from "@/components/ContactView";
 import { DonationsEditor } from "@/components/DonationsEditor";
 import { SignificantDatesEditor } from "@/components/SignificantDatesEditor";
 import { VisitHistoryEditor } from "@/components/VisitHistoryEditor";
@@ -24,12 +23,12 @@ export default function ContactDetailPage() {
   const { t } = useLocalization();
   const confirmDialog = useConfirm();
   const { isAdmin } = useAuth();
-  const { success } = useToast();
+  const { success, error: toastError } = useToast();
 
   const [contact, setContact] = useState<Contact | null>(null);
   const [users, setUsers] = useState<UserSummary[]>([]);
-  const [editing, setEditing] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [recreating, setRecreating] = useState(false);
 
   useEffect(() => {
     apiFetch<UserSummary[]>("/api/users").then(setUsers).catch(() => {});
@@ -39,17 +38,15 @@ export default function ContactDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contactId]);
 
-  async function save(values: ContactFormValues) {
-    // fixes25: Mivtzoim / interactions / custom fields are logged per visit —
-    // the contact save carries only the contact's own data.
-    await apiFetch<Contact>(`/api/contacts/${contactId}`, {
-      method: "PUT",
-      body: JSON.stringify(values),
+  // fixes26 §2: per-field autosave — the fields edit in place (ContactView),
+  // each change lands as its own PATCH. fixes25: Mivtzoim / interactions /
+  // custom fields are logged per visit, not on the contact.
+  async function patchContact(partial: ContactPatch) {
+    const fresh = await apiFetch<Contact>(`/api/contacts/${contactId}`, {
+      method: "PATCH",
+      body: JSON.stringify(partial),
     });
-    const fresh = await apiFetch<Contact>(`/api/contacts/${contactId}`);
     setContact(fresh);
-    setEditing(false);
-    success(t("msg.saved", "נשמר בהצלחה"));
   }
 
   async function remove() {
@@ -64,9 +61,36 @@ export default function ContactDetailPage() {
     );
   }
 
+  // fixes26 §4: one-click recovery of a suspended/deleted shliach login.
+  async function recreateLogin() {
+    if (!contact?.email || recreating) return;
+    setRecreating(true);
+    try {
+      await apiFetch("/api/users/recreate", {
+        method: "POST",
+        body: JSON.stringify({ email: contact.email }),
+      });
+      const fresh = await apiFetch<Contact>(`/api/contacts/${contactId}`);
+      setContact(fresh);
+      success(t("users.user_recreated", "המשתמש נוצר מחדש"));
+    } catch (err) {
+      toastError(
+        err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"),
+      );
+    } finally {
+      setRecreating(false);
+    }
+  }
+
   if (notFound)
     return <p className="text-gray-500">{t("page.contact_not_found", "איש הקשר לא נמצא.")}</p>;
   if (!contact) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+
+  const loginSuspended =
+    contact.contact_type === "shliach" &&
+    contact.shliach != null &&
+    contact.shliach.login_status != null &&
+    contact.shliach.login_status !== "active";
 
   return (
     <div className="space-y-6">
@@ -80,30 +104,35 @@ export default function ContactDetailPage() {
             {t("page.back_to_contacts", "← חזרה לאנשי קשר")}
           </Link>
         )}
-        <div className="flex items-center gap-2">
-          {editing ? (
+        <button
+          onClick={remove}
+          className="text-sm text-status-darkred border border-status-darkred/30 rounded-md px-3 py-1 hover:bg-red-50"
+        >
+          {t("action.delete", "מחק")}
+        </button>
+      </div>
+
+      {/* fixes26 §4: a shliach whose login was deleted or disabled gets a
+          prominent notice + one-click recovery (admins only). */}
+      {loginSuspended && (
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-status-darkred/40 bg-red-50 px-4 py-3">
+          <span className="text-sm font-medium text-status-darkred">
+            {t("users.login_suspended", "הכניסה למערכת הושעתה")}
+          </span>
+          {isAdmin && contact.email && (
             <button
-              onClick={() => setEditing(false)}
-              className="text-sm border border-gray-300 rounded-md px-3 py-1 hover:bg-gray-50"
+              type="button"
+              onClick={recreateLogin}
+              disabled={recreating}
+              className="rounded-md bg-status-darkred text-white px-3 py-1 text-sm font-medium hover:opacity-90 disabled:opacity-50"
             >
-              {t("action.cancel", "ביטול")}
-            </button>
-          ) : (
-            <button
-              onClick={() => setEditing(true)}
-              className="text-sm bg-status-magenta text-white rounded-md px-4 py-1 hover:opacity-90"
-            >
-              {t("action.edit", "עריכה")}
+              {recreating
+                ? t("action.saving", "שומר…")
+                : t("users.recreate_user", "צור משתמש מחדש")}
             </button>
           )}
-          <button
-            onClick={remove}
-            className="text-sm text-status-darkred border border-status-darkred/30 rounded-md px-3 py-1 hover:bg-red-50"
-          >
-            {t("action.delete", "מחק")}
-          </button>
         </div>
-      </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-bold">{contactFullName(contact)}</h1>
@@ -147,16 +176,9 @@ export default function ContactDetailPage() {
             ? t("page.shliach_details", "פרטי פעיל")
             : t("page.contact_details", "פרטי איש קשר")}
         </h2>
-        {editing ? (
-          <ContactForm
-            initial={contact}
-            users={users}
-            onSubmit={save}
-            submitLabel={t("action.save_changes", "שמור שינויים")}
-          />
-        ) : (
-          <ContactView contact={contact} users={users} />
-        )}
+        {/* fixes26 §2: inline editing replaces the edit-mode form — click a
+            value to change it; it saves on click-away / Enter. */}
+        <ContactView contact={contact} users={users} onPatch={patchContact} />
       </section>
 
       {/* fixes19 §2: the "apartments covered by the activist" grid is gone —

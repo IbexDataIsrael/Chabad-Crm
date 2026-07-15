@@ -6,7 +6,13 @@ import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
-import { HEBREW_FONT, prepareHebrewPdf } from "@/lib/pdfRtl";
+import {
+  drawPdfHeaders,
+  loadHeaderLogo,
+  prepareHebrewPdf,
+  HEBREW_FONT,
+  PDF_CONTENT_TOP,
+} from "@/lib/pdfRtl";
 import { displayPicklistValue } from "@/lib/picklists";
 import { useToast } from "@/lib/toast";
 import {
@@ -25,7 +31,7 @@ const CELL_PADDING = 4;
 const COLUMN_WIDTHS = [50, 70, 85, 75, 70, 160];
 
 export default function CreateReportsPage() {
-  const { loading } = useAuth();
+  const { loading, user } = useAuth();
   const { t, lang } = useLocalization();
   const { error: toastError } = useToast();
   const [reportNumbers, setReportNumbers] = useState<ReportNumber[]>([]);
@@ -72,13 +78,13 @@ export default function CreateReportsPage() {
 
       // Picklist labels are fetched here (not via usePicklist) so a fast
       // click right after page load can't produce raw technical values.
-      const [jewish, mezuzah, language] = await Promise.all(
-        [
-          "apartment.Jewish_status",
-          "apartment.mezuzah_status",
-          "apartment.language",
-        ].map((key) => apiFetch<PicklistValue[]>(`/api/picklists/${key}`)),
-      );
+      // fixes26 §1: the org logo rides along for the per-page header.
+      const [jewish, mezuzah, language, headerLogo] = await Promise.all([
+        apiFetch<PicklistValue[]>("/api/picklists/apartment.Jewish_status"),
+        apiFetch<PicklistValue[]>("/api/picklists/apartment.mezuzah_status"),
+        apiFetch<PicklistValue[]>("/api/picklists/apartment.language"),
+        loadHeaderLogo(user?.organization?.logo_url),
+      ]);
       const labelFor = (opts: PicklistValue[], value: string | null): string => {
         if (value == null) return "";
         const o = opts.find((opt) => opt.value === value);
@@ -123,7 +129,8 @@ export default function CreateReportsPage() {
         visualWidths.map((w, i) => [i, { cellWidth: w }]),
       );
 
-      let y = MARGIN;
+      // fixes26 §1: every page carries the org header — content starts below it.
+      let y = PDF_CONTENT_TOP;
       doc.setFont(HEBREW_FONT, "bold");
       doc.setFontSize(18);
       doc.text(t("reports.pdf_title", "דוח ריכוז דירות"), pageW - MARGIN, y + 8, {
@@ -150,7 +157,7 @@ export default function CreateReportsPage() {
 
         if (y + 48 > bottom) {
           doc.addPage();
-          y = MARGIN;
+          y = PDF_CONTENT_TOP;
         }
         doc.setFont(HEBREW_FONT, "bold");
         doc.setFontSize(14);
@@ -165,7 +172,7 @@ export default function CreateReportsPage() {
         for (const buildingKey of buildingKeys) {
           if (y + 60 > bottom) {
             doc.addPage();
-            y = MARGIN;
+            y = PDF_CONTENT_TOP;
           }
           doc.setFont(HEBREW_FONT, "bold");
           doc.setFontSize(12);
@@ -185,7 +192,8 @@ export default function CreateReportsPage() {
 
           autoTable(doc, {
             startY: y,
-            margin: { left: MARGIN, right: MARGIN, top: MARGIN, bottom: MARGIN },
+            // top must clear the per-page org header on flowed pages (fixes26 §1).
+            margin: { left: MARGIN, right: MARGIN, top: PDF_CONTENT_TOP, bottom: MARGIN },
             // Explicit total width — with 'auto' this autotable version logs a
             // spurious "content width could not fit page" warning.
             tableWidth: COLUMN_WIDTHS.reduce((a, b) => a + b, 0),
@@ -213,6 +221,9 @@ export default function CreateReportsPage() {
         }
         y += 6;
       }
+
+      // fixes26 §1: stamp the org name + logo header onto every page.
+      drawPdfHeaders(doc, MARGIN, user?.organization?.name ?? "", headerLogo);
 
       doc.save(`apartments-report-${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch (err) {

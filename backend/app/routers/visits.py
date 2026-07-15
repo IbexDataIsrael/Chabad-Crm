@@ -187,7 +187,10 @@ def add_visit(
     return _out(v)
 
 
+# PATCH aliases (fixes26 §2): the handlers are already partial via
+# exclude_unset; inline-editing autosave sends one field at a time.
 @router.put("/{contact_id}/visits/{visit_id}", response_model=VisitOut)
+@router.patch("/{contact_id}/visits/{visit_id}", response_model=VisitOut)
 def update_visit(
     contact_id: int,
     visit_id: int,
@@ -259,6 +262,7 @@ def create_visit(
 
 
 @all_router.put("/{visit_id}", response_model=VisitOut)
+@all_router.patch("/{visit_id}", response_model=VisitOut)
 def update_any_visit(
     visit_id: int,
     payload: VisitUpdate,

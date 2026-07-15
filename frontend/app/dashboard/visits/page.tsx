@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import { VisitForm } from "@/components/VisitForm";
+import { VisitDetails } from "@/components/VisitDetails";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { usePicklist } from "@/lib/picklists";
-import type { Contact, Visit } from "@/lib/types";
+import type { Visit } from "@/lib/types";
 import { useConfirm } from "@/lib/confirm";
 
 export default function VisitsPage() {
@@ -18,12 +18,15 @@ export default function VisitsPage() {
   const confirmDialog = useConfirm();
   const { labelFor } = usePicklist("visit.type");
   const [visits, setVisits] = useState<Visit[]>([]);
-  const [contacts, setContacts] = useState<Contact[]>([]);
   // fixes15 §1.1/§1.2: search + paging survive navigation.
   const [query, setQuery] = usePersistentState("crm.visits.q", "");
   const [page, setPage] = usePersistentState("crm.visits.page", 1);
   const [pageSize, setPageSize] = usePersistentState("crm.visits.pageSize", 20);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  // fixes26 §2: a row expands to a read-only view ("הצג") or to the inline
+  // per-field editor ("ערוך") — both render VisitDetails.
+  const [expanded, setExpanded] = useState<{ id: number; mode: "view" | "edit" } | null>(
+    null,
+  );
   const [loaded, setLoaded] = useState(false);
 
   async function reload() {
@@ -33,9 +36,6 @@ export default function VisitsPage() {
   useEffect(() => {
     if (loading || !isAdmin) return;
     reload().catch(() => setVisits([])).finally(() => setLoaded(true));
-    apiFetch<Contact[]>("/api/contacts?contact_type=mekurav")
-      .then(setContacts)
-      .catch(() => {});
   }, [loading, isAdmin]);
 
   const shown = useMemo(() => {
@@ -134,23 +134,20 @@ export default function VisitsPage() {
               </tr>
             ) : (
               visible.map((v) =>
-                editingId === v.id ? (
+                expanded?.id === v.id ? (
                   <tr key={v.id} className="border-t border-gray-100">
                     <td colSpan={6} className="p-3">
-                      <VisitForm
-                        initial={v}
-                        contacts={contacts}
-                        onCancel={() => setEditingId(null)}
-                        onSave={(payload) =>
-                          apiFetch<Visit>(`/api/visits/${v.id}`, {
-                            method: "PUT",
-                            body: JSON.stringify(payload),
-                          })
-                        }
-                        onDone={async () => {
-                          setEditingId(null);
+                      <VisitDetails
+                        visit={v}
+                        readOnly={expanded.mode === "view"}
+                        onPatch={async (partial) => {
+                          await apiFetch<Visit>(`/api/visits/${v.id}`, {
+                            method: "PATCH",
+                            body: JSON.stringify(partial),
+                          });
                           await reload();
                         }}
+                        onClose={() => setExpanded(null)}
                       />
                     </td>
                   </tr>
@@ -176,7 +173,13 @@ export default function VisitsPage() {
                     <td className="px-3 py-2">{v.notes}</td>
                     <td className="px-3 py-2 text-end whitespace-nowrap">
                       <button
-                        onClick={() => setEditingId(v.id)}
+                        onClick={() => setExpanded({ id: v.id, mode: "view" })}
+                        className="text-sm text-status-magenta hover:underline me-2"
+                      >
+                        {t("action.view", "הצג")}
+                      </button>
+                      <button
+                        onClick={() => setExpanded({ id: v.id, mode: "edit" })}
                         className="text-sm text-status-magenta hover:underline me-2"
                       >
                         {t("action.edit", "ערוך")}

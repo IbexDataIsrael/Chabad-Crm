@@ -46,6 +46,9 @@ export interface Shliach {
   id: number;
   contact_id: number;
   user_id: number | null;
+  /** fixes26 §4: state of the linked login account —
+   *  'active' | 'disabled' | 'missing'. */
+  login_status?: "active" | "disabled" | "missing" | null;
   notes: string | null;
   /** fixes19: report numbers replace the apartment coverage links. */
   report_number_ids: number[];

@@ -231,6 +231,27 @@ def _apply_picklist_values(
 
 
 # --- Detail assembly --------------------------------------------------------
+def _shliach_login_status(contact: models.Contact, db: Session) -> str:
+    """State of the shliach's login account (fixes26 §4): resolved by the
+    user_id link, else by a same-org email match (mirrors core/shliach.py) —
+    'active' | 'disabled' | 'missing'."""
+    user = None
+    if contact.shliach and contact.shliach.user_id:
+        user = db.get(models.User, contact.shliach.user_id)
+    if user is None and contact.email:
+        user = (
+            db.query(models.User)
+            .filter(
+                models.User.organization_id == contact.organization_id,
+                func.lower(models.User.email) == contact.email.strip().lower(),
+            )
+            .first()
+        )
+    if user is None:
+        return "missing"
+    return "active" if user.is_active else "disabled"
+
+
 def _build_detail(contact: models.Contact, db: Session) -> ContactDetailOut:
     detail = ContactDetailOut.model_validate(contact)
     if contact.mekurav:
@@ -248,6 +269,7 @@ def _build_detail(contact: models.Contact, db: Session) -> ContactDetailOut:
                 r.report_number_id for r in contact.shliach.report_numbers
             ],
             area_ids=[a.area_id for a in contact.shliach.areas],
+            login_status=_shliach_login_status(contact, db),
         )
     detail.picklist_values = _picklist_values_map(db, contact)
     return detail
@@ -891,7 +913,10 @@ def get_contact(
     return _build_detail(contact, db)
 
 
+# PATCH is an alias (fixes26 §2): the handler is already partial via
+# exclude_unset, and the inline-editing autosave sends one field at a time.
 @router.put("/{contact_id}", response_model=ContactDetailOut)
+@router.patch("/{contact_id}", response_model=ContactDetailOut)
 def update_contact(
     contact_id: int,
     payload: ContactUpdate,
@@ -937,12 +962,16 @@ def update_contact(
 
     if payload.shliach is not None and contact.contact_type == "shliach":
         sh_data = payload.shliach
+        # fixes26 §2: only touch what the client actually sent — a per-field
+        # autosave patching {shliach: {notes}} must not wipe the report-number
+        # and area links (their schema defaults are empty lists).
+        sh_sent = payload.shliach.model_dump(exclude_unset=True)
         if contact.shliach is None:
             contact.shliach = models.ContactShliach(
                 organization_id=org_id, contact_id=contact.id
             )
             db.flush()
-        if sh_data.notes is not None:
+        if "notes" in sh_sent:
             contact.shliach.notes = sh_data.notes
         if contact.shliach.user_id is None:
             user = _provision_shliach_user(
@@ -956,10 +985,12 @@ def update_contact(
             login_user = db.get(models.User, contact.shliach.user_id)
             if login_user:
                 login_user.password_hash = hash_password(sh_data.password)
-        _set_shliach_report_numbers(
-            db, contact.shliach, sh_data.report_number_ids, org_id
-        )
-        _set_shliach_areas(db, contact.shliach, sh_data.area_ids, org_id)
+        if "report_number_ids" in sh_sent:
+            _set_shliach_report_numbers(
+                db, contact.shliach, sh_data.report_number_ids, org_id
+            )
+        if "area_ids" in sh_sent:
+            _set_shliach_areas(db, contact.shliach, sh_data.area_ids, org_id)
 
     # Keep the shliach's *login user* in sync with the contact. The user's
     # full_name (shown in their own session) is a separate field from the

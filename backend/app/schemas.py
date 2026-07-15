@@ -119,6 +119,15 @@ class OrgUserUpdate(BaseModel):
     _email_lower = field_validator("email")(_normalize_email)
 
 
+class UserRecreateIn(BaseModel):
+    """fixes26 §4: re-enable (or re-create) a shliach's login by the contact's
+    email — the one-click recovery for a deleted/disabled account."""
+
+    email: str
+
+    _email_lower = field_validator("email")(_normalize_email)
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -781,6 +790,10 @@ class ShliachOut(BaseModel):
     notes: Optional[str] = None
     report_number_ids: list[int] = []
     area_ids: list[int] = []
+    # fixes26 §4: state of the linked login account, resolved like
+    # core/shliach.py (user_id link, else same-org email match) —
+    # 'active' | 'disabled' | 'missing'.
+    login_status: Optional[str] = None
 
 
 # --- Contacts --------------------------------------------------------------

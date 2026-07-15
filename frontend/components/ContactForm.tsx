@@ -190,12 +190,13 @@ export function ContactForm({
         </Field>
       )}
 
+      {/* fixes26 §2: phone is optional — empty is fine, a provided value must
+          still pass validation (mirrors the backend). */}
       <Field label={t("contacts.phone", "טלפון")}>
         <PhoneInput
           value={values.phone}
           onChange={(v) => set("phone", v)}
           onValidityChange={setPhoneValid}
-          required
         />
       </Field>
 
