@@ -31,12 +31,12 @@ import {
 
 type SortKey = "created" | "name";
 
-/** Optional grid columns (fixes15 §5.1); name + actions are always shown.
- * fixes18 §3: the geographic "area" column is gone (stale saved selections are
- * ignored by the COLUMN_KEYS intersection); "admin_area" replaces it. */
+/** Optional grid columns (fixes15 §5.1); name + email + actions are always
+ * shown — fixes28 §1: email is a core identity column, no longer optional
+ * (a stale saved "email" selection is ignored by the COLUMN_KEYS
+ * intersection, like fixes18 §3 did for "area"). */
 const COLUMN_KEYS = [
   "phone",
-  "email",
   "owner",
   "admin_area",
   "building",
@@ -299,8 +299,6 @@ export default function ContactsPage() {
   // a shliach (everything is theirs).
   const availability: Record<ColumnKey, boolean> = {
     phone: true,
-    // fixes28 §1: email is a core field — the column is always offered.
-    email: true,
     owner: !isShliach,
     // fixes18 §3.4: the admin-areas section is blocked for shliach (fixes10).
     admin_area: !isShliach && vis("contact_mekurav.admin_area_id"),
@@ -312,7 +310,6 @@ export default function ContactsPage() {
   };
   const columnLabels: Record<ColumnKey, string> = {
     phone: t("contacts.phone", "טלפון"),
-    email: t("contacts.email", "אימייל"),
     owner: t("contacts.assigned_user_id", "משויך ל"),
     admin_area: t("contact_mekurav.admin_area_id", "אזור מנהל"),
     building: t("contacts.building", "בניין"),
