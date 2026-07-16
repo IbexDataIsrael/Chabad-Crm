@@ -334,8 +334,6 @@ export default function ContactsPage() {
     switch (k) {
       case "phone":
         return <span dir="ltr">{c.phone}</span>;
-      case "email":
-        return <span dir="ltr">{c.email ?? ""}</span>;
       case "owner":
         return ownerName(c.assigned_user_id);
       case "admin_area":
