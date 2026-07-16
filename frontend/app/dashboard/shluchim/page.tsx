@@ -9,6 +9,7 @@ import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
+import { useToast } from "@/lib/toast";
 import {
   buildingDisplayName,
   contactFullName,
@@ -24,7 +25,10 @@ export default function ShluchimPage() {
   const router = useRouter();
   const { isAdmin, loading } = useAuth();
   const { t } = useLocalization();
+  const { success, error: toastError } = useToast();
   const [shluchim, setShluchim] = useState<Contact[]>([]);
+  // fixes27 §3: id of the row whose login is being re-created right now.
+  const [recreatingId, setRecreatingId] = useState<number | null>(null);
   const [areas, setAreas] = useState<Area[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
   // fixes15 §4.1: sorting + multi-select geo filters, all persisted (§1.2).
@@ -40,6 +44,8 @@ export default function ShluchimPage() {
   const [pageSize, setPageSize] = usePersistentState("crm.shluchim.pageSize", 20);
   const [total, setTotal] = useState(0);
   const [busy, setBusy] = useState(true);
+  // Bumped to re-fetch the page after a login re-creation (fixes27 §3).
+  const [refreshTick, setRefreshTick] = useState(0);
 
   // Admin-only page.
   useEffect(() => {
@@ -74,7 +80,28 @@ export default function ShluchimPage() {
         setTotal(0);
       })
       .finally(() => setBusy(false));
-  }, [loading, isAdmin, areaIds, buildingIds, sort, dir, page, pageSize]);
+  }, [loading, isAdmin, areaIds, buildingIds, sort, dir, page, pageSize, refreshTick]);
+
+  // fixes27 §3: one-click recovery of a suspended/deleted shliach login,
+  // straight from the row's red notice.
+  async function recreateLogin(c: Contact) {
+    if (!c.email || recreatingId !== null) return;
+    setRecreatingId(c.id);
+    try {
+      await apiFetch("/api/users/recreate", {
+        method: "POST",
+        body: JSON.stringify({ email: c.email }),
+      });
+      success(t("users.user_recreated", "המשתמש נוצר מחדש"));
+      setRefreshTick((n) => n + 1);
+    } catch (err) {
+      toastError(
+        err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"),
+      );
+    } finally {
+      setRecreatingId(null);
+    }
+  }
 
   if (loading || !isAdmin) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
 
@@ -207,8 +234,34 @@ export default function ShluchimPage() {
                   onClick={() => router.push(`/dashboard/contacts/${c.id}`)}
                   className="border-t border-gray-100 cursor-pointer hover:bg-gray-50/80"
                 >
-                  <td className="px-4 py-2 font-medium text-status-magenta underline">
-                    {contactFullName(c)}
+                  <td className="px-4 py-2 font-medium">
+                    <span className="text-status-magenta underline">
+                      {contactFullName(c)}
+                    </span>
+                    {/* fixes27 §3: row-level notice for a deleted/disabled
+                        login + one-click recovery. */}
+                    {c.login_status && c.login_status !== "active" && (
+                      <span
+                        className="ms-2 inline-flex items-center gap-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span className="rounded bg-red-50 border border-status-darkred/40 text-status-darkred text-xs px-2 py-0.5">
+                          {t("users.login_suspended", "הכניסה למערכת הושעתה")}
+                        </span>
+                        {c.email && (
+                          <button
+                            type="button"
+                            onClick={() => recreateLogin(c)}
+                            disabled={recreatingId !== null}
+                            className="rounded-md bg-status-darkred text-white px-2 py-0.5 text-xs font-medium hover:opacity-90 disabled:opacity-50"
+                          >
+                            {recreatingId === c.id
+                              ? t("action.saving", "שומר…")
+                              : t("users.recreate_user", "צור משתמש מחדש")}
+                          </button>
+                        )}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-2" dir="ltr">{c.phone}</td>
                   <td className="px-4 py-2" dir="ltr">{c.email ?? ""}</td>

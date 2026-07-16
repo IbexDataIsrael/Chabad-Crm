@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { apiFetch } from "@/lib/api";
+import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
 import { useToast } from "@/lib/toast";
@@ -41,9 +42,14 @@ export function VisitDetails({
 }) {
   const { t } = useLocalization();
   const { error: toastError } = useToast();
+  // fixes27 §4: admins can hide individual visit fields (visits.* toggles).
+  const { isFieldVisible: vis } = useFieldSettings();
   const visitType = usePicklist("visit.type");
   const torah = usePicklist("checklist.torah_thought");
   const editable = !readOnly && onPatch != null;
+  const visibleFlags = MIVTZOIM_FLAGS.filter((f) => vis(`visits.${f}`));
+  const showTorah = vis("visits.torah_thought");
+  const showRebbe = vis("visits.connection_to_rebbe");
 
   const [busyFlag, setBusyFlag] = useState<MivtzoimFlag | null>(null);
 
@@ -241,44 +247,79 @@ export function VisitDetails({
         </button>
       </div>
 
-      {/* fixes25 §4: Mivtzoim flags logged on the visit. */}
-      <section className="space-y-2 border-t border-gray-100 pt-3">
-        <h4 className="text-sm font-semibold">{t("visits.mivtzoim", "מבצעים")}</h4>
-        <div className="flex flex-wrap gap-2">
-          {MIVTZOIM_FLAGS.map((flag) => (
-            <button
-              key={flag}
-              type="button"
-              onClick={() => toggleFlag(flag)}
-              disabled={!editable || busyFlag === flag}
-              className={`flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm ${
-                visit[flag]
-                  ? "border-status-green bg-status-green/10 text-status-green"
-                  : "border-gray-200 text-gray-600"
-              } ${editable ? "hover:bg-gray-50" : "cursor-default"} ${
-                busyFlag === flag ? "opacity-60" : ""
-              }`}
+      {/* fixes25 §4: Mivtzoim flags logged on the visit. fixes27 §2/§4: the
+          custom fields live inside this section (no separate heading), and
+          every field honors its admin visibility toggle. */}
+      {(visibleFlags.length > 0 || showTorah || showRebbe || customFields.length > 0) && (
+        <section className="space-y-2 border-t border-gray-100 pt-3">
+          <h4 className="text-sm font-semibold">{t("visits.mivtzoim", "מבצעים")}</h4>
+          {visibleFlags.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {visibleFlags.map((flag) => (
+                <button
+                  key={flag}
+                  type="button"
+                  onClick={() => toggleFlag(flag)}
+                  disabled={!editable || busyFlag === flag}
+                  className={`flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm ${
+                    visit[flag]
+                      ? "border-status-green bg-status-green/10 text-status-green"
+                      : "border-gray-200 text-gray-600"
+                  } ${editable ? "hover:bg-gray-50" : "cursor-default"} ${
+                    busyFlag === flag ? "opacity-60" : ""
+                  }`}
+                >
+                  <span>{t(`visits.${flag}`)}</span>
+                  <span>{visit[flag] ? "✓" : ""}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {(showTorah || showRebbe) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {showTorah && (
+                <div className="flex flex-col">
+                  <span className="text-xs text-gray-500">
+                    {t("visits.torah_thought", "דבר תורה")}
+                  </span>
+                  <span className="text-sm">{torahNode}</span>
+                </div>
+              )}
+              {showRebbe && (
+                <div className="flex flex-col">
+                  <span className="text-xs text-gray-500">
+                    {t("visits.connection_to_rebbe", "קשר לרבי")}
+                  </span>
+                  <span className="text-sm">{inlineText("connection_to_rebbe", true)}</span>
+                </div>
+              )}
+            </div>
+          )}
+          {customFields.length > 0 && (
+            <div
+              onBlur={(e) => {
+                if (!editable) return;
+                if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+                void persistCustomFields(customRef.current);
+              }}
             >
-              <span>{t(`visits.${flag}`)}</span>
-              <span>{visit[flag] ? "✓" : ""}</span>
-            </button>
-          ))}
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="flex flex-col">
-            <span className="text-xs text-gray-500">
-              {t("visits.torah_thought", "דבר תורה")}
-            </span>
-            <span className="text-sm">{torahNode}</span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-xs text-gray-500">
-              {t("visits.connection_to_rebbe", "קשר לרבי")}
-            </span>
-            <span className="text-sm">{inlineText("connection_to_rebbe", true)}</span>
-          </div>
-        </div>
-      </section>
+              {editable ? (
+                <CustomFieldsEditor items={customFields} onChange={handleCustomChange} />
+              ) : (
+                <ul className="space-y-1.5">
+                  {customFields.map((it) => (
+                    <li key={it.definition_id} className="flex items-center gap-2 text-sm">
+                      <span>{it.checked ? "✓" : "—"}</span>
+                      <span>{it.hebrew_label}</span>
+                      {it.note && <span className="text-gray-500">— {it.note}</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* fixes25 §4: the interaction log lives on the visit. */}
       <InteractionsFields
@@ -286,32 +327,6 @@ export function VisitDetails({
         onChange={(items) => void saveInteractions(items)}
         readOnly={!editable}
       />
-
-      {customFields.length > 0 && (
-        <section
-          className="space-y-2 border-t border-gray-100 pt-3"
-          onBlur={(e) => {
-            if (!editable) return;
-            if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
-            void persistCustomFields(customRef.current);
-          }}
-        >
-          <h4 className="text-sm font-semibold">{t("visits.extra_fields", "שדות נוספים")}</h4>
-          {editable ? (
-            <CustomFieldsEditor items={customFields} onChange={handleCustomChange} />
-          ) : (
-            <ul className="space-y-1.5">
-              {customFields.map((it) => (
-                <li key={it.definition_id} className="flex items-center gap-2 text-sm">
-                  <span>{it.checked ? "✓" : "—"}</span>
-                  <span>{it.hebrew_label}</span>
-                  {it.note && <span className="text-gray-500">— {it.note}</span>}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
     </div>
   );
 }

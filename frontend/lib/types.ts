@@ -109,6 +109,9 @@ export interface Contact {
   building_name?: string | null;
   area_name?: string | null;
   admin_area_name?: string | null;
+  /** fixes27 §3: /list enrichment for shliach rows — the login account's
+   *  state, driving the row-level suspended notice. */
+  login_status?: "active" | "disabled" | "missing" | null;
 }
 
 /** One server-side page of the contacts list (fixes8 §2C pattern). */

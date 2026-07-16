@@ -488,6 +488,9 @@ def _contacts_query(
     admin_area_ids: Optional[list[int]] = None,
     visit_from: Optional[datetime.datetime] = None,
     visit_to: Optional[datetime.datetime] = None,
+    torah_thought: Optional[list[str]] = None,
+    connection_to_rebbe: Optional[str] = None,
+    custom_fields: Optional[list[str]] = None,
 ):
     """The org-scoped, filtered, shliach-aware contacts query (shared by the
     plain list, the paginated list and the bulk-email address list).
@@ -628,6 +631,65 @@ def _contacts_query(
                 )
             )
         )
+    # fixes27 §1: more visit-level filters, same through-any-visit semantics
+    # as the mitzvot flags.
+    if torah_thought:
+        query = query.filter(
+            models.Contact.id.in_(
+                select(models.VisitHistory.contact_id).where(
+                    models.VisitHistory.contact_id.isnot(None),
+                    models.VisitHistory.torah_thought.in_(torah_thought),
+                )
+            )
+        )
+    if connection_to_rebbe and connection_to_rebbe.strip():
+        query = query.filter(
+            models.Contact.id.in_(
+                select(models.VisitHistory.contact_id).where(
+                    models.VisitHistory.contact_id.isnot(None),
+                    models.VisitHistory.connection_to_rebbe.ilike(
+                        f"%{connection_to_rebbe.strip()}%"
+                    ),
+                )
+            )
+        )
+    # fixes27 §1: dynamic custom-field filters — every named field_key must be
+    # checked on at least one visit (AND across keys, mirroring `mitzvot`).
+    if custom_fields:
+        org_keys = {
+            row[0]
+            for row in db.query(models.CustomFieldDefinition.field_key)
+            .filter(
+                models.CustomFieldDefinition.organization_id
+                == current_user.organization_id
+            )
+            .all()
+        }
+        for key in custom_fields:
+            if key not in org_keys:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    f"'{key}' is not a custom field",
+                )
+            query = query.filter(
+                models.Contact.id.in_(
+                    select(models.VisitHistory.contact_id)
+                    .join(
+                        models.CustomFieldValue,
+                        models.CustomFieldValue.visit_id == models.VisitHistory.id,
+                    )
+                    .join(
+                        models.CustomFieldDefinition,
+                        models.CustomFieldDefinition.id
+                        == models.CustomFieldValue.definition_id,
+                    )
+                    .where(
+                        models.VisitHistory.contact_id.isnot(None),
+                        models.CustomFieldDefinition.field_key == key,
+                        models.CustomFieldValue.checked.is_(True),
+                    )
+                )
+            )
     # fixes25 §4: visit date range (טווח תאריכי ביקור) — only contacts holding
     # at least one visit inside the range (the spec's inner-join semantics).
     if visit_from is not None or visit_to is not None:
@@ -692,6 +754,41 @@ def _list_item(contact: models.Contact) -> ContactOut:
     return out
 
 
+def _login_status_map(db: Session, rows: list[models.Contact]) -> dict[int, str]:
+    """contact_id → login-account state for the shliach rows of a list page
+    (fixes27 §3). One batched user lookup; resolution mirrors core/shliach.py
+    (user_id link first, else a same-org email match)."""
+    shluchim = [c for c in rows if c.contact_type == "shliach"]
+    if not shluchim:
+        return {}
+    org_id = shluchim[0].organization_id
+    user_ids = {c.shliach.user_id for c in shluchim if c.shliach and c.shliach.user_id}
+    emails = {c.email.strip().lower() for c in shluchim if c.email and c.email.strip()}
+    users = (
+        db.query(models.User)
+        .filter(
+            models.User.organization_id == org_id,
+            or_(
+                models.User.id.in_(user_ids or {0}),
+                func.lower(models.User.email).in_(emails or {""}),
+            ),
+        )
+        .all()
+    )
+    by_id = {u.id: u for u in users}
+    by_email = {u.email.strip().lower(): u for u in users if u.email}
+    out: dict[int, str] = {}
+    for c in shluchim:
+        user = by_id.get(c.shliach.user_id) if c.shliach and c.shliach.user_id else None
+        if user is None and c.email:
+            user = by_email.get(c.email.strip().lower())
+        if user is None:
+            out[c.id] = "missing"
+        else:
+            out[c.id] = "active" if user.is_active else "disabled"
+    return out
+
+
 @router.get("/list", response_model=ContactPageOut)
 def list_contacts_paginated(
     db: Session = Depends(get_db),
@@ -708,6 +805,9 @@ def list_contacts_paginated(
     admin_area_ids: Optional[list[int]] = Query(None),
     visit_from: Optional[datetime.datetime] = None,
     visit_to: Optional[datetime.datetime] = None,
+    torah_thought: Optional[list[str]] = Query(None),
+    connection_to_rebbe: Optional[str] = None,
+    custom_fields: Optional[list[str]] = Query(None),
     sort: Literal["name", "created"] = "name",
     dir: Literal["asc", "desc"] = "asc",
     page: int = Query(1, ge=1),
@@ -727,6 +827,8 @@ def list_contacts_paginated(
         q=q, area_ids=area_ids, building_ids=building_ids, has_mitzvot=has_mitzvot,
         mitzvot=mitzvot, tzedaka_potential=tzedaka_potential,
         admin_area_ids=admin_area_ids, visit_from=visit_from, visit_to=visit_to,
+        torah_thought=torah_thought, connection_to_rebbe=connection_to_rebbe,
+        custom_fields=custom_fields,
     )
     total = query.count()
     key = models.Contact.created_at if sort == "created" else models.Contact.name
@@ -738,8 +840,15 @@ def list_contacts_paginated(
         .limit(page_size)
         .all()
     )
+    items = [_list_item(c) for c in rows]
+    # fixes27 §3: shliach rows carry their login-account state so the list can
+    # flag suspended/deleted logins inline.
+    statuses = _login_status_map(db, rows)
+    for item in items:
+        if item.id in statuses:
+            item.login_status = statuses[item.id]
     return ContactPageOut(
-        items=[_list_item(c) for c in rows],
+        items=items,
         total=total,
         page=page,
         page_size=page_size,
@@ -760,6 +869,9 @@ def list_contact_emails(
     mitzvot: Optional[list[str]] = Query(None),
     tzedaka_potential: Optional[str] = None,
     admin_area_ids: Optional[list[int]] = Query(None),
+    torah_thought: Optional[list[str]] = Query(None),
+    connection_to_rebbe: Optional[str] = None,
+    custom_fields: Optional[list[str]] = Query(None),
 ):
     """The distinct email addresses of every contact matching the same filter
     set as /list (fixes15 §5.2) — feeds the bulk `mailto:` BCC action, so it
@@ -768,7 +880,8 @@ def list_contact_emails(
         db, current_user, pipeline_status, contact_type, assigned_user_id,
         q=q, area_ids=area_ids, building_ids=building_ids, has_mitzvot=has_mitzvot,
         mitzvot=mitzvot, tzedaka_potential=tzedaka_potential,
-        admin_area_ids=admin_area_ids,
+        admin_area_ids=admin_area_ids, torah_thought=torah_thought,
+        connection_to_rebbe=connection_to_rebbe, custom_fields=custom_fields,
     )
     rows = (
         query.filter(models.Contact.email.isnot(None), models.Contact.email != "")

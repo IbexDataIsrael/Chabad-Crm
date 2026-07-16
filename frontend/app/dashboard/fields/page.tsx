@@ -17,6 +17,8 @@ const ENTITY_GROUPS: { entity: string; labelKey: string; fallback: string }[] = 
   { entity: "contact_shliach", labelKey: "contact_shliach", fallback: "פעיל" },
   { entity: "building", labelKey: "building", fallback: "בניין" },
   { entity: "apartment", labelKey: "apartment", fallback: "דירה" },
+  // fixes27 §4: built-in visit fields (Mivtzoim flags, torah thought, rebbe).
+  { entity: "visit", labelKey: "page.visits", fallback: "ביקורים" },
 ];
 
 export default function FieldsPage() {

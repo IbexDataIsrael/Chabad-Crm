@@ -868,6 +868,10 @@ class ContactOut(ContactBase):
     building_name: Optional[str] = None
     area_name: Optional[str] = None
     admin_area_name: Optional[str] = None
+    # fixes27 §3: /list enrichment for shliach rows — the login account's state
+    # ('active' | 'disabled' | 'missing'), driving the row-level suspended
+    # notice. None for mekurav rows and outside /list.
+    login_status: Optional[str] = None
 
 
 class ContactDetailOut(ContactOut):

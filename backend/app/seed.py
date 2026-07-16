@@ -759,6 +759,11 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("users", "users.login_suspended", "הכניסה למערכת הושעתה", "System access is suspended"),
     ("users", "users.recreate_user", "צור משתמש מחדש", "Re-create user"),
     ("users", "users.user_recreated", "המשתמש נוצר מחדש", "The user was re-created"),
+    # --- fixes27: visit-level contact filters + visit-field visibility ---
+    ("filter", "filter.all_torah_thoughts", "דבר תורה", "Torah thought"),
+    ("filter", "filter.rebbe_ph", "קשר לרבי…", "Connection to the Rebbe…"),
+    ("cf", "cf.visit_fields", "שדות ביקור מובנים", "Built-in visit fields"),
+    ("cf", "cf.visit_fields_intro", "שדה מוסתר לא יופיע בטופסי הביקור, בכרטיסי הביקור או באפשרויות הסינון.", "A hidden field disappears from the visit forms, visit cards and filter options."),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)

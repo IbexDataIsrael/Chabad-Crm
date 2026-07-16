@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
+import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
 import {
@@ -67,6 +68,8 @@ export function VisitForm({
   onCancel: () => void;
 }) {
   const { t } = useLocalization();
+  // fixes27 §4: admins can hide individual visit fields (visits.* toggles).
+  const { isFieldVisible: vis } = useFieldSettings();
   const [contactSel, setContactSel] = useState<number | "">(
     lockedContactId ?? initial?.contact_id ?? "",
   );
@@ -195,60 +198,81 @@ export function VisitForm({
         </label>
       </div>
 
-      {/* fixes25 §4: Mivtzoim flags logged on the visit. */}
-      <section className="space-y-2 border-t border-gray-100 pt-3">
-        <h4 className="text-sm font-semibold">{t("visits.mivtzoim", "מבצעים")}</h4>
-        <div className="flex flex-wrap gap-2">
-          {MIVTZOIM_FLAGS.map((flag) => (
-            <button
-              key={flag}
-              type="button"
-              onClick={() => setFlags((prev) => ({ ...prev, [flag]: !prev[flag] }))}
-              className={`flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm ${
-                flags[flag]
-                  ? "border-status-green bg-status-green/10 text-status-green"
-                  : "border-gray-200 text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              <span>{t(`visits.${flag}`)}</span>
-              <span>{flags[flag] ? "✓" : ""}</span>
-            </button>
-          ))}
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label className="block space-y-1">
-            <span className="block text-sm font-medium">
-              {t("visits.torah_thought", "דבר תורה")}
-            </span>
-            <PicklistSelect
-              fieldKey="checklist.torah_thought"
-              value={torahThought}
-              onChange={setTorahThought}
-            />
-          </label>
-          <label className="block space-y-1">
-            <span className="block text-sm font-medium">
-              {t("visits.connection_to_rebbe", "קשר לרבי")}
-            </span>
-            <textarea
-              className={inputClass}
-              rows={2}
-              value={rebbe}
-              onChange={(e) => setRebbe(e.target.value)}
-            />
-          </label>
-        </div>
-      </section>
+      {/* fixes25 §4: Mivtzoim flags logged on the visit. fixes27 §2/§4: the
+          custom fields live inside this section (no separate heading), and
+          every field honors its admin visibility toggle. */}
+      {(() => {
+        const visibleFlags = MIVTZOIM_FLAGS.filter((f) => vis(`visits.${f}`));
+        const showTorah = vis("visits.torah_thought");
+        const showRebbe = vis("visits.connection_to_rebbe");
+        if (
+          visibleFlags.length === 0 &&
+          !showTorah &&
+          !showRebbe &&
+          customFields.length === 0
+        ) {
+          return null;
+        }
+        return (
+          <section className="space-y-2 border-t border-gray-100 pt-3">
+            <h4 className="text-sm font-semibold">{t("visits.mivtzoim", "מבצעים")}</h4>
+            {visibleFlags.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {visibleFlags.map((flag) => (
+                  <button
+                    key={flag}
+                    type="button"
+                    onClick={() => setFlags((prev) => ({ ...prev, [flag]: !prev[flag] }))}
+                    className={`flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm ${
+                      flags[flag]
+                        ? "border-status-green bg-status-green/10 text-status-green"
+                        : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    <span>{t(`visits.${flag}`)}</span>
+                    <span>{flags[flag] ? "✓" : ""}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {(showTorah || showRebbe) && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {showTorah && (
+                  <label className="block space-y-1">
+                    <span className="block text-sm font-medium">
+                      {t("visits.torah_thought", "דבר תורה")}
+                    </span>
+                    <PicklistSelect
+                      fieldKey="checklist.torah_thought"
+                      value={torahThought}
+                      onChange={setTorahThought}
+                    />
+                  </label>
+                )}
+                {showRebbe && (
+                  <label className="block space-y-1">
+                    <span className="block text-sm font-medium">
+                      {t("visits.connection_to_rebbe", "קשר לרבי")}
+                    </span>
+                    <textarea
+                      className={inputClass}
+                      rows={2}
+                      value={rebbe}
+                      onChange={(e) => setRebbe(e.target.value)}
+                    />
+                  </label>
+                )}
+              </div>
+            )}
+            {customFields.length > 0 && (
+              <CustomFieldsEditor items={customFields} onChange={setCustomFields} />
+            )}
+          </section>
+        );
+      })()}
 
       {/* fixes25 §4: the interaction log lives on the visit. */}
       <InteractionsFields value={interactions} onChange={setInteractions} />
-
-      {customFields.length > 0 && (
-        <section className="space-y-2 border-t border-gray-100 pt-3">
-          <h4 className="text-sm font-semibold">{t("visits.extra_fields", "שדות נוספים")}</h4>
-          <CustomFieldsEditor items={customFields} onChange={setCustomFields} />
-        </section>
-      )}
 
       {error && <p className="text-sm text-status-darkred">{error}</p>}
       <div className="flex items-center gap-2">

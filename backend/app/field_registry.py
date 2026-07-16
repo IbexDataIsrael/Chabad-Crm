@@ -83,6 +83,17 @@ TOGGLEABLE_FIELDS: list[tuple[str, str, str]] = [
     ("apartment.language", "picklist.apartment.language", "apartment"),  # fixes13
     # fixes19: linked report number (מספר דוח).
     ("apartments.report_number_id", "apartments.report_number_id", "apartment"),
+    # fixes27 §4: built-in visit fields (Mivtzoim flags + torah thought +
+    # connection to the Rebbe). Hiding one removes it from the visit forms,
+    # the visit detail cards and the contacts-page filter options. Labels
+    # reuse the seeded visits.* rows.
+    ("visits.tefillin", "visits.tefillin", "visit"),
+    ("visits.tzedakah", "visits.tzedakah", "visit"),
+    ("visits.shabbat_candles", "visits.shabbat_candles", "visit"),
+    ("visits.torah_pamphlet", "visits.torah_pamphlet", "visit"),
+    ("visits.letter_in_torah", "visits.letter_in_torah", "visit"),
+    ("visits.torah_thought", "visits.torah_thought", "visit"),
+    ("visits.connection_to_rebbe", "visits.connection_to_rebbe", "visit"),
 ]
 
 # Fields concealed by default (an explicit field_settings row overrides this).

@@ -25,6 +25,7 @@ import {
   type Building,
   type Contact,
   type ContactPage,
+  type CustomFieldDefinition,
   type UserSummary,
 } from "@/lib/types";
 
@@ -51,8 +52,11 @@ type ColumnKey = (typeof COLUMN_KEYS)[number];
 const DEFAULT_COLUMNS: ColumnKey[] = ["phone", "owner", "created"];
 
 /** The mitzvah checkbox filters (fixes17 §2.2); fixes25: the flags live on
- * visits — a contact matches through any of its visits. */
+ * visits — a contact matches through any of its visits. fixes27 §1: the org's
+ * custom fields join the same dropdown, carried under a `cf:` id prefix so the
+ * request can split them into the separate `custom_fields` query param. */
 const MITZVAH_KEYS: string[] = [...MIVTZOIM_FLAGS];
+const CF_PREFIX = "cf:";
 
 export default function ContactsPage() {
   const router = useRouter();
@@ -67,6 +71,8 @@ export default function ContactsPage() {
     labelFor: statusLabel,
     display: statusDisplay,
   } = usePicklist("contact.pipeline_status");
+  // fixes27 §1: torah-thought filter options come from its picklist.
+  const torahPicklist = usePicklist("checklist.torah_thought");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
@@ -99,6 +105,16 @@ export default function ContactsPage() {
     "crm.contacts.mitzvotFields", [],
   );
   const [tzedaka, setTzedaka] = usePersistentState("crm.contacts.tzedaka", "");
+  // fixes27 §1: further visit-level filters — torah thought (picklist values,
+  // OR), connection-to-the-Rebbe (contains, debounced like the text search).
+  const [torahFilter, setTorahFilter] = usePersistentState<string[]>(
+    "crm.contacts.torahThought", [],
+  );
+  const [rebbeQuery, setRebbeQuery] = usePersistentState("crm.contacts.rebbe", "");
+  const [debouncedRebbe, setDebouncedRebbe] = useState(rebbeQuery);
+  const rebbeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // fixes27 §1: the org's custom fields feed extra מבצעים filter options.
+  const [customDefs, setCustomDefs] = useState<CustomFieldDefinition[]>([]);
   // fixes25 §4: visit date range (טווח תאריכי ביקור) — only contacts holding a
   // visit inside the range.
   const [visitFrom, setVisitFrom] = usePersistentState<string | null>(
@@ -143,11 +159,15 @@ export default function ContactsPage() {
       .catch(() => {});
   }, [user]);
 
-  // Areas + buildings feed the geographic multi-select filters (fixes15 §5.1).
+  // Areas + buildings feed the geographic multi-select filters (fixes15 §5.1);
+  // fixes27 §1: the active custom-field definitions feed the מבצעים dropdown.
   useEffect(() => {
     if (!user) return;
     apiFetch<Area[]>("/api/areas").then(setAreas).catch(() => {});
     apiFetch<Building[]>("/api/buildings").then(setBuildings).catch(() => {});
+    apiFetch<CustomFieldDefinition[]>("/api/custom-fields")
+      .then(setCustomDefs)
+      .catch(() => {});
   }, [user]);
 
   // Default the filter to the logged-in user once the session resolves
@@ -195,10 +215,20 @@ export default function ContactsPage() {
     // fixes18 §3.5: admin-area filter.
     adminAreaIds.forEach((id) => params.append("admin_area_ids", String(id)));
     // fixes17 §2.2: individual mitzvah checkboxes; fixes18 §3.2: the tzedaka
-    // value is an exact selection from the aggregated dropdown.
-    mitzvotFilter.forEach((m) => params.append("mitzvot", m));
+    // value is an exact selection from the aggregated dropdown. fixes27 §1:
+    // `cf:`-prefixed selections are custom-field keys (their own param).
+    mitzvotFilter.forEach((m) =>
+      m.startsWith(CF_PREFIX)
+        ? params.append("custom_fields", m.slice(CF_PREFIX.length))
+        : params.append("mitzvot", m),
+    );
     if (tzedaka.trim()) {
       params.set("tzedaka_potential", tzedaka.trim());
+    }
+    // fixes27 §1: torah thought (OR list) + connection-to-the-Rebbe contains.
+    torahFilter.forEach((v) => params.append("torah_thought", v));
+    if (debouncedRebbe.trim()) {
+      params.set("connection_to_rebbe", debouncedRebbe.trim());
     }
     // fixes25 §4: visit date range.
     if (visitFrom) params.set("visit_from", visitFrom);
@@ -228,8 +258,8 @@ export default function ContactsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     statusFilter, assignedFilter, debouncedQ, areaIds, buildingIds,
-    adminAreaIds, mitzvotFilter, tzedaka, visitFrom, visitTo, sort, dir, page,
-    pageSize,
+    adminAreaIds, mitzvotFilter, tzedaka, torahFilter, debouncedRebbe,
+    visitFrom, visitTo, sort, dir, page, pageSize,
   ]);
 
   // fixes15 §5.2: mass email to the WHOLE filtered set via mailto: BCC.
@@ -398,19 +428,59 @@ export default function ContactsPage() {
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
         />
-        {/* fixes17 §2.2: one checkbox per mitzvah (fixes25: visit-level flags). */}
+        {/* fixes17 §2.2: one checkbox per mitzvah (fixes25: visit-level flags).
+            fixes27 §1/§4: the org's custom fields join the list; hidden visit
+            fields drop out of the options. */}
         <MultiSelectFilter
           allLabel={t("filter.all_mitzvot", "מבצעים")}
-          options={MITZVAH_KEYS.map((m) => ({
-            id: m,
-            label: t(`visits.${m}`, m),
-          }))}
+          options={[
+            ...MITZVAH_KEYS.filter((m) => vis(`visits.${m}`)).map((m) => ({
+              id: m,
+              label: t(`visits.${m}`, m),
+            })),
+            ...customDefs.map((d) => ({
+              id: `${CF_PREFIX}${d.field_key}`,
+              label: d.hebrew_label,
+            })),
+          ]}
           value={mitzvotFilter}
           onChange={(ids) => {
             setMitzvotFilter(ids);
             setPage(1);
           }}
         />
+        {/* fixes27 §1: torah-thought filter (any visit carries the value). */}
+        {vis("visits.torah_thought") && (
+          <MultiSelectFilter
+            allLabel={t("filter.all_torah_thoughts", "דבר תורה")}
+            options={torahPicklist.options.map((o) => ({
+              id: o.value,
+              label: torahPicklist.display(o),
+            }))}
+            value={torahFilter}
+            onChange={(ids) => {
+              setTorahFilter(ids);
+              setPage(1);
+            }}
+          />
+        )}
+        {/* fixes27 §1: connection-to-the-Rebbe contains-filter. */}
+        {vis("visits.connection_to_rebbe") && (
+          <input
+            className={`${selectClass} w-44`}
+            placeholder={t("filter.rebbe_ph", "קשר לרבי…")}
+            value={rebbeQuery}
+            onChange={(e) => {
+              setRebbeQuery(e.target.value);
+              setPage(1);
+              if (rebbeDebounceRef.current) clearTimeout(rebbeDebounceRef.current);
+              rebbeDebounceRef.current = setTimeout(
+                () => setDebouncedRebbe(e.target.value),
+                300,
+              );
+            }}
+          />
+        )}
         {/* fixes18 §3.2: tzedaka-potential dropdown over the org's values. */}
         <SearchableSelect
           className="w-44"

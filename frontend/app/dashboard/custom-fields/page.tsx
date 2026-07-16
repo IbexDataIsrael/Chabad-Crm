@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
 import type { CustomFieldDefinition } from "@/lib/types";
@@ -50,7 +51,68 @@ export default function CustomFieldsPage() {
       </div>
 
       <AddDef onAdded={reload} />
+
+      <BuiltinVisitFields />
     </div>
+  );
+}
+
+/** fixes27 §4: show/hide toggles for the built-in visit fields (Mivtzoim
+ *  flags, torah thought, connection to the Rebbe). Hidden fields leave the
+ *  visit forms/cards and the contacts-page filter options. */
+function BuiltinVisitFields() {
+  const { t } = useLocalization();
+  const { settings, refresh } = useFieldSettings();
+  const { success, error } = useToast();
+  const visitFields = settings.filter((s) => s.entity === "visit");
+
+  async function toggle(field_key: string, is_visible: boolean) {
+    try {
+      await apiFetch("/api/field-settings", {
+        method: "PUT",
+        body: JSON.stringify({ field_key, is_visible }),
+      });
+      await refresh();
+      success(is_visible ? t("msg.shown", "השדה הוצג") : t("msg.hidden", "השדה הוסתר"));
+    } catch (err) {
+      error(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+    }
+  }
+
+  if (visitFields.length === 0) return null;
+
+  return (
+    <section className="bg-white rounded-xl shadow-sm">
+      <div className="px-4 py-2 border-b border-gray-100">
+        <h2 className="text-sm font-semibold">
+          {t("cf.visit_fields", "שדות ביקור מובנים")}
+        </h2>
+        <p className="text-xs text-gray-500">
+          {t(
+            "cf.visit_fields_intro",
+            "שדה מוסתר לא יופיע בטופסי הביקור, בכרטיסי הביקור או באפשרויות הסינון.",
+          )}
+        </p>
+      </div>
+      <ul className="divide-y divide-gray-100">
+        {visitFields.map((f) => (
+          <li key={f.field_key} className="px-4 py-2 flex items-center justify-between gap-3">
+            <span className={`text-sm ${f.is_visible ? "" : "text-gray-400"}`}>
+              {t(f.label_key, f.field_key)}
+            </span>
+            <label className="inline-flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
+              {f.is_visible ? t("fields.shown", "מוצג") : t("fields.hidden", "מוסתר")}
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-status-magenta"
+                checked={f.is_visible}
+                onChange={(e) => toggle(f.field_key, e.target.checked)}
+              />
+            </label>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
