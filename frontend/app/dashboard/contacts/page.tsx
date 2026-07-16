@@ -63,7 +63,7 @@ export default function ContactsPage() {
   const { t } = useLocalization();
   const { user, isShliach } = useAuth();
   const { error: toastError } = useToast();
-  const { isFieldVisible: vis } = useFieldSettings();
+  const { isFieldVisible: vis, loading: fieldsLoading } = useFieldSettings();
   // The color has no column of its own (fixes7 §8A) — it tints the whole row.
   const showColor = vis("contacts.color_tag");
   const {
@@ -85,9 +85,12 @@ export default function ContactsPage() {
   const [statusFilter, setStatusFilter] = usePersistentState(
     "crm.contacts.status", "",
   );
-  // null = waiting for the session user; "" = all users (fixes11 §2.2).
-  const [assignedFilter, setAssignedFilter] = usePersistentState<string | null>(
-    "crm.contacts.assigned", null,
+  // "" = all users. The fixes11 §2.2 default (the logged-in user) is gone:
+  // with most contacts owned by one login it silently blanked the list for
+  // everyone else — the reported "contacts missing" prod bug. New storage key
+  // so browsers that persisted the old auto-default reset once.
+  const [assignedFilter, setAssignedFilter] = usePersistentState<string>(
+    "crm.contacts.assigned2", "",
   );
   const [areaIds, setAreaIds] = usePersistentState<number[]>(
     "crm.contacts.areaIds", [],
@@ -176,26 +179,23 @@ export default function ContactsPage() {
       .catch(() => {});
   }, [user]);
 
-  // Default the filter to the logged-in user once the session resolves
-  // (fixes11 §2.2). fixes17 §5.1: the persisted filter survives ACROSS logins
-  // on a shared browser — a shliach inheriting an admin's guid saw an empty
-  // list. A shliach never applies an owner filter (server-scoped anyway).
+  // fixes17 §5.1: the persisted filter survives ACROSS logins on a shared
+  // browser — a shliach inheriting an admin's guid saw an empty list. A
+  // shliach never applies an owner filter (server-scoped anyway).
   useEffect(() => {
     if (!user) return;
-    if (isShliach) {
-      if (assignedFilter !== "") setAssignedFilter("");
-      return;
-    }
-    if (assignedFilter === null) setAssignedFilter(user.guid);
+    if (isShliach && assignedFilter !== "") setAssignedFilter("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assignedFilter, user, isShliach]);
 
   // fixes17 §5.1 (admin/staff): a persisted owner guid that no longer matches
-  // anyone in the org (other login, deleted user) resets to the current user.
+  // anyone in the org (other login, deleted/recreated user) resets to "all
+  // users" — resetting to the current user re-created the invisible-subset
+  // trap this round removed.
   useEffect(() => {
     if (isShliach || !user || users.length === 0) return;
     if (assignedFilter && !users.some((u) => u.guid === assignedFilter)) {
-      setAssignedFilter(user.guid);
+      setAssignedFilter("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [users, assignedFilter, user, isShliach]);
@@ -221,17 +221,56 @@ export default function ContactsPage() {
   const effectiveMitzvot = mitzvotFilter.filter((m) => visibleMitzvahIds.has(m));
   const effectiveTorah = vis("visits.torah_thought") ? torahFilter : [];
   const effectiveRebbe = vis("visits.connection_to_rebbe") ? debouncedRebbe : "";
+  // Same rule for the two filters whose CONTROLS can be absent: a pipeline
+  // status the org hid, and admin areas for a shliach, must not keep
+  // filtering from persisted state the user can no longer see or clear.
+  const effectiveStatus = vis("contacts.pipeline_status") ? statusFilter : "";
+  const effectiveAdminAreaIds = isShliach ? [] : adminAreaIds;
+
+  // The list can be narrowed while the controls are collapsed (fixes29 §1) —
+  // count the active criteria so the toggle button and the empty state can
+  // say so instead of silently showing a subset.
+  const activeFilterCount =
+    (query.trim() ? 1 : 0) +
+    areaIds.length +
+    buildingIds.length +
+    effectiveAdminAreaIds.length +
+    effectiveMitzvot.length +
+    (tzedaka.trim() ? 1 : 0) +
+    effectiveTorah.length +
+    (effectiveRebbe.trim() ? 1 : 0) +
+    (visitFrom || visitTo ? 1 : 0) +
+    (effectiveStatus ? 1 : 0) +
+    (assignedFilter ? 1 : 0);
+
+  function clearAllFilters() {
+    setQuery("");
+    setDebouncedQ("");
+    setAreaIds([]);
+    setBuildingIds([]);
+    setAdminAreaIds([]);
+    setMitzvotFilter([]);
+    setTzedaka("");
+    setTorahFilter([]);
+    setRebbeQuery("");
+    setDebouncedRebbe("");
+    setVisitFrom(null);
+    setVisitTo(null);
+    setStatusFilter("");
+    setAssignedFilter(""); // "" = all users (null would re-default to self)
+    setPage(1);
+  }
 
   function listParams(): URLSearchParams {
     const params = new URLSearchParams();
     params.set("contact_type", "mekurav"); // contacts page shows mekuravim only
-    if (statusFilter) params.set("pipeline_status", statusFilter);
+    if (effectiveStatus) params.set("pipeline_status", effectiveStatus);
     if (assignedFilter) params.set("assigned_user_id", assignedFilter);
     if (debouncedQ.trim()) params.set("q", debouncedQ.trim());
     areaIds.forEach((id) => params.append("area_ids", String(id)));
     buildingIds.forEach((id) => params.append("building_ids", String(id)));
     // fixes18 §3.5: admin-area filter.
-    adminAreaIds.forEach((id) => params.append("admin_area_ids", String(id)));
+    effectiveAdminAreaIds.forEach((id) => params.append("admin_area_ids", String(id)));
     // fixes17 §2.2: individual mitzvah checkboxes; fixes18 §3.2: the tzedaka
     // value is an exact selection from the aggregated dropdown. fixes27 §1:
     // `cf:`-prefixed selections are custom-field keys (their own param).
@@ -256,8 +295,13 @@ export default function ContactsPage() {
   }
 
   // Server-side page (fixes8 §2C pattern) instead of the full org dump.
+  // Waits for the field settings too — the effective* pruning above is
+  // meaningless before they load, and firing early sends a request whose
+  // late response can overwrite the corrected one.
+  const fetchSeq = useRef(0);
   useEffect(() => {
-    if (assignedFilter === null) return; // session not resolved yet
+    if (!user || fieldsLoading) return; // session/visibility not resolved yet
+    const seq = ++fetchSeq.current;
     const params = listParams();
     params.set("sort", sort);
     params.set("dir", dir);
@@ -266,20 +310,25 @@ export default function ContactsPage() {
     setLoading(true);
     apiFetch<ContactPage>(`/api/contacts/list?${params}`)
       .then((res) => {
+        if (seq !== fetchSeq.current) return; // a newer request superseded us
         setContacts(res.items);
         setTotal(res.total);
       })
       .catch(() => {
+        if (seq !== fetchSeq.current) return;
         setContacts([]);
         setTotal(0);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (seq === fetchSeq.current) setLoading(false);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    statusFilter, assignedFilter, debouncedQ, areaIds, buildingIds,
+    user, fieldsLoading, effectiveStatus, assignedFilter, debouncedQ,
+    areaIds, buildingIds,
     // fixes28 §3: the effective (visibility-pruned) selections drive the
     // fetch; joined because they are re-derived arrays, not state.
-    adminAreaIds, effectiveMitzvot.join(","), tzedaka,
+    effectiveAdminAreaIds.join(","), effectiveMitzvot.join(","), tzedaka,
     effectiveTorah.join(","), effectiveRebbe,
     visitFrom, visitTo, sort, dir, page, pageSize,
   ]);
@@ -392,6 +441,12 @@ export default function ContactsPage() {
             {filtersOpen
               ? `▴ ${t("filter.hide_filters", "הסתר סינון")}`
               : `▾ ${t("filter.show_filters", "הצג סינון")}`}
+            {/* Collapsed filters keep applying — surface how many are active. */}
+            {!filtersOpen && activeFilterCount > 0 && (
+              <span className="ms-1.5 inline-flex items-center justify-center rounded-full bg-status-magenta text-white text-xs px-1.5 py-0.5 leading-none">
+                {activeFilterCount}
+              </span>
+            )}
           </button>
           <button
             type="button"
@@ -728,7 +783,25 @@ export default function ContactsPage() {
             ) : contacts.length === 0 ? (
               <tr>
                 <td colSpan={colCount} className="px-4 py-6 text-center text-gray-400">
-                  {t("page.no_contacts", "אין אנשי קשר עדיין.")}
+                  {/* An empty page with active filters is almost never "no
+                      data" — say which, and offer a one-click way out. */}
+                  {activeFilterCount > 0 ? (
+                    <>
+                      {t(
+                        "page.no_contacts_filtered",
+                        "לא נמצאו אנשי קשר התואמים לסינון הפעיל.",
+                      )}{" "}
+                      <button
+                        type="button"
+                        onClick={clearAllFilters}
+                        className="text-status-magenta hover:underline"
+                      >
+                        {t("filter.clear_all", "נקה את כל הסינונים")}
+                      </button>
+                    </>
+                  ) : (
+                    t("page.no_contacts", "אין אנשי קשר עדיין.")
+                  )}
                 </td>
               </tr>
             ) : (

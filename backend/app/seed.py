@@ -549,6 +549,8 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("apt", "apt.none_covered", "אין דירות משויכות אליך.", "No apartments are assigned to you."),
     ("column", "contacts.created_at", "נוצר בתאריך", "Created on"),
     ("buildings", "buildings.coords_hint", "פורמט: longitude,latitude — לדוגמה 35.2137,31.7683", "Format: longitude,latitude — e.g. 35.2137,31.7683"),
+    # fixes30 §3: inline address editing rejects an empty value.
+    ("buildings", "buildings.address_required", "יש להזין כתובת", "Address is required"),
     # --- fixes12: previously-unseeded strings + new routes/modal ---
     ("page", "page.show_apartments", "הצג דירות", "Show apartments"),
     ("page", "page.hide_apartments", "הסתר דירות", "Hide apartments"),
@@ -576,6 +578,14 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     # fixes29 §1: header toggle for the whole filter section.
     ("filter", "filter.show_filters", "הצג סינון", "Show filters"),
     ("filter", "filter.hide_filters", "הסתר סינון", "Hide filters"),
+    # fixes29 urgents: one-click reset when active filters empty the list.
+    ("filter", "filter.clear_all", "נקה את כל הסינונים", "Clear all filters"),
+    (
+        "page",
+        "page.no_contacts_filtered",
+        "לא נמצאו אנשי קשר התואמים לסינון הפעיל.",
+        "No contacts match the active filters.",
+    ),
     ("columns", "columns.configure", "התאמת עמודות", "Customize columns"),
     ("columns", "columns.title", "עמודות מוצגות", "Visible columns"),
     ("columns", "columns.hint", "בחר אילו עמודות יוצגו בטבלה. ההעדפה נשמרת בדפדפן זה.", "Choose which columns the table shows. Saved in this browser."),

@@ -55,14 +55,18 @@ function DashboardChrome({ children }: { children: ReactNode }) {
   ]);
   // fixes24 §2: dedicated Reports group — PDF generation plus the
   // report-number management page (moved out of Places; still admin-only).
-  const reportItems = adminOnly([
-    { href: "/dashboard/reports/create", label: t("reports.create_reports", "יצירת דוחות") },
-    {
-      href: "/dashboard/report-numbers",
-      label: t("nav.report_numbers", "מספרי דוח"),
-      admin: true,
-    },
-  ]);
+  // fixes30 §1: the whole group is hidden for shliach users (an empty menu
+  // renders nothing).
+  const reportItems = isShliach
+    ? []
+    : adminOnly([
+        { href: "/dashboard/reports/create", label: t("reports.create_reports", "יצירת דוחות") },
+        {
+          href: "/dashboard/report-numbers",
+          label: t("nav.report_numbers", "מספרי דוח"),
+          admin: true,
+        },
+      ]);
   const moreItems = adminOnly([
     { href: "/dashboard", label: t("nav.home", "בית") },
     { href: "/dashboard/ai", label: t("nav.ai_chat", "צ'אט AI") },

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { InlineEdit } from "@/components/ui/InlineEdit";
+import { SearchableSelect } from "@/components/SearchableSelect";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useFieldSettings } from "@/lib/fieldSettings";
@@ -17,6 +19,9 @@ import {
   type Building,
 } from "@/lib/types";
 
+const inputClass =
+  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+
 export default function BuildingDetailPage() {
   const { isAdmin, loading } = useAuth();
   const { t } = useLocalization();
@@ -27,6 +32,8 @@ export default function BuildingDetailPage() {
   const [building, setBuilding] = useState<Building | null>(null);
   const [area, setArea] = useState<Area | null>(null);
   const [apartments, setApartments] = useState<Apartment[]>([]);
+  // fixes30 §3: option source for the inline area select (admins only).
+  const [areas, setAreas] = useState<Area[]>([]);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
 
@@ -48,6 +55,24 @@ export default function BuildingDetailPage() {
       )
       .finally(() => setLoaded(true));
   }, [buildingId, loading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (loading || !isAdmin) return;
+    apiFetch<Area[]>("/api/areas").then(setAreas).catch(() => {});
+  }, [loading, isAdmin]);
+
+  // fixes30 §3: one-field partial save. Building updates are in-place (stable
+  // id, admin-only server-side) — just swap in the returned row.
+  async function patch(partial: Record<string, unknown>) {
+    const updated = await apiFetch<Building>(`/api/buildings/${buildingId}`, {
+      method: "PUT",
+      body: JSON.stringify(partial),
+    });
+    setBuilding(updated);
+    if (partial.area_id !== undefined) {
+      setArea(areas.find((a) => a.id === partial.area_id) ?? null);
+    }
+  }
 
   if (loading || !loaded) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
   if (error || !building) {
@@ -84,10 +109,13 @@ export default function BuildingDetailPage() {
 
       <div className="bg-white rounded-xl shadow-sm p-5 space-y-3">
         <h1 className="text-2xl font-bold">{display}</h1>
+        {/* fixes30 §3: name / address / area edit in place for admins (the
+            backend PUT is admin-only); everyone else sees the plain values.
+            Floors, coordinates and the map stay on the edit page. */}
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <div>
             <dt className="text-gray-500">{t("buildings.area_id", "אזור")}</dt>
-            <dd className="font-medium">
+            <dd className="font-medium flex items-baseline gap-2">
               {area ? (
                 <Link
                   href={`/dashboard/areas/${area.id}`}
@@ -98,21 +126,80 @@ export default function BuildingDetailPage() {
               ) : (
                 "—"
               )}
+              {/* The name stays a nav link — a separate small trigger opens
+                  the move-area select. */}
+              {isAdmin && (
+                <InlineEdit<number | null>
+                  value={building.area_id}
+                  display={
+                    <span className="text-xs text-gray-400">
+                      {t("action.edit", "ערוך")}
+                    </span>
+                  }
+                  commitOnBlur={false}
+                  onSave={(v) => (v == null ? Promise.resolve() : patch({ area_id: v }))}
+                  editor={(draft, _setDraft, commit) => (
+                    <SearchableSelect
+                      value={draft}
+                      onChange={(id) => commit(id ?? null)}
+                      options={areas.map((a) => ({ id: a.id, label: a.area_name }))}
+                      placeholder={t("filter.all_areas", "כל האזורים")}
+                    />
+                  )}
+                />
+              )}
             </dd>
           </div>
           <div>
             <dt className="text-gray-500">{t("apartments", "דירות")}</dt>
             <dd className="font-medium">{apartments.length}</dd>
           </div>
-          {isFieldVisible("buildings.building_name") && building.building_name && (
-            <div>
-              <dt className="text-gray-500">{t("buildings.building_name", "שם בניין")}</dt>
-              <dd className="font-medium">{building.building_name}</dd>
-            </div>
-          )}
+          {isFieldVisible("buildings.building_name") &&
+            (building.building_name || isAdmin) && (
+              <div>
+                <dt className="text-gray-500">{t("buildings.building_name", "שם בניין")}</dt>
+                <dd className="font-medium">
+                  <InlineEdit<string>
+                    value={building.building_name ?? ""}
+                    display={building.building_name || "—"}
+                    disabled={!isAdmin}
+                    onSave={(v) =>
+                      patch({ building_name: v.trim() === "" ? null : v.trim() })
+                    }
+                    editor={(draft, setDraft) => (
+                      <input
+                        className={inputClass}
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                      />
+                    )}
+                  />
+                </dd>
+              </div>
+            )}
           <div className="sm:col-span-2">
             <dt className="text-gray-500">{t("buildings.building_address", "כתובת בניין")}</dt>
-            <dd className="font-medium">{building.building_address || "—"}</dd>
+            <dd className="font-medium">
+              <InlineEdit<string>
+                value={building.building_address ?? ""}
+                display={building.building_address || "—"}
+                disabled={!isAdmin}
+                // The backend rejects an explicit empty address.
+                validate={(v) =>
+                  v.trim() === ""
+                    ? t("buildings.address_required", "יש להזין כתובת")
+                    : null
+                }
+                onSave={(v) => patch({ building_address: v.trim() })}
+                editor={(draft, setDraft) => (
+                  <input
+                    className={inputClass}
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                  />
+                )}
+              />
+            </dd>
           </div>
           {(building.floors?.length ?? 0) > 0 && (
             <div className="sm:col-span-2">

@@ -24,3 +24,6 @@ Thumbs.db
 
 # Local production DB dumps (never commit)
 backups/
+
+.vercel
+.env*

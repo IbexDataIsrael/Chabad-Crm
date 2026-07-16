@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { PicklistSelect } from "@/components/PicklistSelect";
+import { SearchableSelect } from "@/components/SearchableSelect";
+import { InlineEdit } from "@/components/ui/InlineEdit";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useFieldSettings } from "@/lib/fieldSettings";
@@ -12,17 +15,28 @@ import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
 import { useToast } from "@/lib/toast";
 import {
+  EMAIL_HINT,
+  PHONE_HINT,
+  isValidEmail,
+  isValidPhone,
+} from "@/lib/validation";
+import {
   apartmentTitle,
   buildingDisplayName,
   type Apartment,
   type ApartmentPage,
   type ApartmentVersion,
   type Building,
+  type Floor,
   type ReportNumber,
 } from "@/lib/types";
 
-/** Apartment card: view + edit, the same structural flow as a CRM contact
- *  (fixes7 §2 — fetch detail, edit button → form → PUT → refreshed view). */
+const inputClass =
+  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+
+/** Apartment card (fixes30 §2): the fields edit in place, Google-style — the
+ *  same InlineEdit flow as the contact page (fixes26 §2). Every save is a
+ *  fixes19 §3 versioned edit, so the page follows the new active id. */
 export default function ApartmentDetailPage() {
   const router = useRouter();
   const { loading, isAdmin } = useAuth();
@@ -42,6 +56,10 @@ export default function ApartmentDetailPage() {
   const [reportNumbers, setReportNumbers] = useState<ReportNumber[]>([]);
   const [history, setHistory] = useState<ApartmentVersion[]>([]);
   const [snapshot, setSnapshot] = useState<ApartmentVersion | null>(null);
+  // fixes30 §2: option sources for the inline selects — the building's floors
+  // and the org's buildings (same feeds as ApartmentEditor).
+  const [floors, setFloors] = useState<Floor[]>([]);
+  const [buildings, setBuildings] = useState<Building[]>([]);
 
   const { labelFor: jewishLabel } = usePicklist("apartment.Jewish_status");
   const { labelFor: campaignLabel } = usePicklist("apartment.campaign_status");
@@ -52,6 +70,10 @@ export default function ApartmentDetailPage() {
     const a = await apiFetch<Apartment>(`/api/apartments/${apartmentId}`);
     setApt(a);
     setBuilding(await apiFetch<Building>(`/api/buildings/${a.building_id}`).catch(() => null));
+    setFloors(
+      await apiFetch<Floor[]>(`/api/buildings/${a.building_id}/floors`).catch(() => []),
+    );
+    setBuildings(await apiFetch<Building[]>("/api/buildings").catch(() => []));
     // The linked contact comes from the enriched list (shliach-scoped too);
     // apartment_id fetches just this row instead of the whole building (fixes8).
     const enriched = await apiFetch<ApartmentPage>(
@@ -107,6 +129,21 @@ export default function ApartmentDetailPage() {
     router.push(`/dashboard/apartments/${updated.id}`);
   }
 
+  // fixes30 §2: one-field partial save (InlineEdit). Every PUT is a fixes19 §3
+  // versioned edit returning a NEW active row — keep the UI on it and move the
+  // URL along (the old id turns historical, which 404s for non-admins).
+  async function patch(partial: Record<string, unknown>) {
+    if (!apt) return;
+    const saved = await apiFetch<Apartment>(`/api/apartments/${apt.id}`, {
+      method: "PUT",
+      body: JSON.stringify(partial),
+    });
+    setApt(saved);
+    if (saved.id !== apartmentId) {
+      router.replace(`/dashboard/apartments/${saved.id}`);
+    }
+  }
+
   if (loading || !loaded) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
   if (error || !apt) {
     return (
@@ -121,21 +158,79 @@ export default function ApartmentDetailPage() {
     );
   }
 
+  // fixes30 §2: a visible field row whose value edits in place. Text fields
+  // save trimmed-or-null partials; select editors commit on selection
+  // (clicking away cancels), mirroring the contact page (fixes26 §2).
+  // Historical versions (admin-viewable, fixes19 §3) are immutable — their
+  // fields render as plain values.
+  const editable = apt.is_display !== false;
   const field = (
     key: string,
     labelKey: string,
     fallback: string,
-    value: string | null | undefined,
-    dir?: "ltr",
+    node: ReactNode,
+    span2 = false,
   ) =>
     vis(key) ? (
-      <div>
+      <div className={span2 ? "sm:col-span-2" : undefined}>
         <dt className="text-gray-500">{t(labelKey, fallback)}</dt>
-        <dd className="font-medium" dir={dir}>
-          {value || "—"}
-        </dd>
+        <dd className="font-medium">{node}</dd>
       </div>
     ) : null;
+
+  const inlineText = (
+    fieldName: string,
+    value: string | null | undefined,
+    opts: {
+      dir?: "ltr";
+      multiline?: boolean;
+      validate?: (v: string) => string | null;
+    } = {},
+  ) => (
+    <InlineEdit<string>
+      value={value ?? ""}
+      display={<span dir={opts.dir}>{value || "—"}</span>}
+      validate={opts.validate}
+      disabled={!editable}
+      enterCommits={!opts.multiline}
+      onSave={(v) => patch({ [fieldName]: v.trim() === "" ? null : v.trim() })}
+      editor={(draft, setDraft) =>
+        opts.multiline ? (
+          <textarea
+            className={inputClass}
+            rows={2}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+          />
+        ) : (
+          <input
+            className={inputClass}
+            dir={opts.dir}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+          />
+        )
+      }
+    />
+  );
+
+  const inlinePicklist = (
+    picklistKey: string,
+    fieldName: string,
+    value: string | null | undefined,
+    labelFor: (v: string | null | undefined) => string | null | undefined,
+  ) => (
+    <InlineEdit<string | null>
+      value={value ?? null}
+      display={labelFor(value) || "—"}
+      commitOnBlur={false}
+      disabled={!editable}
+      onSave={(v) => patch({ [fieldName]: v })}
+      editor={(draft, _setDraft, commit) => (
+        <PicklistSelect fieldKey={picklistKey} value={draft} onChange={commit} />
+      )}
+    />
+  );
 
   return (
     <div className="space-y-5 max-w-3xl">
@@ -144,20 +239,9 @@ export default function ApartmentDetailPage() {
           {t("page.back_to_apartments", "← חזרה לדירות")}
         </Link>
         <div className="flex items-center gap-2">
-          {/* fixes12 §2.4: this page is a clean read-only reference view —
-              editing lives on the dedicated /apartments/edit/{id} route.
-              fixes22 §2: shluchim may now edit apartments assigned to them
-              (the backend scopes their edits + versions them like anyone's). */}
-          {(
-            <Link
-              href={`/dashboard/apartments/edit/${apartmentId}?return=${encodeURIComponent(
-                `/dashboard/apartments/${apartmentId}`,
-              )}`}
-              className="rounded-md bg-gray-800 text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
-            >
-              {t("action.edit", "ערוך")}
-            </Link>
-          )}
+          {/* fixes30 §2: the edit button is gone — every field below edits in
+              place. fixes22 §2 still holds: the backend scopes shliach edits
+              to their assigned apartments (others get the save-failed toast). */}
           {isAdmin && (
             <button
               onClick={() => setConfirmingDelete(true)}
@@ -183,7 +267,7 @@ export default function ApartmentDetailPage() {
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <div>
               <dt className="text-gray-500">{t("apartments.building_id", "בניין")}</dt>
-              <dd className="font-medium">
+              <dd className="font-medium flex items-baseline gap-2">
                 {building ? (
                   <Link
                     href={`/dashboard/buildings/${building.id}`}
@@ -194,47 +278,166 @@ export default function ApartmentDetailPage() {
                 ) : (
                   "—"
                 )}
+                {/* The name stays a nav link, so a separate small trigger
+                    opens the move-building select (fixes30 §2). */}
+                {editable && (
+                <InlineEdit<number | null>
+                  value={apt.building_id}
+                  display={
+                    <span className="text-xs text-gray-400">
+                      {t("action.edit", "ערוך")}
+                    </span>
+                  }
+                  commitOnBlur={false}
+                  onSave={(v) => (v == null ? Promise.resolve() : patch({ building_id: v }))}
+                  editor={(draft, _setDraft, commit) => (
+                    <SearchableSelect
+                      value={draft}
+                      onChange={(id) => commit(id ?? null)}
+                      options={buildings.map((b) => ({
+                        id: b.id,
+                        label: buildingDisplayName(b),
+                      }))}
+                      placeholder={t("apt.choose_building", "בחר בניין…")}
+                    />
+                  )}
+                />
+                )}
               </dd>
             </div>
-            {field("apartments.floor", "apartments.floor", "קומה", apt.floor)}
+            {field(
+              "apartments.floor",
+              "apartments.floor",
+              "קומה",
+              <InlineEdit<string | null>
+                value={apt.floor ?? null}
+                display={apt.floor || "—"}
+                commitOnBlur={false}
+                disabled={!editable}
+                onSave={(v) => patch({ floor: v })}
+                editor={(draft, _setDraft, commit) => (
+                  <select
+                    className={inputClass}
+                    value={draft ?? ""}
+                    onChange={(e) =>
+                      commit(e.target.value === "" ? null : e.target.value)
+                    }
+                  >
+                    <option value="">—</option>
+                    {floors.map((f) => (
+                      <option key={f.id} value={f.name}>
+                        {f.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              />,
+            )}
             {field(
               "apartments.apartment_name",
               "apartments.apartment_name",
               "מספר דירה",
-              apt.apartment_name,
+              inlineText("apartment_name", apt.apartment_name),
             )}
-            {field("apartments.name", "apartments.name", "שם דייר", apt.name)}
-            {field("apartments.phone", "apartments.phone", "טלפון", apt.phone, "ltr")}
-            {field("apartments.email", "apartments.email", "אימייל", apt.email, "ltr")}
+            {field(
+              "apartments.name",
+              "apartments.name",
+              "שם דייר",
+              inlineText("name", apt.name),
+            )}
+            {field(
+              "apartments.phone",
+              "apartments.phone",
+              "טלפון",
+              inlineText("phone", apt.phone, {
+                dir: "ltr",
+                validate: (v) =>
+                  v.trim() === "" || isValidPhone(v.trim())
+                    ? null
+                    : t("validation.phone_hint", PHONE_HINT),
+              }),
+            )}
+            {field(
+              "apartments.email",
+              "apartments.email",
+              "אימייל",
+              inlineText("email", apt.email, {
+                dir: "ltr",
+                validate: (v) =>
+                  v.trim() === "" || isValidEmail(v.trim())
+                    ? null
+                    : t("validation.email_hint", EMAIL_HINT),
+              }),
+            )}
             {field(
               "apartment.Jewish_status",
               "picklist.apartment.Jewish_status",
               "יהדות",
-              jewishLabel(apt.jewish_status),
+              inlinePicklist(
+                "apartment.Jewish_status",
+                "jewish_status",
+                apt.jewish_status,
+                jewishLabel,
+              ),
             )}
             {field(
               "apartment.campaign_status",
               "picklist.apartment.campaign_status",
               "סטטוס קמפיין",
-              campaignLabel(apt.campaign_status),
+              inlinePicklist(
+                "apartment.campaign_status",
+                "campaign_status",
+                apt.campaign_status,
+                campaignLabel,
+              ),
             )}
             {field(
               "apartment.mezuzah_status",
               "picklist.apartment.mezuzah_status",
               "מזוזה",
-              mezuzahLabel(apt.mezuzah_status),
+              inlinePicklist(
+                "apartment.mezuzah_status",
+                "mezuzah_status",
+                apt.mezuzah_status,
+                mezuzahLabel,
+              ),
             )}
             {field(
               "apartment.language",
               "picklist.apartment.language",
               "שפה",
-              languageLabel(apt.language),
+              inlinePicklist(
+                "apartment.language",
+                "language",
+                apt.language,
+                languageLabel,
+              ),
             )}
             {field(
               "apartments.report_number_id",
               "apartments.report_number_id",
               "מספר דוח",
-              reportNumbers.find((rn) => rn.id === apt.report_number_id)?.name ?? null,
+              <InlineEdit<number | null>
+                value={apt.report_number_id ?? null}
+                display={
+                  reportNumbers.find((rn) => rn.id === apt.report_number_id)?.name ||
+                  "—"
+                }
+                commitOnBlur={false}
+                disabled={!editable}
+                onSave={(v) => patch({ report_number_id: v })}
+                editor={(draft, _setDraft, commit) => (
+                  <SearchableSelect
+                    value={draft}
+                    onChange={(id) => commit(id ?? null)}
+                    options={reportNumbers.map((rn) => ({
+                      id: rn.id,
+                      label: rn.name,
+                    }))}
+                    placeholder={t("apt.choose_report_number", "בחר מספר דוח…")}
+                  />
+                )}
+              />,
             )}
             {building?.building_address && (
               <div className="sm:col-span-2">
@@ -242,11 +445,12 @@ export default function ApartmentDetailPage() {
                 <dd className="font-medium">{building.building_address}</dd>
               </div>
             )}
-            {vis("apartments.apartment_notes") && (
-              <div className="sm:col-span-2">
-                <dt className="text-gray-500">{t("apartments.apartment_notes", "הערות")}</dt>
-                <dd className="font-medium">{apt.apartment_notes || "—"}</dd>
-              </div>
+            {field(
+              "apartments.apartment_notes",
+              "apartments.apartment_notes",
+              "הערות",
+              inlineText("apartment_notes", apt.apartment_notes, { multiline: true }),
+              true,
             )}
           </dl>
         </div>
