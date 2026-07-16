@@ -262,7 +262,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("auth", "signup.verify_password", "אימות סיסמה", "Confirm password"),
     # --- Validation hints ---
     ("field", "validation.phone_hint", "מספר טלפון ישראלי (לדוגמה 052-1234567) או אמריקאי/קנדי (לדוגמה 718-888-9770).", "Israeli (e.g. 052-1234567) or US/Canada (e.g. 718-888-9770) phone number."),
-    ("field", "validation.email_hint", "כתובת אימייל תקינה, לדוגמה name@example.com", "A valid email address, e.g. name@example.com"),
+    ("field", "validation.email_hint", "נא להזין כתובת אימייל תקינה, לדוגמה name@example.com", "Please enter a valid email address, e.g. name@example.com"),
     ("field", "validation.password_hint", "הסיסמה חייבת לכלול לפחות 8 תווים, אות גדולה (A-Z), אות קטנה (a-z) ומספר.", "Password must be at least 8 characters with an uppercase letter (A-Z), a lowercase letter (a-z), and a number."),
     ("field", "validation.pw_length", "לפחות 8 תווים", "At least 8 characters"),
     ("field", "validation.pw_upper", "אות גדולה (A-Z)", "Uppercase letter (A-Z)"),
@@ -573,6 +573,9 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("filter", "filter.n_selected", "{n} נבחרו", "{n} selected"),
     ("filter", "filter.search_name", "חיפוש לפי שם…", "Search by name…"),
     ("filter", "filter.clear", "נקה סינון", "Clear filters"),
+    # fixes29 §1: header toggle for the whole filter section.
+    ("filter", "filter.show_filters", "הצג סינון", "Show filters"),
+    ("filter", "filter.hide_filters", "הסתר סינון", "Hide filters"),
     ("columns", "columns.configure", "התאמת עמודות", "Customize columns"),
     ("columns", "columns.title", "עמודות מוצגות", "Visible columns"),
     ("columns", "columns.hint", "בחר אילו עמודות יוצגו בטבלה. ההעדפה נשמרת בדפדפן זה.", "Choose which columns the table shows. Saved in this browser."),
@@ -897,6 +900,13 @@ LOCALIZATION_RENAMES: dict[str, tuple[set, str, set, str]] = {
     ),
     "filter.all_mitzvot": (
         {"מצוות קהילה"}, "מבצעים", {"Community mitzvot"}, "Mivtzoim",
+    ),
+    # fixes29 §3: clearer email validation hint (both languages).
+    "validation.email_hint": (
+        {"כתובת אימייל תקינה, לדוגמה name@example.com"},
+        "נא להזין כתובת אימייל תקינה, לדוגמה name@example.com",
+        {"A valid email address, e.g. name@example.com"},
+        "Please enter a valid email address, e.g. name@example.com",
     ),
     # fixes25: custom fields are logged per visit, not on the contact card.
     "cf.intro": (

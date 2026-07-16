@@ -72,11 +72,9 @@ export function InlineEdit<T>({
       setEditing(false);
       return;
     }
-    const problem = validate?.(v);
-    if (problem) {
-      toastError(problem);
-      return; // stay in edit so the value can be fixed
-    }
+    // fixes29 §2: no toast — the live inline hint under the editor already
+    // explains the problem; just refuse to save and stay in edit.
+    if (validate?.(v)) return;
     setSaving(true);
     try {
       await onSave(v);
@@ -124,10 +122,15 @@ export function InlineEdit<T>({
     );
   }
 
+  // fixes29 §2: validate the live draft so the error renders directly under
+  // the input while typing — same placement and styling as the add form's
+  // EmailInput/PhoneInput hints — instead of a toast on save.
+  const problem = validate ? validate(draft) : null;
+
   return (
     <div
       ref={boxRef}
-      className={saving ? "opacity-60 pointer-events-none" : undefined}
+      className={`space-y-1 ${saving ? "opacity-60 pointer-events-none" : ""}`}
       onKeyDown={onKeyDown}
       onBlur={(e) => {
         if (!commitOnBlur || saving) return;
@@ -138,6 +141,9 @@ export function InlineEdit<T>({
       }}
     >
       {editor(draft, setDraft, (v) => void commit(v))}
+      {problem && (
+        <span className="block text-xs text-status-darkred">{problem}</span>
+      )}
     </div>
   );
 }

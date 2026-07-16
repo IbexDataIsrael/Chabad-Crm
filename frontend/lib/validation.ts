@@ -18,7 +18,7 @@ export function isValidEmail(raw: string): boolean {
   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw.trim());
 }
 
-export const EMAIL_HINT = "כתובת אימייל תקינה, לדוגמה name@example.com";
+export const EMAIL_HINT = "נא להזין כתובת אימייל תקינה, לדוגמה name@example.com";
 
 export interface PasswordCheck {
   length: boolean;

@@ -131,6 +131,12 @@ export default function ContactsPage() {
   );
   const [page, setPage] = usePersistentState("crm.contacts.page", 1);
   const [pageSize, setPageSize] = usePersistentState("crm.contacts.pageSize", 20);
+  // fixes29 §1: the whole filter section can be tucked away (visibility only —
+  // hidden filters keep applying to the list).
+  const [filtersOpen, setFiltersOpen] = usePersistentState(
+    "crm.contacts.filtersOpen",
+    true,
+  );
   // fixes17 §1.1: the column selection lives in the DB — follows the account
   // across browsers/devices (localStorage is only the boot cache).
   const [columns, setColumns] = useDbPreference<ColumnKey[]>(
@@ -377,6 +383,16 @@ export default function ContactsPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">{t("contacts", "אנשי קשר")}</h1>
         <div className="flex items-center gap-2">
+          {/* fixes29 §1: show/hide the whole filter block below. */}
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((v) => !v)}
+            className="rounded-md border border-gray-300 text-gray-600 px-4 py-2 text-sm font-medium hover:bg-gray-50"
+          >
+            {filtersOpen
+              ? `▴ ${t("filter.hide_filters", "הסתר סינון")}`
+              : `▾ ${t("filter.show_filters", "הצג סינון")}`}
+          </button>
           <button
             type="button"
             onClick={bulkEmail}
@@ -394,7 +410,11 @@ export default function ContactsPage() {
         </div>
       </div>
 
-      {/* fixes15 §5.1: apartments-style filters — geo multi-selects + search. */}
+      {/* fixes15 §5.1: apartments-style filters — geo multi-selects + search.
+          fixes29 §1: both filter rows (and the columns panel opened from the
+          second one) unmount while the header toggle is off; the persisted
+          filter state is untouched, so they keep filtering the list. */}
+      {filtersOpen && (<>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <MultiSelectFilter
           allLabel={t("filter.all_areas", "כל האזורים")}
@@ -677,6 +697,7 @@ export default function ContactsPage() {
           </div>
         </div>
       )}
+      </>)}
 
       <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm">

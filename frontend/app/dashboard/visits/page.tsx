@@ -22,6 +22,9 @@ export default function VisitsPage() {
   const [query, setQuery] = usePersistentState("crm.visits.q", "");
   const [page, setPage] = usePersistentState("crm.visits.page", 1);
   const [pageSize, setPageSize] = usePersistentState("crm.visits.pageSize", 20);
+  // fixes29 §1: the search/paging filter row can be tucked away (visibility
+  // only — a hidden search keeps filtering the rows).
+  const [filtersOpen, setFiltersOpen] = usePersistentState("crm.visits.filtersOpen", true);
   // fixes26 §2: a row expands to a read-only view ("הצג") or to the inline
   // per-field editor ("ערוך") — both render VisitDetails.
   const [expanded, setExpanded] = useState<{ id: number; mode: "view" | "edit" } | null>(
@@ -76,42 +79,56 @@ export default function VisitsPage() {
     <div className="space-y-5 max-w-4xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">{t("page.visits", "ביקורים")}</h1>
-        <Link
-          href="/dashboard/visits/add"
-          className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
-        >
-          {t("visit.add", "הוסף ביקור")}
-        </Link>
+        <div className="flex items-center gap-2">
+          {/* fixes29 §1: show/hide the search/paging filter row below. */}
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((v) => !v)}
+            className="rounded-md border border-gray-300 text-gray-600 px-4 py-1.5 text-sm font-medium hover:bg-gray-50"
+          >
+            {filtersOpen
+              ? `▴ ${t("filter.hide_filters", "הסתר סינון")}`
+              : `▾ ${t("filter.show_filters", "הצג סינון")}`}
+          </button>
+          <Link
+            href="/dashboard/visits/add"
+            className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
+          >
+            {t("visit.add", "הוסף ביקור")}
+          </Link>
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <input
-          className="w-full max-w-sm rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
-          placeholder={t("visit.search_ph", "חיפוש לפי איש קשר או הערות…")}
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setPage(1);
-          }}
-        />
-        <span className="ms-auto flex items-center gap-2 text-gray-500">
-          {t("pager.page_size", "בעמוד:")}
-          <select
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
-            value={pageSize}
+      {filtersOpen && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <input
+            className="w-full max-w-sm rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
+            placeholder={t("visit.search_ph", "חיפוש לפי איש קשר או הערות…")}
+            value={query}
             onChange={(e) => {
-              setPageSize(Number(e.target.value));
+              setQuery(e.target.value);
               setPage(1);
             }}
-          >
-            {[20, 50, 100].map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </span>
-      </div>
+          />
+          <span className="ms-auto flex items-center gap-2 text-gray-500">
+            {t("pager.page_size", "בעמוד:")}
+            <select
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(1);
+              }}
+            >
+              {[20, 50, 100].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </span>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm min-w-[720px]">

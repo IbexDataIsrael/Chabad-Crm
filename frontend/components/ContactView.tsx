@@ -20,7 +20,7 @@ import {
   type ReportNumber,
   type UserSummary,
 } from "@/lib/types";
-import { isValidEmail, isValidPhone, EMAIL_HINT } from "@/lib/validation";
+import { isValidEmail, isValidPhone, EMAIL_HINT, PHONE_HINT } from "@/lib/validation";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ApartmentPicker } from "./ApartmentPicker";
 import { AreaMultiSelect } from "./AreaMultiSelect";
@@ -155,10 +155,11 @@ export function ContactView({
   const lastNameNode = inlineText("last_name", contact.last_name);
   const phoneNode = inlineText("phone", contact.phone, {
     dir: "ltr",
+    // fixes29 §2: same message the add form's PhoneInput shows under its field.
     validate: (v) =>
       v.trim() === "" || isValidPhone(v.trim())
         ? null
-        : t("validation.phone_invalid", "מספר טלפון לא תקין"),
+        : t("validation.phone_hint", PHONE_HINT),
   });
   const emailNode = inlineText("email", contact.email, {
     dir: "ltr",
