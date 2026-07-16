@@ -200,21 +200,20 @@ export function ContactForm({
         />
       </Field>
 
-      {/* Email is required for a shliach (login), so it's always shown for them. */}
-      {(vis("contacts.email") || isShliach) && (
-        <Field
-          label={
-            t("contacts.email", "אימייל") +
-            (isShliach ? ` (${t("contacts.email_for_login", "להתחברות")})` : "")
-          }
-        >
-          <EmailInput
-            value={values.email ?? ""}
-            onChange={(v) => set("email", v || null)}
-            required={isShliach}
-          />
-        </Field>
-      )}
+      {/* fixes28 §1: email is a core CRUD field — always shown, like name and
+          phone. For a shliach it is also the login identity (required). */}
+      <Field
+        label={
+          t("contacts.email", "אימייל") +
+          (isShliach ? ` (${t("contacts.email_for_login", "להתחברות")})` : "")
+        }
+      >
+        <EmailInput
+          value={values.email ?? ""}
+          onChange={(v) => set("email", v || null)}
+          required={isShliach}
+        />
+      </Field>
 
       {/* Ownership is forced server-side for shliach users — no picker. */}
       {vis("contacts.assigned_user_id") && !isShliachUser && (

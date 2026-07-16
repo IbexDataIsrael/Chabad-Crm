@@ -184,17 +184,19 @@ export default function ContactDetailPage() {
       {/* fixes19 §2: the "apartments covered by the activist" grid is gone —
           shluchim associate with report numbers (shown in the details card). */}
 
+      {/* fixes28 §1: visits render right after the contact info section,
+          before the significant dates. */}
       {contact.contact_type === "mekurav" && (
         <section className="bg-white rounded-xl shadow-sm p-6">
-          <h2 className="font-semibold mb-4">{t("significant_dates", "תאריכים חשובים")}</h2>
-          <SignificantDatesEditor contactId={contact.id} />
+          <h2 className="font-semibold mb-4">{t("visit.history", "היסטורית ביקורים")}</h2>
+          <VisitHistoryEditor contactId={contact.id} />
         </section>
       )}
 
       {contact.contact_type === "mekurav" && (
         <section className="bg-white rounded-xl shadow-sm p-6">
-          <h2 className="font-semibold mb-4">{t("visit.history", "היסטורית ביקורים")}</h2>
-          <VisitHistoryEditor contactId={contact.id} />
+          <h2 className="font-semibold mb-4">{t("significant_dates", "תאריכים חשובים")}</h2>
+          <SignificantDatesEditor contactId={contact.id} />
         </section>
       )}
 

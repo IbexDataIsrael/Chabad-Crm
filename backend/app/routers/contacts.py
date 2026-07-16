@@ -364,6 +364,14 @@ def _provision_shliach_user(
         .first()
     )
     if existing:
+        # fixes28 §2: only a shliach-role account may back a shliach contact —
+        # silently reusing a restricted (staff) or admin login would associate
+        # a ContactShliach with a non-activist user.
+        if existing.role != "shliach":
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "כתובת אימייל זו שייכת למשתמש קיים בארגון שאינו פעיל",
+            )
         linked_elsewhere = (
             db.query(models.ContactShliach)
             .filter(
@@ -556,6 +564,34 @@ def _contacts_query(
                     .where(models.Building.id.in_(building_ids))
                 )
             )
+        # fixes28 §2: the shluchim page must not show rows backed by a
+        # restricted (staff) login. Resolution mirrors _login_status_map:
+        # the ContactShliach.user_id link decides when present; otherwise a
+        # same-org email match.
+        staff_ids = select(models.User.id).where(
+            models.User.organization_id == current_user.organization_id,
+            models.User.role == "staff",
+        )
+        staff_emails = select(func.lower(models.User.email)).where(
+            models.User.organization_id == current_user.organization_id,
+            models.User.role == "staff",
+            models.User.email.isnot(None),
+        )
+        linked_to_staff = select(models.ContactShliach.contact_id).where(
+            models.ContactShliach.user_id.in_(staff_ids)
+        )
+        linked_to_any = select(models.ContactShliach.contact_id).where(
+            models.ContactShliach.user_id.isnot(None)
+        )
+        query = query.filter(
+            ~models.Contact.id.in_(linked_to_staff),
+            or_(
+                # A user_id link to a shliach login wins over any email match.
+                models.Contact.id.in_(linked_to_any),
+                models.Contact.email.is_(None),
+                ~func.lower(models.Contact.email).in_(staff_emails),
+            ),
+        )
     else:
         if building_ids:
             query = query.filter(
@@ -600,12 +636,29 @@ def _contacts_query(
     # fixes17 §2.2: specific mitzvot, AND semantics — every named flag must be
     # checked on at least one of the contact's visits (fixes25).
     if mitzvot:
+        # fixes28 §3: a flag the org hid on the custom-fields page must not
+        # filter — a stale persisted selection would silently narrow the list.
+        hidden_flags = {
+            row.field_key
+            for row in db.query(models.FieldSetting)
+            .filter(
+                models.FieldSetting.organization_id
+                == current_user.organization_id,
+                models.FieldSetting.field_key.in_(
+                    [f"visits.{col}" for col in mitzvot]
+                ),
+                models.FieldSetting.is_visible.is_(False),
+            )
+            .all()
+        }
         for col in mitzvot:
             if col not in _MITZVAH_COLUMNS:
                 raise HTTPException(
                     status.HTTP_422_UNPROCESSABLE_ENTITY,
                     f"'{col}' is not a mitzvah field",
                 )
+            if f"visits.{col}" in hidden_flags:
+                continue
             query = query.filter(
                 models.Contact.id.in_(
                     select(models.VisitHistory.contact_id).where(
@@ -657,8 +710,11 @@ def _contacts_query(
     # checked on at least one visit (AND across keys, mirroring `mitzvot`).
     if custom_fields:
         org_keys = {
-            row[0]
-            for row in db.query(models.CustomFieldDefinition.field_key)
+            row[0]: row[1]
+            for row in db.query(
+                models.CustomFieldDefinition.field_key,
+                models.CustomFieldDefinition.is_active,
+            )
             .filter(
                 models.CustomFieldDefinition.organization_id
                 == current_user.organization_id
@@ -671,6 +727,9 @@ def _contacts_query(
                     status.HTTP_422_UNPROCESSABLE_ENTITY,
                     f"'{key}' is not a custom field",
                 )
+            # fixes28 §3: a deactivated (hidden) custom field never filters.
+            if not org_keys[key]:
+                continue
             query = query.filter(
                 models.Contact.id.in_(
                     select(models.VisitHistory.contact_id)

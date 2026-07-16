@@ -204,6 +204,18 @@ export default function ContactsPage() {
     debounceRef.current = setTimeout(() => setDebouncedQ(v), 300);
   }
 
+  // fixes28 §3: the filter strictly obeys the hidden state — a persisted
+  // selection of a since-hidden (or deactivated) field must neither render in
+  // the dropdown/chip count nor keep filtering the list. The effective
+  // selection is the persisted one intersected with the visible options.
+  const visibleMitzvahIds = new Set<string>([
+    ...MITZVAH_KEYS.filter((m) => vis(`visits.${m}`)),
+    ...customDefs.map((d) => `${CF_PREFIX}${d.field_key}`),
+  ]);
+  const effectiveMitzvot = mitzvotFilter.filter((m) => visibleMitzvahIds.has(m));
+  const effectiveTorah = vis("visits.torah_thought") ? torahFilter : [];
+  const effectiveRebbe = vis("visits.connection_to_rebbe") ? debouncedRebbe : "";
+
   function listParams(): URLSearchParams {
     const params = new URLSearchParams();
     params.set("contact_type", "mekurav"); // contacts page shows mekuravim only
@@ -217,7 +229,8 @@ export default function ContactsPage() {
     // fixes17 §2.2: individual mitzvah checkboxes; fixes18 §3.2: the tzedaka
     // value is an exact selection from the aggregated dropdown. fixes27 §1:
     // `cf:`-prefixed selections are custom-field keys (their own param).
-    mitzvotFilter.forEach((m) =>
+    // fixes28 §3: only the *effective* (still-visible) selections are sent.
+    effectiveMitzvot.forEach((m) =>
       m.startsWith(CF_PREFIX)
         ? params.append("custom_fields", m.slice(CF_PREFIX.length))
         : params.append("mitzvot", m),
@@ -226,9 +239,9 @@ export default function ContactsPage() {
       params.set("tzedaka_potential", tzedaka.trim());
     }
     // fixes27 §1: torah thought (OR list) + connection-to-the-Rebbe contains.
-    torahFilter.forEach((v) => params.append("torah_thought", v));
-    if (debouncedRebbe.trim()) {
-      params.set("connection_to_rebbe", debouncedRebbe.trim());
+    effectiveTorah.forEach((v) => params.append("torah_thought", v));
+    if (effectiveRebbe.trim()) {
+      params.set("connection_to_rebbe", effectiveRebbe.trim());
     }
     // fixes25 §4: visit date range.
     if (visitFrom) params.set("visit_from", visitFrom);
@@ -258,7 +271,10 @@ export default function ContactsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     statusFilter, assignedFilter, debouncedQ, areaIds, buildingIds,
-    adminAreaIds, mitzvotFilter, tzedaka, torahFilter, debouncedRebbe,
+    // fixes28 §3: the effective (visibility-pruned) selections drive the
+    // fetch; joined because they are re-derived arrays, not state.
+    adminAreaIds, effectiveMitzvot.join(","), tzedaka,
+    effectiveTorah.join(","), effectiveRebbe,
     visitFrom, visitTo, sort, dir, page, pageSize,
   ]);
 
@@ -283,7 +299,8 @@ export default function ContactsPage() {
   // a shliach (everything is theirs).
   const availability: Record<ColumnKey, boolean> = {
     phone: true,
-    email: vis("contacts.email"),
+    // fixes28 §1: email is a core field — the column is always offered.
+    email: true,
     owner: !isShliach,
     // fixes18 §3.4: the admin-areas section is blocked for shliach (fixes10).
     admin_area: !isShliach && vis("contact_mekurav.admin_area_id"),
@@ -443,7 +460,7 @@ export default function ContactsPage() {
               label: d.hebrew_label,
             })),
           ]}
-          value={mitzvotFilter}
+          value={effectiveMitzvot}
           onChange={(ids) => {
             setMitzvotFilter(ids);
             setPage(1);
@@ -457,7 +474,7 @@ export default function ContactsPage() {
               id: o.value,
               label: torahPicklist.display(o),
             }))}
-            value={torahFilter}
+            value={effectiveTorah}
             onChange={(ids) => {
               setTorahFilter(ids);
               setPage(1);
@@ -516,6 +533,20 @@ export default function ContactsPage() {
             className={`${selectClass} w-36`}
             placeholder={t("visits.date_to", "עד תאריך")}
           />
+          {/* fixes28 §1: one-click reset of the visit date range. */}
+          {(visitFrom || visitTo) && (
+            <button
+              type="button"
+              onClick={() => {
+                setVisitFrom(null);
+                setVisitTo(null);
+                setPage(1);
+              }}
+              className="text-status-magenta hover:underline"
+            >
+              ✕ {t("action.clear", "נקה")}
+            </button>
+          )}
         </span>
       </div>
 

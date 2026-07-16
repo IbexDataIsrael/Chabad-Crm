@@ -18,9 +18,9 @@ TOGGLEABLE_FIELDS: list[tuple[str, str, str]] = [
     # fixes19 §5: the entire mekurav layout area (one section-level switch,
     # hidden by default — see DEFAULT_HIDDEN).
     ("contact_mekurav.section", "contact_mekurav.section", "contact_mekurav"),
-    # Core contact
+    # Core contact — email is NOT here (fixes28 §1): like name and phone it is
+    # a core identity field (and the shliach login identity) and can't be hidden.
     ("contacts.last_name", "contacts.last_name", "contact"),
-    ("contacts.email", "contacts.email", "contact"),
     ("contacts.assigned_user_id", "contacts.assigned_user_id", "contact"),
     ("contacts.pipeline_status", "contacts.pipeline_status", "contact"),
     ("contacts.color_tag", "contacts.color_tag", "contact"),

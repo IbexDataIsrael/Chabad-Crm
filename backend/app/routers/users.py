@@ -230,6 +230,13 @@ def recreate_user(
         .first()
     )
     if user:
+        # fixes28 §2: never turn a restricted (staff) or admin account into an
+        # activist login — a ContactShliach may only bind to a shliach role.
+        if user.role != "shliach":
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "כתובת אימייל זו שייכת למשתמש קיים בארגון שאינו פעיל",
+            )
         # The account may serve another shliach contact — never steal a login.
         linked_elsewhere = (
             db.query(models.ContactShliach)

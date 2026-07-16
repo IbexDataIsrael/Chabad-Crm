@@ -328,6 +328,8 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("visit", "visit.notes", "הערות", "Notes"),
     ("visit", "visit.pick_date", "יש לבחור תאריך", "Please choose a date"),
     ("visit", "visit.delete_confirm", "למחוק ביקור זה?", "Delete this visit?"),
+    # fixes28 §1: the visit row expands to inline editing on click.
+    ("visit", "visit.click_to_edit", "לחצו לפתיחה ולעריכה", "Click to open and edit"),
     # --- Donations ---
     ("donation", "donation.history", "היסטורית תרומות", "Donation history"),
     ("donation", "donation.add", "הוסף תרומה", "Add donation"),

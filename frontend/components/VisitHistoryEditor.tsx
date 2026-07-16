@@ -11,8 +11,9 @@ import { VisitDetails } from "./VisitDetails";
 import { VisitForm } from "./VisitForm";
 
 /** Per-contact visit history (date, type, location, notes), newest first.
- *  fixes26 §2: a visit opens read-only ("הצג") or in the inline per-field
- *  editor ("ערוך"); creation still uses the visit form. */
+ *  fixes28 §1: clicking a visit's title row expands it in place with
+ *  Google-style inline per-field autosave (the separate "הצג"/"ערוך" links
+ *  are gone — only "מחק" remains); creation still uses the visit form. */
 export function VisitHistoryEditor({ contactId }: { contactId: number }) {
   const { t } = useLocalization();
   const confirmDialog = useConfirm();
@@ -20,9 +21,7 @@ export function VisitHistoryEditor({ contactId }: { contactId: number }) {
   const [visits, setVisits] = useState<Visit[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
-  const [expanded, setExpanded] = useState<{ id: number; mode: "view" | "edit" } | null>(
-    null,
-  );
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   async function reload() {
     setVisits(await apiFetch<Visit[]>(`/api/contacts/${contactId}/visits`));
@@ -46,11 +45,10 @@ export function VisitHistoryEditor({ contactId }: { contactId: number }) {
   return (
     <div className="space-y-3">
       {visits.map((v) =>
-        expanded?.id === v.id ? (
+        expandedId === v.id ? (
           <VisitDetails
             key={v.id}
             visit={v}
-            readOnly={expanded.mode === "view"}
             onPatch={async (partial) => {
               await apiFetch<Visit>(`/api/contacts/${contactId}/visits/${v.id}`, {
                 method: "PATCH",
@@ -58,14 +56,16 @@ export function VisitHistoryEditor({ contactId }: { contactId: number }) {
               });
               await reload();
             }}
-            onClose={() => setExpanded(null)}
+            onClose={() => setExpandedId(null)}
           />
         ) : (
           <div
             key={v.id}
-            className="flex flex-wrap items-center gap-2 rounded-md border border-gray-100 px-3 py-2"
+            onClick={() => setExpandedId(v.id)}
+            className="flex flex-wrap items-center gap-2 rounded-md border border-gray-100 px-3 py-2 cursor-pointer hover:bg-gray-50/80"
+            title={t("visit.click_to_edit", "לחצו לפתיחה ולעריכה")}
           >
-            <span className="font-medium" dir="ltr">
+            <span className="font-medium text-status-magenta" dir="ltr">
               {new Date(v.visit_date).toLocaleDateString("he-IL")}
             </span>
             {v.visit_type && (
@@ -77,19 +77,10 @@ export function VisitHistoryEditor({ contactId }: { contactId: number }) {
             {v.notes && <span className="text-sm text-gray-600">— {v.notes}</span>}
             <div className="flex items-center gap-2 ms-auto">
               <button
-                onClick={() => setExpanded({ id: v.id, mode: "view" })}
-                className="text-sm text-status-magenta hover:underline"
-              >
-                {t("action.view", "הצג")}
-              </button>
-              <button
-                onClick={() => setExpanded({ id: v.id, mode: "edit" })}
-                className="text-sm text-status-magenta hover:underline"
-              >
-                {t("action.edit", "ערוך")}
-              </button>
-              <button
-                onClick={() => remove(v.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void remove(v.id);
+                }}
                 className="text-sm text-status-darkred hover:underline"
               >
                 {t("action.delete", "מחק")}

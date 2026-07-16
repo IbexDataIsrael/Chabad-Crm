@@ -230,8 +230,8 @@ export function ContactView({
   );
 
   // fixes15 §4.2: a shliach profile shows only shliach-relevant fields.
-  // fixes26 §3: email is the login identity — always shown for a shliach,
-  // even when the contacts.email field-setting is hidden.
+  // fixes28 §1: email is a core identity field (and the shliach login
+  // identity) — always shown, no visibility toggle.
   const shliachFields: [string | null, string, ReactNode][] = [
     [null, t("contacts.name", "שם פרטי"), nameNode],
     ["contacts.last_name", t("contacts.last_name", "שם משפחה"), lastNameNode],
@@ -246,7 +246,8 @@ export function ContactView({
     [null, t("contacts.name", "שם פרטי"), nameNode],
     ["contacts.last_name", t("contacts.last_name", "שם משפחה"), lastNameNode],
     [null, t("contacts.phone", "טלפון"), phoneNode],
-    ["contacts.email", t("contacts.email", "אימייל"), emailNode],
+    // fixes28 §1: email is a core CRUD field — always shown, like name/phone.
+    [null, t("contacts.email", "אימייל"), emailNode],
     [null, t("contacts.contact_type", "סוג איש קשר"), contactType.labelFor(contact.contact_type) || "—"],
     ["contacts.assigned_user_id", t("contacts.assigned_user_id", "משויך ל"), assignedNode],
     [
