@@ -34,6 +34,7 @@ from app.schemas import (
     ApartmentRestoreField,
     ApartmentUpdate,
     ApartmentVersionOut,
+    BuildingAggregate,
     ReportNumberBuildingLink,
 )
 
@@ -244,6 +245,7 @@ def _apply_apartment_filters(
     area_id: Optional[int] = None,
     area_ids: Optional[list[int]] = None,
     apartment_id: Optional[int] = None,
+    apartment_ids: Optional[list[int]] = None,
     report_number_ids: Optional[list[int]] = None,
     q: Optional[str] = None,
     jewish_status: Optional[list[str]] = None,
@@ -265,6 +267,10 @@ def _apply_apartment_filters(
         query = query.filter(models.Building.area_id.in_(area_ids))
     if apartment_id is not None:
         query = query.filter(models.Apartment.id == apartment_id)
+    # fixes30 §3: explicit apartment selection (repeated ?apartment_ids=…) —
+    # the report page fetches exactly the chosen apartments.
+    if apartment_ids:
+        query = query.filter(models.Apartment.id.in_(apartment_ids))
     # fixes20 §3: searchable report-number filter (multi-select).
     if report_number_ids:
         query = query.filter(models.Apartment.report_number_id.in_(report_number_ids))
@@ -295,6 +301,7 @@ def list_apartments_enriched(
     area_id: Optional[int] = None,
     area_ids: Optional[list[int]] = Query(None),
     apartment_id: Optional[int] = None,
+    apartment_ids: Optional[list[int]] = Query(None),
     report_number_ids: Optional[list[int]] = Query(None),
     q: Optional[str] = None,
     jewish_status: Optional[list[str]] = Query(None),
@@ -338,6 +345,7 @@ def list_apartments_enriched(
         area_id=area_id,
         area_ids=area_ids,
         apartment_id=apartment_id,
+        apartment_ids=apartment_ids,
         report_number_ids=report_number_ids,
         q=q,
         jewish_status=jewish_status,
@@ -490,6 +498,53 @@ def report_number_buildings(
     return [
         ReportNumberBuildingLink(report_number_id=rn_id, building_id=b_id)
         for rn_id, b_id in query.distinct().all()
+    ]
+
+
+@router.get("/building-aggregates", response_model=list[BuildingAggregate])
+def building_aggregates(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+    building_id: Optional[int] = None,
+    building_ids: Optional[list[int]] = Query(None),
+    area_id: Optional[int] = None,
+    area_ids: Optional[list[int]] = Query(None),
+    report_number_ids: Optional[list[int]] = Query(None),
+    q: Optional[str] = None,
+    jewish_status: Optional[list[str]] = Query(None),
+    mezuzah_status: Optional[list[str]] = Query(None),
+):
+    """fixes30 §1: apartment counts per building under the exact /list filters —
+    the group-by-building view shows each building header with its full
+    filtered count, not just the rows on the current page. Shliach users are
+    scoped to their covered apartments like everywhere else."""
+    query = (
+        db.query(models.Apartment.building_id, func.count(models.Apartment.id))
+        .join(models.Building, models.Building.id == models.Apartment.building_id)
+        .filter(
+            models.Apartment.organization_id == current_user.organization_id,
+            models.Apartment.is_display.is_(True),
+        )
+    )
+    if current_user.role == "shliach":
+        ids = _shliach_apartment_ids(db, current_user)
+        if not ids:
+            return []
+        query = query.filter(models.Apartment.id.in_(ids))
+    query = _apply_apartment_filters(
+        query,
+        building_id=building_id,
+        building_ids=building_ids,
+        area_id=area_id,
+        area_ids=area_ids,
+        report_number_ids=report_number_ids,
+        q=q,
+        jewish_status=jewish_status,
+        mezuzah_status=mezuzah_status,
+    )
+    return [
+        BuildingAggregate(building_id=b_id, count=count)
+        for b_id, count in query.group_by(models.Apartment.building_id).all()
     ]
 
 

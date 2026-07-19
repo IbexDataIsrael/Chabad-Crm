@@ -16,6 +16,7 @@ import {
 import { displayPicklistValue } from "@/lib/picklists";
 import { useToast } from "@/lib/toast";
 import {
+  apartmentTitle,
   buildingDisplayName,
   type ApartmentListItem,
   type ApartmentPage,
@@ -30,12 +31,20 @@ const CELL_PADDING = 4;
 // mezuzah, language, notes. Notes takes the rest of the usable ~515pt.
 const COLUMN_WIDTHS = [50, 70, 85, 75, 70, 160];
 
+/** fixes30 §3: the page offers two source modes — the classic report-number
+ *  selection, or an arbitrary hand-picked set of apartments. */
+type ReportMode = "reports" | "apartments";
+
 export default function CreateReportsPage() {
   const { loading, user } = useAuth();
   const { t, lang } = useLocalization();
   const { error: toastError } = useToast();
+  const [mode, setMode] = useState<ReportMode>("reports");
   const [reportNumbers, setReportNumbers] = useState<ReportNumber[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  // fixes30 §3: the direct-selection option pool + chosen apartment ids.
+  const [apartmentOptions, setApartmentOptions] = useState<ApartmentListItem[] | null>(null);
+  const [selectedAptIds, setSelectedAptIds] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
   const [noData, setNoData] = useState(false);
 
@@ -46,14 +55,15 @@ export default function CreateReportsPage() {
       .catch(() => setReportNumbers([]));
   }, [loading]);
 
-  /** Every active apartment linked to the selected report numbers, in the
-   *  canonical floor order (the /list endpoint already restricts to
-   *  is_display=true and applies role scoping). */
-  async function fetchAllApartments(ids: number[]): Promise<ApartmentListItem[]> {
+  /** Page through /api/apartments/list (active versions, role-scoped, floor
+   *  order) with the given extra params until every row is in. */
+  async function fetchAllPages(
+    build: (params: URLSearchParams) => void,
+  ): Promise<ApartmentListItem[]> {
     const all: ApartmentListItem[] = [];
     for (let page = 1; ; page += 1) {
       const params = new URLSearchParams();
-      ids.forEach((id) => params.append("report_number_ids", String(id)));
+      build(params);
       params.set("sort", "floor");
       params.set("dir", "asc");
       params.set("page", String(page));
@@ -65,12 +75,34 @@ export default function CreateReportsPage() {
     return all;
   }
 
+  // fixes30 §3: the apartment picker's options load once, on first use.
+  useEffect(() => {
+    if (loading || mode !== "apartments" || apartmentOptions !== null) return;
+    fetchAllPages(() => {})
+      .then(setApartmentOptions)
+      .catch(() => setApartmentOptions([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, mode, apartmentOptions]);
+
   async function generatePdf() {
-    if (selectedIds.length === 0 || busy) return;
+    const nothingSelected =
+      mode === "reports" ? selectedIds.length === 0 : selectedAptIds.length === 0;
+    if (nothingSelected || busy) return;
     setBusy(true);
     setNoData(false);
     try {
-      const rows = await fetchAllApartments(selectedIds);
+      const rows =
+        mode === "reports"
+          ? await fetchAllPages((params) =>
+              selectedIds.forEach((id) =>
+                params.append("report_number_ids", String(id)),
+              ),
+            )
+          : await fetchAllPages((params) =>
+              selectedAptIds.forEach((id) =>
+                params.append("apartment_ids", String(id)),
+              ),
+            );
       if (rows.length === 0) {
         setNoData(true);
         return;
@@ -90,17 +122,6 @@ export default function CreateReportsPage() {
         const o = opts.find((opt) => opt.value === value);
         return o ? displayPicklistValue(o, lang) : value;
       };
-
-      // Group by report number (picker order = name order), then by the
-      // building's cleaned "street + number" display string.
-      const byReport = new Map<number, ApartmentListItem[]>();
-      for (const a of rows) {
-        if (a.report_number_id == null) continue;
-        const group = byReport.get(a.report_number_id) ?? [];
-        group.push(a);
-        byReport.set(a.report_number_id, group);
-      }
-      const orderedReports = reportNumbers.filter((rn) => byReport.has(rn.id));
 
       const { jsPDF } = await import("jspdf");
       const { default: autoTable } = await import("jspdf-autotable");
@@ -138,8 +159,9 @@ export default function CreateReportsPage() {
       });
       y += 34;
 
-      for (const rn of orderedReports) {
-        const group = byReport.get(rn.id)!;
+      // One table per building, headed by the building's cleaned
+      // "street + number" display string (shared by both modes).
+      const renderBuildingTables = (group: ApartmentListItem[]) => {
         const byBuilding = new Map<string, ApartmentListItem[]>();
         for (const a of group) {
           const key = buildingDisplayName({
@@ -154,20 +176,6 @@ export default function CreateReportsPage() {
         const buildingKeys = [...byBuilding.keys()].sort((a, b) =>
           a.localeCompare(b, "he"),
         );
-
-        if (y + 48 > bottom) {
-          doc.addPage();
-          y = PDF_CONTENT_TOP;
-        }
-        doc.setFont(HEBREW_FONT, "bold");
-        doc.setFontSize(14);
-        doc.text(
-          `${t("apartments.report_number_id", "מספר דוח")}: ${rn.name}`,
-          pageW - MARGIN,
-          y + 6,
-          { align: "right" },
-        );
-        y += 22;
 
         for (const buildingKey of buildingKeys) {
           if (y + 60 > bottom) {
@@ -219,7 +227,40 @@ export default function CreateReportsPage() {
             (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable
               .finalY + 16;
         }
-        y += 6;
+      };
+
+      if (mode === "reports") {
+        // Group by report number (picker order = name order), then by building.
+        const byReport = new Map<number, ApartmentListItem[]>();
+        for (const a of rows) {
+          if (a.report_number_id == null) continue;
+          const group = byReport.get(a.report_number_id) ?? [];
+          group.push(a);
+          byReport.set(a.report_number_id, group);
+        }
+        const orderedReports = reportNumbers.filter((rn) => byReport.has(rn.id));
+
+        for (const rn of orderedReports) {
+          if (y + 48 > bottom) {
+            doc.addPage();
+            y = PDF_CONTENT_TOP;
+          }
+          doc.setFont(HEBREW_FONT, "bold");
+          doc.setFontSize(14);
+          doc.text(
+            `${t("apartments.report_number_id", "מספר דוח")}: ${rn.name}`,
+            pageW - MARGIN,
+            y + 6,
+            { align: "right" },
+          );
+          y += 22;
+          renderBuildingTables(byReport.get(rn.id)!);
+          y += 6;
+        }
+      } else {
+        // fixes30 §3: hand-picked apartments — building groups only, and rows
+        // without a report number are included too.
+        renderBuildingTables(rows);
       }
 
       // fixes26 §1: stamp the org name + logo header onto every page.
@@ -237,27 +278,87 @@ export default function CreateReportsPage() {
 
   if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
 
+  const nothingSelected =
+    mode === "reports" ? selectedIds.length === 0 : selectedAptIds.length === 0;
+
   return (
     <div className="space-y-5 max-w-2xl">
       <h1 className="text-2xl font-bold">{t("reports.create_reports", "יצירת דוחות")}</h1>
 
       <div className="bg-white rounded-xl shadow-sm p-5 space-y-4">
-        <label className="block space-y-1">
-          <span className="block text-sm font-medium">
-            {t("reports.report_numbers", "מספרי דוחות")}
-          </span>
-          <MultiSelectSearchFilter
-            className="w-full max-w-sm"
-            allLabel={t("reports.select_reports_placeholder", "בחר מספר דוח אחד או יותר")}
-            options={reportNumbers.map((rn) => ({ id: rn.id, label: rn.name }))}
-            value={selectedIds}
-            onChange={(ids) => {
-              setSelectedIds(ids);
-              setNoData(false);
-            }}
-            searchPlaceholder={t("filter.search_report_numbers", "חיפוש מספר דוח…")}
-          />
-        </label>
+        {/* fixes30 §3: source mode. */}
+        <div className="flex flex-wrap items-center gap-4 text-sm">
+          {(
+            [
+              ["reports", t("reports.mode_by_report", "לפי מספרי דוח")],
+              ["apartments", t("reports.mode_by_apartments", "לפי בחירת דירות")],
+            ] as [ReportMode, string][]
+          ).map(([m, label]) => (
+            <label key={m} className="inline-flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="radio"
+                name="report-mode"
+                className="accent-status-magenta"
+                checked={mode === m}
+                onChange={() => {
+                  setMode(m);
+                  setNoData(false);
+                }}
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+
+        {mode === "reports" ? (
+          <label className="block space-y-1">
+            <span className="block text-sm font-medium">
+              {t("reports.report_numbers", "מספרי דוחות")}
+            </span>
+            <MultiSelectSearchFilter
+              className="w-full max-w-sm"
+              allLabel={t("reports.select_reports_placeholder", "בחר מספר דוח אחד או יותר")}
+              options={reportNumbers.map((rn) => ({ id: rn.id, label: rn.name }))}
+              value={selectedIds}
+              onChange={(ids) => {
+                setSelectedIds(ids);
+                setNoData(false);
+              }}
+              searchPlaceholder={t("filter.search_report_numbers", "חיפוש מספר דוח…")}
+            />
+          </label>
+        ) : (
+          <label className="block space-y-1">
+            <span className="block text-sm font-medium">
+              {t("apartments", "דירות")}
+            </span>
+            {apartmentOptions === null ? (
+              <p className="text-sm text-gray-400">{t("action.loading", "טוען…")}</p>
+            ) : (
+              <MultiSelectSearchFilter
+                className="w-full max-w-sm"
+                allLabel={t(
+                  "reports.select_apartments_placeholder",
+                  "בחר דירה אחת או יותר",
+                )}
+                options={apartmentOptions.map((a) => ({
+                  id: a.id,
+                  label: `${apartmentTitle(a)} — ${buildingDisplayName({
+                    id: a.building_id,
+                    building_name: a.building_name,
+                    building_address: a.building_address,
+                  })}`,
+                }))}
+                value={selectedAptIds}
+                onChange={(ids) => {
+                  setSelectedAptIds(ids);
+                  setNoData(false);
+                }}
+                searchPlaceholder={t("filter.search_apartments", "חיפוש דירה…")}
+              />
+            )}
+          </label>
+        )}
 
         {noData && (
           <p className="text-sm text-status-darkred">
@@ -268,7 +369,7 @@ export default function CreateReportsPage() {
         <button
           type="button"
           onClick={generatePdf}
-          disabled={busy || selectedIds.length === 0}
+          disabled={busy || nothingSelected}
           className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {busy ? t("action.loading", "טוען…") : t("reports.generate_pdf", "הפק דוח PDF")}

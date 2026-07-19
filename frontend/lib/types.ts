@@ -215,6 +215,13 @@ export interface ReportNumberBuildingLink {
   building_id: number;
 }
 
+/** fixes30 §1: apartment count per building under the current list filters —
+ *  feeds the group-by-building header rows. */
+export interface BuildingAggregate {
+  building_id: number;
+  count: number;
+}
+
 /** fixes23 §3: outcome of a bulk apartment update. */
 export interface ApartmentBulkUpdateResult {
   updated: number;

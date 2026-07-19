@@ -13,3 +13,9 @@ export function waHref(phone: string): string {
   if (digits.startsWith("0")) digits = `972${digits.slice(1)}`;
   return `https://wa.me/${digits}`;
 }
+
+/** Google Maps navigation link for a free-text address (fixes30 §4 — the
+ *  shluchim display renders building addresses as these). */
+export function mapsHref(address: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+}

@@ -680,6 +680,15 @@ class ReportNumberBuildingLink(BaseModel):
     building_id: int
 
 
+class BuildingAggregate(BaseModel):
+    """fixes30 §1: apartment count per building under the /list filters — the
+    group-by-building view's header aggregates (filter-scoped, not
+    page-scoped)."""
+
+    building_id: int
+    count: int
+
+
 class ApartmentBulkUpdate(BaseModel):
     """fixes23 §3: apply a change to every active apartment matching the page's
     current filters. The filter block mirrors the /list query params; the

@@ -10,6 +10,7 @@ import { SearchableSelect } from "@/components/SearchableSelect";
 import { InlineEdit } from "@/components/ui/InlineEdit";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { mapsHref } from "@/lib/contactActions";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
@@ -39,7 +40,7 @@ const inputClass =
  *  fixes19 §3 versioned edit, so the page follows the new active id. */
 export default function ApartmentDetailPage() {
   const router = useRouter();
-  const { loading, isAdmin } = useAuth();
+  const { loading, isAdmin, isShliach } = useAuth();
   const { t } = useLocalization();
   const { isFieldVisible: vis } = useFieldSettings();
   const { success } = useToast();
@@ -442,7 +443,22 @@ export default function ApartmentDetailPage() {
             {building?.building_address && (
               <div className="sm:col-span-2">
                 <dt className="text-gray-500">{t("buildings.building_address", "כתובת בניין")}</dt>
-                <dd className="font-medium">{building.building_address}</dd>
+                <dd className="font-medium">
+                  {/* fixes30 §4: the shluchim display navigates via Maps. */}
+                  {isShliach ? (
+                    <a
+                      href={mapsHref(building.building_address)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={t("apt.navigate", "ניווט בגוגל מפות")}
+                      className="text-status-magenta hover:underline"
+                    >
+                      📍 {building.building_address}
+                    </a>
+                  ) : (
+                    building.building_address
+                  )}
+                </dd>
               </div>
             )}
             {field(

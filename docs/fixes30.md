@@ -1,84 +1,76 @@
-
-# Specification: Shliach Role UI Restructuring & Inline Editing
-
-This document outlines the modifications required to adapt the application UI for the **Shliach (Courier / שליח)** role. It covers hiding the Reports menu and transitioning the existing edit behaviors in both the **Building** and **Apartment** modules to inline editing.
-
-make fixes30-plan.md first
+# Development Sprint: Feature Additions and Optimizations
+make fixes30-plan.md before starting
 
 ---
 
-## STATUS: code DONE and verified — UNCOMMITTED, awaiting the user's own commit/push
+## STATUS: DONE — code complete and verified, UNCOMMITTED (the user commits/pushes themselves)
 
 Plan: `docs/fixes30-plan.md` (written first, per the instruction above).
-Evidence: 14/14 headless-Chrome checks, 320 backend tests, `tsc --noEmit`
-clean. No backend code changes (both PUTs already accept partials); one new
-seeded string (`buildings.address_required`).
-
-**Git/deploy state (2026-07-17):** all changes live uncommitted in the
-working tree (plus local safety branch `backup/fixes29-30-original`);
-`origin/main` was reset back to the user's `34fa62e` at their demand — the
-user commits and pushes themselves as **IbexDataIsrael** (Render/Vercel only
-deploy commits from that account). Note: the Vercel production domain is
-currently serving this build via an unauthorized CLI deployment (watcher
-mishap, see conversation of 2026-07-17) — the user decides whether to roll
-it back or let their own git push supersede it.
-
-- **§1** `reportItems` empties for shliach in `app/dashboard/layout.tsx` — an
-  empty NavMenu renders nothing. Drive-verified: admin sees דוחות, shliach
-  nav shows only מקומות/עוד.
-- **§2** Apartment detail page fields edit in place (InlineEdit, the contact
-  page pattern): text fields save trimmed-or-null partials on Enter/blur,
-  Escape reverts, selects (floor / picklists / report number / building)
-  commit on selection; phone/email get the shared validation hints. Each
-  save is a fixes19 versioned edit — the page follows the new active id
-  (drive: 83→84 on rename, 84→85 on floor change; values persist across
-  reload). The "ערוך" button is gone; historical (admin-viewable) versions
-  render read-only. The `/apartments/edit/[id]` route stays for the
-  buildings pages' `?return=` flows.
-- **§3** Building detail page: name / address / area edit in place for
-  admins (backend PUT is admin-only; non-admins keep plain text —
-  drive-verified with a shliach session). Address rejects an explicit empty
-  value inline. Floors, coordinates/map and apartment management stay on
-  `/buildings/edit/[id]` (link kept).
+Evidence: **327 backend tests** (7 new in `tests/test_fixes30.py`),
+`tsc --noEmit` clean in the frontend container, **20/20 headless-Chrome
+drive checks** (2026-07-19) covering every section below.
 
 ---
 
-## 1. Role-Based Navigation Restriction (Shliach)
+## 1. Apartments Module
 
-### Goal
-Hide the "Reports" menu item from the navigation system when the active session belongs to a user with the **Shliach** role.
+### Building Aggregation & Customization
+* [x] **Building Aggregation:** toggle **קיבוץ לפי בניין** on the apartments
+  page groups the rows under per-building header rows (building, area, and the
+  building's *filter-scoped* apartment count from the new
+  `GET /api/apartments/building-aggregates`). Sorting locks to building while
+  grouping so groups stay contiguous across pages. Drive: 2 header rows,
+  correct counts (3/1), sort select disabled.
+* [x] **Field Customization:** the "התאמת שדות" panel now carries an
+  **איש קשר** chip that shows/hides the contact column (DB preference
+  `apartments.showContact`, default on — kept separate from the stored
+  fields array so existing saved selections keep the column). Drive: hidden
+  and restored.
 
-### Implementation Requirements
-* Locate the main application navigation/sidebar component.
-* Check the current user's role context.
-* Exclude the **Reports** menu/option link from being rendered if the user's role is `shliach`.
-
----
-
-## 2. Inline Editing: Apartment Module
-
-### Goal
-Convert the existing edit flow for the **Apartment** module into an inline-editable interface.
-
-### UI/UX Requirements
-* **Triggers:** Replacing the current edit form or modal redirect with an in-place interaction. Clicking the target value (or an adjacent edit icon) switches the element into its active edit state.
-* **Input Behavior:** Render an inline input field pre-populated with the current value.
-* **Save Conditions:**
-  * Pressing `Enter` or loss of focus (`onBlur`) saves the value by calling the existing update logic.
-  * Pressing `Escape` cancels the edit and restores the original value.
-* **Visual States:** Provide a subtle visual indicator (such as a border change or hover highlight) to show the element is editable.
+### Fast Inline Editing
+* [x] **Jewish status**, **Campaign status**, **Mezuzah** edit in place from
+  the list rows (InlineEdit + picklist select, commit-on-select). Each save is
+  a fixes19 versioned edit — the row swaps to the new active id in place.
+  Drive: edit saved, value persisted, id changed (95→99).
 
 ---
 
-## 3. Inline Editing: Building Module
+## 2. Contacts (`Contact_Mekurav`)
 
-### Goal
-Convert the existing edit flow for the **Building** module into an inline-editable interface.
+### List Display Dashboard (`dashboard/contacts`)
+* [x] **Quick Visit Action:** a 📅 button in each row's quick-actions cell
+  opens a modal with the shared visit form pinned to that contact
+  (`POST /api/contacts/{id}/visits` — open to any org member). Drive: visit
+  created from the list, verified via the API.
 
-### UI/UX Requirements
-* **Triggers:** Clicking the building identifier or field triggers the transition from static text to an editable state.
-* **Input Behavior:** Render an inline input field pre-populated with the current building value.
-* **Save Conditions:**
-  * Pressing `Enter` or losing focus (`onBlur`) saves the change using the current edit/update execution path.
-  * Pressing `Escape` aborts changes and resets to the previous value.
-* **Visual States:** Distinguish the editable field with clear hover and active-input states to maintain usability.
+### Contact Card Detail Page (`dashboard/contacts/[id]`)
+* [x] **Dynamic Segment Ordering:** a **⚙ סדר תצוגה** button opens a panel
+  with ↑/↓ reordering for the four segments; the order is a DB preference
+  (`contact.segmentOrder`) that follows the account. Segments keep their
+  existing visibility rules (visits/dates: mekurav; donations: admin).
+  Drive: main moved below visits, order survives reload.
+* Segments covered: main contact info (`תצוגה עיקרית של איש קשר`), visit
+  history, significant dates, donation history.
+
+---
+
+## 3. Reports Module
+
+* [x] **Flexible Report Creation:** `dashboard/reports/create` gained a mode
+  switch — **לפי מספרי דוח** (unchanged) / **לפי בחירת דירות**: pick any n
+  apartments in a searchable multi-select ("apartment — building" labels) and
+  generate the same PDF grouped by building only; apartments without a report
+  number are included. Backend: new repeated `apartment_ids` filter on
+  `GET /api/apartments/list`. Drive: PDF generated from a hand-picked pair
+  (one with no report number), no errors.
+
+---
+
+## 4. Shluchim Role Display
+
+* [x] **Location Navigation:** in shliach sessions every rendered building
+  address is a Google Maps link (`mapsHref` in `lib/contactActions.ts`,
+  `maps/search/?api=1&query=…`, opens in a new tab): the apartments-list
+  building column, the apartment card's "כתובת בניין" row, and the area
+  page's building addresses. Other roles keep the current plain text /
+  internal links. Drive (shliach login): both links verified, scoping intact.

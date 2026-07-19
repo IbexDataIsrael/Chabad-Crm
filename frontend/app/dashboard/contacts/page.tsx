@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { DatePicker } from "@/components/DatePicker";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { VisitForm } from "@/components/VisitForm";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { rowStyle } from "@/lib/colors";
@@ -27,6 +28,7 @@ import {
   type ContactPage,
   type CustomFieldDefinition,
   type UserSummary,
+  type Visit,
 } from "@/lib/types";
 
 type SortKey = "created" | "name";
@@ -62,7 +64,9 @@ export default function ContactsPage() {
   const router = useRouter();
   const { t } = useLocalization();
   const { user, isShliach } = useAuth();
-  const { error: toastError } = useToast();
+  const { success, error: toastError } = useToast();
+  // fixes30 §2a: which contact the quick add-visit modal is open for.
+  const [visitFor, setVisitFor] = useState<Contact | null>(null);
   const { isFieldVisible: vis, loading: fieldsLoading } = useFieldSettings();
   // The color has no column of its own (fixes7 §8A) — it tints the whole row.
   const showColor = vis("contacts.color_tag");
@@ -432,6 +436,18 @@ export default function ContactsPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">{t("contacts", "אנשי קשר")}</h1>
         <div className="flex items-center gap-2">
+          {/* Always reachable while any filter narrows the list — a saved
+              filter must never require hunting through the controls to undo
+              (the empty-state button below only covers the zero-results case). */}
+          {activeFilterCount > 0 && (
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="rounded-md border border-gray-300 text-gray-600 px-4 py-2 text-sm font-medium hover:bg-gray-50"
+            >
+              ✕ {t("filter.clear_all", "נקה את כל הסינונים")}
+            </button>
+          )}
           {/* fixes29 §1: show/hide the whole filter block below. */}
           <button
             type="button"
@@ -754,6 +770,35 @@ export default function ContactsPage() {
       )}
       </>)}
 
+      {/* fixes30 §2a: quick visit modal — the shared VisitForm pinned to the
+          row's contact, saving through the per-contact endpoint (open to any
+          org member, same as the contact page's visit section). */}
+      {visitFor && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl bg-white rounded-xl shadow-xl p-5 space-y-3 max-h-[90vh] overflow-y-auto">
+            <div>
+              <h2 className="text-lg font-bold">{t("page.add_visit", "ביקור חדש")}</h2>
+              <p className="text-sm text-gray-500">{contactFullName(visitFor)}</p>
+            </div>
+            <VisitForm
+              contacts={[]}
+              lockedContactId={visitFor.id}
+              onCancel={() => setVisitFor(null)}
+              onSave={(payload) =>
+                apiFetch<Visit>(`/api/contacts/${visitFor.id}/visits`, {
+                  method: "POST",
+                  body: JSON.stringify(payload),
+                })
+              }
+              onDone={() => {
+                setVisitFor(null);
+                success(t("msg.saved", "נשמר בהצלחה"));
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           {/* Data columns are content-width (w-px + nowrap); the empty trailing
@@ -858,6 +903,18 @@ export default function ContactsPage() {
                           ✉
                         </a>
                       )}
+                      {/* fixes30 §2a: log a visit without leaving the list. */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setVisitFor(c);
+                        }}
+                        title={t("visit.add", "הוסף ביקור")}
+                        className="rounded-full border border-gray-200 p-1.5 leading-none hover:bg-status-green/10"
+                      >
+                        📅
+                      </button>
                     </span>
                   </td>
                   <td className="px-3 py-1.5 w-px whitespace-nowrap">

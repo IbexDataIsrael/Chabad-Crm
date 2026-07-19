@@ -779,6 +779,21 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("filter", "filter.rebbe_ph", "קשר לרבי…", "Connection to the Rebbe…"),
     ("cf", "cf.visit_fields", "שדות ביקור מובנים", "Built-in visit fields"),
     ("cf", "cf.visit_fields_intro", "שדה מוסתר לא יופיע בטופסי הביקור, בכרטיסי הביקור או באפשרויות הסינון.", "A hidden field disappears from the visit forms, visit cards and filter options."),
+    # --- fixes30 (round 2): building grouping, segment order, apartment reports,
+    # shliach Maps navigation ---
+    ("apt", "apt.group_by_building", "קיבוץ לפי בניין", "Group by building"),
+    ("apt", "apt.group_count", "{n} דירות", "{n} apartments"),
+    ("apt", "apt.grouping_sort_hint", "בזמן קיבוץ לפי בניין המיון קבוע לפי בניין", "While grouping, sorting is fixed to building"),
+    ("apt", "apt.navigate", "ניווט בגוגל מפות", "Navigate in Google Maps"),
+    ("contact", "contact.segment_main", "תצוגה עיקרית של איש קשר", "Main contact view"),
+    ("contact", "contact.display_order", "סדר תצוגה", "Display order"),
+    ("contact", "contact.display_order_hint", "קבע את סדר הקטעים בכרטיס איש הקשר. ההעדפה נשמרת בחשבון שלך.", "Set the order of the contact card's sections. The preference is saved to your account."),
+    ("action", "action.move_up", "העלה", "Move up"),
+    ("action", "action.move_down", "הורד", "Move down"),
+    ("reports", "reports.mode_by_report", "לפי מספרי דוח", "By report numbers"),
+    ("reports", "reports.mode_by_apartments", "לפי בחירת דירות", "By selected apartments"),
+    ("reports", "reports.select_apartments_placeholder", "בחר דירה אחת או יותר", "Select one or more apartments"),
+    ("filter", "filter.search_apartments", "חיפוש דירה…", "Search apartment…"),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)

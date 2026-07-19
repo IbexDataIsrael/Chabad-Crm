@@ -105,6 +105,16 @@ This also removed the mivtzoim checkboxes from visit forms/cards.
 - [x] **Sanity Check** — query params verified in the drive (request URL
   capture); 320 backend tests pass; `tsc --noEmit` clean (Vercel-build rule).
 
+## Follow-up (user request, 2026-07-17 chat)
+- [x] **Clear-all always available:** the customer's list silently shrank to
+  24 via a saved פוטנציאל לצדקה="1" filter (browser localStorage; data intact
+  — 24/109 contacts carry that value). The "נקה את כל הסינונים" button now
+  renders in the contacts page header whenever any filter is active — not
+  only on an empty result — and works with the filter section collapsed.
+  Verified 4/4 headless checks (button visible collapsed, filter applied,
+  cleared from request, full list restored); tsc clean. Uncommitted — the
+  user commits/pushes themselves.
+
 ## Not done / follow-ups
 - **Resume the Render service** — owner-only action (no API key available
   locally). After resume, verify `https://minicrm-3xtt.onrender.com/docs`

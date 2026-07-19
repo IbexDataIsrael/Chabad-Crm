@@ -8,6 +8,7 @@ import { AreaPolygonView } from "@/components/AreaPolygonView";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { mapsHref } from "@/lib/contactActions";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
 import {
@@ -19,7 +20,7 @@ import {
 } from "@/lib/types";
 
 export default function AreaDetailPage() {
-  const { isAdmin, loading } = useAuth();
+  const { isAdmin, isShliach, loading } = useAuth();
   const { t } = useLocalization();
   const { success, error: toastError } = useToast();
   const params = useParams<{ id: string }>();
@@ -219,9 +220,23 @@ export default function AreaDetailPage() {
                 >
                   {buildingDisplayName(b)}
                 </Link>
-                {b.building_address && (
-                  <div className="text-sm text-gray-500">{b.building_address}</div>
-                )}
+                {b.building_address &&
+                  // fixes30 §4: the shluchim display navigates via Maps.
+                  (isShliach ? (
+                    <div className="text-sm">
+                      <a
+                        href={mapsHref(b.building_address)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={t("apt.navigate", "ניווט בגוגל מפות")}
+                        className="text-status-magenta hover:underline"
+                      >
+                        📍 {b.building_address}
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-500">{b.building_address}</div>
+                  ))}
               </li>
             ))}
           </ul>

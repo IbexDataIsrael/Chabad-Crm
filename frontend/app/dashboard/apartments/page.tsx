@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
+import { PicklistSelect } from "@/components/PicklistSelect";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { InlineEdit } from "@/components/ui/InlineEdit";
 import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { mapsHref } from "@/lib/contactActions";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { usePicklist } from "@/lib/picklists";
@@ -16,11 +19,13 @@ import { useToast } from "@/lib/toast";
 import {
   apartmentTitle,
   buildingDisplayName,
+  type Apartment,
   type ApartmentBulkUpdateResult,
   type ApartmentListItem,
   type ApartmentPage,
   type Area,
   type Building,
+  type BuildingAggregate,
   type Floor,
   type ReportNumber,
   type ReportNumberBuildingLink,
@@ -93,6 +98,18 @@ export default function ApartmentsPage() {
   const [fields, setFields] = useDbPreference<FieldKey[]>(
     "apartments.fields", DEFAULT_FIELDS,
   );
+  // fixes30 §1b: the linked-contact column has its own toggle — a separate
+  // preference (not a new fields-array entry) so every existing saved column
+  // selection keeps showing the column.
+  const [showContact, setShowContact] = useDbPreference<boolean>(
+    "apartments.showContact", true,
+  );
+  // fixes30 §1a: group the table by building; the sort is forced to
+  // "building" while active so groups stay contiguous across pages.
+  const [groupByBuilding, setGroupByBuilding] = usePersistentState(
+    "crm.apartments.groupByBuilding", false,
+  );
+  const [aggregates, setAggregates] = useState<Record<number, number>>({});
   const [fieldsOpen, setFieldsOpen] = useState(false);
   const [debouncedQ, setDebouncedQ] = useState(query);
   const [batchOpen, setBatchOpen] = useState(false);
@@ -112,7 +129,8 @@ export default function ApartmentsPage() {
     jewishFilter.forEach((v) => params.append("jewish_status", v));
     mezuzahFilter.forEach((v) => params.append("mezuzah_status", v));
     if (debouncedQ.trim()) params.set("q", debouncedQ.trim());
-    params.set("sort", sort);
+    // fixes30 §1a: grouping needs building-contiguous rows.
+    params.set("sort", groupByBuilding ? "building" : sort);
     params.set("dir", dir);
     params.set("page", String(page));
     params.set("page_size", String(pageSize));
@@ -151,7 +169,28 @@ export default function ApartmentsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     loading, areaIds, buildingIds, reportNumberIds, jewishFilter, mezuzahFilter,
-    debouncedQ, sort, dir, page, pageSize,
+    debouncedQ, sort, dir, page, pageSize, groupByBuilding,
+  ]);
+
+  // fixes30 §1a: filter-scoped per-building counts for the group headers —
+  // each building shows its full filtered count, not just this page's rows.
+  useEffect(() => {
+    if (loading || !groupByBuilding) return;
+    const params = new URLSearchParams();
+    areaIds.forEach((id) => params.append("area_ids", String(id)));
+    buildingIds.forEach((id) => params.append("building_ids", String(id)));
+    reportNumberIds.forEach((id) => params.append("report_number_ids", String(id)));
+    jewishFilter.forEach((v) => params.append("jewish_status", v));
+    mezuzahFilter.forEach((v) => params.append("mezuzah_status", v));
+    if (debouncedQ.trim()) params.set("q", debouncedQ.trim());
+    apiFetch<BuildingAggregate[]>(`/api/apartments/building-aggregates?${params}`)
+      .then((rows) =>
+        setAggregates(Object.fromEntries(rows.map((r) => [r.building_id, r.count]))),
+      )
+      .catch(() => setAggregates({}));
+  }, [
+    loading, groupByBuilding, areaIds, buildingIds, reportNumberIds,
+    jewishFilter, mezuzahFilter, debouncedQ,
   ]);
 
   // Debounced dynamic search (street name / label / resident).
@@ -230,6 +269,40 @@ export default function ApartmentsPage() {
     );
   }
 
+  // fixes30 §1c: one-field inline save from the list. The PUT is a fixes19 §3
+  // versioned edit returning a NEW active row — swap the row's id in place so
+  // the page, scroll and filters all stay put.
+  async function saveListField(
+    a: ApartmentListItem,
+    field: "jewish_status" | "campaign_status" | "mezuzah_status",
+    v: string | null,
+  ) {
+    const saved = await apiFetch<Apartment>(`/api/apartments/${a.id}`, {
+      method: "PUT",
+      body: JSON.stringify({ [field]: v }),
+    });
+    setItems((prev) =>
+      prev.map((it) => (it.id === a.id ? { ...it, id: saved.id, [field]: v } : it)),
+    );
+  }
+
+  const inlinePicklistCell = (
+    a: ApartmentListItem,
+    field: "jewish_status" | "campaign_status" | "mezuzah_status",
+    picklistKey: string,
+    label: string | null | undefined,
+  ) => (
+    <InlineEdit<string | null>
+      value={a[field] ?? null}
+      display={label || "—"}
+      commitOnBlur={false}
+      onSave={(v) => saveListField(a, field, v)}
+      editor={(draft, _setDraft, commit) => (
+        <PicklistSelect fieldKey={picklistKey} value={draft} onChange={commit} />
+      )}
+    />
+  );
+
   const fieldLabels: Record<FieldKey, string> = {
     resident: t("apartments.name", "שם דייר"),
     building: t("apartments.building_id", "בניין"),
@@ -250,12 +323,28 @@ export default function ApartmentsPage() {
     switch (k) {
       case "resident":
         return a.name ?? "—";
-      case "building":
-        return buildingDisplayName({
+      case "building": {
+        const name = buildingDisplayName({
           id: a.building_id,
           building_name: a.building_name,
           building_address: a.building_address,
         });
+        // fixes30 §4: the shluchim display navigates via Google Maps.
+        if (isShliach && a.building_address) {
+          return (
+            <a
+              href={mapsHref(a.building_address)}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={t("apt.navigate", "ניווט בגוגל מפות")}
+              className="text-status-magenta hover:underline"
+            >
+              📍 {name}
+            </a>
+          );
+        }
+        return name;
+      }
       case "area":
         return a.area_name ?? "—";
       case "report_number":
@@ -268,12 +357,22 @@ export default function ApartmentsPage() {
         return a.email ? <span dir="ltr">{a.email}</span> : "—";
       case "language":
         return language.labelFor(a.language) || "—";
+      // fixes30 §1c: these three edit in place, straight from the list row.
       case "jewish_status":
-        return jewish.labelFor(a.jewish_status) || "—";
+        return inlinePicklistCell(
+          a, "jewish_status", "apartment.Jewish_status",
+          jewish.labelFor(a.jewish_status),
+        );
       case "campaign_status":
-        return campaign.labelFor(a.campaign_status) || "—";
+        return inlinePicklistCell(
+          a, "campaign_status", "apartment.campaign_status",
+          campaign.labelFor(a.campaign_status),
+        );
       case "mezuzah_status":
-        return mezuzah.labelFor(a.mezuzah_status) || "—";
+        return inlinePicklistCell(
+          a, "mezuzah_status", "apartment.mezuzah_status",
+          mezuzah.labelFor(a.mezuzah_status),
+        );
     }
   }
 
@@ -284,6 +383,9 @@ export default function ApartmentsPage() {
       // matching apartment remain choosable.
       (buildingIdsForReports === null || buildingIdsForReports.has(b.id)),
   );
+
+  // Title + optional data columns + optional contact column + trailing filler.
+  const colCount = 2 + activeFields.length + (showContact ? 1 : 0);
 
   const lastPage = Math.max(1, Math.ceil(total / pageSize));
   const rangeText = t("pager.range", "{from}–{to} מתוך {total}")
@@ -383,7 +485,13 @@ export default function ApartmentsPage() {
         <span className="text-gray-500">{t("sort.label", "מיון:")}</span>
         <select
           className={inputClass}
-          value={sort}
+          value={groupByBuilding ? "building" : sort}
+          disabled={groupByBuilding}
+          title={
+            groupByBuilding
+              ? t("apt.grouping_sort_hint", "בזמן קיבוץ לפי בניין המיון קבוע לפי בניין")
+              : undefined
+          }
           onChange={(e) => onSortChange(e.target.value as SortKey)}
         >
           <option value="floor">{t("sort.floor", "קומה")}</option>
@@ -400,6 +508,19 @@ export default function ApartmentsPage() {
           title={dir === "asc" ? t("sort.asc", "עולה") : t("sort.desc", "יורד")}
         >
           {dir === "asc" ? "↑" : "↓"} {dir === "asc" ? t("sort.asc", "עולה") : t("sort.desc", "יורד")}
+        </button>
+        {/* fixes30 §1a: aggregate the rows under per-building headers. */}
+        <button
+          type="button"
+          onClick={() => setGroupByBuilding(!groupByBuilding)}
+          className={`rounded-md border px-3 py-2 ${
+            groupByBuilding
+              ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
+              : "border-gray-300 hover:bg-gray-50"
+          }`}
+        >
+          {groupByBuilding ? "✓ " : ""}
+          {t("apt.group_by_building", "קיבוץ לפי בניין")}
         </button>
         <button
           type="button"
@@ -470,6 +591,19 @@ export default function ApartmentsPage() {
                 {fieldLabels[k]}
               </button>
             ))}
+            {/* fixes30 §1b: the linked-contact column, previously always on. */}
+            <button
+              type="button"
+              onClick={() => setShowContact(!showContact)}
+              className={`rounded-md border px-3 py-1.5 text-sm ${
+                showContact
+                  ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
+                  : "border-gray-200 text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              {showContact ? "✓ " : ""}
+              {t("apartments.contact", "איש קשר")}
+            </button>
           </div>
         </div>
       )}
@@ -517,55 +651,85 @@ export default function ApartmentsPage() {
                   {fieldLabels[k]}
                 </th>
               ))}
-              <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
-                {t("apartments.contact", "איש קשר")}
-              </th>
+              {/* fixes30 §1b: toggleable via the fields panel. */}
+              {showContact && (
+                <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
+                  {t("apartments.contact", "איש קשר")}
+                </th>
+              )}
               <th className="w-full"></th>
             </tr>
           </thead>
           <tbody>
             {busy ? (
               <tr>
-                <td colSpan={3 + activeFields.length} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={colCount} className="px-4 py-6 text-center text-gray-400">
                   {t("action.loading", "טוען…")}
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={3 + activeFields.length} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={colCount} className="px-4 py-6 text-center text-gray-400">
                   {t("apt.no_apartments_page", "אין דירות להצגה.")}
                 </td>
               </tr>
             ) : (
-              items.map((a) => (
-                <tr key={a.id} className="border-t border-gray-100">
-                  <td className="px-3 py-2 w-px whitespace-nowrap">
-                    <Link
-                      href={`/dashboard/apartments/${a.id}`}
-                      className="font-medium text-status-magenta hover:underline"
-                    >
-                      {apartmentTitle(a)}
-                    </Link>
-                  </td>
-                  {activeFields.map((k) => (
-                    <td key={k} className="px-3 py-2 w-px whitespace-nowrap max-w-[14rem] truncate">
-                      {cell(a, k)}
-                    </td>
-                  ))}
-                  <td className="px-3 py-2 w-px whitespace-nowrap">
-                    {a.contact_id ? (
-                      <Link
-                        href={`/dashboard/contacts/${a.contact_id}`}
-                        className="rounded-full bg-status-magenta/10 text-status-magenta px-3 py-0.5 hover:bg-status-magenta/20"
-                      >
-                        {a.contact_name}
-                      </Link>
-                    ) : (
-                      <span className="text-gray-400">{t("apt.no_contact", "ללא איש קשר")}</span>
+              items.map((a, i) => (
+                <Fragment key={a.id}>
+                  {/* fixes30 §1a: a header row opens each building group (also
+                      when a group continues from the previous page). */}
+                  {groupByBuilding &&
+                    (i === 0 || items[i - 1].building_id !== a.building_id) && (
+                      <tr className="border-t border-gray-200 bg-gray-50/80">
+                        <td colSpan={colCount} className="px-3 py-2">
+                          <span className="font-semibold">
+                            {cell(a, "building")}
+                          </span>
+                          {a.area_name && (
+                            <span className="ms-2 text-gray-500">{a.area_name}</span>
+                          )}
+                          {aggregates[a.building_id] !== undefined && (
+                            <span className="ms-2 rounded-full bg-status-magenta/10 text-status-magenta px-2 py-0.5 text-xs">
+                              {t("apt.group_count", "{n} דירות").replace(
+                                "{n}",
+                                String(aggregates[a.building_id]),
+                              )}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
                     )}
-                  </td>
-                  <td></td>
-                </tr>
+                  <tr className="border-t border-gray-100">
+                    <td className="px-3 py-2 w-px whitespace-nowrap">
+                      <Link
+                        href={`/dashboard/apartments/${a.id}`}
+                        className="font-medium text-status-magenta hover:underline"
+                      >
+                        {apartmentTitle(a)}
+                      </Link>
+                    </td>
+                    {activeFields.map((k) => (
+                      <td key={k} className="px-3 py-2 w-px whitespace-nowrap max-w-[14rem] truncate">
+                        {cell(a, k)}
+                      </td>
+                    ))}
+                    {showContact && (
+                      <td className="px-3 py-2 w-px whitespace-nowrap">
+                        {a.contact_id ? (
+                          <Link
+                            href={`/dashboard/contacts/${a.contact_id}`}
+                            className="rounded-full bg-status-magenta/10 text-status-magenta px-3 py-0.5 hover:bg-status-magenta/20"
+                          >
+                            {a.contact_name}
+                          </Link>
+                        ) : (
+                          <span className="text-gray-400">{t("apt.no_contact", "ללא איש קשר")}</span>
+                        )}
+                      </td>
+                    )}
+                    <td></td>
+                  </tr>
+                </Fragment>
               ))
             )}
           </tbody>

@@ -1,80 +1,93 @@
-# fixes30 — Implementation Plan
+# fixes30 (round 2) — Implementation Plan
 
-Spec: `docs/fixes30.md` (shliach nav restriction + inline editing for the
-Apartment and Building modules).
+Spec: `docs/fixes30.md` (the previous fixes30 spec was archived to
+`docs/archive/`; this file replaces the archived plan for the new round).
 
-## Context
+## §1 Apartments module
 
-- `components/ui/InlineEdit.tsx` (fixes26 §2, fixes29 §2) already implements
-  the exact interaction the spec describes: click-to-edit, Enter/blur saves,
-  Escape reverts, hover highlight + ✎ affordance, live validation hints. The
-  contact page (`ContactView`) is the established consumer pattern — text
-  editors save trimmed-or-null partials; pickers commit on selection with
-  `commitOnBlur={false}`.
-- `PUT /api/apartments/{id}` and `PUT /api/buildings/{id}` both accept
-  partial payloads (`exclude_unset`) — **no backend changes are needed**.
-- Apartment updates are *versioned* (fixes19 §3): each PUT retires the row
-  and returns a **new active id**. Inline saves must follow it
-  (`setApt(saved)` + `router.replace('/dashboard/apartments/<newId>')`), or
-  the next reload 404s for non-admins (historical ids are admin-only).
-- Building updates are in-place (stable id) and **admin-only**
-  (`require_admin`); the building page's inline editors are admin-gated,
-  matching today's admin-only edit button.
+### 1a. Building aggregation (`/dashboard/apartments`)
+- New persisted toggle **קיבוץ לפי בניין** (`usePersistentState`,
+  `crm.apartments.groupByBuilding`).
+- While grouping is on the page forces `sort=building` (the sort select is
+  disabled with a hint) so apartments of the same building are contiguous, and
+  the table renders a **group header row** whenever the building changes:
+  building display name + area + aggregate apartment count.
+- Aggregate counts are **filter-scoped, not page-scoped**: new backend endpoint
+  `GET /api/apartments/building-aggregates` taking the same filter params as
+  `/list` (shliach-scoped, active versions only) returning
+  `[{building_id, count}]`.
 
-## 1. Hide the Reports menu for shliach — `app/dashboard/layout.tsx`
+### 1b. Contacts column toggle in "התאמת שדות"
+- The linked-contact column is currently hard-coded. It becomes toggleable via
+  a **separate** DB preference `apartments.showContact` (default **true**) —
+  deliberately not a new entry in the stored `apartments.fields` array, so
+  every existing user's saved column selection keeps showing the column.
+- The chip reuses the existing `apartments.contact` label.
 
-`reportItems` currently keeps the non-admin "יצירת דוחות" entry, so shluchim
-see the דוחות group. Change: `isShliach ? [] : adminOnly([...])` — `NavMenu`
-renders nothing for an empty items array (verified, NavMenu.tsx:43). Nav-only
-change, matching the precedent of the retired Visits entry (direct URL still
-serves; this app treats nav visibility, not routing, as the shliach gate).
+### 1c. Inline editing from the list view
+- The three picklist columns — **jewish_status**, **campaign_status**,
+  **mezuzah_status** — render through `InlineEdit` + `PicklistSelect`
+  (commit-on-select, click-away cancels), the exact apartment-detail pattern.
+- Save = `PUT /api/apartments/{id}` single-field partial → a fixes19 **versioned
+  edit returning a NEW id**; the row is patched in place (`id` + field swapped)
+  so pagination/scroll don't reset. Shliach edits outside their assignment get
+  the backend 403 → toast (unchanged behavior).
 
-## 2. Apartment inline editing — `app/dashboard/apartments/[id]/page.tsx`
+## §2 Contacts
 
-Convert the read-only `<dl>` to InlineEdit fields (ContactView pattern),
-remove the "ערוך" button; the `/apartments/edit/[id]` route stays (still used
-by the buildings pages' apartment rows with `?return=`; the add flow is
-untouched).
+### 2a. Quick visit from the list (`/dashboard/contacts`)
+- New per-row quick action (📅, title reuses `visit.add` "הוסף ביקור") beside
+  the call/WhatsApp/mail icons; `stopPropagation` so the row click doesn't
+  navigate.
+- Opens a modal (BatchModal overlay pattern) hosting the shared `VisitForm`
+  with `lockedContactId`, saving via `POST /api/contacts/{id}/visits` — that
+  endpoint is open to any org member, so no backend change.
 
-- Text: `apartment_name`, `name`; `phone`/`email` with the shared
-  `isValidPhone`/`isValidEmail` + `PHONE_HINT`/`EMAIL_HINT` hints (ltr);
-  `apartment_notes` multiline.
-- Commit-on-select (`commitOnBlur={false}`): `floor` (select over the
-  building's floors — `GET /api/buildings/{building_id}/floors`, like
-  ApartmentEditor), the four picklists (`PicklistSelect`),
-  `report_number_id` + `building_id` (`SearchableSelect`; building change
-  keeps the floor value — its select then offers the new building's floors).
-- Save: `PUT /api/apartments/{apt.id}` with the one-field partial → returns
-  the new active version → `setApt` + `router.replace` (the id-param effect
-  refetches history/links). Field visibility gating (`vis`) unchanged.
-- Permissions: editors render for everyone who can open the page; the server
-  scopes shliach edits to assigned apartments (fixes22) — a 403 surfaces as
-  the standard save-failed toast.
+### 2b. Contact card segment ordering (`/dashboard/contacts/[id]`)
+- DB preference `contact.segmentOrder`, default
+  `["main", "visits", "dates", "donations"]`; stored value sanitized like the
+  column-keys pattern (unknown keys dropped, missing keys appended).
+- A small **⚙ סדר תצוגה** button in the page header opens a config panel
+  listing the four segments with ↑/↓ reorder buttons.
+- The four sections render by mapping the order array → JSX; each keeps its
+  existing visibility condition (visits/dates: mekurav only; donations:
+  admin + mekurav).
+- Segment names: main = new key `contact.segment_main`
+  ("תצוגה עיקרית של איש קשר", per the spec); the rest reuse `visit.history`,
+  `significant_dates`, `donation.history`.
 
-## 3. Building inline editing — `app/dashboard/buildings/[id]/page.tsx`
+## §3 Reports — arbitrary apartment selection
+- Backend: `GET /api/apartments/list` (and the shared filter helper) accepts a
+  new repeated `apartment_ids` param — the report page fetches exactly the
+  chosen apartments, enriched, in canonical floor order.
+- `/dashboard/reports/create` gets a mode switch:
+  - **לפי מספרי דוח** — existing flow, unchanged.
+  - **לפי בחירת דירות** — a `MultiSelectSearchFilter` over all apartments
+    (label "מספר דירה — בניין", options loaded from the paged `/list` like the
+    existing fetch-all helper). Any n apartments.
+- PDF in apartment mode: same table/columns, grouped by building only (no
+  report-number level, and rows without a report number are included).
 
-Admin-only inline editors (non-admins keep the read-only card):
+## §4 Shluchim display — Google Maps address links
+- New helper `mapsHref(address)` in `lib/contactActions.ts` →
+  `https://www.google.com/maps/search/?api=1&query=<encoded>`.
+- In **shliach sessions** (the spec scopes this to the shluchim role display)
+  every rendered building address becomes an external Maps link
+  (`target="_blank"`):
+  - apartments list — building column (links the building's full address);
+  - apartment detail — the "כתובת בניין" row;
+  - area detail — the per-building address lines.
+- Other roles keep the current plain text / internal links.
 
-- `building_name` (text; render the row for admins even when empty so a name
-  can be set — today it's hidden when blank), `building_address` (text,
-  validate non-empty — backend rejects an explicit empty address).
-- `area_id`: select over `GET /api/areas` (fetched for admins).
-- Save: `PUT /api/buildings/{id}` partial → `setBuilding(updated)`.
-- Floors, coordinates/map and the apartments section keep living on
-  `/buildings/edit/[id]` — the "עריכת בניין" link stays for those.
-
-## Out of scope
-
-- No backend changes, no new localization keys expected
-  (`inline.click_to_edit` etc. already seeded).
-- List-page grid cells stay links (rows already lead to the now-editable
-  detail pages).
-
-## Verification
-
-- `tsc --noEmit` in the frontend container (Vercel-build rule); 320 backend
-  tests must stay green (no backend diff).
-- Headless drive: (a) shliach session — no דוחות menu; admin — menu present;
-  (b) apartment detail: inline-edit resident name → URL follows the new
-  version id, value persists after reload; Escape reverts; (c) building
-  detail: inline-edit address → persists; non-admin sees plain text.
+## Cross-cutting
+- Every new Hebrew string gets a `LOCALIZATION` seed row (project rule);
+  planned keys: `apt.group_by_building`, `apt.group_count`,
+  `apt.grouping_sort_hint`, `contact.segment_main`, `contact.display_order`,
+  `contact.display_order_hint`, `action.move_up`, `action.move_down`,
+  `reports.mode_by_report`, `reports.mode_by_apartments`,
+  `reports.select_apartments_placeholder`, `filter.search_apartments`.
+- Backend tests for the two API additions (`apartment_ids` filter,
+  `building-aggregates`: org scoping, filters, shliach scoping).
+- Verification: full backend pytest in Docker, `tsc --noEmit` in the frontend
+  container (Vercel-build rule), headless-Chrome drive of each flow.
+- No commit/push — the user commits themselves.
