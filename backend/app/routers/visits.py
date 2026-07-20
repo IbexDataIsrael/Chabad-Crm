@@ -20,7 +20,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app import models
+from app import models, picklist_utils
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.picklist_utils import validate_picklist_value
@@ -46,7 +46,11 @@ _MIVTZOIM_FLAGS = (
 )
 
 
-def _out(v: models.VisitHistory) -> VisitOut:
+# The 2 picklist-backed visit fields (fixes32 — no longer real columns).
+_VISIT_PICKLIST_FIELD_KEYS = ["visit.type", "checklist.torah_thought"]
+
+
+def _out(v: models.VisitHistory, picklist_map: dict[str, Optional[str]]) -> VisitOut:
     contact = v.contact
     name = f"{contact.name} {contact.last_name or ''}".strip() if contact else None
     return VisitOut(
@@ -55,7 +59,7 @@ def _out(v: models.VisitHistory) -> VisitOut:
         contact_id=v.contact_id,
         contact_name=name,
         visit_date=v.visit_date,
-        visit_type=v.visit_type,
+        visit_type=picklist_map.get("visit.type"),
         location=v.location,
         notes=v.notes,
         interactions=v.interactions or [],
@@ -64,9 +68,25 @@ def _out(v: models.VisitHistory) -> VisitOut:
         shabbat_candles=v.shabbat_candles,
         torah_pamphlet=v.torah_pamphlet,
         letter_in_torah=v.letter_in_torah,
-        torah_thought=v.torah_thought,
+        torah_thought=picklist_map.get("checklist.torah_thought"),
         connection_to_rebbe=v.connection_to_rebbe,
     )
+
+
+def _out_one(db: Session, v: models.VisitHistory) -> VisitOut:
+    """`_out` for a single visit (create/update endpoints)."""
+    values = picklist_utils.get_values(
+        db, v.organization_id, "visit_history", v.id, _VISIT_PICKLIST_FIELD_KEYS
+    )
+    return _out(v, values)
+
+
+def _out_many(db: Session, org_id: int, rows: list[models.VisitHistory]) -> list[VisitOut]:
+    """`_out` for a list of visits, resolving every picklist value in one query."""
+    picklist_map = picklist_utils.get_values_bulk(
+        db, org_id, "visit_history", [v.id for v in rows], _VISIT_PICKLIST_FIELD_KEYS
+    )
+    return [_out(v, picklist_map.get(v.id, {})) for v in rows]
 
 
 def _contact_or_404(contact_id: int, org_id: int, db: Session) -> models.Contact:
@@ -131,18 +151,32 @@ def _apply_payload(
     org_id: int,
     current_user: models.User,
 ) -> None:
-    """Set validated payload fields on a visit (shared by create/update)."""
-    if "visit_type" in data:
-        validate_picklist_value(db, org_id, "visit.type", data["visit_type"])
-    if "torah_thought" in data:
-        validate_picklist_value(
-            db, org_id, "checklist.torah_thought", data["torah_thought"]
-        )
+    """Set validated payload fields on a visit (shared by create/update).
+    visit_type/torah_thought are PicklistLink-backed (fixes32) and need `v.id`
+    to attach to — every plain field is set first, then the session is
+    flushed (a no-op if `v` was already persisted, i.e. an update) before
+    writing the picklist links."""
+    has_visit_type = "visit_type" in data
+    visit_type = data.pop("visit_type", None)
+    if has_visit_type:
+        validate_picklist_value(db, org_id, "visit.type", visit_type)
+    has_torah_thought = "torah_thought" in data
+    torah_thought = data.pop("torah_thought", None)
+    if has_torah_thought:
+        validate_picklist_value(db, org_id, "checklist.torah_thought", torah_thought)
     interactions = data.pop("interactions", None)
     if interactions is not None:
         v.interactions = interactions  # already normalized by the caller
     for field, value in data.items():
         setattr(v, field, value)
+    if has_visit_type or has_torah_thought:
+        db.flush()  # ensure v.id exists for the picklist links
+    if has_visit_type:
+        picklist_utils.set_value(db, org_id, "visit_history", v.id, "visit.type", visit_type)
+    if has_torah_thought:
+        picklist_utils.set_value(
+            db, org_id, "visit_history", v.id, "checklist.torah_thought", torah_thought
+        )
 
 
 # --- Per-contact sub-resource (contact page) -------------------------------
@@ -162,7 +196,7 @@ def list_visits(
         .order_by(models.VisitHistory.visit_date.desc())
         .all()
     )
-    return [_out(v) for v in rows]
+    return _out_many(db, current_user.organization_id, rows)
 
 
 @router.post("/{contact_id}/visits", response_model=VisitOut, status_code=status.HTTP_201_CREATED)
@@ -180,11 +214,11 @@ def add_visit(
         payload.interactions, db, org_id, current_user
     )
     v = models.VisitHistory(organization_id=org_id)
-    _apply_payload(v, data, db, org_id, current_user)
     db.add(v)
+    _apply_payload(v, data, db, org_id, current_user)
     db.commit()
     db.refresh(v)
-    return _out(v)
+    return _out_one(db, v)
 
 
 # PATCH aliases (fixes26 §2): the handlers are already partial via
@@ -210,7 +244,7 @@ def update_visit(
     _apply_payload(v, data, db, org_id, current_user)
     db.commit()
     db.refresh(v)
-    return _out(v)
+    return _out_one(db, v)
 
 
 @router.delete("/{contact_id}/visits/{visit_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -221,6 +255,7 @@ def delete_visit(
     current_user: models.User = Depends(get_current_user),
 ):
     v = _visit_or_404(visit_id, current_user.organization_id, db, contact_id=contact_id)
+    picklist_utils.delete_links(db, "visit_history", v.id)
     db.delete(v)
     db.commit()
 
@@ -238,7 +273,7 @@ def list_all_visits(
     if contact_id is not None:
         q = q.filter(models.VisitHistory.contact_id == contact_id)
     rows = q.order_by(models.VisitHistory.visit_date.desc()).all()
-    return [_out(v) for v in rows]
+    return _out_many(db, admin.organization_id, rows)
 
 
 @all_router.post("", response_model=VisitOut, status_code=status.HTTP_201_CREATED)
@@ -254,11 +289,11 @@ def create_visit(
         payload.interactions, db, org_id, admin
     )
     v = models.VisitHistory(organization_id=org_id)
-    _apply_payload(v, data, db, org_id, admin)
     db.add(v)
+    _apply_payload(v, data, db, org_id, admin)
     db.commit()
     db.refresh(v)
-    return _out(v)
+    return _out_one(db, v)
 
 
 @all_router.put("/{visit_id}", response_model=VisitOut)
@@ -281,7 +316,7 @@ def update_any_visit(
     _apply_payload(v, data, db, org_id, admin)
     db.commit()
     db.refresh(v)
-    return _out(v)
+    return _out_one(db, v)
 
 
 @all_router.delete("/{visit_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -291,6 +326,7 @@ def delete_any_visit(
     admin: models.User = Depends(require_admin),
 ):
     v = _visit_or_404(visit_id, admin.organization_id, db)
+    picklist_utils.delete_links(db, "visit_history", v.id)
     db.delete(v)
     db.commit()
 

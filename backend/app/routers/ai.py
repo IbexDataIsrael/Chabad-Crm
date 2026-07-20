@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app import models
+from app import models, picklist_utils
 from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user
@@ -70,14 +70,20 @@ def _contact_lines(db: Session, current_user: models.User) -> tuple[list[str], i
         .order_by(models.Contact.name)
     )
     total = query.count()
+    rows = list(query.limit(MAX_CONTACT_LINES))
+    picklist_map = picklist_utils.get_values_bulk(
+        db, current_user.organization_id, "contacts",
+        [contact.id for contact, _, _ in rows], ["contact.pipeline_status"],
+    )
     lines = []
-    for contact, tzedaka, admin_area in query.limit(MAX_CONTACT_LINES):
+    for contact, tzedaka, admin_area in rows:
         full_name = f"{contact.name} {contact.last_name or ''}".strip()
         parts = [full_name, contact.contact_type]
         if contact.phone:
             parts.append(contact.phone)
-        if contact.pipeline_status:
-            parts.append(f"סטטוס: {contact.pipeline_status}")
+        pipeline_status = picklist_map.get(contact.id, {}).get("contact.pipeline_status")
+        if pipeline_status:
+            parts.append(f"סטטוס: {pipeline_status}")
         if admin_area:
             parts.append(f"אזור מנהל: {admin_area}")
         if tzedaka:

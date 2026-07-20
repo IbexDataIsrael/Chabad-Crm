@@ -267,7 +267,7 @@ def test_delete_contact_cascades_visits_and_picklists_but_keeps_donations(
     """
     import datetime
 
-    from app import models
+    from app import models, picklist_utils
 
     cid = _make_contact(client, auth_headers).json()["id"]
     org_id = db_session.get(models.Contact, cid).organization_id
@@ -284,9 +284,6 @@ def test_delete_contact_cascades_visits_and_picklists_but_keeps_donations(
                 contact_id=cid,
                 visit_date=datetime.datetime.utcnow(),
             ),
-            models.ContactPicklistValue(
-                organization_id=org_id, contact_id=cid, picklist_id=pl.id, value="haredi"
-            ),
             models.Donation(
                 organization_id=org_id,
                 contact_id=cid,
@@ -296,6 +293,9 @@ def test_delete_contact_cascades_visits_and_picklists_but_keeps_donations(
         ]
     )
     db_session.commit()
+    # fixes32: dynamic picklist selections live in PicklistLink now.
+    picklist_utils.set_value(db_session, org_id, "contacts", cid, "affiliation", "haredi")
+    db_session.commit()
 
     assert client.delete(f"/api/contacts/{cid}", headers=auth_headers).status_code == 204
 
@@ -303,7 +303,9 @@ def test_delete_contact_cascades_visits_and_picklists_but_keeps_donations(
     assert db_session.get(models.Contact, cid) is None
     assert db_session.query(models.VisitHistory).filter_by(contact_id=cid).count() == 0
     assert (
-        db_session.query(models.ContactPicklistValue).filter_by(contact_id=cid).count()
+        db_session.query(models.PicklistLink)
+        .filter_by(entity_table="contacts", entity_id=cid)
+        .count()
         == 0
     )
     # Donation survives the contact, with its link nulled out.

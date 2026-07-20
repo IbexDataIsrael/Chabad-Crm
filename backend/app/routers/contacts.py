@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app import models
+from app import models, picklist_utils
 from app.core.display import building_display_name
 from app.core.email import send_shliach_welcome
 from app.core.geocode import geocode_address
@@ -110,11 +110,37 @@ _CONTACT_PICKLISTS = {
     "color_tag": "contact.color_tag",
 }
 
+# Of the 3 above, contact_type is a structural type discriminator and stays a
+# real column (fixes32 §0 — excluded from the migration); these 2 move to
+# PicklistLink and need popping out of any payload dict before it reaches the
+# Contact(**data) constructor / setattr loop.
+_CONTACT_LINK_FIELDS = {
+    "pipeline_status": "contact.pipeline_status",
+    "color_tag": "contact.color_tag",
+}
+
 
 def _validate_picklists(data: dict, org_id: int, db: Session) -> None:
     for field, field_key in _CONTACT_PICKLISTS.items():
         if field in data and data[field] is not None:
             validate_picklist_value(db, org_id, field_key, data[field])
+
+
+def _split_contact_link_changes(data: dict) -> dict[str, Optional[str]]:
+    """Pop pipeline_status/color_tag out of a payload dict (mutates `data`),
+    returning field_key -> value ready for `picklist_utils.set_value`."""
+    return {
+        field_key: data.pop(field)
+        for field, field_key in _CONTACT_LINK_FIELDS.items()
+        if field in data
+    }
+
+
+def _apply_contact_picklist_fields(out, values: dict[str, Optional[str]]) -> None:
+    """Populate an out schema's pipeline_status/color_tag fields from a
+    resolved {field_key: value} map (fixes32 — no longer real columns)."""
+    for field, field_key in _CONTACT_LINK_FIELDS.items():
+        setattr(out, field, values.get(field_key))
 
 
 def _check_phone_unique(
@@ -174,60 +200,21 @@ def _validate_admin_area(admin_area_id: Optional[int], org_id: int, db: Session)
 
 # --- Dynamic picklist values (generic store) -------------------------------
 def _picklist_values_map(db: Session, contact: models.Contact) -> dict[str, str]:
-    """The contact's selected dynamic-picklist values, keyed by system_name."""
-    rows = (
-        db.query(models.ContactPicklistValue.value, models.PicklistDefinition.system_name)
-        .join(
-            models.PicklistDefinition,
-            models.PicklistDefinition.id == models.ContactPicklistValue.picklist_id,
-        )
-        .filter(models.ContactPicklistValue.contact_id == contact.id)
-        .all()
-    )
-    return {system_name: value for value, system_name in rows}
+    """The contact's selected *dynamic* picklist values (system + any
+    admin-added custom list), keyed by system_name — excludes pipeline_status
+    /color_tag, which keep their own dedicated ContactOut fields."""
+    values = picklist_utils.get_values(db, contact.organization_id, "contacts", contact.id)
+    return {k: v for k, v in values.items() if k not in _CONTACT_LINK_FIELDS.values()}
 
 
 def _apply_picklist_values(
     db: Session, org_id: int, contact: models.Contact, values: dict
 ) -> None:
-    """Upsert (or clear) a contact's dynamic-picklist selections by system_name."""
+    """Upsert (or clear) a contact's dynamic-picklist selections by system_name.
+    The picklist must already be a registered definition — `set_value` 400s
+    otherwise, the same "unknown picklist" guard this always had."""
     for system_name, value in values.items():
-        definition = (
-            db.query(models.PicklistDefinition)
-            .filter(
-                models.PicklistDefinition.organization_id == org_id,
-                models.PicklistDefinition.system_name == system_name,
-            )
-            .first()
-        )
-        if not definition:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST, f"unknown picklist '{system_name}'"
-            )
-        existing = (
-            db.query(models.ContactPicklistValue)
-            .filter(
-                models.ContactPicklistValue.contact_id == contact.id,
-                models.ContactPicklistValue.picklist_id == definition.id,
-            )
-            .first()
-        )
-        if not value:
-            if existing:
-                db.delete(existing)
-            continue
-        validate_picklist_value(db, org_id, system_name, value)
-        if existing:
-            existing.value = value
-        else:
-            db.add(
-                models.ContactPicklistValue(
-                    organization_id=org_id,
-                    contact_id=contact.id,
-                    picklist_id=definition.id,
-                    value=value,
-                )
-            )
+        picklist_utils.set_value(db, org_id, "contacts", contact.id, system_name, value)
 
 
 # --- Detail assembly --------------------------------------------------------
@@ -253,11 +240,20 @@ def _shliach_login_status(contact: models.Contact, db: Session) -> str:
 
 
 def _build_detail(contact: models.Contact, db: Session) -> ContactDetailOut:
+    org_id = contact.organization_id
     detail = ContactDetailOut.model_validate(contact)
+    _apply_contact_picklist_fields(
+        detail, picklist_utils.get_values(db, org_id, "contacts", contact.id)
+    )
     if contact.mekurav:
         detail.mekurav = MekuravOut.model_validate(contact.mekurav)
+        detail.mekurav.potential_next_step = picklist_utils.get_values(
+            db, org_id, "contact_mekurav", contact.mekurav.id,
+            ["contact.potential_next_step"],
+        )["contact.potential_next_step"]
         detail.special_dates = [
-            _sd_out(link.special_date_obj) for link in contact.mekurav.special_dates
+            _sd_out(db, org_id, link.special_date_obj)
+            for link in contact.mekurav.special_dates
         ]
     if contact.shliach:
         detail.shliach = ShliachOut(
@@ -275,13 +271,16 @@ def _build_detail(contact: models.Contact, db: Session) -> ContactDetailOut:
     return detail
 
 
-def _sd_out(sd: models.SignificantDate) -> SignificantDateOut:
+def _sd_out(db: Session, org_id: int, sd: models.SignificantDate) -> SignificantDateOut:
+    special_date_type = picklist_utils.get_values(
+        db, org_id, "significant_dates", sd.id, ["significant_date.type"]
+    )["significant_date.type"]
     return SignificantDateOut(
         id=sd.id,
         guid=sd.guid,
         special_date=sd.special_date,
         hebrew_date=sd.hebrew_date,
-        special_date_type=sd.special_date_type,
+        special_date_type=special_date_type,
         special_date_title=sd.special_date_title,
         is_set_reminder=sd.is_set_reminder,
         reminders=[ReminderOut.model_validate(r) for r in sd.reminders],
@@ -515,7 +514,13 @@ def _contacts_query(
         models.Contact.organization_id == current_user.organization_id
     )
     if pipeline_status is not None:
-        query = query.filter(models.Contact.pipeline_status == pipeline_status)
+        query = query.filter(
+            models.Contact.id.in_(
+                picklist_utils.matching_entity_ids(
+                    "contacts", "contact.pipeline_status", [pipeline_status]
+                )
+            )
+        )
     if contact_type is not None:
         query = query.filter(models.Contact.contact_type == contact_type)
     if assigned_user_id is not None:
@@ -691,7 +696,11 @@ def _contacts_query(
             models.Contact.id.in_(
                 select(models.VisitHistory.contact_id).where(
                     models.VisitHistory.contact_id.isnot(None),
-                    models.VisitHistory.torah_thought.in_(torah_thought),
+                    models.VisitHistory.id.in_(
+                        picklist_utils.matching_entity_ids(
+                            "visit_history", "checklist.torah_thought", torah_thought
+                        )
+                    ),
                 )
             )
         )
@@ -795,13 +804,18 @@ def list_contacts(
     query = _contacts_query(
         db, current_user, pipeline_status, contact_type, assigned_user_id
     )
-    return query.order_by(models.Contact.name).all()
+    rows = query.order_by(models.Contact.name).all()
+    picklist_map = picklist_utils.get_values_bulk(
+        db, current_user.organization_id, "contacts", [c.id for c in rows]
+    )
+    return [_list_item(c, picklist_map.get(c.id, {})) for c in rows]
 
 
-def _list_item(contact: models.Contact) -> ContactOut:
+def _list_item(contact: models.Contact, picklist_map: dict[str, Optional[str]]) -> ContactOut:
     """A list row enriched with the mekurav apartment's building/area names
     (fixes15 §5.1 optional grid columns)."""
     out = ContactOut.model_validate(contact)
+    _apply_contact_picklist_fields(out, picklist_map)
     apartment = contact.mekurav.apartment if contact.mekurav else None
     if apartment and apartment.building:
         out.building_name = building_display_name(apartment.building)
@@ -899,7 +913,10 @@ def list_contacts_paginated(
         .limit(page_size)
         .all()
     )
-    items = [_list_item(c) for c in rows]
+    picklist_map = picklist_utils.get_values_bulk(
+        db, current_user.organization_id, "contacts", [c.id for c in rows]
+    )
+    items = [_list_item(c, picklist_map.get(c.id, {})) for c in rows]
     # fixes27 §3: shliach rows carry their login-account state so the list can
     # flag suspended/deleted logins inline.
     statuses = _login_status_map(db, rows)
@@ -1010,10 +1027,14 @@ def create_contact(
     if data.get("contact_type") == "shliach" and data.get("email"):
         _check_shliach_email_unique(db, org_id, data["email"])
     _geocode_fallback(data)
+    link_changes = _split_contact_link_changes(data)
 
     contact = models.Contact(**data, organization_id=org_id)
     db.add(contact)
     db.flush()
+    for field_key, value in link_changes.items():
+        if value is not None:
+            picklist_utils.set_value(db, org_id, "contacts", contact.id, field_key, value)
 
     if contact.contact_type == "shliach":
         sh = payload.shliach
@@ -1054,18 +1075,23 @@ def create_contact(
     else:
         mk = payload.mekurav
         mk_data = mk.model_dump() if mk else {}
-        if mk_data.get("potential_next_step"):
+        potential_next_step = mk_data.pop("potential_next_step", None)
+        if potential_next_step:
             validate_picklist_value(
-                db, org_id, "contact.potential_next_step",
-                mk_data["potential_next_step"],
+                db, org_id, "contact.potential_next_step", potential_next_step
             )
         _validate_apartment(mk_data.get("apartment_id"), org_id, db)
         _validate_admin_area(mk_data.get("admin_area_id"), org_id, db)
-        db.add(
-            models.ContactMekurav(
-                organization_id=org_id, contact_id=contact.id, **mk_data
-            )
+        mekurav = models.ContactMekurav(
+            organization_id=org_id, contact_id=contact.id, **mk_data
         )
+        db.add(mekurav)
+        if potential_next_step:
+            db.flush()
+            picklist_utils.set_value(
+                db, org_id, "contact_mekurav", mekurav.id,
+                "contact.potential_next_step", potential_next_step,
+            )
 
     if payload.picklist_values:
         _apply_picklist_values(db, org_id, contact, payload.picklist_values)
@@ -1107,8 +1133,11 @@ def update_contact(
     if data.get("phone"):
         _check_phone_unique(db, org_id, data["phone"], exclude_id=contact_id)
     _geocode_fallback(data)
+    link_changes = _split_contact_link_changes(data)
     for field, value in data.items():
         setattr(contact, field, value)
+    for field_key, value in link_changes.items():
+        picklist_utils.set_value(db, org_id, "contacts", contact.id, field_key, value)
     if contact.contact_type == "shliach" and data.get("email"):
         _check_shliach_email_unique(
             db, org_id, contact.email, exclude_contact_id=contact.id
@@ -1116,10 +1145,11 @@ def update_contact(
 
     if payload.mekurav is not None and contact.contact_type == "mekurav":
         mk_data = payload.mekurav.model_dump(exclude_unset=True)
-        if mk_data.get("potential_next_step"):
+        has_next_step = "potential_next_step" in mk_data
+        potential_next_step = mk_data.pop("potential_next_step", None)
+        if potential_next_step:
             validate_picklist_value(
-                db, org_id, "contact.potential_next_step",
-                mk_data["potential_next_step"],
+                db, org_id, "contact.potential_next_step", potential_next_step
             )
         if "apartment_id" in mk_data:
             _validate_apartment(mk_data["apartment_id"], org_id, db)
@@ -1129,8 +1159,14 @@ def update_contact(
             contact.mekurav = models.ContactMekurav(
                 organization_id=org_id, contact_id=contact.id
             )
+            db.flush()
         for field, value in mk_data.items():
             setattr(contact.mekurav, field, value)
+        if has_next_step:
+            picklist_utils.set_value(
+                db, org_id, "contact_mekurav", contact.mekurav.id,
+                "contact.potential_next_step", potential_next_step,
+            )
 
     if payload.shliach is not None and contact.contact_type == "shliach":
         sh_data = payload.shliach
@@ -1200,6 +1236,15 @@ def delete_contact(
     current_user: models.User = Depends(get_current_user),
 ):
     contact = _get_contact_or_404(contact_id, current_user, db)
+    # fixes32: picklist_links aren't cascade-deleted at the DB level (entity_id
+    # isn't a real FK) — clean up the contact's own links plus its mekurav
+    # (cascade-deleted with it) and its visits (also cascade-deleted).
+    visit_ids = [v.id for v in contact.visits]
+    mekurav_id = contact.mekurav.id if contact.mekurav else None
+    picklist_utils.delete_links(db, "contacts", contact.id)
+    if mekurav_id is not None:
+        picklist_utils.delete_links(db, "contact_mekurav", mekurav_id)
+    picklist_utils.delete_links_many(db, "visit_history", visit_ids)
     db.delete(contact)
     db.commit()
 
@@ -1250,7 +1295,11 @@ def list_special_dates(
     contact = _get_contact_or_404(contact_id, current_user, db)
     if not contact.mekurav:
         return []
-    return [_sd_out(link.special_date_obj) for link in contact.mekurav.special_dates]
+    org_id = current_user.organization_id
+    return [
+        _sd_out(db, org_id, link.special_date_obj)
+        for link in contact.mekurav.special_dates
+    ]
 
 
 @router.post(
@@ -1276,12 +1325,16 @@ def add_special_date(
         organization_id=org_id,
         special_date=payload.special_date,
         hebrew_date=payload.hebrew_date,
-        special_date_type=payload.special_date_type,
         special_date_title=payload.special_date_title,
         is_set_reminder=payload.is_set_reminder,
     )
     db.add(sd)
     db.flush()
+    if payload.special_date_type is not None:
+        picklist_utils.set_value(
+            db, org_id, "significant_dates", sd.id,
+            "significant_date.type", payload.special_date_type,
+        )
     _apply_reminders(db, sd, payload.reminders, org_id)
     db.add(
         models.ContactMekuravSpecialDate(
@@ -1292,7 +1345,7 @@ def add_special_date(
     )
     db.commit()
     db.refresh(sd)
-    return _sd_out(sd)
+    return _sd_out(db, org_id, sd)
 
 
 @router.put(
@@ -1320,8 +1373,9 @@ def update_special_date(
     data = payload.model_dump(exclude_unset=True)
     reminders = data.pop("reminders", None)
     if "special_date_type" in data:
-        validate_picklist_value(
-            db, org_id, "significant_date.type", data["special_date_type"]
+        picklist_utils.set_value(
+            db, org_id, "significant_dates", sd.id,
+            "significant_date.type", data.pop("special_date_type"),
         )
     # special_date_title is free text (fixes4) — no picklist validation.
     for field, value in data.items():
@@ -1330,7 +1384,7 @@ def update_special_date(
         _apply_reminders(db, sd, payload.reminders, org_id)
     db.commit()
     db.refresh(sd)
-    return _sd_out(sd)
+    return _sd_out(db, org_id, sd)
 
 
 @router.delete(
@@ -1354,5 +1408,6 @@ def delete_special_date(
     )
     if not sd:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Significant date not found")
+    picklist_utils.delete_links(db, "significant_dates", sd.id)
     db.delete(sd)
     db.commit()

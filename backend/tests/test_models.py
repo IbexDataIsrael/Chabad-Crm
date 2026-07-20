@@ -36,11 +36,12 @@ def test_contact_has_new_fields():
     mekurav_cols = {c["name"] for c in insp.get_columns("contact_mekurav")}
     assert {
         "first_visit",
-        "potential_next_step",
         "background",
     }.issubset(mekurav_cols)
     # fixes25: rebbe_connection moved to visit_history.connection_to_rebbe.
     assert "rebbe_connection" not in mekurav_cols
+    # fixes32: potential_next_step (picklist-backed) moved to PicklistLink.
+    assert "potential_next_step" not in mekurav_cols
 
 
 def test_visit_has_engagement_fields():
@@ -55,9 +56,11 @@ def test_visit_has_engagement_fields():
         "shabbat_candles",
         "torah_pamphlet",
         "letter_in_torah",
-        "torah_thought",
         "connection_to_rebbe",
     }.issubset(visit_cols)
+    # fixes32: torah_thought/visit_type (picklist-backed) moved to PicklistLink.
+    assert "torah_thought" not in visit_cols
+    assert "visit_type" not in visit_cols
     value_cols = {c["name"] for c in inspect(engine).get_columns("custom_field_values")}
     assert "visit_id" in value_cols
     assert "contact_id" not in value_cols

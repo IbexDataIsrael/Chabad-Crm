@@ -52,7 +52,7 @@ SNAPSHOT_MODELS = [
     models.Donation,
     models.PicklistDefinition,
     models.PicklistValue,
-    models.ContactPicklistValue,
+    models.PicklistLink,  # fixes32: replaces ContactPicklistValue (generic now)
     models.FieldSetting,
 ]
 

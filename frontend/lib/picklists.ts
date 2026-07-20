@@ -48,3 +48,46 @@ export function usePicklist(fieldKey: string) {
 
   return { options, labelFor, display };
 }
+
+/** fixes32 §6: `usePicklist` for a *dynamic* set of field_keys (e.g. every
+ *  admin-added apartment.* picklist beyond the fixed 4) — one hook call
+ *  covering an arbitrary, runtime-determined list, which a loop of
+ *  `usePicklist` calls can't do (hook count must stay stable across renders). */
+export function usePicklistsMap(fieldKeys: string[]) {
+  const { lang } = useLocalization();
+  const [map, setMap] = useState<Record<string, PicklistValue[]>>({});
+  const key = [...fieldKeys].sort().join(",");
+
+  useEffect(() => {
+    let active = true;
+    if (fieldKeys.length === 0) {
+      setMap({});
+      return;
+    }
+    Promise.all(
+      fieldKeys.map((fk) =>
+        apiFetch<PicklistValue[]>(`/api/picklists/${fk}`)
+          .then((opts): [string, PicklistValue[]] => [fk, opts])
+          .catch((): [string, PicklistValue[]] => [fk, cache[fk] ?? []]),
+      ),
+    ).then((entries) => {
+      entries.forEach(([fk, opts]) => {
+        cache[fk] = opts;
+      });
+      if (active) setMap(Object.fromEntries(entries));
+    });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  const display = (o: PicklistValue): string => displayPicklistValue(o, lang);
+
+  const labelFor = (fieldKey: string, value: string | null | undefined): string => {
+    const o = (map[fieldKey] ?? []).find((opt) => opt.value === value);
+    return o ? display(o) : value ?? "";
+  };
+
+  return { map, labelFor, display };
+}

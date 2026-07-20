@@ -13,9 +13,10 @@ import { useAuth } from "@/lib/auth";
 import { mapsHref } from "@/lib/contactActions";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
-import { usePicklist } from "@/lib/picklists";
+import { usePicklist, usePicklistsMap } from "@/lib/picklists";
 import { useDbPreference } from "@/lib/preferences";
 import { useToast } from "@/lib/toast";
+import { EMAIL_HINT, PHONE_HINT, isValidEmail, isValidPhone } from "@/lib/validation";
 import {
   apartmentTitle,
   buildingDisplayName,
@@ -27,6 +28,7 @@ import {
   type Building,
   type BuildingAggregate,
   type Floor,
+  type PicklistField,
   type ReportNumber,
   type ReportNumberBuildingLink,
 } from "@/lib/types";
@@ -35,6 +37,16 @@ const inputClass =
   "rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 const PAGE_SIZES = [20, 50, 100];
+
+// fixes32 §6: the 4 apartment picklists with dedicated fields/columns already
+// handled above — any other "apartment.*" definition is a dynamic (custom)
+// one, auto-wired into a filter + grid column with no further code changes.
+const FIXED_APARTMENT_PICKLIST_KEYS = [
+  "apartment.Jewish_status",
+  "apartment.campaign_status",
+  "apartment.mezuzah_status",
+  "apartment.language",
+];
 
 type SortKey = "floor" | "label" | "resident" | "building";
 type SortDir = "asc" | "desc";
@@ -59,7 +71,7 @@ const DEFAULT_FIELDS: FieldKey[] = ["resident", "building", "area"];
 
 export default function ApartmentsPage() {
   const { loading, isShliach } = useAuth();
-  const { t } = useLocalization();
+  const { t, lang } = useLocalization();
   const [items, setItems] = useState<ApartmentListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [areas, setAreas] = useState<Area[]>([]);
@@ -89,6 +101,17 @@ export default function ApartmentsPage() {
   const [mezuzahFilter, setMezuzahFilter] = usePersistentState<string[]>(
     "crm.apartments.mezuzah", [],
   );
+  // fixes32 §6: language filter, same multi-select pattern as jewish/mezuzah.
+  const [languageFilter, setLanguageFilter] = usePersistentState<string[]>(
+    "crm.apartments.language", [],
+  );
+  // fixes32 §6: any admin-added apartment.* picklist beyond the fixed 4 —
+  // each one automatically gets a filter (here) and a grid column (below),
+  // keyed by field_key so the set can grow with no page code changes.
+  const [customDefs, setCustomDefs] = useState<PicklistField[]>([]);
+  const [customFilters, setCustomFilters] = usePersistentState<Record<string, string[]>>(
+    "crm.apartments.customFilters", {},
+  );
   const [query, setQuery] = usePersistentState("crm.apartments.q", "");
   const [sort, setSort] = usePersistentState<SortKey>("crm.apartments.sort", "floor");
   const [dir, setDir] = usePersistentState<SortDir>("crm.apartments.dir", "asc");
@@ -110,7 +133,14 @@ export default function ApartmentsPage() {
     "crm.apartments.groupByBuilding", false,
   );
   const [aggregates, setAggregates] = useState<Record<number, number>>({});
+  // fixes32 §6: the whole filter section can be tucked away, mirroring the
+  // Contacts page (fixes29 §1) — hidden filters keep applying to the list.
+  const [filtersOpen, setFiltersOpen] = usePersistentState(
+    "crm.apartments.filtersOpen", true,
+  );
   const [fieldsOpen, setFieldsOpen] = useState(false);
+  // fixes32 §6: native HTML5 drag state for reordering the active-field chips.
+  const [draggedField, setDraggedField] = useState<FieldKey | null>(null);
   const [debouncedQ, setDebouncedQ] = useState(query);
   const [batchOpen, setBatchOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -120,6 +150,16 @@ export default function ApartmentsPage() {
   const jewish = usePicklist("apartment.Jewish_status");
   const campaign = usePicklist("apartment.campaign_status");
   const mezuzah = usePicklist("apartment.mezuzah_status");
+  // fixes32 §6: options for every dynamic apartment.* picklist at once.
+  const customPicklists = usePicklistsMap(customDefs.map((d) => d.field_key));
+
+  // fixes32 §6: the `picklist=field_key:value` params any dynamic apartment
+  // picklist filter sends — shared by the list fetch and the aggregates fetch.
+  function appendCustomPicklistParams(params: URLSearchParams) {
+    for (const [fieldKey, values] of Object.entries(customFilters)) {
+      for (const v of values) params.append("picklist", `${fieldKey}:${v}`);
+    }
+  }
 
   async function reload() {
     const params = new URLSearchParams();
@@ -128,6 +168,8 @@ export default function ApartmentsPage() {
     reportNumberIds.forEach((id) => params.append("report_number_ids", String(id)));
     jewishFilter.forEach((v) => params.append("jewish_status", v));
     mezuzahFilter.forEach((v) => params.append("mezuzah_status", v));
+    languageFilter.forEach((v) => params.append("language", v));
+    appendCustomPicklistParams(params);
     if (debouncedQ.trim()) params.set("q", debouncedQ.trim());
     // fixes30 §1a: grouping needs building-contiguous rows.
     params.set("sort", groupByBuilding ? "building" : sort);
@@ -154,6 +196,18 @@ export default function ApartmentsPage() {
     apiFetch<ReportNumberBuildingLink[]>("/api/apartments/report-number-buildings")
       .then(setReportBuildingLinks)
       .catch(() => setReportBuildingLinks([]));
+    // fixes32 §6: any admin-added apartment.* picklist beyond the fixed 4.
+    apiFetch<PicklistField[]>("/api/picklists")
+      .then((defs) =>
+        setCustomDefs(
+          defs.filter(
+            (d) =>
+              d.field_key.startsWith("apartment.") &&
+              !FIXED_APARTMENT_PICKLIST_KEYS.includes(d.field_key),
+          ),
+        ),
+      )
+      .catch(() => setCustomDefs([]));
   }, [loading]);
 
   // One server-side page per filter/sort/page change.
@@ -169,7 +223,7 @@ export default function ApartmentsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     loading, areaIds, buildingIds, reportNumberIds, jewishFilter, mezuzahFilter,
-    debouncedQ, sort, dir, page, pageSize, groupByBuilding,
+    languageFilter, customFilters, debouncedQ, sort, dir, page, pageSize, groupByBuilding,
   ]);
 
   // fixes30 §1a: filter-scoped per-building counts for the group headers —
@@ -182,15 +236,18 @@ export default function ApartmentsPage() {
     reportNumberIds.forEach((id) => params.append("report_number_ids", String(id)));
     jewishFilter.forEach((v) => params.append("jewish_status", v));
     mezuzahFilter.forEach((v) => params.append("mezuzah_status", v));
+    languageFilter.forEach((v) => params.append("language", v));
+    appendCustomPicklistParams(params);
     if (debouncedQ.trim()) params.set("q", debouncedQ.trim());
     apiFetch<BuildingAggregate[]>(`/api/apartments/building-aggregates?${params}`)
       .then((rows) =>
         setAggregates(Object.fromEntries(rows.map((r) => [r.building_id, r.count]))),
       )
       .catch(() => setAggregates({}));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     loading, groupByBuilding, areaIds, buildingIds, reportNumberIds,
-    jewishFilter, mezuzahFilter, debouncedQ,
+    jewishFilter, mezuzahFilter, languageFilter, customFilters, debouncedQ,
   ]);
 
   // Debounced dynamic search (street name / label / resident).
@@ -244,6 +301,34 @@ export default function ApartmentsPage() {
     setPage(1);
   }
 
+  // fixes32 §6: active-filter badge + one-click reset, mirroring Contacts
+  // (fixes29 §1) — shown even while the filter section is collapsed.
+  const customFilterCount = Object.values(customFilters).reduce(
+    (sum, vals) => sum + vals.length, 0,
+  );
+  const activeFilterCount =
+    areaIds.length +
+    buildingIds.length +
+    reportNumberIds.length +
+    jewishFilter.length +
+    mezuzahFilter.length +
+    languageFilter.length +
+    customFilterCount +
+    (query.trim() ? 1 : 0);
+
+  function clearAllFilters() {
+    setAreaIds([]);
+    setBuildingIds([]);
+    setReportNumberIds([]);
+    setJewishFilter([]);
+    setMezuzahFilter([]);
+    setLanguageFilter([]);
+    setCustomFilters({});
+    setQuery("");
+    setDebouncedQ("");
+    setPage(1);
+  }
+
   function onSortChange(v: SortKey) {
     setSort(v);
     setPage(1);
@@ -269,26 +354,39 @@ export default function ApartmentsPage() {
     );
   }
 
-  // fixes30 §1c: one-field inline save from the list. The PUT is a fixes19 §3
-  // versioned edit returning a NEW active row — swap the row's id in place so
-  // the page, scroll and filters all stay put.
-  async function saveListField(
-    a: ApartmentListItem,
-    field: "jewish_status" | "campaign_status" | "mezuzah_status",
-    v: string | null,
-  ) {
+  // fixes32 §6: drag one active-field chip to another position — reorders the
+  // stored preference array itself (no separate "column order" preference).
+  function moveField(from: FieldKey, to: FieldKey) {
+    if (from === to) return;
+    setFields((prev) => {
+      const known = prev.filter((k): k is FieldKey =>
+        (FIELD_KEYS as readonly string[]).includes(k),
+      );
+      const fromIdx = known.indexOf(from);
+      const toIdx = known.indexOf(to);
+      if (fromIdx === -1 || toIdx === -1) return prev;
+      const next = [...known];
+      next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, from);
+      return next;
+    });
+  }
+
+  // fixes30 §1c / fixes32 §6: one-field inline save from the list. The PUT is
+  // a fixes19 §3 versioned edit returning a NEW active row — merge the full
+  // response into the row in place (id + every Apartment field, including the
+  // resolved picklist_values) so the page, scroll and filters all stay put.
+  async function saveListField(a: ApartmentListItem, body: Record<string, unknown>) {
     const saved = await apiFetch<Apartment>(`/api/apartments/${a.id}`, {
       method: "PUT",
-      body: JSON.stringify({ [field]: v }),
+      body: JSON.stringify(body),
     });
-    setItems((prev) =>
-      prev.map((it) => (it.id === a.id ? { ...it, id: saved.id, [field]: v } : it)),
-    );
+    setItems((prev) => prev.map((it) => (it.id === a.id ? { ...it, ...saved } : it)));
   }
 
   const inlinePicklistCell = (
     a: ApartmentListItem,
-    field: "jewish_status" | "campaign_status" | "mezuzah_status",
+    field: "jewish_status" | "campaign_status" | "mezuzah_status" | "language",
     picklistKey: string,
     label: string | null | undefined,
   ) => (
@@ -296,10 +394,44 @@ export default function ApartmentsPage() {
       value={a[field] ?? null}
       display={label || "—"}
       commitOnBlur={false}
-      onSave={(v) => saveListField(a, field, v)}
+      onSave={(v) => saveListField(a, { [field]: v })}
       editor={(draft, _setDraft, commit) => (
         <PicklistSelect fieldKey={picklistKey} value={draft} onChange={commit} />
       )}
+    />
+  );
+
+  // fixes32 §6: plain-text inline edit for comments/email/phone.
+  const inlineTextCell = (
+    a: ApartmentListItem,
+    field: "apartment_notes" | "email" | "phone",
+    opts: { dir?: "ltr"; multiline?: boolean; validate?: (v: string) => string | null } = {},
+  ) => (
+    <InlineEdit<string>
+      value={(a[field] as string | null) ?? ""}
+      display={
+        a[field] ? <span dir={opts.dir} className="whitespace-pre-wrap">{a[field]}</span> : "—"
+      }
+      validate={opts.validate}
+      enterCommits={!opts.multiline}
+      onSave={(v) => saveListField(a, { [field]: v.trim() || null })}
+      editor={(draft, setDraft) =>
+        opts.multiline ? (
+          <textarea
+            className={`${inputClass} w-full`}
+            rows={2}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+          />
+        ) : (
+          <input
+            className={inputClass}
+            dir={opts.dir}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+          />
+        )
+      }
     />
   );
 
@@ -316,8 +448,17 @@ export default function ApartmentsPage() {
     campaign_status: t("picklist.apartment.campaign_status", "סטטוס קמפיין"),
     mezuzah_status: t("picklist.apartment.mezuzah_status", "מזוזה"),
   };
-  // Ignore unknown stored keys (older versions used e.g. "location").
-  const activeFields = FIELD_KEYS.filter((k) => fields.includes(k));
+  // fixes32 §6: a dynamic apartment.* definition's display name in the
+  // current language (mirrors the Picklists dashboard's defLabel).
+  const customDefLabel = (d: PicklistField) =>
+    (lang === "en" ? d.english_label || d.label : d.label) || d.field_key;
+  // fixes32 §6: the stored array's own order is now the display order — drag-
+  // reordering the chips below persists it. (Previously this always rendered
+  // in the fixed FIELD_KEYS order regardless of the stored array's order.)
+  // Unknown stored keys (older versions used e.g. "location") are dropped.
+  const activeFields = fields.filter((k): k is FieldKey =>
+    (FIELD_KEYS as readonly string[]).includes(k),
+  );
 
   function cell(a: ApartmentListItem, k: FieldKey) {
     switch (k) {
@@ -349,14 +490,29 @@ export default function ApartmentsPage() {
         return a.area_name ?? "—";
       case "report_number":
         return a.report_number_name ?? "—";
+      // fixes32 §6: notes/email/phone edit in place, straight from the list row.
       case "notes":
-        return a.apartment_notes ?? "—";
+        return inlineTextCell(a, "apartment_notes", { multiline: true });
       case "phone":
-        return a.phone ? <span dir="ltr">{a.phone}</span> : "—";
+        return inlineTextCell(a, "phone", {
+          dir: "ltr",
+          validate: (v) =>
+            v.trim() === "" || isValidPhone(v.trim())
+              ? null
+              : t("validation.phone_hint", PHONE_HINT),
+        });
       case "email":
-        return a.email ? <span dir="ltr">{a.email}</span> : "—";
+        return inlineTextCell(a, "email", {
+          dir: "ltr",
+          validate: (v) =>
+            v.trim() === "" || isValidEmail(v.trim())
+              ? null
+              : t("validation.email_hint", EMAIL_HINT),
+        });
       case "language":
-        return language.labelFor(a.language) || "—";
+        return inlinePicklistCell(
+          a, "language", "apartment.language", language.labelFor(a.language),
+        );
       // fixes30 §1c: these three edit in place, straight from the list row.
       case "jewish_status":
         return inlinePicklistCell(
@@ -384,8 +540,10 @@ export default function ApartmentsPage() {
       (buildingIdsForReports === null || buildingIdsForReports.has(b.id)),
   );
 
-  // Title + optional data columns + optional contact column + trailing filler.
-  const colCount = 2 + activeFields.length + (showContact ? 1 : 0);
+  // Title + optional data columns + custom-picklist columns + optional
+  // contact column + trailing filler.
+  const colCount =
+    2 + activeFields.length + customDefs.length + (showContact ? 1 : 0);
 
   const lastPage = Math.max(1, Math.ceil(total / pageSize));
   const rangeText = t("pager.range", "{from}–{to} מתוך {total}")
@@ -396,30 +554,62 @@ export default function ApartmentsPage() {
   if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">{t("apartments", "דירות")}</h1>
-        {!isShliach && (
-          <div className="flex items-center gap-2">
-            {!batchOpen && (
-              <button
-                onClick={() => setBatchOpen(true)}
-                className="rounded-md border border-status-magenta text-status-magenta px-4 py-1.5 text-sm font-medium hover:bg-status-magenta/10"
-              >
-                {t("batch.open", "יצירה מרובה")}
-              </button>
-            )}
-            {/* Dedicated add route (fixes12 §2.2). */}
-            <Link
-              href="/dashboard/apartments/add"
-              className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
+        <div className="flex items-center gap-2">
+          {/* fixes32 §6: always reachable while any filter narrows the list —
+              mirrors the Contacts page (fixes29 §1). */}
+          {activeFilterCount > 0 && (
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="rounded-md border border-gray-300 text-gray-600 px-4 py-1.5 text-sm font-medium hover:bg-gray-50"
             >
-              + {t("apt.add_apartment", "הוסף דירה")}
-            </Link>
-          </div>
-        )}
+              ✕ {t("filter.clear_all", "נקה את כל הסינונים")}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((v) => !v)}
+            className="rounded-md border border-gray-300 text-gray-600 px-4 py-1.5 text-sm font-medium hover:bg-gray-50"
+          >
+            {filtersOpen
+              ? `▴ ${t("filter.hide_filters", "הסתר סינון")}`
+              : `▾ ${t("filter.show_filters", "הצג סינון")}`}
+            {!filtersOpen && activeFilterCount > 0 && (
+              <span className="ms-1.5 inline-flex items-center justify-center rounded-full bg-status-magenta text-white text-xs px-1.5 py-0.5 leading-none">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+          {!isShliach && (
+            <>
+              {!batchOpen && (
+                <button
+                  onClick={() => setBatchOpen(true)}
+                  className="rounded-md border border-status-magenta text-status-magenta px-4 py-1.5 text-sm font-medium hover:bg-status-magenta/10"
+                >
+                  {t("batch.open", "יצירה מרובה")}
+                </button>
+              )}
+              {/* Dedicated add route (fixes12 §2.2). */}
+              <Link
+                href="/dashboard/apartments/add"
+                className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
+              >
+                + {t("apt.add_apartment", "הוסף דירה")}
+              </Link>
+            </>
+          )}
+        </div>
       </div>
 
+      {/* fixes32 §6: both filter rows (+ the column-config panel opened from
+          the second one) unmount while the toggle is off; the persisted
+          filter state is untouched, so it keeps filtering the list — the
+          exact fixes29 §1 pattern from the Contacts page. */}
+      {filtersOpen && (<>
       {/* Dataset filters (fixes8 §2): multi-area (fixes15 §7.1) + building
           bounds, street lookup. */}
       <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -472,6 +662,32 @@ export default function ApartmentsPage() {
             setPage(1);
           }}
         />
+        {/* fixes32 §6: language filter. */}
+        <MultiSelectFilter
+          allLabel={t("filter.all_languages", "כל השפות")}
+          options={language.options.map((o) => ({ id: o.value, label: language.display(o) }))}
+          value={languageFilter}
+          onChange={(vals) => {
+            setLanguageFilter(vals);
+            setPage(1);
+          }}
+        />
+        {/* fixes32 §6: one filter per admin-added apartment.* picklist. */}
+        {customDefs.map((d) => {
+          const opts = customPicklists.map[d.field_key] ?? [];
+          return (
+            <MultiSelectFilter
+              key={d.field_key}
+              allLabel={customDefLabel(d)}
+              options={opts.map((o) => ({ id: o.value, label: customPicklists.display(o) }))}
+              value={customFilters[d.field_key] ?? []}
+              onChange={(vals) => {
+                setCustomFilters((prev) => ({ ...prev, [d.field_key]: vals }));
+                setPage(1);
+              }}
+            />
+          );
+        })}
         <input
           className={`${inputClass} flex-1 min-w-[12rem]`}
           placeholder={t("apt.street_search", "חיפוש לפי שם רחוב…")}
@@ -575,22 +791,45 @@ export default function ApartmentsPage() {
               "בחר אילו עמודות יוצגו בטבלה. ההעדפה נשמרת בדפדפן זה.",
             )}
           </p>
+          <p className="text-xs text-gray-400">
+            {t("columns.reorder_hint", "גרור עמודה פעילה כדי לשנות את סדר ההצגה.")}
+          </p>
           <div className="flex flex-wrap gap-2">
-            {FIELD_KEYS.map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => toggleField(k)}
-                className={`rounded-md border px-3 py-1.5 text-sm ${
-                  activeFields.includes(k)
-                    ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
-                    : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                {activeFields.includes(k) ? "✓ " : ""}
-                {fieldLabels[k]}
-              </button>
-            ))}
+            {FIELD_KEYS.map((k) => {
+              const active = activeFields.includes(k);
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  draggable={active}
+                  onClick={() => toggleField(k)}
+                  onDragStart={(e) => {
+                    if (!active) return;
+                    setDraggedField(k);
+                    e.dataTransfer.effectAllowed = "move";
+                  }}
+                  onDragOver={(e) => {
+                    if (!active || !draggedField || draggedField === k) return;
+                    e.preventDefault();
+                  }}
+                  onDrop={(e) => {
+                    if (!active || !draggedField) return;
+                    e.preventDefault();
+                    moveField(draggedField, k);
+                    setDraggedField(null);
+                  }}
+                  onDragEnd={() => setDraggedField(null)}
+                  className={`rounded-md border px-3 py-1.5 text-sm ${
+                    active
+                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta cursor-grab active:cursor-grabbing"
+                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  } ${draggedField === k ? "opacity-40" : ""}`}
+                >
+                  {active ? "⠿ " : ""}
+                  {fieldLabels[k]}
+                </button>
+              );
+            })}
             {/* fixes30 §1b: the linked-contact column, previously always on. */}
             <button
               type="button"
@@ -607,6 +846,7 @@ export default function ApartmentsPage() {
           </div>
         </div>
       )}
+      </>)}
 
       {batchOpen && (
         <BatchModal
@@ -649,6 +889,12 @@ export default function ApartmentsPage() {
               {activeFields.map((k) => (
                 <th key={k} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
                   {fieldLabels[k]}
+                </th>
+              ))}
+              {/* fixes32 §6: one column per admin-added apartment.* picklist. */}
+              {customDefs.map((d) => (
+                <th key={d.field_key} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
+                  {customDefLabel(d)}
                 </th>
               ))}
               {/* fixes30 §1b: toggleable via the fields panel. */}
@@ -701,18 +947,43 @@ export default function ApartmentsPage() {
                     )}
                   <tr className="border-t border-gray-100">
                     <td className="px-3 py-2 w-px whitespace-nowrap">
-                      <Link
-                        href={`/dashboard/apartments/${a.id}`}
-                        className="font-medium text-status-magenta hover:underline"
-                      >
-                        {apartmentTitle(a)}
-                      </Link>
+                      <ApartmentNameCell
+                        a={a}
+                        onSave={(v) => saveListField(a, { apartment_name: v })}
+                      />
                     </td>
                     {activeFields.map((k) => (
                       <td key={k} className="px-3 py-2 w-px whitespace-nowrap max-w-[14rem] truncate">
                         {cell(a, k)}
                       </td>
                     ))}
+                    {/* fixes32 §6: inline-editable, straight from the list row —
+                        no per-field code needed for a new custom picklist. */}
+                    {customDefs.map((d) => {
+                      const value = a.picklist_values?.[d.field_key] ?? null;
+                      return (
+                        <td
+                          key={d.field_key}
+                          className="px-3 py-2 w-px whitespace-nowrap max-w-[14rem] truncate"
+                        >
+                          <InlineEdit<string | null>
+                            value={value}
+                            display={customPicklists.labelFor(d.field_key, value) || "—"}
+                            commitOnBlur={false}
+                            onSave={(v) =>
+                              saveListField(a, { picklist_values: { [d.field_key]: v } })
+                            }
+                            editor={(draft, _setDraft, commit) => (
+                              <PicklistSelect
+                                fieldKey={d.field_key}
+                                value={draft}
+                                onChange={commit}
+                              />
+                            )}
+                          />
+                        </td>
+                      );
+                    })}
                     {showContact && (
                       <td className="px-3 py-2 w-px whitespace-nowrap">
                         {a.contact_id ? (
@@ -759,6 +1030,91 @@ export default function ApartmentsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/** fixes32 §6: the apartment-number cell stays the primary navigation Link
+ *  (unchanged click target) with a separate hover-pencil icon that opens
+ *  inline edit in place — avoids the ambiguity of one click target doing two
+ *  different things (navigate vs. edit). */
+function ApartmentNameCell({
+  a,
+  onSave,
+}: {
+  a: ApartmentListItem;
+  onSave: (v: string | null) => Promise<void>;
+}) {
+  const { t } = useLocalization();
+  const { error: toastError } = useToast();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(a.apartment_name ?? "");
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  async function commit() {
+    if (saving) return;
+    const next = draft.trim() || null;
+    if (next === (a.apartment_name ?? null)) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(next);
+      setEditing(false);
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        className="rounded-md border border-status-magenta px-1.5 py-0.5 text-sm w-20 focus:outline-none"
+        value={draft}
+        disabled={saving}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            void commit();
+          } else if (e.key === "Escape") {
+            setDraft(a.apartment_name ?? "");
+            setEditing(false);
+          }
+        }}
+      />
+    );
+  }
+
+  return (
+    <span className="group inline-flex items-center gap-1">
+      <Link
+        href={`/dashboard/apartments/${a.id}`}
+        className="font-medium text-status-magenta hover:underline"
+      >
+        {apartmentTitle(a)}
+      </Link>
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(a.apartment_name ?? "");
+          setEditing(true);
+        }}
+        title={t("inline.click_to_edit", "לחץ לעריכה")}
+        className="text-xs text-gray-300 opacity-0 group-hover:opacity-100 hover:text-status-magenta"
+      >
+        ✎
+      </button>
+    </span>
   );
 }
 

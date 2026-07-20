@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import case, func, nullslast, or_, select
 from sqlalchemy.orm import Session
 
-from app import models
+from app import models, picklist_utils
 from app.core.shliach import resolve_shliach
 from app.database import get_db
 from app.deps import get_current_user, require_admin
@@ -40,7 +40,10 @@ from app.schemas import (
 
 router = APIRouter(prefix="/api/apartments", tags=["apartments"])
 
-# Apartment columns constrained by an org-managed picklist (fixes7 §4).
+# Apartment fields constrained by an org-managed picklist (fixes7 §4). Values
+# live in PicklistLink (fixes32) — these 4 keep dedicated API fields for
+# backward compatibility; any other apartment.* picklist is dynamic (see
+# ApartmentOut.picklist_values).
 _APARTMENT_PICKLISTS = {
     "jewish_status": "apartment.Jewish_status",
     "campaign_status": "apartment.campaign_status",
@@ -49,10 +52,48 @@ _APARTMENT_PICKLISTS = {
 }
 
 
-def _validate_apartment_picklists(data: dict, org_id: int, db: Session) -> None:
+def _validate_picklist_changes(changes: dict, org_id: int, db: Session) -> None:
+    """`changes` is field_key -> value (already resolved — fixed field names
+    translated to their field_key, custom picklist_values entries as-is)."""
+    for field_key, value in changes.items():
+        if value is not None:
+            validate_picklist_value(db, org_id, field_key, value)
+
+
+def _split_picklist_changes(data: dict) -> dict[str, Optional[str]]:
+    """Pop the 4 fixed picklist fields + the custom `picklist_values` dict out
+    of a payload dict (mutates `data`), returning one field_key -> value dict
+    (fixes32) ready for `_validate_picklist_changes` / `picklist_utils.set_value`."""
+    changes: dict[str, Optional[str]] = {}
     for field, field_key in _APARTMENT_PICKLISTS.items():
-        if field in data and data[field] is not None:
-            validate_picklist_value(db, org_id, field_key, data[field])
+        if field in data:
+            changes[field_key] = data.pop(field)
+    custom = data.pop("picklist_values", None) or {}
+    changes.update(custom)
+    return changes
+
+
+def _apply_picklist_fields(out, values: dict[str, Optional[str]]) -> None:
+    """Populate an ApartmentOut's 4 fixed fields + the dynamic picklist_values
+    dict from a resolved {field_key: value} map."""
+    for field, field_key in _APARTMENT_PICKLISTS.items():
+        setattr(out, field, values.get(field_key))
+    out.picklist_values = {
+        k: v for k, v in values.items() if k not in _APARTMENT_PICKLISTS.values()
+    }
+
+
+def _apartment_out(
+    db: Session, a: models.Apartment, picklist_map: Optional[dict] = None
+) -> ApartmentOut:
+    values = (
+        picklist_map
+        if picklist_map is not None
+        else picklist_utils.get_values(db, a.organization_id, "apartments", a.id)
+    )
+    out = ApartmentOut.model_validate(a)
+    _apply_picklist_fields(out, values)
+    return out
 
 
 def _validate_report_number(data: dict, org_id: int, db: Session) -> None:
@@ -115,7 +156,7 @@ def _shliach_apartment_ids(db: Session, user: models.User) -> list[int]:
     return sorted(ids)
 
 
-def _enrich(a: models.Apartment) -> ApartmentListOut:
+def _enrich(a: models.Apartment, picklist_map: dict[str, Optional[str]]) -> ApartmentListOut:
     building = a.building
     area = building.area if building else None
     mekurav = a.mekuravim[0] if a.mekuravim else None
@@ -124,6 +165,7 @@ def _enrich(a: models.Apartment) -> ApartmentListOut:
     if contact:
         contact_name = f"{contact.name} {contact.last_name or ''}".strip()
     out = ApartmentListOut.model_validate(a)
+    _apply_picklist_fields(out, picklist_map)
     out.building_name = building.building_name if building else None
     out.building_address = building.building_address if building else None
     out.area_name = area.area_name if area else None
@@ -184,7 +226,11 @@ def list_apartments(
         query = query.filter(models.Apartment.building_id == building_id)
     if q:
         query = query.filter(models.Apartment.apartment_name.ilike(f"%{q}%"))
-    return query.order_by(models.Apartment.apartment_name).all()
+    rows = query.order_by(models.Apartment.apartment_name).all()
+    picklist_map = picklist_utils.get_values_bulk(
+        db, current_user.organization_id, "apartments", [r.id for r in rows]
+    )
+    return [_apartment_out(db, a, picklist_map.get(a.id, {})) for a in rows]
 
 
 def _natural(col, db: Session):
@@ -237,6 +283,16 @@ def _sort_keys(sort: str, db: Session) -> list:
     return [_floor_rank(), *_natural(models.Apartment.floor, db)]
 
 
+def _picklist_filter(query, field_key: str, values: list[str]):
+    """Restrict to apartments whose stored value for `field_key` (fixes32:
+    PicklistLink, not a real column) is one of `values`."""
+    return query.filter(
+        models.Apartment.id.in_(
+            picklist_utils.matching_entity_ids("apartments", field_key, values)
+        )
+    )
+
+
 def _apply_apartment_filters(
     query,
     *,
@@ -250,6 +306,9 @@ def _apply_apartment_filters(
     q: Optional[str] = None,
     jewish_status: Optional[list[str]] = None,
     mezuzah_status: Optional[list[str]] = None,
+    campaign_status: Optional[list[str]] = None,
+    language: Optional[list[str]] = None,
+    custom_picklists: Optional[dict[str, list[str]]] = None,
 ):
     """Apply the shared apartment-list filters (fixes8/15/18/20/23). The caller's
     query must already be joined to `models.Building` (area/street filters need
@@ -284,11 +343,20 @@ def _apply_apartment_filters(
                 models.Apartment.name.ilike(like),
             )
         )
-    # fixes18 §5.2: picklist-column filters (multi-select, OR within a field).
+    # fixes18 §5.2 / fixes32 §6: picklist filters (multi-select, OR within a
+    # field, AND across fields) — the 4 fixed apartment picklists plus any
+    # number of dynamic (admin-added) ones.
     if jewish_status:
-        query = query.filter(models.Apartment.jewish_status.in_(jewish_status))
+        query = _picklist_filter(query, "apartment.Jewish_status", jewish_status)
     if mezuzah_status:
-        query = query.filter(models.Apartment.mezuzah_status.in_(mezuzah_status))
+        query = _picklist_filter(query, "apartment.mezuzah_status", mezuzah_status)
+    if campaign_status:
+        query = _picklist_filter(query, "apartment.campaign_status", campaign_status)
+    if language:
+        query = _picklist_filter(query, "apartment.language", language)
+    for field_key, values in (custom_picklists or {}).items():
+        if values:
+            query = _picklist_filter(query, field_key, values)
     return query
 
 
@@ -306,6 +374,11 @@ def list_apartments_enriched(
     q: Optional[str] = None,
     jewish_status: Optional[list[str]] = Query(None),
     mezuzah_status: Optional[list[str]] = Query(None),
+    campaign_status: Optional[list[str]] = Query(None),
+    language: Optional[list[str]] = Query(None),
+    # fixes32 §6: dynamic filter for any custom apartment.* picklist, sent as
+    # repeated "field_key:value" pairs (OR within a field_key, AND across).
+    picklist: Optional[list[str]] = Query(None),
     sort: Literal["floor", "label", "resident", "building", "created"] = "floor",
     dir: Literal["asc", "desc"] = "asc",
     page: int = Query(1, ge=1),
@@ -338,6 +411,11 @@ def list_apartments_enriched(
         if not ids:
             return ApartmentPageOut(items=[], total=0, page=page, page_size=page_size)
         query = query.filter(models.Apartment.id.in_(ids))
+    custom_picklists: dict[str, list[str]] = {}
+    for entry in picklist or []:
+        key, sep, value = entry.partition(":")
+        if sep:
+            custom_picklists.setdefault(key, []).append(value)
     query = _apply_apartment_filters(
         query,
         building_id=building_id,
@@ -350,6 +428,9 @@ def list_apartments_enriched(
         q=q,
         jewish_status=jewish_status,
         mezuzah_status=mezuzah_status,
+        campaign_status=campaign_status,
+        language=language,
+        custom_picklists=custom_picklists,
     )
 
     total = query.count()
@@ -366,8 +447,11 @@ def list_apartments_enriched(
         .limit(page_size)
         .all()
     )
+    picklist_map = picklist_utils.get_values_bulk(
+        db, current_user.organization_id, "apartments", [r.id for r in rows]
+    )
     return ApartmentPageOut(
-        items=[_enrich(a) for a in rows],
+        items=[_enrich(a, picklist_map.get(a.id, {})) for a in rows],
         total=total,
         page=page,
         page_size=page_size,
@@ -384,11 +468,15 @@ def create_apartment(
     _validate_building(payload.building_id, org_id, db)
     data = payload.model_dump()
     contact_id = data.pop("contact_id", None)
-    _validate_apartment_picklists(data, org_id, db)
+    picklist_changes = _split_picklist_changes(data)
+    _validate_picklist_changes(picklist_changes, org_id, db)
     _validate_report_number(data, org_id, db)
     a = models.Apartment(**data, organization_id=org_id)
     db.add(a)
     db.flush()
+    for field_key, value in picklist_changes.items():
+        if value is not None:
+            picklist_utils.set_value(db, org_id, "apartments", a.id, field_key, value)
 
     # Optionally link an existing mekurav contact to this apartment.
     if contact_id is not None:
@@ -411,7 +499,7 @@ def create_apartment(
 
     db.commit()
     db.refresh(a)
-    return a
+    return _apartment_out(db, a)
 
 
 @router.post(
@@ -513,6 +601,9 @@ def building_aggregates(
     q: Optional[str] = None,
     jewish_status: Optional[list[str]] = Query(None),
     mezuzah_status: Optional[list[str]] = Query(None),
+    campaign_status: Optional[list[str]] = Query(None),
+    language: Optional[list[str]] = Query(None),
+    picklist: Optional[list[str]] = Query(None),
 ):
     """fixes30 §1: apartment counts per building under the exact /list filters —
     the group-by-building view shows each building header with its full
@@ -531,6 +622,11 @@ def building_aggregates(
         if not ids:
             return []
         query = query.filter(models.Apartment.id.in_(ids))
+    custom_picklists: dict[str, list[str]] = {}
+    for entry in picklist or []:
+        key, sep, value = entry.partition(":")
+        if sep:
+            custom_picklists.setdefault(key, []).append(value)
     query = _apply_apartment_filters(
         query,
         building_id=building_id,
@@ -541,6 +637,9 @@ def building_aggregates(
         q=q,
         jewish_status=jewish_status,
         mezuzah_status=mezuzah_status,
+        campaign_status=campaign_status,
+        language=language,
+        custom_picklists=custom_picklists,
     )
     return [
         BuildingAggregate(building_id=b_id, count=count)
@@ -556,7 +655,9 @@ def _bulk_versioned_update(
 ) -> int:
     """Apply `changes` to a list of active apartments as fixes19 §3 versioned
     edits, in a single transaction: retire each current row and insert its
-    successor carrying the change, re-pointing any mekurav link. Returns the
+    successor carrying the change, re-pointing any mekurav link. `changes` here
+    only ever carries real columns (report_number_id / apartment_notes) — the
+    picklist-backed fields are copied forward untouched (fixes32). Returns the
     number of apartments updated."""
     for active in apartments:
         active.is_display = False
@@ -578,6 +679,7 @@ def _bulk_versioned_update(
         ).update(
             {models.ContactMekurav.apartment_id: new.id}, synchronize_session=False
         )
+        picklist_utils.copy_links(db, "apartments", active.id, new.id)
     db.commit()
     return len(apartments)
 
@@ -634,16 +736,14 @@ def bulk_update_apartments(
     return ApartmentBulkUpdateResult(updated=updated)
 
 
-# The data columns copied from a retired version into its successor (fixes19).
+# The real-column data copied from a retired version into its successor
+# (fixes19). Picklist-backed fields (fixes32) aren't columns anymore — they're
+# copied separately via picklist_utils.copy_links.
 _VERSIONED_COLUMNS = (
     "building_id",
     "apartment_name",
     "apartment_notes",
     "floor",
-    "jewish_status",
-    "campaign_status",
-    "mezuzah_status",
-    "language",
     "name",
     "phone",
     "email",
@@ -677,17 +777,24 @@ def apartment_history(
         )
         .all()
     )
+    picklist_map = picklist_utils.get_values_bulk(
+        db, admin.organization_id, "apartments", [v.id for v in versions]
+    )
     out = []
     for v in versions:
         item = ApartmentVersionOut.model_validate(v)
+        _apply_picklist_fields(item, picklist_map.get(v.id, {}))
         item.editor_name = v.editor.full_name if v.editor else None
         out.append(item)
     return out
 
 
-# Data columns an admin may roll back per-field (building_id is excluded — a
-# restore should not silently move an apartment to a different building).
-_RESTORABLE_FIELDS = tuple(c for c in _VERSIONED_COLUMNS if c != "building_id")
+# Fields an admin may roll back per-field (building_id is excluded — a restore
+# should not silently move an apartment to a different building). Covers both
+# the real versioned columns and the 4 fixed picklist fields (fixes32).
+_RESTORABLE_FIELDS = tuple(
+    c for c in _VERSIONED_COLUMNS if c != "building_id"
+) + tuple(_APARTMENT_PICKLISTS.keys())
 
 
 @router.post("/{apartment_id}/restore-field", response_model=ApartmentOut)
@@ -727,11 +834,18 @@ def restore_apartment_field(
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, "version not found in this apartment's history"
         )
-    restored_value = getattr(version, payload.field)
-    changes = {payload.field: restored_value}
-    _validate_apartment_picklists(changes, org_id, db)
+    changes: dict = {}
+    picklist_changes: dict[str, Optional[str]] = {}
+    if payload.field in _APARTMENT_PICKLISTS:
+        field_key = _APARTMENT_PICKLISTS[payload.field]
+        picklist_changes[field_key] = picklist_utils.get_values(
+            db, org_id, "apartments", version.id, [field_key]
+        )[field_key]
+    else:
+        changes[payload.field] = getattr(version, payload.field)
+    _validate_picklist_changes(picklist_changes, org_id, db)
     _validate_report_number(changes, org_id, db)
-    return _apply_versioned_update(db, active, changes, admin)
+    return _apartment_out(db, _apply_versioned_update(db, active, changes, picklist_changes, admin))
 
 
 @router.get("/{apartment_id}", response_model=ApartmentOut)
@@ -745,18 +859,22 @@ def get_apartment(
     # must never see anything but the current version).
     if not a.is_display and current_user.role != "admin":
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Apartment not found")
-    return a
+    return _apartment_out(db, a)
 
 
 def _apply_versioned_update(
     db: Session,
     active: models.Apartment,
     changes: dict,
+    picklist_changes: dict[str, Optional[str]],
     editor: models.User,
 ) -> models.Apartment:
     """Core of the fixes19 §3 versioning: retire the active row (is_display=False
-    + last_edit/editor_id stamp) and insert a new active row carrying `changes`.
-    Mekurav contact links follow the new row. Commits and returns the new row."""
+    + last_edit/editor_id stamp) and insert a new active row carrying `changes`
+    (real columns) and `picklist_changes` (field_key -> value, fixes32).
+    Mekurav contact links follow the new row; every existing picklist link is
+    copied onto the new row first (so unrelated fields survive), then
+    `picklist_changes` is applied on top. Commits and returns the new row."""
     org_id = active.organization_id
     active.is_display = False
     active.last_edit = datetime.datetime.utcnow()
@@ -776,6 +894,9 @@ def _apply_versioned_update(
     db.query(models.ContactMekurav).filter(
         models.ContactMekurav.apartment_id == active.id
     ).update({models.ContactMekurav.apartment_id: new.id}, synchronize_session=False)
+    picklist_utils.copy_links(db, "apartments", active.id, new.id)
+    for field_key, value in picklist_changes.items():
+        picklist_utils.set_value(db, org_id, "apartments", new.id, field_key, value)
     db.commit()
     db.refresh(new)
     return new
@@ -807,9 +928,10 @@ def update_apartment(
     data = payload.model_dump(exclude_unset=True)
     if "building_id" in data and data["building_id"] is not None:
         _validate_building(data["building_id"], org_id, db)
-    _validate_apartment_picklists(data, org_id, db)
+    picklist_changes = _split_picklist_changes(data)
+    _validate_picklist_changes(picklist_changes, org_id, db)
     _validate_report_number(data, org_id, db)
-    return _apply_versioned_update(db, a, data, current_user)
+    return _apartment_out(db, _apply_versioned_update(db, a, data, picklist_changes, current_user))
 
 
 @router.delete("/{apartment_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -833,6 +955,7 @@ def delete_apartment(
         )
         .all()
     )
+    picklist_utils.delete_links_many(db, "apartments", [row.id for row in lineage])
     for row in lineage:
         db.delete(row)
     db.commit()

@@ -100,7 +100,7 @@ def _delete_organization_cascade(db: Session, org_id: int) -> None:
 
     # Org-scoped tables, leaves → roots.
     ordered_models = [
-        models.ContactPicklistValue,
+        models.PicklistLink,  # fixes32: replaces ContactPicklistValue (generic now)
         models.ContactMekuravSpecialDate,
         models.SignificantDateReminder,
         models.ReportNumberContactShliach,

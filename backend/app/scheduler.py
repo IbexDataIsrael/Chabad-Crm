@@ -12,7 +12,7 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from app import models
+from app import models, picklist_utils
 from app.config import settings
 from app.core.email import send_email
 from app.database import SessionLocal
@@ -85,12 +85,15 @@ def _recipients(db: Session, sd: models.SignificantDate) -> list[str]:
     return sorted(emails)
 
 
-def _body(sd: models.SignificantDate) -> str:
+def _body(db: Session, sd: models.SignificantDate) -> str:
     names = ", ".join(
         " ".join(filter(None, [m.mekurav.contact.last_name, m.mekurav.contact.name]))
         for m in sd.mekuravim
     )
-    title = sd.special_date_title or sd.special_date_type or "תאריך חשוב"
+    special_date_type = picklist_utils.get_values(
+        db, sd.organization_id, "significant_dates", sd.id, ["significant_date.type"]
+    )["significant_date.type"]
+    title = sd.special_date_title or special_date_type or "תאריך חשוב"
     when = sd.special_date.strftime("%d/%m")
     hebrew = f" ({sd.hebrew_date})" if sd.hebrew_date else ""
     return (
@@ -124,7 +127,7 @@ def scan_reminders() -> int:
                 continue
             recipients = _recipients(db, sd)
             if recipients:
-                send_email(", ".join(recipients), "תזכורת — מיני CRM", _body(sd))
+                send_email(", ".join(recipients), "תזכורת — מיני CRM", _body(db, sd))
                 sent += 1
             reminder.last_sent_at = now
         db.commit()

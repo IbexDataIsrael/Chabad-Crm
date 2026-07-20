@@ -174,6 +174,10 @@ export interface Apartment {
   is_display?: boolean;
   last_edit?: string | null;
   root_id?: number | null;
+  /** fixes32 §5: any apartment.* picklist beyond the 4 fixed fields above —
+   *  keyed by field_key (e.g. "apartment.diet"). Populated on every read;
+   *  written back via ApartmentUpdate.picklist_values. */
+  picklist_values?: Record<string, string | null>;
 }
 
 /** One historical apartment version (admin history view, fixes19 §3). */

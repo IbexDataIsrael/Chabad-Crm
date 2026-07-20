@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from app import models
+from app import models, picklist_utils
 from app.core.display import apartment_title
 from app.core.geo import point_in_polygon, polygon_ring
 from app.core.security import hash_password
@@ -371,16 +371,24 @@ class TestApartmentFilters:
         a1 = _mk_apartment(client, admin_headers, b["id"], apartment_name="1")
         a2 = _mk_apartment(client, admin_headers, b["id"], apartment_name="2")
         a3 = _mk_apartment(client, admin_headers, b["id"], apartment_name="3")
-        # Set the columns directly — the picklist registry values vary per org.
-        db_session.query(models.Apartment).filter(
-            models.Apartment.id == a1["id"]
-        ).update({"jewish_status": "jewish", "mezuzah_status": "has_mezuzah"})
-        db_session.query(models.Apartment).filter(
-            models.Apartment.id == a2["id"]
-        ).update({"jewish_status": "jewish", "mezuzah_status": "no_mezuzah"})
-        db_session.query(models.Apartment).filter(
-            models.Apartment.id == a3["id"]
-        ).update({"jewish_status": "not_jewish"})
+        # Set the values directly via PicklistLink — the picklist registry
+        # values vary per org (fixes32: no longer real columns).
+        org_id = _me(client, admin_headers)["organization_id"]
+        picklist_utils.set_value(
+            db_session, org_id, "apartments", a1["id"], "apartment.Jewish_status", "jewish"
+        )
+        picklist_utils.set_value(
+            db_session, org_id, "apartments", a1["id"], "apartment.mezuzah_status", "has_mezuzah"
+        )
+        picklist_utils.set_value(
+            db_session, org_id, "apartments", a2["id"], "apartment.Jewish_status", "jewish"
+        )
+        picklist_utils.set_value(
+            db_session, org_id, "apartments", a2["id"], "apartment.mezuzah_status", "no_mezuzah"
+        )
+        picklist_utils.set_value(
+            db_session, org_id, "apartments", a3["id"], "apartment.Jewish_status", "not_jewish"
+        )
         db_session.commit()
 
         r = client.get(

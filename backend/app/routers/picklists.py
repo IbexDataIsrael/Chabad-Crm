@@ -160,7 +160,12 @@ def delete_definition(
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, "System picklists cannot be deleted"
         )
-    # Remove the definition and its values.
+    # fixes32: drop every record's link to this field before the values it
+    # points at — picklist_value_id is a real FK now, no orphaned links.
+    db.query(models.PicklistLink).filter(
+        models.PicklistLink.organization_id == admin.organization_id,
+        models.PicklistLink.picklist_definition_id == row.id,
+    ).delete(synchronize_session=False)
     db.query(models.PicklistValue).filter(
         models.PicklistValue.organization_id == admin.organization_id,
         models.PicklistValue.field_key == row.system_name,

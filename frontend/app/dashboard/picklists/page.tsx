@@ -69,6 +69,41 @@ export default function PicklistsPage() {
     await loadAll();
   }
 
+  // fixes32 §7: one definition's editor + option list — shared by both
+  // sections below.
+  function renderDefinition(f: PicklistField) {
+    const options = optionsByKey[f.field_key] ?? [];
+    return (
+      <section key={f.field_key} className="space-y-2">
+        <h3 className="text-lg font-semibold">{defLabel(f)}</h3>
+        <DefinitionEditor def={f} onChanged={loadAll} onDeleted={loadAll} />
+        <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
+          {options.map((opt, i) => (
+            <OptionRow
+              key={opt.id}
+              option={opt}
+              onSaved={loadAll}
+              onMoveUp={() => reorder(f.field_key, i, -1)}
+              onMoveDown={() => reorder(f.field_key, i, 1)}
+              isFirst={i === 0}
+              isLast={i === options.length - 1}
+            />
+          ))}
+          {options.length === 0 && (
+            <p className="px-4 py-6 text-center text-gray-400">{t("pl.no_values", "אין ערכים.")}</p>
+          )}
+        </div>
+        <AddOption fieldKey={f.field_key} onAdded={loadAll} />
+      </section>
+    );
+  }
+
+  // fixes32 §7: apartment.* picklists live in their own section — everything
+  // else (contact.*, checklist.*, interaction.*, visit.*, significant_date.*,
+  // and any custom addition) is the "Contact" section.
+  const contactDefs = fields.filter((f) => !f.field_key.startsWith("apartment."));
+  const apartmentDefs = fields.filter((f) => f.field_key.startsWith("apartment."));
+
   return (
     <div className="space-y-8">
       <div>
@@ -78,51 +113,34 @@ export default function PicklistsPage() {
         </p>
       </div>
 
-      {/* Apartment picklists live under their own "דירה" subsection (fixes7 §4). */}
-      {[
-        {
-          heading: t("pl.group_general", "כללי"),
-          defs: fields.filter((f) => !f.field_key.startsWith("apartment.")),
-        },
-        {
-          heading: t("pl.group_apartment", "דירה"),
-          defs: fields.filter((f) => f.field_key.startsWith("apartment.")),
-        },
-      ]
-        .filter((group) => group.defs.length > 0)
-        .map((group) => (
-          <div key={group.heading} className="space-y-6">
-            <h2 className="text-xl font-bold border-b border-gray-200 pb-1">{group.heading}</h2>
-            {group.defs.map((f) => {
-              const options = optionsByKey[f.field_key] ?? [];
-              return (
-                <section key={f.field_key} className="space-y-2">
-                  <h3 className="text-lg font-semibold">{defLabel(f)}</h3>
-                  <DefinitionEditor def={f} onChanged={loadAll} onDeleted={loadAll} />
-                  <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
-                    {options.map((opt, i) => (
-                      <OptionRow
-                        key={opt.id}
-                        option={opt}
-                        onSaved={loadAll}
-                        onMoveUp={() => reorder(f.field_key, i, -1)}
-                        onMoveDown={() => reorder(f.field_key, i, 1)}
-                        isFirst={i === 0}
-                        isLast={i === options.length - 1}
-                      />
-                    ))}
-                    {options.length === 0 && (
-                      <p className="px-4 py-6 text-center text-gray-400">{t("pl.no_values", "אין ערכים.")}</p>
-                    )}
-                  </div>
-                  <AddOption fieldKey={f.field_key} onAdded={loadAll} />
-                </section>
-              );
-            })}
-          </div>
-        ))}
+      {/* fixes32 §7: a plain neutral card for the Contact section, contrasted
+          against the highlighted Apartment section below — the two read as
+          unmistakably separate zones. */}
+      <section className="space-y-6 rounded-2xl border border-gray-200 bg-white p-5">
+        <h2 className="text-xl font-bold flex items-center gap-2">
+          <span aria-hidden>👤</span>
+          {t("pl.group_general", "אנשי קשר")}
+        </h2>
+        {contactDefs.map(renderDefinition)}
+        <AddPicklist
+          heading={t("pl.add_list_contact", "הוספת רשימת בחירה לאיש קשר")}
+          prefix=""
+          onAdded={loadAll}
+        />
+      </section>
 
-      <AddPicklist onAdded={loadAll} />
+      <section className="space-y-6 rounded-2xl border-2 border-status-magenta/30 bg-status-magenta/5 p-5">
+        <h2 className="text-xl font-bold flex items-center gap-2 text-status-magenta">
+          <span aria-hidden>🏠</span>
+          {t("pl.group_apartment", "דירה")}
+        </h2>
+        {apartmentDefs.map(renderDefinition)}
+        <AddPicklist
+          heading={t("pl.add_list_apartment", "הוספת רשימת בחירה לדירה")}
+          prefix="apartment."
+          onAdded={loadAll}
+        />
+      </section>
     </div>
   );
 }
@@ -203,8 +221,19 @@ function DefinitionEditor({
   );
 }
 
-/** Create a brand-new (custom) picklist definition. */
-function AddPicklist({ onAdded }: { onAdded: (systemName: string) => Promise<void> }) {
+/** Create a brand-new (custom) picklist definition (fixes32 §7: one variant
+ *  per section — `prefix` is silently prepended to whatever the admin types,
+ *  so an apartment-section addition always lands in the apartment group and
+ *  is immediately picked up by the apartments page's dynamic filter/column). */
+function AddPicklist({
+  heading,
+  prefix,
+  onAdded,
+}: {
+  heading: string;
+  prefix: string;
+  onAdded: (systemName: string) => Promise<void>;
+}) {
   const { t } = useLocalization();
   const [systemName, setSystemName] = useState("");
   const [he, setHe] = useState("");
@@ -214,11 +243,12 @@ function AddPicklist({ onAdded }: { onAdded: (systemName: string) => Promise<voi
   async function add(e: FormEvent) {
     e.preventDefault();
     setError("");
+    const fullSystemName = `${prefix}${systemName}`;
     try {
       await apiFetch("/api/picklists/definition", {
         method: "POST",
         body: JSON.stringify({
-          system_name: systemName,
+          system_name: fullSystemName,
           hebrew_display_name: he,
           english_display_name: en || null,
         }),
@@ -226,7 +256,7 @@ function AddPicklist({ onAdded }: { onAdded: (systemName: string) => Promise<voi
       setSystemName("");
       setHe("");
       setEn("");
-      await onAdded(systemName);
+      await onAdded(fullSystemName);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("cf.add_failed", "הוספה נכשלה"));
     }
@@ -236,8 +266,13 @@ function AddPicklist({ onAdded }: { onAdded: (systemName: string) => Promise<voi
 
   return (
     <form onSubmit={add} className="bg-white rounded-xl shadow-sm p-4 space-y-2">
-      <h3 className="font-medium text-sm">{t("pl.add_list", "הוספת רשימת בחירה")}</h3>
-      <div className="flex flex-wrap gap-2">
+      <h3 className="font-medium text-sm">{heading}</h3>
+      <div className="flex flex-wrap items-center gap-2">
+        {prefix && (
+          <code className="text-xs text-gray-400" dir="ltr">
+            {prefix}
+          </code>
+        )}
         <input
           className={`${input} w-44`}
           placeholder={t("pl.system_name_placeholder", "מזהה (אנגלית) — diet")}

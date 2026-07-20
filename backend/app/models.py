@@ -140,9 +140,7 @@ class Contact(Base):
     address = Column(Text, nullable=True)  # formatted address (Google Places)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
-    # Picklist-backed (admin-managed) CRM fields stay on the core contact:
-    pipeline_status = Column(String(50), nullable=True)
-    color_tag = Column(String(20), nullable=True)
+    # fixes32: pipeline_status/color_tag (picklist-backed) moved to PicklistLink.
     priority_score = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(
@@ -175,13 +173,6 @@ class Contact(Base):
         back_populates="contact",
         cascade="all, delete-orphan",
     )
-    # Named *_rows to avoid colliding with the ContactDetailOut.picklist_values
-    # schema field (a dict assembled separately in the router).
-    picklist_value_rows = relationship(
-        "ContactPicklistValue",
-        back_populates="contact",
-        cascade="all, delete-orphan",
-    )
     # Donations are admin-managed financial records that may outlive a contact:
     # on contact delete, SQLAlchemy nulls their (nullable) contact_id instead of
     # deleting them. No delete cascade here on purpose.
@@ -209,13 +200,13 @@ class ContactMekurav(Base):
     )  # אזור מנהל (fixes9 §2C)
     tzedaka_potential = Column(Text, nullable=True)  # פוטנציאל לצדקה (fixes9 §3)
     first_visit = Column(DateTime, nullable=True)  # ביקור ראשון
-    potential_next_step = Column(String(50), nullable=True)  # picklist (פוטנציאל לצעד)
+    # fixes32: potential_next_step (picklist-backed) moved to PicklistLink.
     # fixes25: rebbe_connection moved to visit_history.connection_to_rebbe.
     recommendations = Column(Text, nullable=True)  # המלצות
     background = Column(Text, nullable=True)  # רקע
-    # NOTE (fixes4): picklist-backed attributes (Jewish_status, affiliation, language,
-    # and any admin-defined picklist) are stored generically in `contact_picklist_values`
-    # — no hardcoded columns. Only pre-existing system picklists remain as columns.
+    # NOTE (fixes32): every picklist-backed attribute (Jewish_status, affiliation,
+    # language, potential_next_step, and any admin-defined picklist) is stored
+    # generically in `picklist_links` — no hardcoded columns.
 
     contact = relationship("Contact", back_populates="mekurav")
     apartment = relationship("Apartment", back_populates="mekuravim")
@@ -451,10 +442,8 @@ class Apartment(Base):
     apartment_notes = Column(Text, nullable=True)  # הערות
     # fixes7 §4 — apartment data fields:
     floor = Column(String(50), nullable=True)  # קומה (name of a building floor)
-    jewish_status = Column(String(100), nullable=True)  # picklist apartment.Jewish_status
-    campaign_status = Column(String(100), nullable=True)  # picklist apartment.campaign_status
-    mezuzah_status = Column(String(100), nullable=True)  # picklist apartment.mezuzah_status
-    language = Column(String(100), nullable=True)  # picklist apartment.language (fixes13)
+    # fixes32: jewish_status/campaign_status/mezuzah_status/language (picklist-
+    # backed) moved to PicklistLink, keyed by this row's own (versioned) id.
     name = Column(String(150), nullable=True)  # שם דייר (resident)
     phone = Column(String(50), nullable=True)  # טלפון (validated at the API)
     email = Column(String(255), nullable=True)  # אימייל (validated at the API)
@@ -498,7 +487,7 @@ class SignificantDate(Base):
     )
     special_date = Column(DateTime, nullable=False)  # תאריך חשוב
     hebrew_date = Column(String(100), nullable=True)  # תאריך עברי
-    special_date_type = Column(String(50), nullable=True)  # picklist significant_date.type
+    # fixes32: special_date_type (picklist-backed) moved to PicklistLink.
     special_date_title = Column(String(200), nullable=True)  # free text (fixes4)
     is_set_reminder = Column(Boolean, nullable=False, default=False)  # האם לשלוח תזכורת
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
@@ -585,7 +574,7 @@ class VisitHistory(Base):
         Integer, ForeignKey("contacts.id"), nullable=True, index=True
     )  # איש קשר (optional)
     visit_date = Column(DateTime, nullable=False)  # תאריך
-    visit_type = Column(String, nullable=True)  # סוג ביקור (picklist: visit.type)
+    # fixes32: visit_type / torah_thought (picklist-backed) moved to PicklistLink.
     location = Column(Text, nullable=True)  # מיקום
     notes = Column(Text, nullable=True)  # הערות
     # fixes25: [{category, note, created_at, author_name}] (picklist interaction.category)
@@ -595,7 +584,6 @@ class VisitHistory(Base):
     shabbat_candles = Column(Boolean, default=False, nullable=False)  # נרות
     torah_pamphlet = Column(Boolean, default=False, nullable=False)  # עלון
     letter_in_torah = Column(Boolean, default=False, nullable=False)  # אות בספר
-    torah_thought = Column(String(50), nullable=True)  # picklist checklist.torah_thought
     connection_to_rebbe = Column(Text, nullable=True)  # קשר לרבי
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
@@ -849,17 +837,30 @@ class PicklistDefinition(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
-class ContactPicklistValue(Base):
-    """A contact's selected option for a *dynamic* picklist (single-select).
+class PicklistLink(Base):
+    """Generic normalized store for every picklist-backed field's selected
+    value (fixes32): one row per (entity row, picklist field), pointing at a
+    real `picklist_values.id` rather than storing the technical token as text.
+    Replaces both the old hardcoded picklist columns (Apartment.jewish_status,
+    Contact.pipeline_status, VisitHistory.torah_thought, ...) and the old
+    contact-only `ContactPicklistValue` table.
 
-    Generic key/value store so picklist-backed attributes need no schema columns:
-    one row per (contact, picklist). `value` holds the technical token (matching
-    `picklist_values.value`).
+    `entity_table` names the owning model's table (`"apartments"`,
+    `"contacts"`, `"contact_mekurav"`, `"visit_history"`,
+    `"significant_dates"`) — there's no single FK target since one row here
+    can belong to any of them. Apartments are versioned (every edit inserts a
+    new row with a new id); `entity_id` for `entity_table="apartments"` is the
+    per-version row's own id, so historical snapshots keep their own value —
+    the apartments router copies links forward onto each new version's id,
+    mirroring how the other versioned columns are copied.
     """
 
-    __tablename__ = "contact_picklist_values"
+    __tablename__ = "picklist_links"
     __table_args__ = (
-        UniqueConstraint("contact_id", "picklist_id", name="uq_contact_picklist"),
+        UniqueConstraint(
+            "entity_table", "entity_id", "picklist_definition_id",
+            name="uq_picklist_link_entity_field",
+        ),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -867,16 +868,23 @@ class ContactPicklistValue(Base):
     organization_id = Column(
         Integer, ForeignKey("organizations.id"), nullable=False, index=True
     )
-    contact_id = Column(
-        Integer, ForeignKey("contacts.id"), nullable=False, index=True
-    )
-    picklist_id = Column(
+    entity_table = Column(String(50), nullable=False, index=True)
+    entity_id = Column(Integer, nullable=False, index=True)
+    picklist_definition_id = Column(
         Integer, ForeignKey("picklists.id"), nullable=False, index=True
     )
-    value = Column(String(100), nullable=False)
+    picklist_value_id = Column(
+        Integer, ForeignKey("picklist_values.id"), nullable=False, index=True
+    )
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
 
-    contact = relationship("Contact", back_populates="picklist_value_rows")
-    picklist = relationship("PicklistDefinition")
+    definition = relationship("PicklistDefinition")
+    picklist_value = relationship("PicklistValue")
 
 
 class UserPreference(Base):

@@ -557,6 +557,9 @@ class ApartmentBase(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     report_number_id: Optional[int] = None  # מספר דוח (fixes19)
+    # fixes32: any apartment.* picklist beyond the 4 fixed fields above — an
+    # admin-added custom picklist works without any dedicated schema field.
+    picklist_values: dict[str, Optional[str]] = {}
 
     @field_validator("phone")
     @classmethod
@@ -587,6 +590,7 @@ class ApartmentUpdate(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     report_number_id: Optional[int] = None
+    picklist_values: Optional[dict[str, Optional[str]]] = None
 
     @field_validator("phone")
     @classmethod
@@ -616,6 +620,7 @@ class ApartmentOut(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     report_number_id: Optional[int] = None
+    picklist_values: dict[str, Optional[str]] = {}
     # Versioning metadata (fixes19 §3):
     is_display: bool = True
     last_edit: Optional[datetime] = None

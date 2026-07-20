@@ -10,7 +10,7 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from app import models
+from app import models, picklist_utils
 from app.config import settings
 from app.core.security import hash_password
 from app.picklist_utils import PICKLIST_FIELDS
@@ -428,6 +428,9 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("pl", "pl.delete_list", "מחק רשימה", "Delete list"),
     ("pl", "pl.add_list", "הוספת רשימת בחירה", "Add picklist"),
     ("pl", "pl.system_name_placeholder", "מזהה (אנגלית) — diet", "Identifier (English) — diet"),
+    # fixes32 §7: dedicated add-picklist forms per dashboard section.
+    ("pl", "pl.add_list_contact", "הוספת רשימת בחירה לאיש קשר", "Add picklist to contact"),
+    ("pl", "pl.add_list_apartment", "הוספת רשימת בחירה לדירה", "Add picklist to apartment"),
     # --- Global search (header) ---
     ("search", "search.placeholder", "חיפוש כללי: אזור, בניין, דירה, איש קשר…", "Search: area, building, apartment, contact…"),
     ("search", "search.no_results", "לא נמצאו תוצאות", "No results found"),
@@ -493,7 +496,9 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("table", "building", "בניין", "Building"),
     ("table", "apartment", "דירה", "Apartment"),
     ("pl", "pl.group_apartment", "דירה", "Apartment"),
-    ("pl", "pl.group_general", "כללי", "General"),
+    # fixes32 §7: renamed from "כללי"/"General" — the dashboard's two
+    # sections are now explicitly Contact vs. Apartment.
+    ("pl", "pl.group_general", "אנשי קשר", "Contacts"),
     # --- fixes7 §5: bulk apartment generator ---
     ("batch", "batch.open", "יצירה מרובה", "Bulk create"),
     ("batch", "batch.title", "יצירת דירות מרובות", "Bulk apartment generator"),
@@ -590,6 +595,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("columns", "columns.title", "עמודות מוצגות", "Visible columns"),
     ("columns", "columns.hint", "בחר אילו עמודות יוצגו בטבלה. ההעדפה נשמרת בדפדפן זה.", "Choose which columns the table shows. Saved in this browser."),
     ("columns", "columns.reset", "איפוס ברירת מחדל", "Reset to defaults"),
+    ("columns", "columns.reorder_hint", "גרור עמודה פעילה כדי לשנות את סדר ההצגה.", "Drag an active column to change the display order."),
     ("columns", "columns.fields_configure", "התאמת שדות", "Customize fields"),
     ("column", "contacts.area", "אזור", "Area"),
     ("column", "contacts.building", "בניין", "Building"),
@@ -655,6 +661,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("filter", "filter.all_admin_areas", "כל אזורי המנהל", "All admin areas"),
     ("filter", "filter.all_jewish", "כל סטטוסי היהדות", "All Jewish statuses"),
     ("filter", "filter.all_mezuzah", "כל סטטוסי המזוזה", "All mezuzah statuses"),
+    ("filter", "filter.all_languages", "כל השפות", "All languages"),
     # --- fixes18: area detail — add-activist / add-building dropdowns ---
     ("areas", "areas.add_activist_pick", "בחר פעיל להוספה…", "Pick an activist to add…"),
     ("areas", "areas.add_building_pick", "בחר בניין להוספה…", "Pick a building to add…"),
@@ -940,6 +947,11 @@ LOCALIZATION_RENAMES: dict[str, tuple[set, str, set, str]] = {
         {"Each field is a checkbox + note shown on the contact card. e.g. Hanukkah party."},
         "Each field is a checkbox + note logged on each visit. e.g. Hanukkah party.",
     ),
+    # fixes32 §7: the picklists dashboard's two sections are now explicitly
+    # Contact vs. Apartment (was the generic "General").
+    "pl.group_general": (
+        {"כללי"}, "אנשי קשר", {"General"}, "Contacts",
+    ),
 }
 
 
@@ -1133,13 +1145,10 @@ def _seed_sample_data(db: Session, org: models.Organization, admin: models.User)
         address="דיזנגוף 100, תל אביב-יפו",
         latitude=32.0809,
         longitude=34.7738,
-        pipeline_status="in_progress",
         priority_score=5,
-        color_tag="magenta",
     )
     c1.mekurav = models.ContactMekurav(
         organization_id=org.id,
-        potential_next_step="high",
         background="נפגשנו בכנס",
     )
 
@@ -1150,16 +1159,24 @@ def _seed_sample_data(db: Session, org: models.Organization, admin: models.User)
         phone="054-7654321",
         contact_type="mekurav",
         assigned_user_id=admin.guid,
-        pipeline_status="sent",
         priority_score=3,
-        color_tag="green",
     )
-    c2.mekurav = models.ContactMekurav(
-        organization_id=org.id, potential_next_step="medium"
-    )
+    c2.mekurav = models.ContactMekurav(organization_id=org.id)
 
     db.add_all([c1, c2])
     db.flush()
+    # fixes32: pipeline_status/color_tag/potential_next_step are picklist-
+    # backed (PicklistLink) — the org's picklists are already seeded above.
+    picklist_utils.set_value(db, org.id, "contacts", c1.id, "contact.pipeline_status", "in_progress")
+    picklist_utils.set_value(db, org.id, "contacts", c1.id, "contact.color_tag", "magenta")
+    picklist_utils.set_value(
+        db, org.id, "contact_mekurav", c1.mekurav.id, "contact.potential_next_step", "high"
+    )
+    picklist_utils.set_value(db, org.id, "contacts", c2.id, "contact.pipeline_status", "sent")
+    picklist_utils.set_value(db, org.id, "contacts", c2.id, "contact.color_tag", "green")
+    picklist_utils.set_value(
+        db, org.id, "contact_mekurav", c2.mekurav.id, "contact.potential_next_step", "medium"
+    )
 
     # fixes25: engagement data (Mivtzoim / interactions / custom fields) is
     # logged per visit, not on the contact.
@@ -1169,7 +1186,6 @@ def _seed_sample_data(db: Session, org: models.Organization, admin: models.User)
         visit_date=datetime.datetime.utcnow(),
         tefillin=True,
         tzedakah=True,
-        torah_thought="given",
         interactions=[
             {
                 "category": "heart_connection",
@@ -1180,6 +1196,9 @@ def _seed_sample_data(db: Session, org: models.Organization, admin: models.User)
         ],
     )
     db.add(v1)
+    db.flush()
+    # fixes32: torah_thought is picklist-backed (PicklistLink).
+    picklist_utils.set_value(db, org.id, "visit_history", v1.id, "checklist.torah_thought", "given")
 
     # Example custom checklist field for the demo org.
     cf = models.CustomFieldDefinition(
