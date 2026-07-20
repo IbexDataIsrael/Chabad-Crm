@@ -9,6 +9,16 @@ import type { PicklistValue } from "./types";
 // Simple module-level cache so multiple selects don't refetch the same field.
 const cache: Record<string, PicklistValue[]> = {};
 
+// fixes32 §6/§stillnotdone: the 4 apartment picklists with dedicated fields
+// everywhere (list grid, CRUD form) — any other "apartment.*" definition is
+// dynamic (custom), auto-wired wherever this constant is used to filter it in.
+export const FIXED_APARTMENT_PICKLIST_KEYS = [
+  "apartment.Jewish_status",
+  "apartment.campaign_status",
+  "apartment.mezuzah_status",
+  "apartment.language",
+];
+
 /** Render a picklist option in the given language (English value falls back
  *  to Hebrew). Shared by the hook and non-hook callers (fixes24: the PDF
  *  generator fetches its picklists imperatively). */

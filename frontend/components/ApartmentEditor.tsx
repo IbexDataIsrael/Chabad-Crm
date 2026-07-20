@@ -9,6 +9,7 @@ import { SearchableSelect } from "@/components/SearchableSelect";
 import { apiFetch } from "@/lib/api";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
+import { FIXED_APARTMENT_PICKLIST_KEYS } from "@/lib/picklists";
 import {
   buildingDisplayName,
   contactFullName,
@@ -16,6 +17,7 @@ import {
   type Building,
   type Contact,
   type Floor,
+  type PicklistField,
   type ReportNumber,
 } from "@/lib/types";
 
@@ -41,7 +43,7 @@ export function ApartmentEditor({
   /** fixes19: editing returns a NEW active version — `saved` carries its id. */
   onSaved: (saved: Apartment) => Promise<void>;
 }) {
-  const { t } = useLocalization();
+  const { t, lang } = useLocalization();
   const { isFieldVisible: vis } = useFieldSettings();
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -71,6 +73,13 @@ export function ApartmentEditor({
   const [reportNumberId, setReportNumberId] = useState<number | "">(
     apt?.report_number_id ?? "",
   );
+  // fixes32-stillnotdone §2: any admin-added apartment.* picklist beyond the
+  // fixed 4 above — same mechanism as the apartments list grid, so a new
+  // custom picklist shows up here with no further code changes.
+  const [customDefs, setCustomDefs] = useState<PicklistField[]>([]);
+  const [customValues, setCustomValues] = useState<Record<string, string | null>>(
+    apt?.picklist_values ?? {},
+  );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -79,6 +88,17 @@ export function ApartmentEditor({
     apiFetch<ReportNumber[]>("/api/report-numbers")
       .then(setReportNumbers)
       .catch(() => {});
+    apiFetch<PicklistField[]>("/api/picklists")
+      .then((defs) =>
+        setCustomDefs(
+          defs.filter(
+            (d) =>
+              d.field_key.startsWith("apartment.") &&
+              !FIXED_APARTMENT_PICKLIST_KEYS.includes(d.field_key),
+          ),
+        ),
+      )
+      .catch(() => setCustomDefs([]));
     if (!apt) {
       apiFetch<Contact[]>("/api/contacts?contact_type=mekurav")
         .then(setContacts)
@@ -123,6 +143,7 @@ export function ApartmentEditor({
       language,
       apartment_notes: notes || null,
       report_number_id: reportNumberId === "" ? null : Number(reportNumberId),
+      picklist_values: customValues,
     };
     try {
       let saved: Apartment;
@@ -266,6 +287,21 @@ export function ApartmentEditor({
             />
           </label>
         )}
+        {/* fixes32-stillnotdone §2: any admin-added apartment.* picklist. */}
+        {customDefs.map((d) => (
+          <label key={d.field_key} className="block space-y-1">
+            <span className="block text-sm font-medium">
+              {(lang === "en" ? d.english_label || d.label : d.label) || d.field_key}
+            </span>
+            <PicklistSelect
+              fieldKey={d.field_key}
+              value={customValues[d.field_key] ?? null}
+              onChange={(v) =>
+                setCustomValues((prev) => ({ ...prev, [d.field_key]: v }))
+              }
+            />
+          </label>
+        ))}
         {/* fixes19: searchable report-number dropdown (מספר דוח). */}
         {vis("apartments.report_number_id") && (
           <label className="block space-y-1">

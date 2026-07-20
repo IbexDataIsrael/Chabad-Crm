@@ -13,7 +13,7 @@ import { useAuth } from "@/lib/auth";
 import { mapsHref } from "@/lib/contactActions";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
-import { usePicklist, usePicklistsMap } from "@/lib/picklists";
+import { FIXED_APARTMENT_PICKLIST_KEYS, usePicklist, usePicklistsMap } from "@/lib/picklists";
 import { useDbPreference } from "@/lib/preferences";
 import { useToast } from "@/lib/toast";
 import { EMAIL_HINT, PHONE_HINT, isValidEmail, isValidPhone } from "@/lib/validation";
@@ -37,16 +37,6 @@ const inputClass =
   "rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 const PAGE_SIZES = [20, 50, 100];
-
-// fixes32 §6: the 4 apartment picklists with dedicated fields/columns already
-// handled above — any other "apartment.*" definition is a dynamic (custom)
-// one, auto-wired into a filter + grid column with no further code changes.
-const FIXED_APARTMENT_PICKLIST_KEYS = [
-  "apartment.Jewish_status",
-  "apartment.campaign_status",
-  "apartment.mezuzah_status",
-  "apartment.language",
-];
 
 type SortKey = "floor" | "label" | "resident" | "building";
 type SortDir = "asc" | "desc";
@@ -795,7 +785,15 @@ export default function ApartmentsPage() {
             {t("columns.reorder_hint", "גרור עמודה פעילה כדי לשנות את סדר ההצגה.")}
           </p>
           <div className="flex flex-wrap gap-2">
-            {FIELD_KEYS.map((k) => {
+            {/* fixes32-stillnotdone §1: active chips render FIRST, in their
+                actual current (draggable-reordered) order — rendering every
+                chip in the fixed FIELD_KEYS order regardless of drag state
+                meant a successful drag changed the table but never visibly
+                moved anything in this panel, reading as "nothing happened". */}
+            {[
+              ...activeFields,
+              ...FIELD_KEYS.filter((k) => !activeFields.includes(k)),
+            ].map((k) => {
               const active = activeFields.includes(k);
               return (
                 <button
@@ -807,6 +805,9 @@ export default function ApartmentsPage() {
                     if (!active) return;
                     setDraggedField(k);
                     e.dataTransfer.effectAllowed = "move";
+                    // Some browsers (Firefox) won't fire `drop` at all unless
+                    // the drag event carries data.
+                    e.dataTransfer.setData("text/plain", k);
                   }}
                   onDragOver={(e) => {
                     if (!active || !draggedField || draggedField === k) return;
