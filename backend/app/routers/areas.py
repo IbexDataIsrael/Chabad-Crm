@@ -2,7 +2,10 @@
 
 Reads: any authenticated user. Mutations: admins only.
 """
+from typing import Literal, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app import models
@@ -105,9 +108,45 @@ def delete_area(
     area_id: int,
     db: Session = Depends(get_db),
     admin: models.User = Depends(require_admin),
+    mode: Optional[Literal["cascade", "unassign"]] = None,
 ):
+    """fixes33 §2.2: an area with buildings needs an explicit choice — cascade
+    (delete the buildings + their apartments too) or unassign (keep the
+    buildings, clear their area_id). Without buildings, deletes outright.
+
+    `contact_shliach_area` rows (direct area-coverage assignments) have no
+    ORM relationship declared on `Area`, so the ORM cascade never reaches
+    them; left alone they trip the FK RESTRICT on every delete, buildings or
+    not — that was the actual "deletion does nothing" bug. Always clear them
+    first regardless of mode.
+    """
     area = _get_or_404(area_id, admin.organization_id, db)
-    db.delete(area)
+    buildings = (
+        db.query(models.Building)
+        .filter(models.Building.area_id == area.id)
+        .all()
+    )
+    if buildings and mode is None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={"has_buildings": True, "building_count": len(buildings)},
+        )
+
+    db.query(models.ContactShliachArea).filter(
+        models.ContactShliachArea.area_id == area.id
+    ).delete(synchronize_session=False)
+
+    if buildings and mode == "unassign":
+        for b in buildings:
+            b.area_id = None
+        # SessionLocal runs autoflush=False: without an explicit flush here,
+        # `db.delete(area)` below would lazy-load `area.buildings` (never
+        # queried via the relationship yet) against the DB's still-unchanged
+        # area_id values, cascade-delete-orphan them anyway, and silently
+        # undo the unassign.
+        db.flush()
+
+    db.delete(area)  # mode == "cascade" (or no buildings): ORM cascades buildings→apartments.
     db.commit()
 
 
@@ -210,7 +249,14 @@ def area_eligible_buildings(
         db.query(models.Building)
         .filter(
             models.Building.organization_id == admin.organization_id,
-            models.Building.area_id != area.id,
+            # fixes33 §2.2: area_id can now be NULL (unassigned) — `!=` alone
+            # would silently exclude those buildings (NULL != x is NULL, not
+            # TRUE), even though an unassigned building is exactly the kind
+            # of candidate this "add building" picker should offer.
+            or_(
+                models.Building.area_id.is_(None),
+                models.Building.area_id != area.id,
+            ),
             models.Building.latitude.isnot(None),
             models.Building.longitude.isnot(None),
         )

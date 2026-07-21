@@ -60,6 +60,8 @@ class Organization(Base):
     shliach_can_view_contacts = Column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    # fixes33 §6: free text injected at the top of every generated PDF report.
+    report_notes = Column(Text, nullable=True)
     # Platform-level enable/disable (superadmin). A disabled org's users can't log in.
     is_active = Column(Boolean, nullable=False, default=True, server_default=text("true"))
     # Signup approval workflow: 'pending' (awaiting superadmin approval) | 'approved'.
@@ -373,7 +375,9 @@ class Building(Base):
     organization_id = Column(
         Integer, ForeignKey("organizations.id"), nullable=False, index=True
     )
-    area_id = Column(Integer, ForeignKey("areas.id"), nullable=False, index=True)
+    # fixes33 §2.2: nullable so an area can be deleted while its buildings are
+    # kept (Option B unassigns them instead of cascading the delete).
+    area_id = Column(Integer, ForeignKey("areas.id"), nullable=True, index=True)
     building_name = Column(String(150), nullable=True)  # שם בניין (optional, fixes7)
     building_address = Column(Text, nullable=True)  # כתובת בניין (required at the API)
     longitude = Column(Float, nullable=True)

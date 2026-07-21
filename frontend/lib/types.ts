@@ -144,7 +144,8 @@ export interface Floor {
 export interface Building {
   id: number;
   guid: string;
-  area_id: number;
+  /** fixes33 §2.2: nullable — an area delete may unassign its buildings. */
+  area_id: number | null;
   building_name: string | null;
   building_address: string | null;
   longitude: number | null;
@@ -352,6 +353,8 @@ export interface OrgDetails {
   default_zoom: number;
   /** fixes18 §6: may shliach users view (mekurav) contacts? Default false. */
   shliach_can_view_contacts: boolean;
+  /** fixes33 §6: free text injected at the top of every generated PDF report. */
+  report_notes: string | null;
 }
 
 /** One org restore point (fixes16) — metadata only, the blob stays server-side. */

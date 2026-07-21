@@ -30,6 +30,8 @@ export interface Organization {
   default_zoom: number;
   /** fixes18 §6: may shliach users view (mekurav) contacts? Default false. */
   shliach_can_view_contacts?: boolean;
+  /** fixes33 §6: free text injected at the top of every generated PDF report. */
+  report_notes?: string | null;
 }
 
 export interface User {

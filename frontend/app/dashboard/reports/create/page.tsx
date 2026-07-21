@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 
 import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter";
 import { apiFetch } from "@/lib/api";
@@ -31,15 +32,43 @@ const CELL_PADDING = 4;
 // mezuzah, language, notes. Notes takes the rest of the usable ~515pt.
 const COLUMN_WIDTHS = [50, 70, 85, 75, 70, 160];
 
-/** fixes30 §3: the page offers two source modes — the classic report-number
- *  selection, or an arbitrary hand-picked set of apartments. */
-type ReportMode = "reports" | "apartments";
+/** fixes30 §3 / fixes33 §3.2: the page offers three source modes — the
+ *  classic report-number selection, an arbitrary hand-picked set of
+ *  apartments, or (deep-linked from the Apartments page's filtered list)
+ *  whatever filter params arrived in the URL. */
+type ReportMode = "reports" | "apartments" | "filters";
+
+// fixes33 §3.2: the exact param names /api/apartments/list accepts, carried
+// over verbatim from the Apartments page's current filter state.
+const FILTER_PARAM_KEYS = [
+  "area_ids", "building_ids", "report_number_ids",
+  "jewish_status", "mezuzah_status", "language", "picklist", "q",
+] as const;
 
 export default function CreateReportsPage() {
+  return (
+    <Suspense fallback={<p className="text-gray-400">…</p>}>
+      <CreateReportsInner />
+    </Suspense>
+  );
+}
+
+function CreateReportsInner() {
   const { loading, user } = useAuth();
   const { t, lang } = useLocalization();
   const { error: toastError } = useToast();
-  const [mode, setMode] = useState<ReportMode>("reports");
+  const searchParams = useSearchParams();
+  // fixes33 §3.2: the `from` marker — not just "any filter param present" —
+  // decides this, since an apartments-page visit with every filter cleared
+  // (viewing all apartments) still needs to land in "filters" mode; its
+  // query string otherwise carries no params at all and would be
+  // indistinguishable from a plain, non-deep-linked visit to this page.
+  const hasFilterParams = searchParams.get("from") === "apartments-filtered";
+  const filterParams = new URLSearchParams();
+  for (const key of FILTER_PARAM_KEYS) {
+    for (const v of searchParams.getAll(key)) filterParams.append(key, v);
+  }
+  const [mode, setMode] = useState<ReportMode>(hasFilterParams ? "filters" : "reports");
   const [reportNumbers, setReportNumbers] = useState<ReportNumber[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   // fixes30 §3: the direct-selection option pool + chosen apartment ids.
@@ -86,7 +115,11 @@ export default function CreateReportsPage() {
 
   async function generatePdf() {
     const nothingSelected =
-      mode === "reports" ? selectedIds.length === 0 : selectedAptIds.length === 0;
+      mode === "reports"
+        ? selectedIds.length === 0
+        : mode === "apartments"
+          ? selectedAptIds.length === 0
+          : false; // "filters": the URL's filter params drive the query, nothing to pick
     if (nothingSelected || busy) return;
     setBusy(true);
     setNoData(false);
@@ -98,11 +131,15 @@ export default function CreateReportsPage() {
                 params.append("report_number_ids", String(id)),
               ),
             )
-          : await fetchAllPages((params) =>
-              selectedAptIds.forEach((id) =>
-                params.append("apartment_ids", String(id)),
-              ),
-            );
+          : mode === "apartments"
+            ? await fetchAllPages((params) =>
+                selectedAptIds.forEach((id) =>
+                  params.append("apartment_ids", String(id)),
+                ),
+              )
+            : await fetchAllPages((params) => {
+                for (const [k, v] of filterParams.entries()) params.append(k, v);
+              });
       if (rows.length === 0) {
         setNoData(true);
         return;
@@ -158,6 +195,21 @@ export default function CreateReportsPage() {
         align: "right",
       });
       y += 34;
+
+      // fixes33 §7.1: the org's configured report_notes, once, at the very
+      // top of the document — before the first report/building section.
+      const reportNotes = user?.organization?.report_notes?.trim();
+      if (reportNotes) {
+        doc.setFont(HEBREW_FONT, "normal");
+        doc.setFontSize(10);
+        const usableWidth = pageW - MARGIN * 2;
+        const lines = doc.splitTextToSize(reportNotes, usableWidth) as string[];
+        for (const line of lines) {
+          doc.text(line, pageW - MARGIN, y, { align: "right" });
+          y += 13;
+        }
+        y += 10;
+      }
 
       // One table per building, headed by the building's cleaned
       // "street + number" display string (shared by both modes).
@@ -240,8 +292,14 @@ export default function CreateReportsPage() {
         }
         const orderedReports = reportNumbers.filter((rn) => byReport.has(rn.id));
 
-        for (const rn of orderedReports) {
-          if (y + 48 > bottom) {
+        orderedReports.forEach((rn, index) => {
+          // fixes33 §7.2: every distinct report number starts on its own
+          // page — not just when its content would overflow — except the
+          // first, which continues right after the title/notes block.
+          if (index > 0) {
+            doc.addPage();
+            y = PDF_CONTENT_TOP;
+          } else if (y + 48 > bottom) {
             doc.addPage();
             y = PDF_CONTENT_TOP;
           }
@@ -256,7 +314,7 @@ export default function CreateReportsPage() {
           y += 22;
           renderBuildingTables(byReport.get(rn.id)!);
           y += 6;
-        }
+        });
       } else {
         // fixes30 §3: hand-picked apartments — building groups only, and rows
         // without a report number are included too.
@@ -279,13 +337,34 @@ export default function CreateReportsPage() {
   if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
 
   const nothingSelected =
-    mode === "reports" ? selectedIds.length === 0 : selectedAptIds.length === 0;
+    mode === "reports"
+      ? selectedIds.length === 0
+      : mode === "apartments"
+        ? selectedAptIds.length === 0
+        : false;
 
   return (
     <div className="space-y-5 max-w-2xl">
       <h1 className="text-2xl font-bold">{t("reports.create_reports", "יצירת דוחות")}</h1>
 
       <div className="bg-white rounded-xl shadow-sm p-5 space-y-4">
+        {/* fixes33 §3.2: opened from the Apartments page's filtered list — the
+            filters themselves drove navigation here, so there's nothing to
+            pick; the reports/apartments radio picker doesn't apply. */}
+        {mode === "filters" ? (
+          <p className="text-sm text-gray-600">
+            {t(
+              "reports.mode_by_filters",
+              "לפי סינון נוכחי",
+            )}
+            {" — "}
+            {t(
+              "reports.filters_mode_hint",
+              "הדוח יופק מהדירות התואמות לסינון שהוגדר בעמוד הדירות.",
+            )}
+          </p>
+        ) : (
+          <>
         {/* fixes30 §3: source mode. */}
         <div className="flex flex-wrap items-center gap-4 text-sm">
           {(
@@ -358,6 +437,8 @@ export default function CreateReportsPage() {
               />
             )}
           </label>
+        )}
+          </>
         )}
 
         {noData && (

@@ -413,7 +413,7 @@ export default function ContactsPage() {
   }
 
   const buildingOptions = buildings
-    .filter((b) => areaIds.length === 0 || areaIds.includes(b.area_id))
+    .filter((b) => areaIds.length === 0 || (b.area_id != null && areaIds.includes(b.area_id)))
     .map((b) => ({
       id: b.id,
       label:
@@ -498,7 +498,9 @@ export default function ContactsPage() {
               ids.length === 0
                 ? prev
                 : prev.filter((bid) =>
-                    buildings.some((b) => b.id === bid && ids.includes(b.area_id)),
+                    buildings.some(
+                      (b) => b.id === bid && b.area_id != null && ids.includes(b.area_id),
+                    ),
                   ),
             );
             setPage(1);

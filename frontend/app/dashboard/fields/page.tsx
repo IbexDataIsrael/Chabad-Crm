@@ -90,11 +90,18 @@ function FieldRow({
   field: FieldSetting;
   onToggle: (key: string, visible: boolean) => Promise<void>;
 }) {
-  const { t } = useLocalization();
+  const { t, lang } = useLocalization();
+  // fixes33 §5.1: a dynamic custom-picklist row carries its own bilingual
+  // name directly (no field_localization row exists for per-org custom text)
+  // — everything else resolves through the usual localization table.
+  const label =
+    field.label != null
+      ? (lang === "en" ? field.english_label || field.label : field.label)
+      : t(field.label_key, field.field_key);
   return (
     <li className="px-4 py-2 flex items-center justify-between gap-3">
       <span className={`text-sm ${field.is_visible ? "" : "text-gray-400"}`}>
-        {t(field.label_key, field.field_key)}
+        {label}
       </span>
       <label className="inline-flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
         {field.is_visible ? t("fields.shown", "מוצג") : t("fields.hidden", "מוסתר")}

@@ -43,7 +43,7 @@ def update_my_org(
         and data["shliach_can_view_contacts"] is not None
     ):
         org.shliach_can_view_contacts = data["shliach_can_view_contacts"]
-    for field in ("default_lat", "default_lng", "default_zoom"):
+    for field in ("default_lat", "default_lng", "default_zoom", "report_notes"):
         if field in data:
             setattr(org, field, data[field])
     db.commit()

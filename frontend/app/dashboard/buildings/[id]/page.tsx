@@ -48,7 +48,13 @@ export default function BuildingDetailPage() {
       .then(async ([b, apts]) => {
         setBuilding(b);
         setApartments(apts);
-        setArea(await apiFetch<Area>(`/api/areas/${b.area_id}`).catch(() => null));
+        // fixes33 §2.2: an unassigned building (area deleted via "unassign") has
+        // no area_id to fetch.
+        setArea(
+          b.area_id == null
+            ? null
+            : await apiFetch<Area>(`/api/areas/${b.area_id}`).catch(() => null),
+        );
       })
       .catch((err) =>
         setError(err instanceof Error ? err.message : t("msg.load_failed", "טעינה נכשלה")),

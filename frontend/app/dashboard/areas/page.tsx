@@ -5,10 +5,11 @@ import { useEffect, useState } from "react";
 
 import { AreasMap } from "@/components/AreasMap";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
-import { apiFetch } from "@/lib/api";
+import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
+import { useToast } from "@/lib/toast";
 import type { Area } from "@/lib/types";
 import { useConfirm } from "@/lib/confirm";
 
@@ -149,12 +150,44 @@ function AreaCard({
 }) {
   const { t } = useLocalization();
   const confirmDialog = useConfirm();
+  const { error: toastError } = useToast();
+  // fixes33 §2.2: only set while the backend reports the area has buildings
+  // and we're waiting on the admin's cascade/unassign/abort choice.
+  const [cascadeChoiceOpen, setCascadeChoiceOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function attemptDelete(mode?: "cascade" | "unassign") {
+    const qs = mode ? `?mode=${mode}` : "";
+    try {
+      await apiFetch(`/api/areas/${area.id}${qs}`, { method: "DELETE" });
+      setCascadeChoiceOpen(false);
+      await onChanged();
+    } catch (err) {
+      if (
+        err instanceof ApiError &&
+        err.status === 409 &&
+        (err.body as { has_buildings?: boolean } | undefined)?.has_buildings
+      ) {
+        setCascadeChoiceOpen(true);
+        return;
+      }
+      toastError(err instanceof Error ? err.message : t("msg.delete_failed", "מחיקה נכשלה"));
+    }
+  }
 
   async function remove() {
     if (!(await confirmDialog({ message: t("msg.delete_area_confirm", "למחוק את האזור?"), detail: area.area_name })))
       return;
-    await apiFetch(`/api/areas/${area.id}`, { method: "DELETE" });
-    await onChanged();
+    await attemptDelete();
+  }
+
+  async function resolveCascadeChoice(mode: "cascade" | "unassign") {
+    setBusy(true);
+    try {
+      await attemptDelete(mode);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -202,6 +235,47 @@ function AreaCard({
         </div>
       </div>
       {area.area_notes && <p className="text-sm text-gray-600">{area.area_notes}</p>}
+      {/* fixes33 §2.2: three real outcomes (cascade / unassign / abort), not a
+          plain yes/no — the generic useConfirm modal only has two. */}
+      {cascadeChoiceOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm bg-white rounded-xl shadow-xl p-5 space-y-4">
+            <h2 className="text-lg font-bold">{t("confirm.title", "אישור פעולה")}</h2>
+            <p className="text-sm text-gray-700">
+              {t(
+                "areas.delete_has_buildings_confirm",
+                "לאזור זה יש בניינים. האם למחוק את הבניינים?",
+              )}
+            </p>
+            <div className="flex flex-col items-stretch gap-2 pt-1">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => resolveCascadeChoice("cascade")}
+                className="rounded-md bg-status-darkred text-white px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
+              >
+                {t("areas.delete_cascade_buildings", "מחק בניינים ודירות")}
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => resolveCascadeChoice("unassign")}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+              >
+                {t("areas.delete_keep_buildings", "השאר בניינים (בטל שיוך לאזור)")}
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setCascadeChoiceOpen(false)}
+                className="text-xs text-gray-500 hover:underline"
+              >
+                {t("action.cancel", "ביטול")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

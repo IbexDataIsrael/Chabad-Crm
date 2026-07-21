@@ -80,7 +80,9 @@ export default function BuildingsPage() {
   const areaName = useMemo(() => {
     const map = new Map<number, string>();
     areas.forEach((a) => map.set(a.id, a.area_name));
-    return (id: number) => map.get(id) ?? "—";
+    // fixes33 §2.2: a building can be unassigned (area deleted, kept via
+    // "unassign") — area_id is null, not just an unknown id.
+    return (id: number | null) => (id == null ? "—" : (map.get(id) ?? "—"));
   }, [areas]);
 
   const lastPage = Math.max(1, Math.ceil(total / pageSize));

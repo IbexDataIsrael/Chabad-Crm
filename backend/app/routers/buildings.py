@@ -107,8 +107,11 @@ def list_buildings_paginated(
     if sort == "name":
         key = models.Building.building_name
     elif sort == "area":
-        # Alphabetical by the parent area's name.
-        query = query.join(models.Area, models.Area.id == models.Building.area_id)
+        # Alphabetical by the parent area's name. fixes33 §2.2: area_id is now
+        # nullable (an unassigned building keeps existing) — an inner join
+        # would silently drop those rows from this page's results even though
+        # `total` above already counted them.
+        query = query.outerjoin(models.Area, models.Area.id == models.Building.area_id)
         key = models.Area.area_name
     elif sort == "created":
         key = models.Building.created_at

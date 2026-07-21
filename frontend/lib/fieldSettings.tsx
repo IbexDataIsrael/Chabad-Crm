@@ -18,6 +18,11 @@ export interface FieldSetting {
   label_key: string;
   entity: string;
   is_visible: boolean;
+  /** fixes33 §5.1: set only for a dynamic (admin-added custom picklist) row —
+   * its own bilingual display name, since there's no field_localization row
+   * for a per-org custom picklist's name. */
+  label?: string | null;
+  english_label?: string | null;
 }
 
 interface FieldSettingsContextValue {

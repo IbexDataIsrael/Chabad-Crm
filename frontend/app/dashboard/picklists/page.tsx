@@ -6,8 +6,20 @@ import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useConfirm } from "@/lib/confirm";
 import { useLocalization } from "@/lib/localization";
+import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 import type { PicklistField, PicklistValue } from "@/lib/types";
+
+// fixes33 §4: field_key namespace (confirmed via picklist_utils.py /
+// routers/visits.py) — visit.*/checklist.*/interaction.* are visit-level
+// picklists even though only "visit." reads as such at a glance.
+type PicklistTab = "contacts" | "visit" | "apartment";
+const VISIT_PREFIXES = ["visit.", "checklist.", "interaction."];
+function tabFor(fieldKey: string): PicklistTab {
+  if (fieldKey.startsWith("apartment.")) return "apartment";
+  if (VISIT_PREFIXES.some((p) => fieldKey.startsWith(p))) return "visit";
+  return "contacts";
+}
 
 export default function PicklistsPage() {
   const { isAdmin, loading } = useAuth();
@@ -15,6 +27,7 @@ export default function PicklistsPage() {
   const [fields, setFields] = useState<PicklistField[]>([]);
   const [optionsByKey, setOptionsByKey] = useState<Record<string, PicklistValue[]>>({});
   const [loaded, setLoaded] = useState(false);
+  const [tab, setTab] = usePersistentState<PicklistTab>("crm.picklists.tab", "contacts");
 
   // Load every list + all its options, so the page shows all picklists at once.
   async function loadAll() {
@@ -98,14 +111,22 @@ export default function PicklistsPage() {
     );
   }
 
-  // fixes32 §7: apartment.* picklists live in their own section — everything
-  // else (contact.*, checklist.*, interaction.*, visit.*, significant_date.*,
-  // and any custom addition) is the "Contact" section.
-  const contactDefs = fields.filter((f) => !f.field_key.startsWith("apartment."));
-  const apartmentDefs = fields.filter((f) => f.field_key.startsWith("apartment."));
+  // fixes33 §4: three domain tabs replace the previous two stacked sections —
+  // apartment.* (unchanged rule), visit.*/checklist.*/interaction.*, and
+  // everything else (contact.*, significant_date.*, bare Jewish_status/
+  // affiliation/language, and any custom addition with no recognized prefix).
+  const contactDefs = fields.filter((f) => tabFor(f.field_key) === "contacts");
+  const visitDefs = fields.filter((f) => tabFor(f.field_key) === "visit");
+  const apartmentDefs = fields.filter((f) => tabFor(f.field_key) === "apartment");
+
+  const TABS: { key: PicklistTab; icon: string; labelKey: string; fallback: string }[] = [
+    { key: "contacts", icon: "👤", labelKey: "pl.tab_contacts", fallback: "אנשי קשר" },
+    { key: "visit", icon: "📋", labelKey: "pl.tab_visit", fallback: "ביקורים" },
+    { key: "apartment", icon: "🏠", labelKey: "pl.tab_apartment", fallback: "דירה" },
+  ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">{t("pl.editor_title", "עריכת תיבת בחירה")}</h1>
         <p className="mt-1 text-sm text-gray-500">
@@ -113,34 +134,57 @@ export default function PicklistsPage() {
         </p>
       </div>
 
-      {/* fixes32 §7: a plain neutral card for the Contact section, contrasted
-          against the highlighted Apartment section below — the two read as
-          unmistakably separate zones. */}
-      <section className="space-y-6 rounded-2xl border border-gray-200 bg-white p-5">
-        <h2 className="text-xl font-bold flex items-center gap-2">
-          <span aria-hidden>👤</span>
-          {t("pl.group_general", "אנשי קשר")}
-        </h2>
-        {contactDefs.map(renderDefinition)}
-        <AddPicklist
-          heading={t("pl.add_list_contact", "הוספת רשימת בחירה לאיש קשר")}
-          prefix=""
-          onAdded={loadAll}
-        />
-      </section>
+      {/* fixes33 §4: tab bar — replaces the previous always-stacked sections. */}
+      <div className="flex flex-wrap gap-2 border-b border-gray-200">
+        {TABS.map((tb) => (
+          <button
+            key={tb.key}
+            type="button"
+            onClick={() => setTab(tb.key)}
+            className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+              tab === tb.key
+                ? "border-status-magenta text-status-magenta"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <span aria-hidden>{tb.icon}</span>
+            {t(tb.labelKey, tb.fallback)}
+          </button>
+        ))}
+      </div>
 
-      <section className="space-y-6 rounded-2xl border-2 border-status-magenta/30 bg-status-magenta/5 p-5">
-        <h2 className="text-xl font-bold flex items-center gap-2 text-status-magenta">
-          <span aria-hidden>🏠</span>
-          {t("pl.group_apartment", "דירה")}
-        </h2>
-        {apartmentDefs.map(renderDefinition)}
-        <AddPicklist
-          heading={t("pl.add_list_apartment", "הוספת רשימת בחירה לדירה")}
-          prefix="apartment."
-          onAdded={loadAll}
-        />
-      </section>
+      {tab === "contacts" && (
+        <section className="space-y-6 rounded-2xl border border-gray-200 bg-white p-5">
+          {contactDefs.map(renderDefinition)}
+          <AddPicklist
+            heading={t("pl.add_list_contact", "הוספת רשימת בחירה לאיש קשר")}
+            prefix=""
+            onAdded={loadAll}
+          />
+        </section>
+      )}
+
+      {tab === "visit" && (
+        <section className="space-y-6 rounded-2xl border border-gray-200 bg-white p-5">
+          {visitDefs.map(renderDefinition)}
+          <AddPicklist
+            heading={t("pl.add_list_visit", "הוספת רשימת בחירה לביקור")}
+            prefix="visit."
+            onAdded={loadAll}
+          />
+        </section>
+      )}
+
+      {tab === "apartment" && (
+        <section className="space-y-6 rounded-2xl border-2 border-status-magenta/30 bg-status-magenta/5 p-5">
+          {apartmentDefs.map(renderDefinition)}
+          <AddPicklist
+            heading={t("pl.add_list_apartment", "הוספת רשימת בחירה לדירה")}
+            prefix="apartment."
+            onAdded={loadAll}
+          />
+        </section>
+      )}
     </div>
   );
 }

@@ -801,6 +801,26 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("reports", "reports.mode_by_apartments", "לפי בחירת דירות", "By selected apartments"),
     ("reports", "reports.select_apartments_placeholder", "בחר דירה אחת או יותר", "Select one or more apartments"),
     ("filter", "filter.search_apartments", "חיפוש דירה…", "Search apartment…"),
+    # --- fixes33 §2: area deletion cascade choice ---
+    ("areas", "areas.delete_has_buildings_confirm", "לאזור זה יש בניינים. האם למחוק את הבניינים?", "This area has buildings. Do you wish to delete the buildings?"),
+    ("areas", "areas.delete_cascade_buildings", "מחק בניינים ודירות", "Delete buildings and apartments"),
+    ("areas", "areas.delete_keep_buildings", "השאר בניינים (בטל שיוך לאזור)", "Keep buildings (unassign from area)"),
+    ("msg", "msg.delete_failed", "מחיקה נכשלה", "Delete failed"),
+    # --- fixes33 §3.2: create report from filtered apartments results ---
+    ("apt", "apt.create_report_from_filters", "צור דוח מהתוצאות המסוננות", "Create report from filtered results"),
+    ("reports", "reports.mode_by_filters", "לפי סינון נוכחי", "By current filter"),
+    ("reports", "reports.filters_mode_hint", "הדוח יופק מהדירות התואמות לסינון שהוגדר בעמוד הדירות.", "The report will be generated from the apartments matching the filter set on the Apartments page."),
+    # --- fixes33 §3.1: toggleable custom picklist columns ---
+    ("columns", "columns.custom_picklists_hint", "עמודות רשימת בחירה מותאמות אישית — ניתן להסתיר כל אחת בנפרד.", "Custom picklist columns — each can be hidden individually."),
+    # --- fixes33 §4: picklists dashboard 3-tab reorg ---
+    ("pl", "pl.tab_contacts", "אנשי קשר", "Contacts"),
+    ("pl", "pl.tab_visit", "ביקורים", "Visits"),
+    ("pl", "pl.tab_apartment", "דירה", "Apartment"),
+    ("pl", "pl.add_list_visit", "הוספת רשימת בחירה לביקור", "Add picklist to visit"),
+    ("pl", "pl.group_visit", "ביקורים", "Visits"),
+    # --- fixes33 §6/§7: report notes setting + PDF header ---
+    ("settings", "settings.report_notes", "הערות לדוח", "Report notes"),
+    ("settings", "settings.report_notes_hint", "טקסט חופשי שיופיע בראש כל דוח שמופק (הבהרה, כותרת, הערת שוליים...)", "Free text shown at the top of every generated report (disclaimer, header, footer note...)"),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)

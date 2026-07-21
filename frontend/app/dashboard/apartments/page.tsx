@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Fragment, useEffect, useRef, useState } from "react";
 
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
@@ -11,6 +12,7 @@ import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { mapsHref } from "@/lib/contactActions";
+import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { FIXED_APARTMENT_PICKLIST_KEYS, usePicklist, usePicklistsMap } from "@/lib/picklists";
@@ -58,10 +60,33 @@ const FIELD_KEYS = [
 ] as const;
 type FieldKey = (typeof FIELD_KEYS)[number];
 const DEFAULT_FIELDS: FieldKey[] = ["resident", "building", "area"];
+// fixes33 §5.2: each toggleable column's Manage Fields registry key, so an
+// org-wide hide (from /dashboard/fields) removes it here too — mirrors the
+// pattern already used on the Contacts page. "building"/"area" have no
+// registry entry (structural, never hideable).
+const FIELD_REGISTRY_KEYS: Partial<Record<FieldKey, string>> = {
+  resident: "apartments.name",
+  report_number: "apartments.report_number_id",
+  notes: "apartments.apartment_notes",
+  phone: "apartments.phone",
+  email: "apartments.email",
+  language: "apartment.language",
+  jewish_status: "apartment.Jewish_status",
+  campaign_status: "apartment.campaign_status",
+  mezuzah_status: "apartment.mezuzah_status",
+};
 
 export default function ApartmentsPage() {
   const { loading, isShliach } = useAuth();
   const { t, lang } = useLocalization();
+  const router = useRouter();
+  // fixes33 §5.2: org-wide field hiding (Manage Fields) must also apply here
+  // — filters, column-selector chips and the rendered columns themselves.
+  const { isFieldVisible: vis } = useFieldSettings();
+  const fieldVisible = (k: FieldKey) => {
+    const registryKey = FIELD_REGISTRY_KEYS[k];
+    return registryKey ? vis(registryKey) : true;
+  };
   const [items, setItems] = useState<ApartmentListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [areas, setAreas] = useState<Area[]>([]);
@@ -101,6 +126,12 @@ export default function ApartmentsPage() {
   const [customDefs, setCustomDefs] = useState<PicklistField[]>([]);
   const [customFilters, setCustomFilters] = usePersistentState<Record<string, string[]>>(
     "crm.apartments.customFilters", {},
+  );
+  // fixes33 §3.1: which custom apartment.* picklists show as table columns —
+  // null (unset) means "all of them", so existing users see no change until
+  // they explicitly hide one via the column-selector panel.
+  const [visibleCustomKeys, setVisibleCustomKeys] = useDbPreference<string[] | null>(
+    "apartments.customFields", null,
   );
   const [query, setQuery] = usePersistentState("crm.apartments.q", "");
   const [sort, setSort] = usePersistentState<SortKey>("crm.apartments.sort", "floor");
@@ -143,24 +174,53 @@ export default function ApartmentsPage() {
   // fixes32 §6: options for every dynamic apartment.* picklist at once.
   const customPicklists = usePicklistsMap(customDefs.map((d) => d.field_key));
 
+  // fixes33 §5.2: a field an admin hid org-wide can't be searched by even if
+  // a stale value survives from before it was hidden — otherwise the list
+  // silently narrows with no visible control explaining why.
+  const effectiveReportNumberIds = fieldVisible("report_number") ? reportNumberIds : [];
+  const effectiveJewishFilter = fieldVisible("jewish_status") ? jewishFilter : [];
+  const effectiveMezuzahFilter = fieldVisible("mezuzah_status") ? mezuzahFilter : [];
+  const effectiveLanguageFilter = fieldVisible("language") ? languageFilter : [];
+
   // fixes32 §6: the `picklist=field_key:value` params any dynamic apartment
   // picklist filter sends — shared by the list fetch and the aggregates fetch.
+  // fixes33 §5.2: a custom picklist hidden org-wide is dropped here too.
   function appendCustomPicklistParams(params: URLSearchParams) {
+    const visibleKeys = new Set(orgVisibleCustomDefs.map((d) => d.field_key));
     for (const [fieldKey, values] of Object.entries(customFilters)) {
+      if (!visibleKeys.has(fieldKey)) continue;
       for (const v of values) params.append("picklist", `${fieldKey}:${v}`);
     }
   }
 
-  async function reload() {
+  // fixes33 §3.2/§5.2: the exact (visibility-aware) filter state driving the
+  // current list — shared by the list fetch, the aggregates fetch and the
+  // "create report from filtered results" deep link.
+  function buildFilterParams(): URLSearchParams {
     const params = new URLSearchParams();
     areaIds.forEach((id) => params.append("area_ids", String(id)));
     buildingIds.forEach((id) => params.append("building_ids", String(id)));
-    reportNumberIds.forEach((id) => params.append("report_number_ids", String(id)));
-    jewishFilter.forEach((v) => params.append("jewish_status", v));
-    mezuzahFilter.forEach((v) => params.append("mezuzah_status", v));
-    languageFilter.forEach((v) => params.append("language", v));
+    effectiveReportNumberIds.forEach((id) => params.append("report_number_ids", String(id)));
+    effectiveJewishFilter.forEach((v) => params.append("jewish_status", v));
+    effectiveMezuzahFilter.forEach((v) => params.append("mezuzah_status", v));
+    effectiveLanguageFilter.forEach((v) => params.append("language", v));
     appendCustomPicklistParams(params);
     if (debouncedQ.trim()) params.set("q", debouncedQ.trim());
+    return params;
+  }
+
+  function goToFilteredReport() {
+    const params = buildFilterParams();
+    // fixes33 §3.2: an explicit marker — when every filter is cleared
+    // (viewing all apartments), the resulting query string would otherwise
+    // be empty and indistinguishable from a plain, non-deep-linked visit to
+    // the reports page.
+    params.set("from", "apartments-filtered");
+    router.push(`/dashboard/reports/create?${params.toString()}`);
+  }
+
+  async function reload() {
+    const params = buildFilterParams();
     // fixes30 §1a: grouping needs building-contiguous rows.
     params.set("sort", groupByBuilding ? "building" : sort);
     params.set("dir", dir);
@@ -220,15 +280,7 @@ export default function ApartmentsPage() {
   // each building shows its full filtered count, not just this page's rows.
   useEffect(() => {
     if (loading || !groupByBuilding) return;
-    const params = new URLSearchParams();
-    areaIds.forEach((id) => params.append("area_ids", String(id)));
-    buildingIds.forEach((id) => params.append("building_ids", String(id)));
-    reportNumberIds.forEach((id) => params.append("report_number_ids", String(id)));
-    jewishFilter.forEach((v) => params.append("jewish_status", v));
-    mezuzahFilter.forEach((v) => params.append("mezuzah_status", v));
-    languageFilter.forEach((v) => params.append("language", v));
-    appendCustomPicklistParams(params);
-    if (debouncedQ.trim()) params.set("q", debouncedQ.trim());
+    const params = buildFilterParams();
     apiFetch<BuildingAggregate[]>(`/api/apartments/building-aggregates?${params}`)
       .then((rows) =>
         setAggregates(Object.fromEntries(rows.map((r) => [r.building_id, r.count]))),
@@ -264,7 +316,7 @@ export default function ApartmentsPage() {
     // Drop building selections that fell outside the chosen areas.
     if (buildingIds.length > 0 && ids.length > 0) {
       const kept = buildingIds.filter((id) =>
-        buildings.some((b) => b.id === id && ids.includes(b.area_id)),
+        buildings.some((b) => b.id === id && b.area_id != null && ids.includes(b.area_id)),
       );
       if (kept.length !== buildingIds.length) setBuildingIds(kept);
     }
@@ -293,16 +345,18 @@ export default function ApartmentsPage() {
 
   // fixes32 §6: active-filter badge + one-click reset, mirroring Contacts
   // (fixes29 §1) — shown even while the filter section is collapsed.
-  const customFilterCount = Object.values(customFilters).reduce(
-    (sum, vals) => sum + vals.length, 0,
+  // fixes33 §5.2: a field hidden org-wide doesn't count toward this even if a
+  // stale filter value survives from before it was hidden.
+  const customFilterCount = Object.entries(customFilters).reduce(
+    (sum, [fieldKey, vals]) => sum + (vis(fieldKey) ? vals.length : 0), 0,
   );
   const activeFilterCount =
     areaIds.length +
     buildingIds.length +
-    reportNumberIds.length +
-    jewishFilter.length +
-    mezuzahFilter.length +
-    languageFilter.length +
+    effectiveReportNumberIds.length +
+    effectiveJewishFilter.length +
+    effectiveMezuzahFilter.length +
+    effectiveLanguageFilter.length +
     customFilterCount +
     (query.trim() ? 1 : 0);
 
@@ -442,6 +496,22 @@ export default function ApartmentsPage() {
   // current language (mirrors the Picklists dashboard's defLabel).
   const customDefLabel = (d: PicklistField) =>
     (lang === "en" ? d.english_label || d.label : d.label) || d.field_key;
+  // fixes33 §5.2: custom picklists an admin hid org-wide (Manage Fields)
+  // never reach the filter row or the column-selector panel at all.
+  const orgVisibleCustomDefs = customDefs.filter((d) => vis(d.field_key));
+  // fixes33 §3.1: the subset of (org-visible) custom picklists the personal
+  // column-selector panel has left switched on.
+  const visibleCustomDefs = orgVisibleCustomDefs.filter(
+    (d) => visibleCustomKeys === null || visibleCustomKeys.includes(d.field_key),
+  );
+  function toggleCustomField(fieldKey: string) {
+    setVisibleCustomKeys((prev) => {
+      const current = prev ?? orgVisibleCustomDefs.map((d) => d.field_key);
+      return current.includes(fieldKey)
+        ? current.filter((k) => k !== fieldKey)
+        : [...current, fieldKey];
+    });
+  }
   // fixes32 §6: the stored array's own order is now the display order — drag-
   // reordering the chips below persists it. (Previously this always rendered
   // in the fixed FIELD_KEYS order regardless of the stored array's order.)
@@ -449,6 +519,10 @@ export default function ApartmentsPage() {
   const activeFields = fields.filter((k): k is FieldKey =>
     (FIELD_KEYS as readonly string[]).includes(k),
   );
+  // fixes33 §5.2: what actually renders as a table column — active minus
+  // anything an admin hid org-wide. `activeFields` itself (the stored
+  // preference) is left untouched so it reappears if unhidden later.
+  const renderedFields = activeFields.filter(fieldVisible);
 
   function cell(a: ApartmentListItem, k: FieldKey) {
     switch (k) {
@@ -524,7 +598,7 @@ export default function ApartmentsPage() {
 
   const visibleBuildings = buildings.filter(
     (b) =>
-      (areaIds.length === 0 || areaIds.includes(b.area_id)) &&
+      (areaIds.length === 0 || (b.area_id != null && areaIds.includes(b.area_id))) &&
       // fixes23 §2: when report numbers are selected, only buildings that hold a
       // matching apartment remain choosable.
       (buildingIdsForReports === null || buildingIdsForReports.has(b.id)),
@@ -533,7 +607,7 @@ export default function ApartmentsPage() {
   // Title + optional data columns + custom-picklist columns + optional
   // contact column + trailing filler.
   const colCount =
-    2 + activeFields.length + customDefs.length + (showContact ? 1 : 0);
+    2 + renderedFields.length + visibleCustomDefs.length + (showContact ? 1 : 0);
 
   const lastPage = Math.max(1, Math.ceil(total / pageSize));
   const rangeText = t("pager.range", "{from}–{to} מתוך {total}")
@@ -622,8 +696,9 @@ export default function ApartmentsPage() {
           onChange={onBuildingsChange}
           searchPlaceholder={t("filter.search_buildings", "חיפוש בניין…")}
         />
-        {/* fixes23 §2: multi-select searchable report-number filter. */}
-        {reportNumbers.length > 0 && (
+        {/* fixes23 §2: multi-select searchable report-number filter.
+            fixes33 §5.2: hidden org-wide → no filter control either. */}
+        {reportNumbers.length > 0 && fieldVisible("report_number") && (
           <MultiSelectSearchFilter
             className="w-48"
             allLabel={t("filter.all_report_numbers", "כל מספרי הדוח")}
@@ -633,26 +708,32 @@ export default function ApartmentsPage() {
             searchPlaceholder={t("filter.search_report_numbers", "חיפוש מספר דוח…")}
           />
         )}
-        {/* fixes18 §5.2: Jewish-status + mezuzah picklist filters. */}
-        <MultiSelectFilter
-          allLabel={t("filter.all_jewish", "כל סטטוסי היהדות")}
-          options={jewish.options.map((o) => ({ id: o.value, label: jewish.display(o) }))}
-          value={jewishFilter}
-          onChange={(vals) => {
-            setJewishFilter(vals);
-            setPage(1);
-          }}
-        />
-        <MultiSelectFilter
-          allLabel={t("filter.all_mezuzah", "כל סטטוסי המזוזה")}
-          options={mezuzah.options.map((o) => ({ id: o.value, label: mezuzah.display(o) }))}
-          value={mezuzahFilter}
-          onChange={(vals) => {
-            setMezuzahFilter(vals);
-            setPage(1);
-          }}
-        />
+        {/* fixes18 §5.2: Jewish-status + mezuzah picklist filters
+            (fixes33 §5.2: gated on the field not being hidden org-wide). */}
+        {fieldVisible("jewish_status") && (
+          <MultiSelectFilter
+            allLabel={t("filter.all_jewish", "כל סטטוסי היהדות")}
+            options={jewish.options.map((o) => ({ id: o.value, label: jewish.display(o) }))}
+            value={jewishFilter}
+            onChange={(vals) => {
+              setJewishFilter(vals);
+              setPage(1);
+            }}
+          />
+        )}
+        {fieldVisible("mezuzah_status") && (
+          <MultiSelectFilter
+            allLabel={t("filter.all_mezuzah", "כל סטטוסי המזוזה")}
+            options={mezuzah.options.map((o) => ({ id: o.value, label: mezuzah.display(o) }))}
+            value={mezuzahFilter}
+            onChange={(vals) => {
+              setMezuzahFilter(vals);
+              setPage(1);
+            }}
+          />
+        )}
         {/* fixes32 §6: language filter. */}
+        {fieldVisible("language") && (
         <MultiSelectFilter
           allLabel={t("filter.all_languages", "כל השפות")}
           options={language.options.map((o) => ({ id: o.value, label: language.display(o) }))}
@@ -662,8 +743,10 @@ export default function ApartmentsPage() {
             setPage(1);
           }}
         />
-        {/* fixes32 §6: one filter per admin-added apartment.* picklist. */}
-        {customDefs.map((d) => {
+        )}
+        {/* fixes32 §6: one filter per admin-added apartment.* picklist
+            (fixes33 §5.2: org-hidden ones are excluded). */}
+        {orgVisibleCustomDefs.map((d) => {
           const opts = customPicklists.map[d.field_key] ?? [];
           return (
             <MultiSelectFilter
@@ -748,6 +831,15 @@ export default function ApartmentsPage() {
             ✎ {t("bulkedit.open", "עריכה מרובה")}
           </button>
         )}
+        {/* fixes33 §3.2: hands the current filter state to the reports page. */}
+        <button
+          type="button"
+          onClick={goToFilteredReport}
+          disabled={total === 0}
+          className="rounded-md border border-status-magenta text-status-magenta px-3 py-2 font-medium hover:bg-status-magenta/10 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          📄 {t("apt.create_report_from_filters", "צור דוח מהתוצאות המסוננות")}
+        </button>
         <span className="ms-auto text-gray-500">{t("pager.page_size", "בעמוד:")}</span>
         <select
           className={inputClass}
@@ -784,16 +876,25 @@ export default function ApartmentsPage() {
           <p className="text-xs text-gray-400">
             {t("columns.reorder_hint", "גרור עמודה פעילה כדי לשנות את סדר ההצגה.")}
           </p>
+          {orgVisibleCustomDefs.length > 0 && (
+            <p className="text-xs text-gray-400">
+              {t(
+                "columns.custom_picklists_hint",
+                "עמודות רשימת בחירה מותאמות אישית — ניתן להסתיר כל אחת בנפרד.",
+              )}
+            </p>
+          )}
           <div className="flex flex-wrap gap-2">
             {/* fixes32-stillnotdone §1: active chips render FIRST, in their
                 actual current (draggable-reordered) order — rendering every
                 chip in the fixed FIELD_KEYS order regardless of drag state
                 meant a successful drag changed the table but never visibly
-                moved anything in this panel, reading as "nothing happened". */}
+                moved anything in this panel, reading as "nothing happened".
+                fixes33 §5.2: fields an admin hid org-wide aren't offered. */}
             {[
               ...activeFields,
               ...FIELD_KEYS.filter((k) => !activeFields.includes(k)),
-            ].map((k) => {
+            ].filter(fieldVisible).map((k) => {
               const active = activeFields.includes(k);
               return (
                 <button
@@ -828,6 +929,27 @@ export default function ApartmentsPage() {
                 >
                   {active ? "⠿ " : ""}
                   {fieldLabels[k]}
+                </button>
+              );
+            })}
+            {/* fixes33 §3.1: one show/hide toggle per admin-added apartment.*
+                picklist — a personal preference, separate from whether the
+                field is hidden org-wide (Manage Fields, fixes33 §5.2). */}
+            {orgVisibleCustomDefs.map((d) => {
+              const active = visibleCustomKeys === null || visibleCustomKeys.includes(d.field_key);
+              return (
+                <button
+                  key={d.field_key}
+                  type="button"
+                  onClick={() => toggleCustomField(d.field_key)}
+                  className={`rounded-md border px-3 py-1.5 text-sm ${
+                    active
+                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
+                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {active ? "✓ " : ""}
+                  {customDefLabel(d)}
                 </button>
               );
             })}
@@ -887,13 +1009,14 @@ export default function ApartmentsPage() {
               <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
                 {t("apartments.apartment_name", "מספר דירה")}
               </th>
-              {activeFields.map((k) => (
+              {renderedFields.map((k) => (
                 <th key={k} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
                   {fieldLabels[k]}
                 </th>
               ))}
-              {/* fixes32 §6: one column per admin-added apartment.* picklist. */}
-              {customDefs.map((d) => (
+              {/* fixes32 §6 / fixes33 §3.1: one column per admin-added
+                  apartment.* picklist the column-selector panel has left on. */}
+              {visibleCustomDefs.map((d) => (
                 <th key={d.field_key} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
                   {customDefLabel(d)}
                 </th>
@@ -953,14 +1076,14 @@ export default function ApartmentsPage() {
                         onSave={(v) => saveListField(a, { apartment_name: v })}
                       />
                     </td>
-                    {activeFields.map((k) => (
+                    {renderedFields.map((k) => (
                       <td key={k} className="px-3 py-2 w-px whitespace-nowrap max-w-[14rem] truncate">
                         {cell(a, k)}
                       </td>
                     ))}
                     {/* fixes32 §6: inline-editable, straight from the list row —
                         no per-field code needed for a new custom picklist. */}
-                    {customDefs.map((d) => {
+                    {visibleCustomDefs.map((d) => {
                       const value = a.picklist_values?.[d.field_key] ?? null;
                       return (
                         <td

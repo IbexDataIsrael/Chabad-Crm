@@ -5,9 +5,15 @@ const TOKEN_KEY = "crm_token";
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  /** fixes33 §2: the raw parsed JSON error body, when the response had one and
+   * `detail` wasn't a plain string (e.g. a structured 409 conflict payload).
+   * `Error`'s message would otherwise stringify a non-string detail into the
+   * useless "[object Object]", losing the data callers need to branch on. */
+  body?: unknown;
+  constructor(status: number, message: string, body?: unknown) {
     super(message);
     this.status = status;
+    this.body = body;
   }
 }
 
@@ -97,13 +103,17 @@ export async function apiFetch<T>(
 
   if (!res.ok) {
     let detail = res.statusText;
+    let structuredDetail: unknown;
     try {
       const data = await res.json();
-      if (data?.detail) detail = data.detail;
+      if (data?.detail) {
+        detail = typeof data.detail === "string" ? data.detail : res.statusText;
+        if (data.detail && typeof data.detail === "object") structuredDetail = data.detail;
+      }
     } catch {
       /* keep statusText */
     }
-    throw new ApiError(res.status, detail);
+    throw new ApiError(res.status, detail, structuredDetail);
   }
 
   if (res.status === 204) return undefined as T;

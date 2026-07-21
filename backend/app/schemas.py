@@ -60,6 +60,8 @@ class OrganizationOut(BaseModel):
     default_zoom: int = 13
     # fixes18 §6: shliach users may view (mekurav) contacts. Default false.
     shliach_can_view_contacts: bool = False
+    # fixes33 §6: free text injected at the top of every generated PDF report.
+    report_notes: Optional[str] = None
 
 
 class OrganizationUpdate(BaseModel):
@@ -70,6 +72,7 @@ class OrganizationUpdate(BaseModel):
     default_lng: Optional[float] = None
     default_zoom: Optional[int] = None
     shliach_can_view_contacts: Optional[bool] = None
+    report_notes: Optional[str] = None
 
 
 class UserOut(BaseModel):
@@ -514,7 +517,8 @@ class BuildingOut(BaseModel):
 
     id: int
     guid: str
-    area_id: int
+    # fixes33 §2.2: nullable — an area delete may unassign its buildings.
+    area_id: Optional[int] = None
     building_name: Optional[str] = None
     building_address: Optional[str] = None
     longitude: Optional[float] = None
