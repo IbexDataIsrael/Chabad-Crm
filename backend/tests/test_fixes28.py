@@ -276,14 +276,26 @@ class TestContactEmailCore:
         r = client.delete(f"/api/contacts/{created['id']}", headers=admin_headers)
         assert r.status_code == 204
 
-    def test_email_has_no_visibility_toggle(self, client, admin_headers):
+    def test_email_now_has_a_visibility_toggle(self, client, admin_headers):
+        # fixes34 §3.1 reverses this round's original decision: phone/email
+        # gained a visibility toggle like every other contact field. The
+        # toggle only ever hides the field from the UI — it never touches
+        # the underlying column, so CRUD (above) is unaffected either way.
         r = client.get("/api/field-settings", headers=admin_headers)
         keys = [f["field_key"] for f in r.json()]
-        assert "contacts.email" not in keys
+        assert "contacts.email" in keys
+        assert "contacts.phone" in keys
 
         r = client.put(
             "/api/field-settings",
             json={"field_key": "contacts.email", "is_visible": False},
             headers=admin_headers,
         )
-        assert r.status_code == 400
+        assert r.status_code == 200, r.text
+
+        r = client.put(
+            "/api/field-settings",
+            json={"field_key": "contacts.email", "is_visible": True},
+            headers=admin_headers,
+        )
+        assert r.status_code == 200, r.text

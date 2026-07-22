@@ -103,7 +103,7 @@ export interface Contact {
   shliach?: Shliach | null;
   special_dates?: SignificantDate[];
   /** Dynamic picklist selections, keyed by system_name. */
-  picklist_values?: Record<string, string>;
+  picklist_values?: Record<string, string | null>;
   /** Enriched by /api/contacts/list only (fixes15 §5.1 grid columns;
    *  fixes18 §3.4 adds the linked admin-area name). */
   building_name?: string | null;

@@ -890,14 +890,16 @@ class ContactOut(ContactBase):
     # ('active' | 'disabled' | 'missing'), driving the row-level suspended
     # notice. None for mekurav rows and outside /list.
     login_status: Optional[str] = None
+    # fixes34 §1.1: dynamic (non-fixed) picklist selections beyond
+    # pipeline_status/color_tag — { system_name: value | None }, populated on
+    # every read path (list + detail), mirroring ApartmentOut.picklist_values.
+    picklist_values: dict[str, Optional[str]] = {}
 
 
 class ContactDetailOut(ContactOut):
     mekurav: Optional[MekuravOut] = None
     shliach: Optional[ShliachOut] = None
     special_dates: list[SignificantDateOut] = []
-    # Dynamic picklist selections: { system_name: value }.
-    picklist_values: dict[str, str] = {}
 
 
 class ContactPageOut(BaseModel):

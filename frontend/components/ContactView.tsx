@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { dotStyle } from "@/lib/colors";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
-import { usePicklist } from "@/lib/picklists";
+import { FIXED_CONTACT_PICKLIST_KEYS, usePicklist, usePicklistsMap } from "@/lib/picklists";
 import {
   apartmentTitle,
   formatCoords,
@@ -17,6 +17,7 @@ import {
   type Apartment,
   type Area,
   type Contact,
+  type PicklistField,
   type ReportNumber,
   type UserSummary,
 } from "@/lib/types";
@@ -50,7 +51,7 @@ export function ContactView({
   users: UserSummary[];
   onPatch?: (partial: ContactPatch) => Promise<void>;
 }) {
-  const { t } = useLocalization();
+  const { t, lang } = useLocalization();
   const { isFieldVisible: vis } = useFieldSettings();
   // The logged-in user's role (distinct from the contact's type).
   const { isShliach: isShliachUser } = useAuth();
@@ -74,6 +75,26 @@ export function ContactView({
     if (!canEdit || !isMekurav || isShliachUser) return;
     apiFetch<AdminArea[]>("/api/admin-areas").then(setAdminAreas).catch(() => {});
   }, [canEdit, isMekurav, isShliachUser]);
+
+  // fixes34 §1.1: any admin-added contact picklist beyond the fixed set.
+  const [customDefs, setCustomDefs] = useState<PicklistField[]>([]);
+  useEffect(() => {
+    apiFetch<PicklistField[]>("/api/picklists")
+      .then((defs) =>
+        setCustomDefs(
+          defs.filter(
+            (d) =>
+              !FIXED_CONTACT_PICKLIST_KEYS.includes(d.field_key) &&
+              !d.field_key.startsWith("apartment.") &&
+              !d.field_key.startsWith("visit.") &&
+              !d.field_key.startsWith("checklist.") &&
+              !d.field_key.startsWith("interaction."),
+          ),
+        ),
+      )
+      .catch(() => setCustomDefs([]));
+  }, []);
+  const customPicklists = usePicklistsMap(customDefs.map((d) => d.field_key));
 
   /** Inline text/textarea editor for a top-level or nested string column. */
   function inlineText(
@@ -231,8 +252,9 @@ export function ContactView({
   );
 
   // fixes15 §4.2: a shliach profile shows only shliach-relevant fields.
-  // fixes28 §1: email is a core identity field (and the shliach login
-  // identity) — always shown, no visibility toggle.
+  // fixes34 §3.1: phone/email gained an org-wide toggle, but a shliach
+  // contact's own profile keeps both force-visible regardless (email doubles
+  // as their login identity) — key stays null (always shown) on purpose.
   const shliachFields: [string | null, string, ReactNode][] = [
     [null, t("contacts.name", "שם פרטי"), nameNode],
     ["contacts.last_name", t("contacts.last_name", "שם משפחה"), lastNameNode],
@@ -246,9 +268,10 @@ export function ContactView({
   const fields: [string | null, string, ReactNode][] = [
     [null, t("contacts.name", "שם פרטי"), nameNode],
     ["contacts.last_name", t("contacts.last_name", "שם משפחה"), lastNameNode],
-    [null, t("contacts.phone", "טלפון"), phoneNode],
-    // fixes28 §1: email is a core CRUD field — always shown, like name/phone.
-    [null, t("contacts.email", "אימייל"), emailNode],
+    // fixes34 §3.1: phone/email are now toggleable (fixes28 §1 made them
+    // permanently visible; this round reverses that per an explicit ask).
+    ["contacts.phone", t("contacts.phone", "טלפון"), phoneNode],
+    ["contacts.email", t("contacts.email", "אימייל"), emailNode],
     [null, t("contacts.contact_type", "סוג איש קשר"), contactType.labelFor(contact.contact_type) || "—"],
     ["contacts.assigned_user_id", t("contacts.assigned_user_id", "משויך ל"), assignedNode],
     [
@@ -403,6 +426,22 @@ export function ContactView({
                 ({ Jewish_status: jewishStatus, affiliation, language }[key] ?? jewishStatus)
                   .labelFor(contact.picklist_values?.[key]) || "—",
                 (v) => ({ picklist_values: { [key]: v } }),
+              ),
+            ],
+          ),
+          // fixes34 §1.1: any admin-added custom contact picklist (the later
+          // `allFields.filter` below applies `vis(d.field_key)`, same as
+          // every other entry keyed by a real field_key).
+          ...customDefs.map(
+            (d): [string | null, string, ReactNode] => [
+              d.field_key,
+              (lang === "en" ? d.english_label || d.label : d.label) || d.field_key,
+              inlinePicklist(
+                d.field_key,
+                contact.picklist_values?.[d.field_key] ?? null,
+                customPicklists.labelFor(d.field_key, contact.picklist_values?.[d.field_key]) ||
+                  "—",
+                (v) => ({ picklist_values: { [d.field_key]: v } }),
               ),
             ],
           ),

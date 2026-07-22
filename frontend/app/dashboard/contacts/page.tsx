@@ -6,7 +6,9 @@ import { useEffect, useRef, useState } from "react";
 
 import { DatePicker } from "@/components/DatePicker";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
+import { PicklistSelect } from "@/components/PicklistSelect";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { InlineEdit } from "@/components/ui/InlineEdit";
 import { VisitForm } from "@/components/VisitForm";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -15,8 +17,13 @@ import { telHref, waHref } from "@/lib/contactActions";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
-import { usePicklist } from "@/lib/picklists";
+import {
+  FIXED_CONTACT_PICKLIST_KEYS,
+  usePicklist,
+  usePicklistsMap,
+} from "@/lib/picklists";
 import { useDbPreference } from "@/lib/preferences";
+import { PHONE_HINT, isValidPhone } from "@/lib/validation";
 import { useToast } from "@/lib/toast";
 import {
   MIVTZOIM_FLAGS,
@@ -27,9 +34,13 @@ import {
   type Contact,
   type ContactPage,
   type CustomFieldDefinition,
+  type PicklistField,
   type UserSummary,
   type Visit,
 } from "@/lib/types";
+
+const inputClass =
+  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 type SortKey = "created" | "name";
 
@@ -62,7 +73,7 @@ const CF_PREFIX = "cf:";
 
 export default function ContactsPage() {
   const router = useRouter();
-  const { t } = useLocalization();
+  const { t, lang } = useLocalization();
   const { user, isShliach } = useAuth();
   const { success, error: toastError } = useToast();
   // fixes30 §2a: which contact the quick add-visit modal is open for.
@@ -122,6 +133,28 @@ export default function ContactsPage() {
   const rebbeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // fixes27 §1: the org's custom fields feed extra מבצעים filter options.
   const [customDefs, setCustomDefs] = useState<CustomFieldDefinition[]>([]);
+  // fixes34 §1.1: any admin-added contact picklist beyond the fixed set —
+  // same mechanism as the apartments page's `customDefs` (fixes32 §6): each
+  // one automatically gets a filter, a column and a CRUD field.
+  const [customPicklistDefs, setCustomPicklistDefs] = useState<PicklistField[]>([]);
+  const [customPicklistFilters, setCustomPicklistFilters] = usePersistentState<
+    Record<string, string[]>
+  >("crm.contacts.customPicklistFilters", {});
+  // fixes34 §1.1: which custom picklists show as table columns — null (unset)
+  // means "all of them", so existing users see no change until they
+  // explicitly hide one via the column-selector panel (mirrors fixes33 §3.1's
+  // apartments.customFields preference).
+  const [visibleCustomPicklistKeys, setVisibleCustomPicklistKeys] = useDbPreference<
+    string[] | null
+  >("contacts.customFields", null);
+  // fixes34 §1.1: field-visibility-aware custom picklists + their options.
+  const orgVisibleCustomPicklistDefs = customPicklistDefs.filter((d) => vis(d.field_key));
+  const customPicklists = usePicklistsMap(
+    orgVisibleCustomPicklistDefs.map((d) => d.field_key),
+  );
+  const visibleCustomPicklistDefs = orgVisibleCustomPicklistDefs.filter(
+    (d) => visibleCustomPicklistKeys == null || visibleCustomPicklistKeys.includes(d.field_key),
+  );
   // fixes25 §4: visit date range (טווח תאריכי ביקור) — only contacts holding a
   // visit inside the range.
   const [visitFrom, setVisitFrom] = usePersistentState<string | null>(
@@ -181,6 +214,23 @@ export default function ContactsPage() {
     apiFetch<CustomFieldDefinition[]>("/api/custom-fields")
       .then(setCustomDefs)
       .catch(() => {});
+    // fixes34 §1.1: any admin-added contact picklist (excludes the fixed
+    // contact ones plus apartment./visit./checklist./interaction.-prefixed
+    // definitions, which belong to other entities' Picklists tabs).
+    apiFetch<PicklistField[]>("/api/picklists")
+      .then((defs) =>
+        setCustomPicklistDefs(
+          defs.filter(
+            (d) =>
+              !FIXED_CONTACT_PICKLIST_KEYS.includes(d.field_key) &&
+              !d.field_key.startsWith("apartment.") &&
+              !d.field_key.startsWith("visit.") &&
+              !d.field_key.startsWith("checklist.") &&
+              !d.field_key.startsWith("interaction."),
+          ),
+        ),
+      )
+      .catch(() => setCustomPicklistDefs([]));
   }, [user]);
 
   // fixes17 §5.1: the persisted filter survives ACROSS logins on a shared
@@ -230,6 +280,14 @@ export default function ContactsPage() {
   // filtering from persisted state the user can no longer see or clear.
   const effectiveStatus = vis("contacts.pipeline_status") ? statusFilter : "";
   const effectiveAdminAreaIds = isShliach ? [] : adminAreaIds;
+  // fixes34 §1.1: a custom picklist filter selection is dropped once its
+  // definition is hidden org-wide (mirrors the effective* pattern above).
+  const visibleCustomPicklistKeySet = new Set(
+    orgVisibleCustomPicklistDefs.map((d) => d.field_key),
+  );
+  const effectiveCustomPicklistFilters = Object.fromEntries(
+    Object.entries(customPicklistFilters).filter(([k]) => visibleCustomPicklistKeySet.has(k)),
+  );
 
   // The list can be narrowed while the controls are collapsed (fixes29 §1) —
   // count the active criteria so the toggle button and the empty state can
@@ -245,7 +303,8 @@ export default function ContactsPage() {
     (effectiveRebbe.trim() ? 1 : 0) +
     (visitFrom || visitTo ? 1 : 0) +
     (effectiveStatus ? 1 : 0) +
-    (assignedFilter ? 1 : 0);
+    (assignedFilter ? 1 : 0) +
+    Object.values(effectiveCustomPicklistFilters).reduce((n, v) => n + v.length, 0);
 
   function clearAllFilters() {
     setQuery("");
@@ -254,6 +313,7 @@ export default function ContactsPage() {
     setBuildingIds([]);
     setAdminAreaIds([]);
     setMitzvotFilter([]);
+    setCustomPicklistFilters({});
     setTzedaka("");
     setTorahFilter([]);
     setRebbeQuery("");
@@ -295,6 +355,11 @@ export default function ContactsPage() {
     // fixes25 §4: visit date range.
     if (visitFrom) params.set("visit_from", visitFrom);
     if (visitTo) params.set("visit_to", visitTo);
+    // fixes34 §1.1: dynamic contact-picklist filters, "field_key:value" pairs
+    // (OR within a field_key, AND across) — mirrors the apartments page.
+    for (const [fieldKey, values] of Object.entries(effectiveCustomPicklistFilters)) {
+      values.forEach((v) => params.append("picklist", `${fieldKey}:${v}`));
+    }
     return params;
   }
 
@@ -335,6 +400,8 @@ export default function ContactsPage() {
     effectiveAdminAreaIds.join(","), effectiveMitzvot.join(","), tzedaka,
     effectiveTorah.join(","), effectiveRebbe,
     visitFrom, visitTo, sort, dir, page, pageSize,
+    // fixes34 §1.1: custom picklist filter selections.
+    JSON.stringify(effectiveCustomPicklistFilters),
   ]);
 
   // fixes15 §5.2: mass email to the WHOLE filtered set via mailto: BCC.
@@ -357,7 +424,8 @@ export default function ContactsPage() {
   // (localStorage) picks among the available ones. Owner is meaningless for
   // a shliach (everything is theirs).
   const availability: Record<ColumnKey, boolean> = {
-    phone: true,
+    // fixes34 §3.1: phone is now toggleable like the other optional columns.
+    phone: vis("contacts.phone"),
     owner: !isShliach,
     // fixes18 §3.4: the admin-areas section is blocked for shliach (fixes10).
     admin_area: !isShliach && vis("contact_mekurav.admin_area_id"),
@@ -381,7 +449,7 @@ export default function ContactsPage() {
     (k) => availability[k] && columns.includes(k),
   );
   // name + actions + quick actions + the trailing filler column.
-  const colCount = 4 + activeColumns.length;
+  const colCount = 4 + activeColumns.length + visibleCustomPicklistDefs.length;
 
   function toggleColumn(k: ColumnKey) {
     setColumns((prev) =>
@@ -389,10 +457,96 @@ export default function ContactsPage() {
     );
   }
 
+  // fixes34 §1.1: one-field inline save straight from the list row — contacts
+  // aren't versioned (unlike apartments), so a plain PATCH suffices; merge
+  // the response back into the row in place so scroll/filters/page stay put.
+  async function saveField(c: Contact, body: Record<string, unknown>) {
+    const saved = await apiFetch<Contact>(`/api/contacts/${c.id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+    setContacts((prev) => prev.map((it) => (it.id === c.id ? { ...it, ...saved } : it)));
+  }
+
+  const inlineTextCell = (
+    c: Contact,
+    field: "phone" | "address",
+    opts: { dir?: "ltr"; validate?: (v: string) => string | null } = {},
+  ) => (
+    <InlineEdit<string>
+      value={(c[field] as string | null) ?? ""}
+      display={c[field] ? <span dir={opts.dir}>{c[field] as string}</span> : "—"}
+      validate={opts.validate}
+      onSave={(v) => saveField(c, { [field]: v.trim() || null })}
+      editor={(draft, setDraft) => (
+        <input
+          className={inputClass}
+          dir={opts.dir}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+        />
+      )}
+    />
+  );
+
+  const inlinePriorityCell = (c: Contact) => (
+    <InlineEdit<string>
+      value={c.priority_score != null ? String(c.priority_score) : ""}
+      display={c.priority_score ?? "—"}
+      onSave={(v) =>
+        saveField(c, { priority_score: v.trim() === "" ? null : Number(v.trim()) })
+      }
+      editor={(draft, setDraft) => (
+        <input
+          type="number"
+          className={inputClass}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+        />
+      )}
+    />
+  );
+
+  const inlineStatusCell = (c: Contact) => (
+    <InlineEdit<string | null>
+      value={c.pipeline_status ?? null}
+      display={statusLabel(c.pipeline_status) || "—"}
+      commitOnBlur={false}
+      onSave={(v) => saveField(c, { pipeline_status: v })}
+      editor={(draft, _setDraft, commit) => (
+        <PicklistSelect
+          fieldKey="contact.pipeline_status"
+          value={draft}
+          onChange={commit}
+        />
+      )}
+    />
+  );
+
+  // fixes34 §1.1: same InlineEdit + PicklistSelect pattern for any admin-added
+  // custom contact picklist column.
+  const inlineCustomPicklistCell = (c: Contact, d: PicklistField) => (
+    <InlineEdit<string | null>
+      value={c.picklist_values?.[d.field_key] ?? null}
+      display={customPicklists.labelFor(d.field_key, c.picklist_values?.[d.field_key]) || "—"}
+      commitOnBlur={false}
+      onSave={(v) => saveField(c, { picklist_values: { [d.field_key]: v } })}
+      editor={(draft, _setDraft, commit) => (
+        <PicklistSelect fieldKey={d.field_key} value={draft} onChange={commit} />
+      )}
+    />
+  );
+
   function cell(c: Contact, k: ColumnKey) {
     switch (k) {
       case "phone":
-        return <span dir="ltr">{c.phone}</span>;
+        return inlineTextCell(c, "phone", {
+          dir: "ltr",
+          validate: (v) =>
+            v.trim() === "" || isValidPhone(v.trim())
+              ? null
+              : t("validation.phone_hint", PHONE_HINT),
+        });
       case "owner":
         return ownerName(c.assigned_user_id);
       case "admin_area":
@@ -404,11 +558,11 @@ export default function ContactsPage() {
           <span dir="ltr">{new Date(c.created_at).toLocaleDateString("he-IL")}</span>
         );
       case "status":
-        return statusLabel(c.pipeline_status);
+        return inlineStatusCell(c);
       case "priority":
-        return c.priority_score ?? "";
+        return inlinePriorityCell(c);
       case "address":
-        return c.address ?? "—";
+        return inlineTextCell(c, "address");
     }
   }
 
@@ -527,6 +681,23 @@ export default function ContactsPage() {
             }}
           />
         )}
+        {/* fixes34 §1.1: one filter per admin-added contact picklist (an
+            org-hidden one is excluded via orgVisibleCustomPicklistDefs). */}
+        {orgVisibleCustomPicklistDefs.map((d) => {
+          const opts = customPicklists.map[d.field_key] ?? [];
+          return (
+            <MultiSelectFilter
+              key={d.field_key}
+              allLabel={(lang === "en" ? d.english_label || d.label : d.label) || d.field_key}
+              options={opts.map((o) => ({ id: o.value, label: customPicklists.display(o) }))}
+              value={customPicklistFilters[d.field_key] ?? []}
+              onChange={(vals) => {
+                setCustomPicklistFilters((prev) => ({ ...prev, [d.field_key]: vals }));
+                setPage(1);
+              }}
+            />
+          );
+        })}
         <input
           className={`${selectClass} flex-1 min-w-[12rem]`}
           placeholder={t("filter.search_contacts", "חיפוש לפי שם, טלפון או אימייל…")}
@@ -767,6 +938,37 @@ export default function ContactsPage() {
                 </button>
               );
             })}
+            {/* fixes34 §1.1: one toggle chip per admin-added contact
+                picklist — same "contacts.customFields" preference the
+                filter/column rendering below consults. */}
+            {orgVisibleCustomPicklistDefs.map((d) => {
+              const on =
+                visibleCustomPicklistKeys == null ||
+                visibleCustomPicklistKeys.includes(d.field_key);
+              return (
+                <button
+                  key={d.field_key}
+                  type="button"
+                  onClick={() =>
+                    setVisibleCustomPicklistKeys((prev) => {
+                      const current =
+                        prev ?? orgVisibleCustomPicklistDefs.map((cd) => cd.field_key);
+                      return current.includes(d.field_key)
+                        ? current.filter((k) => k !== d.field_key)
+                        : [...current, d.field_key];
+                    })
+                  }
+                  className={`rounded-md border px-3 py-1.5 text-sm ${
+                    on
+                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
+                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {on ? "✓ " : ""}
+                  {(lang === "en" ? d.english_label || d.label : d.label) || d.field_key}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -815,6 +1017,13 @@ export default function ContactsPage() {
                   {columnLabels[k]}
                 </th>
               ))}
+              {/* fixes34 §1.1: one column per admin-added contact picklist
+                  the column-selector panel has left switched on. */}
+              {visibleCustomPicklistDefs.map((d) => (
+                <th key={d.field_key} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
+                  {(lang === "en" ? d.english_label || d.label : d.label) || d.field_key}
+                </th>
+              ))}
               <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap"></th>
               <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap"></th>
               <th className="w-full"></th>
@@ -860,14 +1069,24 @@ export default function ContactsPage() {
                   className="border-t border-gray-100 cursor-pointer hover:bg-gray-50/80"
                 >
                   <td
-                    className="px-3 py-1.5 font-medium text-status-magenta underline max-w-[11rem] truncate"
+                    className="px-3 py-1.5 font-medium max-w-[11rem] truncate"
                     title={contactFullName(c)}
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    {contactFullName(c)}
+                    <ContactNameCell
+                      c={c}
+                      onSave={(v) => saveField(c, { name: v })}
+                    />
                   </td>
                   {activeColumns.map((k) => (
                     <td key={k} className="px-3 py-1.5 w-px whitespace-nowrap">
                       {cell(c, k)}
+                    </td>
+                  ))}
+                  {/* fixes34 §1.1: custom picklist columns. */}
+                  {visibleCustomPicklistDefs.map((d) => (
+                    <td key={d.field_key} className="px-3 py-1.5 w-px whitespace-nowrap">
+                      {inlineCustomPicklistCell(c, d)}
                     </td>
                   ))}
                   {/* fixes15 §5.2: single-click call / WhatsApp / email. */}
@@ -959,5 +1178,90 @@ export default function ContactsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/** fixes34 §1.1: the name cell stays the primary navigation target (unchanged
+ *  click behavior) with a separate hover-pencil icon that opens inline edit of
+ *  the primary `name` field in place — mirrors ApartmentNameCell (apartments
+ *  page, fixes32 §6). `last_name` keeps editing only on the full detail page. */
+function ContactNameCell({
+  c,
+  onSave,
+}: {
+  c: Contact;
+  onSave: (v: string | null) => Promise<void>;
+}) {
+  const { t } = useLocalization();
+  const { error: toastError } = useToast();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(c.name ?? "");
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  async function commit() {
+    if (saving) return;
+    const next = draft.trim() || null;
+    if (next === (c.name ?? null)) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(next);
+      setEditing(false);
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        className="rounded-md border border-status-magenta px-1.5 py-0.5 text-sm w-28 focus:outline-none"
+        value={draft}
+        disabled={saving}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            void commit();
+          } else if (e.key === "Escape") {
+            setDraft(c.name ?? "");
+            setEditing(false);
+          }
+        }}
+      />
+    );
+  }
+
+  return (
+    <span className="group inline-flex items-center gap-1">
+      <Link
+        href={`/dashboard/contacts/${c.id}`}
+        className="text-status-magenta hover:underline"
+      >
+        {contactFullName(c)}
+      </Link>
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(c.name ?? "");
+          setEditing(true);
+        }}
+        title={t("inline.click_to_edit", "לחץ לעריכה")}
+        className="text-xs text-gray-300 opacity-0 group-hover:opacity-100 hover:text-status-magenta"
+      >
+        ✎
+      </button>
+    </span>
   );
 }

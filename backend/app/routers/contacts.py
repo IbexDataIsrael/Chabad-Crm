@@ -138,9 +138,16 @@ def _split_contact_link_changes(data: dict) -> dict[str, Optional[str]]:
 
 def _apply_contact_picklist_fields(out, values: dict[str, Optional[str]]) -> None:
     """Populate an out schema's pipeline_status/color_tag fields from a
-    resolved {field_key: value} map (fixes32 — no longer real columns)."""
+    resolved {field_key: value} map (fixes32 — no longer real columns), plus
+    (fixes34 §1.1) every other resolved picklist (custom, admin-added contact
+    picklists) into `out.picklist_values` — mirroring
+    apartments._apply_picklist_fields exactly, so the contacts list/detail
+    payloads carry custom picklist values the same way apartments already do."""
     for field, field_key in _CONTACT_LINK_FIELDS.items():
         setattr(out, field, values.get(field_key))
+    out.picklist_values = {
+        k: v for k, v in values.items() if k not in _CONTACT_LINK_FIELDS.values()
+    }
 
 
 def _check_phone_unique(
@@ -199,14 +206,6 @@ def _validate_admin_area(admin_area_id: Optional[int], org_id: int, db: Session)
 
 
 # --- Dynamic picklist values (generic store) -------------------------------
-def _picklist_values_map(db: Session, contact: models.Contact) -> dict[str, str]:
-    """The contact's selected *dynamic* picklist values (system + any
-    admin-added custom list), keyed by system_name — excludes pipeline_status
-    /color_tag, which keep their own dedicated ContactOut fields."""
-    values = picklist_utils.get_values(db, contact.organization_id, "contacts", contact.id)
-    return {k: v for k, v in values.items() if k not in _CONTACT_LINK_FIELDS.values()}
-
-
 def _apply_picklist_values(
     db: Session, org_id: int, contact: models.Contact, values: dict
 ) -> None:
@@ -267,7 +266,6 @@ def _build_detail(contact: models.Contact, db: Session) -> ContactDetailOut:
             area_ids=[a.area_id for a in contact.shliach.areas],
             login_status=_shliach_login_status(contact, db),
         )
-    detail.picklist_values = _picklist_values_map(db, contact)
     return detail
 
 
@@ -498,6 +496,7 @@ def _contacts_query(
     torah_thought: Optional[list[str]] = None,
     connection_to_rebbe: Optional[str] = None,
     custom_fields: Optional[list[str]] = None,
+    picklist: Optional[list[str]] = None,
 ):
     """The org-scoped, filtered, shliach-aware contacts query (shared by the
     plain list, the paginated list and the bulk-email address list).
@@ -758,6 +757,24 @@ def _contacts_query(
                     )
                 )
             )
+    # fixes34 §1.1: dynamic filter for any custom (org-added) contact
+    # picklist, sent as repeated "field_key:value" pairs (OR within a
+    # field_key, AND across) — mirrors apartments' `picklist` param exactly.
+    if picklist:
+        by_key: dict[str, list[str]] = {}
+        for entry in picklist:
+            key, sep, value = entry.partition(":")
+            if sep:
+                by_key.setdefault(key, []).append(value)
+        for field_key, values in by_key.items():
+            if values:
+                query = query.filter(
+                    models.Contact.id.in_(
+                        picklist_utils.matching_entity_ids(
+                            "contacts", field_key, values
+                        )
+                    )
+                )
     # fixes25 §4: visit date range (טווח תאריכי ביקור) — only contacts holding
     # at least one visit inside the range (the spec's inner-join semantics).
     if visit_from is not None or visit_to is not None:
@@ -881,6 +898,7 @@ def list_contacts_paginated(
     torah_thought: Optional[list[str]] = Query(None),
     connection_to_rebbe: Optional[str] = None,
     custom_fields: Optional[list[str]] = Query(None),
+    picklist: Optional[list[str]] = Query(None),
     sort: Literal["name", "created"] = "name",
     dir: Literal["asc", "desc"] = "asc",
     page: int = Query(1, ge=1),
@@ -901,7 +919,7 @@ def list_contacts_paginated(
         mitzvot=mitzvot, tzedaka_potential=tzedaka_potential,
         admin_area_ids=admin_area_ids, visit_from=visit_from, visit_to=visit_to,
         torah_thought=torah_thought, connection_to_rebbe=connection_to_rebbe,
-        custom_fields=custom_fields,
+        custom_fields=custom_fields, picklist=picklist,
     )
     total = query.count()
     key = models.Contact.created_at if sort == "created" else models.Contact.name
@@ -948,6 +966,7 @@ def list_contact_emails(
     torah_thought: Optional[list[str]] = Query(None),
     connection_to_rebbe: Optional[str] = None,
     custom_fields: Optional[list[str]] = Query(None),
+    picklist: Optional[list[str]] = Query(None),
 ):
     """The distinct email addresses of every contact matching the same filter
     set as /list (fixes15 §5.2) — feeds the bulk `mailto:` BCC action, so it
@@ -958,6 +977,7 @@ def list_contact_emails(
         mitzvot=mitzvot, tzedaka_potential=tzedaka_potential,
         admin_area_ids=admin_area_ids, torah_thought=torah_thought,
         connection_to_rebbe=connection_to_rebbe, custom_fields=custom_fields,
+        picklist=picklist,
     )
     rows = (
         query.filter(models.Contact.email.isnot(None), models.Contact.email != "")

@@ -19,6 +19,19 @@ export const FIXED_APARTMENT_PICKLIST_KEYS = [
   "apartment.language",
 ];
 
+// fixes34 §1.1: the contact-side equivalent — every picklist with a
+// dedicated field somewhere in the contact UI already (pipeline/color/
+// next-step, plus the 3 bare-named mekurav ones); anything else is a custom,
+// admin-added contact picklist, auto-wired wherever this constant filters it in.
+export const FIXED_CONTACT_PICKLIST_KEYS = [
+  "contact.pipeline_status",
+  "contact.color_tag",
+  "contact.potential_next_step",
+  "Jewish_status",
+  "affiliation",
+  "language",
+];
+
 /** Render a picklist option in the given language (English value falls back
  *  to Hebrew). Shared by the hook and non-hook callers (fixes24: the PDF
  *  generator fetches its picklists imperatively). */

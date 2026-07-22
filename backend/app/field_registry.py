@@ -6,8 +6,10 @@ Each entry is (field_key, label_key, entity):
   - entity     — groups fields in the admin UI ('contact' | 'contact_mekurav' |
                  'contact_shliach' | 'building' | 'apartment').
 
-Required identity fields (name, phone) and the contact_type selector are
-intentionally excluded — they can never be hidden.
+The contact `name` field and the `contact_type` selector are intentionally
+excluded — they can never be hidden. (fixes34 §3.1: `phone`/`email` used to be
+excluded on the same grounds — see the `contacts.phone`/`contacts.email`
+entries below for why that changed.)
 
 A field listed in DEFAULT_HIDDEN starts hidden for every org (fixes7: building
 and apartment name labels are concealed by default); absence of a field_settings
@@ -18,9 +20,14 @@ TOGGLEABLE_FIELDS: list[tuple[str, str, str]] = [
     # fixes19 §5: the entire mekurav layout area (one section-level switch,
     # hidden by default — see DEFAULT_HIDDEN).
     ("contact_mekurav.section", "contact_mekurav.section", "contact_mekurav"),
-    # Core contact — email is NOT here (fixes28 §1): like name and phone it is
-    # a core identity field (and the shliach login identity) and can't be hidden.
     ("contacts.last_name", "contacts.last_name", "contact"),
+    # fixes34 §3.1: phone/email are now toggleable too — this reverses fixes28
+    # §1's "core identity field, can't be hidden" decision, per an explicit
+    # spec ask. The toggle only ever governs UI rendering (CRUD forms,
+    # filters, columns); it never touches the DB column, so it can't break a
+    # shliach's email-based login identity even when hidden from their form.
+    ("contacts.phone", "contacts.phone", "contact"),
+    ("contacts.email", "contacts.email", "contact"),
     ("contacts.assigned_user_id", "contacts.assigned_user_id", "contact"),
     ("contacts.pipeline_status", "contacts.pipeline_status", "contact"),
     ("contacts.color_tag", "contacts.color_tag", "contact"),

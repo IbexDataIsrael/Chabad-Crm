@@ -13,7 +13,11 @@ import { useAuth } from "@/lib/auth";
 import { mapsHref } from "@/lib/contactActions";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
-import { usePicklist } from "@/lib/picklists";
+import {
+  FIXED_APARTMENT_PICKLIST_KEYS,
+  usePicklist,
+  usePicklistsMap,
+} from "@/lib/picklists";
 import { useToast } from "@/lib/toast";
 import {
   EMAIL_HINT,
@@ -29,6 +33,7 @@ import {
   type ApartmentVersion,
   type Building,
   type Floor,
+  type PicklistField,
   type ReportNumber,
 } from "@/lib/types";
 
@@ -41,7 +46,7 @@ const inputClass =
 export default function ApartmentDetailPage() {
   const router = useRouter();
   const { loading, isAdmin, isShliach } = useAuth();
-  const { t } = useLocalization();
+  const { t, lang } = useLocalization();
   const { isFieldVisible: vis } = useFieldSettings();
   const { success } = useToast();
   const params = useParams<{ id: string }>();
@@ -61,11 +66,18 @@ export default function ApartmentDetailPage() {
   // and the org's buildings (same feeds as ApartmentEditor).
   const [floors, setFloors] = useState<Floor[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
+  // fixes34 §2.1: any admin-added apartment.* picklist beyond the fixed 4 —
+  // same mechanism as the apartments list grid / ApartmentEditor, so a
+  // custom picklist shows up here too with no further code changes.
+  const [customDefs, setCustomDefs] = useState<PicklistField[]>([]);
 
   const { labelFor: jewishLabel } = usePicklist("apartment.Jewish_status");
   const { labelFor: campaignLabel } = usePicklist("apartment.campaign_status");
   const { labelFor: mezuzahLabel } = usePicklist("apartment.mezuzah_status");
   const { labelFor: languageLabel } = usePicklist("apartment.language");
+  const { labelFor: customLabel } = usePicklistsMap(
+    customDefs.map((d) => d.field_key),
+  );
 
   async function reload() {
     const a = await apiFetch<Apartment>(`/api/apartments/${apartmentId}`);
@@ -75,6 +87,14 @@ export default function ApartmentDetailPage() {
       await apiFetch<Floor[]>(`/api/buildings/${a.building_id}/floors`).catch(() => []),
     );
     setBuildings(await apiFetch<Building[]>("/api/buildings").catch(() => []));
+    const defs = await apiFetch<PicklistField[]>("/api/picklists").catch(() => []);
+    setCustomDefs(
+      defs.filter(
+        (d) =>
+          d.field_key.startsWith("apartment.") &&
+          !FIXED_APARTMENT_PICKLIST_KEYS.includes(d.field_key),
+      ),
+    );
     // The linked contact comes from the enriched list (shliach-scoped too);
     // apartment_id fetches just this row instead of the whole building (fixes8).
     const enriched = await apiFetch<ApartmentPage>(
@@ -414,6 +434,28 @@ export default function ApartmentDetailPage() {
                 languageLabel,
               ),
             )}
+            {customDefs
+              .filter((d) => vis(d.field_key))
+              .map((d) => (
+                <div key={d.field_key}>
+                  <dt className="text-gray-500">
+                    {(lang === "en" ? d.english_label || d.label : d.label) ||
+                      d.field_key}
+                  </dt>
+                  <dd className="font-medium">
+                    <InlineEdit<string | null>
+                      value={apt.picklist_values?.[d.field_key] ?? null}
+                      display={customLabel(d.field_key, apt.picklist_values?.[d.field_key]) || "—"}
+                      commitOnBlur={false}
+                      disabled={!editable}
+                      onSave={(v) => patch({ picklist_values: { [d.field_key]: v } })}
+                      editor={(draft, _setDraft, commit) => (
+                        <PicklistSelect fieldKey={d.field_key} value={draft} onChange={commit} />
+                      )}
+                    />
+                  </dd>
+                </div>
+              ))}
             {field(
               "apartments.report_number_id",
               "apartments.report_number_id",

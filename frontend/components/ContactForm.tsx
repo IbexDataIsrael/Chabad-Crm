@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
+import { FIXED_CONTACT_PICKLIST_KEYS } from "@/lib/picklists";
 import { isValidPhone } from "@/lib/validation";
 import {
   formatCoords,
@@ -14,6 +15,7 @@ import {
   type AdminArea,
   type Contact,
   type ContactType,
+  type PicklistField,
   type UserSummary,
 } from "@/lib/types";
 import { AddressAutocomplete } from "./AddressAutocomplete";
@@ -80,7 +82,7 @@ export function ContactForm({
   submitLabel: string;
   extra?: ReactNode;
 }) {
-  const { t } = useLocalization();
+  const { t, lang } = useLocalization();
   const { isFieldVisible: vis } = useFieldSettings();
   // The logged-in user's role (distinct from isShliach = the contact's type).
   const { isShliach: isShliachUser } = useAuth();
@@ -132,6 +134,26 @@ export function ContactForm({
     if (!isMekurav || isShliachUser) return;
     apiFetch<AdminArea[]>("/api/admin-areas").then(setAdminAreas).catch(() => {});
   }, [isMekurav, isShliachUser]);
+
+  // fixes34 §1.1: any admin-added contact picklist beyond the fixed set —
+  // same mechanism as ApartmentEditor's `customDefs` (fixes32-stillnotdone §2).
+  const [customDefs, setCustomDefs] = useState<PicklistField[]>([]);
+  useEffect(() => {
+    apiFetch<PicklistField[]>("/api/picklists")
+      .then((defs) =>
+        setCustomDefs(
+          defs.filter(
+            (d) =>
+              !FIXED_CONTACT_PICKLIST_KEYS.includes(d.field_key) &&
+              !d.field_key.startsWith("apartment.") &&
+              !d.field_key.startsWith("visit.") &&
+              !d.field_key.startsWith("checklist.") &&
+              !d.field_key.startsWith("interaction."),
+          ),
+        ),
+      )
+      .catch(() => setCustomDefs([]));
+  }, []);
 
   function set<K extends keyof ContactFormValues>(key: K, v: ContactFormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: v }));
@@ -191,29 +213,35 @@ export function ContactForm({
       )}
 
       {/* fixes26 §2: phone is optional — empty is fine, a provided value must
-          still pass validation (mirrors the backend). */}
-      <Field label={t("contacts.phone", "טלפון")}>
-        <PhoneInput
-          value={values.phone}
-          onChange={(v) => set("phone", v)}
-          onValidityChange={setPhoneValid}
-        />
-      </Field>
+          still pass validation (mirrors the backend). fixes34 §3.1: now
+          toggleable like every other field. */}
+      {(vis("contacts.phone") || isShliach) && (
+        <Field label={t("contacts.phone", "טלפון")}>
+          <PhoneInput
+            value={values.phone}
+            onChange={(v) => set("phone", v)}
+            onValidityChange={setPhoneValid}
+          />
+        </Field>
+      )}
 
-      {/* fixes28 §1: email is a core CRUD field — always shown, like name and
-          phone. For a shliach it is also the login identity (required). */}
-      <Field
-        label={
-          t("contacts.email", "אימייל") +
-          (isShliach ? ` (${t("contacts.email_for_login", "להתחברות")})` : "")
-        }
-      >
-        <EmailInput
-          value={values.email ?? ""}
-          onChange={(v) => set("email", v || null)}
-          required={isShliach}
-        />
-      </Field>
+      {/* fixes34 §3.1: email is now toggleable too — but a shliach contact's
+          email is also their login identity, so it stays force-visible (and
+          required) on a shliach's own form regardless of the org's toggle. */}
+      {(vis("contacts.email") || isShliach) && (
+        <Field
+          label={
+            t("contacts.email", "אימייל") +
+            (isShliach ? ` (${t("contacts.email_for_login", "להתחברות")})` : "")
+          }
+        >
+          <EmailInput
+            value={values.email ?? ""}
+            onChange={(v) => set("email", v || null)}
+            required={isShliach}
+          />
+        </Field>
+      )}
 
       {/* Ownership is forced server-side for shliach users — no picker. */}
       {vis("contacts.assigned_user_id") && !isShliachUser && (
@@ -423,6 +451,22 @@ export function ContactForm({
               />
             </Field>
           ))}
+
+          {/* fixes34 §1.1: any admin-added custom contact picklist. */}
+          {customDefs
+            .filter((d) => vis(d.field_key))
+            .map((d) => (
+              <Field
+                key={d.field_key}
+                label={(lang === "en" ? d.english_label || d.label : d.label) || d.field_key}
+              >
+                <PicklistSelect
+                  fieldKey={d.field_key}
+                  value={values.picklist_values[d.field_key] ?? null}
+                  onChange={(v) => setPicklistValue(d.field_key, v)}
+                />
+              </Field>
+            ))}
         </>
       )}
 
