@@ -727,12 +727,20 @@ class FieldSetting(Base):
 
 
 class CustomFieldDefinition(Base):
-    """Admin-defined per-org custom checklist field (a boolean + a note)."""
+    """Admin-defined per-org custom field (fixes35: any of `entity_type` x
+    `field_type`; originally visit-only boolean+note, generalized in place).
+
+    `field_type == "select"` is special: its options and selected values
+    live entirely in `PicklistDefinition`/`PicklistValue`/`PicklistLink`
+    (this definition just derives that picklist's `system_name` by
+    convention — see `app/custom_field_utils.py`) — no `CustomFieldValue`
+    row is ever written for a select-type definition."""
 
     __tablename__ = "custom_field_definitions"
     __table_args__ = (
         UniqueConstraint(
-            "organization_id", "field_key", name="uq_customfield_org_key"
+            "organization_id", "entity_type", "field_key",
+            name="uq_customfield_org_entity_key",
         ),
     )
 
@@ -741,8 +749,15 @@ class CustomFieldDefinition(Base):
     organization_id = Column(
         Integer, ForeignKey("organizations.id"), nullable=False, index=True
     )
+    # fixes35: which entity this field attaches to. Existing (pre-fixes35)
+    # rows are all visit-scoped — default preserves that with zero backfill.
+    entity_type = Column(String(30), nullable=False, default="visit")
     field_key = Column(String(100), nullable=False)  # technical key, e.g. 'hanuka_party'
     hebrew_label = Column(String(100), nullable=False)
+    english_label = Column(String(100), nullable=True)
+    # fixes35: text | number | boolean | date | select. Existing rows are all
+    # the original boolean+note checklist shape.
+    field_type = Column(String(20), nullable=False, default="boolean")
     sort_order = Column(Integer, default=0, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
@@ -755,27 +770,50 @@ class CustomFieldDefinition(Base):
 
 
 class CustomFieldValue(Base):
-    """A visit's value for a custom field definition (checkbox + note).
+    """One entity's value for a custom field definition (fixes35: any
+    non-select field_type; select-type values live in PicklistLink instead).
 
-    fixes25: values used to attach to contacts; they now attach to visits."""
+    `entity_table`/`entity_id` (no real FK — polymorphic across several
+    parent tables, mirrors `PicklistLink`) is the current, generic lookup
+    key. `visit_id`/`checked`/`note` are the original (fixes25) boolean+note
+    visit-only shape — kept, and still populated whenever
+    `entity_table == "visit_history"`, purely so `VisitHistory.custom_values`
+    (the visit-delete cascade) and any pre-fixes35 backup snapshot keep
+    working unchanged. New non-visit or non-boolean values only ever use
+    `entity_table`/`entity_id`/`value`."""
 
     __tablename__ = "custom_field_values"
     __table_args__ = (
         UniqueConstraint(
-            "visit_id", "definition_id", name="uq_customval_visit_def"
+            "entity_table", "entity_id", "definition_id",
+            name="uq_customval_entity_def",
         ),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     guid = _guid_column()
+    # fixes35: every other org-scoped model carries its own organization_id
+    # (this one didn't, which is why core/backup.py and routers/admin.py both
+    # had to special-case it via a visit_id join — this column removes the
+    # need for that).
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    entity_table = Column(String(50), nullable=True, index=True)
+    entity_id = Column(Integer, nullable=True, index=True)
+    # Legacy (fixes25): kept for VisitHistory's cascade relationship below and
+    # for restoring pre-fixes35 backup snapshots — never read by new code.
     visit_id = Column(
-        Integer, ForeignKey("visit_history.id"), nullable=False, index=True
+        Integer, ForeignKey("visit_history.id"), nullable=True, index=True
     )
     definition_id = Column(
         Integer, ForeignKey("custom_field_definitions.id"), nullable=False, index=True
     )
     checked = Column(Boolean, default=False, nullable=False)
     note = Column(Text, nullable=True)
+    # fixes35: text/number/date storage as a string (parsed/validated at the
+    # API boundary, exactly like PicklistValue.value has no DB-level type).
+    value = Column(Text, nullable=True)
 
     visit = relationship("VisitHistory", back_populates="custom_values")
     definition = relationship("CustomFieldDefinition", back_populates="values")

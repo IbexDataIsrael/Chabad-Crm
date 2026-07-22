@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useCustomFieldDefs } from "@/lib/customFields";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { FIXED_CONTACT_PICKLIST_KEYS } from "@/lib/picklists";
@@ -15,12 +16,14 @@ import {
   type AdminArea,
   type Contact,
   type ContactType,
+  type CustomFieldValueMap,
   type PicklistField,
   type UserSummary,
 } from "@/lib/types";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ApartmentPicker } from "./ApartmentPicker";
 import { AreaMultiSelect } from "./AreaMultiSelect";
+import { CustomFieldValueInput } from "./CustomFieldValueInput";
 import { DatePicker } from "./DatePicker";
 import { EmailInput } from "./EmailInput";
 import { PhoneInput } from "./PhoneInput";
@@ -64,6 +67,9 @@ export interface ContactFormValues {
   shliach: ShliachFormValues;
   /** Dynamic picklist selections by system_name. */
   picklist_values: Record<string, string | null>;
+  /** fixes35: non-select custom field values (contact_mekurav or
+   *  contact_shliach, matching this contact's own contact_type). */
+  custom_field_values: CustomFieldValueMap;
 }
 
 const inputClass =
@@ -115,6 +121,7 @@ export function ContactForm({
       password: null,
     },
     picklist_values: { ...(initial?.picklist_values ?? {}) },
+    custom_field_values: { ...(initial?.custom_field_values ?? {}) },
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -148,15 +155,42 @@ export function ContactForm({
               !d.field_key.startsWith("apartment.") &&
               !d.field_key.startsWith("visit.") &&
               !d.field_key.startsWith("checklist.") &&
-              !d.field_key.startsWith("interaction."),
+              !d.field_key.startsWith("interaction.") &&
+              !d.field_key.startsWith("shliach."),
           ),
         ),
       )
       .catch(() => setCustomDefs([]));
   }, []);
 
+  // fixes35: any non-select custom field for whichever contact_type applies.
+  const mekuravCustomFieldDefs = useCustomFieldDefs("contact_mekurav").filter(
+    (d) => d.field_type !== "select",
+  );
+  const shliachCustomFieldDefs = useCustomFieldDefs("contact_shliach").filter(
+    (d) => d.field_type !== "select",
+  );
+  // fixes35 §5: contact_shliach's own select-type custom picklists — the one
+  // dynamic-picklist bucket that didn't exist anywhere in this form before
+  // (mekurav's own customDefs above deliberately excludes shliach.* already).
+  const [shliachPicklistDefs, setShliachPicklistDefs] = useState<PicklistField[]>([]);
+  useEffect(() => {
+    apiFetch<PicklistField[]>("/api/picklists")
+      .then((defs) =>
+        setShliachPicklistDefs(defs.filter((d) => d.field_key.startsWith("shliach."))),
+      )
+      .catch(() => setShliachPicklistDefs([]));
+  }, []);
+
   function set<K extends keyof ContactFormValues>(key: K, v: ContactFormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: v }));
+  }
+
+  function setCustomFieldValue(fieldKey: string, v: string | number | boolean | null) {
+    setValues((prev) => ({
+      ...prev,
+      custom_field_values: { ...prev.custom_field_values, [fieldKey]: v },
+    }));
   }
 
   function setMekurav<K extends keyof MekuravFormValues>(key: K, v: MekuravFormValues[K]) {
@@ -467,6 +501,25 @@ export function ContactForm({
                 />
               </Field>
             ))}
+
+          {/* fixes35: any non-select custom field for mekurav contacts. */}
+          {mekuravCustomFieldDefs
+            .filter((d) => vis(`customfield.contact_mekurav.${d.field_key}`))
+            .map((d) => (
+              <Field
+                key={d.field_key}
+                label={
+                  (lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
+                  d.field_key
+                }
+              >
+                <CustomFieldValueInput
+                  fieldType={d.field_type}
+                  value={values.custom_field_values[d.field_key] ?? null}
+                  onChange={(v) => setCustomFieldValue(d.field_key, v)}
+                />
+              </Field>
+            ))}
         </>
       )}
 
@@ -531,6 +584,41 @@ export function ContactForm({
               </Field>
             </div>
           )}
+
+          {/* fixes35 §5: any admin-added shliach.* custom picklist. */}
+          {shliachPicklistDefs
+            .filter((d) => vis(d.field_key))
+            .map((d) => (
+              <Field
+                key={d.field_key}
+                label={(lang === "en" ? d.english_label || d.label : d.label) || d.field_key}
+              >
+                <PicklistSelect
+                  fieldKey={d.field_key}
+                  value={values.picklist_values[d.field_key] ?? null}
+                  onChange={(v) => setPicklistValue(d.field_key, v)}
+                />
+              </Field>
+            ))}
+
+          {/* fixes35: any non-select custom field for shliach contacts. */}
+          {shliachCustomFieldDefs
+            .filter((d) => vis(`customfield.contact_shliach.${d.field_key}`))
+            .map((d) => (
+              <Field
+                key={d.field_key}
+                label={
+                  (lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
+                  d.field_key
+                }
+              >
+                <CustomFieldValueInput
+                  fieldType={d.field_type}
+                  value={values.custom_field_values[d.field_key] ?? null}
+                  onChange={(v) => setCustomFieldValue(d.field_key, v)}
+                />
+              </Field>
+            ))}
         </>
       )}
 

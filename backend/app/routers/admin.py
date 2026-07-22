@@ -87,19 +87,11 @@ def _delete_organization_cascade(db: Session, org_id: int) -> None:
     """Delete an org and every row that belongs to it, children first.
 
     The FKs to `organizations` have no DB-level ON DELETE CASCADE, so we remove
-    dependents in an order that never violates a foreign key. One table
-    (custom_field_values) carries no organization_id — it is scoped through
-    its visit (fixes25).
+    dependents in an order that never violates a foreign key.
     """
-    visit_ids = db.query(models.VisitHistory.id).filter(
-        models.VisitHistory.organization_id == org_id
-    )
-    db.query(models.CustomFieldValue).filter(
-        models.CustomFieldValue.visit_id.in_(visit_ids)
-    ).delete(synchronize_session=False)
-
     # Org-scoped tables, leaves → roots.
     ordered_models = [
+        models.CustomFieldValue,  # fixes35: gained its own organization_id
         models.PicklistLink,  # fixes32: replaces ContactPicklistValue (generic now)
         models.ContactMekuravSpecialDate,
         models.SignificantDateReminder,

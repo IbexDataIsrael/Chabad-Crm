@@ -5,6 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { dotStyle } from "@/lib/colors";
+import { useCustomFieldDefs } from "@/lib/customFields";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { FIXED_CONTACT_PICKLIST_KEYS, usePicklist, usePicklistsMap } from "@/lib/picklists";
@@ -26,6 +27,7 @@ import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ApartmentPicker } from "./ApartmentPicker";
 import { AreaMultiSelect } from "./AreaMultiSelect";
 import { ContactMap } from "./ContactMap";
+import { CustomFieldValueDisplay, CustomFieldValueInput } from "./CustomFieldValueInput";
 import { DatePicker } from "./DatePicker";
 import { PicklistSelect } from "./PicklistSelect";
 import { ReportNumberMultiSelect } from "./ReportNumberMultiSelect";
@@ -88,13 +90,32 @@ export function ContactView({
               !d.field_key.startsWith("apartment.") &&
               !d.field_key.startsWith("visit.") &&
               !d.field_key.startsWith("checklist.") &&
-              !d.field_key.startsWith("interaction."),
+              !d.field_key.startsWith("interaction.") &&
+              !d.field_key.startsWith("shliach."),
           ),
         ),
       )
       .catch(() => setCustomDefs([]));
   }, []);
   const customPicklists = usePicklistsMap(customDefs.map((d) => d.field_key));
+
+  // fixes35: any non-select custom field for whichever contact_type applies.
+  const mekuravCustomFieldDefs = useCustomFieldDefs("contact_mekurav").filter(
+    (d) => d.field_type !== "select",
+  );
+  const shliachCustomFieldDefs = useCustomFieldDefs("contact_shliach").filter(
+    (d) => d.field_type !== "select",
+  );
+  // fixes35 §5: contact_shliach's own select-type custom picklists.
+  const [shliachPicklistDefs, setShliachPicklistDefs] = useState<PicklistField[]>([]);
+  useEffect(() => {
+    apiFetch<PicklistField[]>("/api/picklists")
+      .then((defs) =>
+        setShliachPicklistDefs(defs.filter((d) => d.field_key.startsWith("shliach."))),
+      )
+      .catch(() => setShliachPicklistDefs([]));
+  }, []);
+  const shliachPicklists = usePicklistsMap(shliachPicklistDefs.map((d) => d.field_key));
 
   /** Inline text/textarea editor for a top-level or nested string column. */
   function inlineText(
@@ -164,6 +185,31 @@ export function ContactView({
         onSave={(v) => onPatch(save(v))}
         editor={(draft, _setDraft, commit) => (
           <PicklistSelect fieldKey={fieldKey} value={draft} onChange={commit} />
+        )}
+      />
+    );
+  }
+
+  /** fixes35: inline editor for one non-select custom field value. */
+  function inlineCustomField(
+    fieldKey: string,
+    fieldType: "text" | "number" | "boolean" | "date",
+    value: string | number | boolean | null,
+  ): ReactNode {
+    const displayNode = <CustomFieldValueDisplay fieldType={fieldType} value={value} />;
+    if (!onPatch) return displayNode;
+    return (
+      <InlineEdit<string | number | boolean | null>
+        value={value}
+        display={displayNode}
+        commitOnBlur={fieldType === "text" || fieldType === "number"}
+        onSave={(v) => onPatch({ custom_field_values: { [fieldKey]: v } })}
+        editor={(draft, setDraft, commit) => (
+          <CustomFieldValueInput
+            fieldType={fieldType}
+            value={draft}
+            onChange={fieldType === "boolean" || fieldType === "date" ? commit : setDraft}
+          />
         )}
       />
     );
@@ -262,6 +308,31 @@ export function ContactView({
     [null, t("contacts.email", "אימייל"), emailNode],
     [null, t("contacts.contact_type", "סוג איש קשר"), contactType.labelFor(contact.contact_type) || "—"],
     [null, t("contacts.created_at", "נוצר בתאריך"), createdNode],
+    // fixes35 §5: any admin-added shliach.* custom picklist.
+    ...shliachPicklistDefs.map(
+      (d): [string | null, string, ReactNode] => [
+        d.field_key,
+        (lang === "en" ? d.english_label || d.label : d.label) || d.field_key,
+        inlinePicklist(
+          d.field_key,
+          contact.picklist_values?.[d.field_key] ?? null,
+          shliachPicklists.labelFor(d.field_key, contact.picklist_values?.[d.field_key]) || "—",
+          (v) => ({ picklist_values: { [d.field_key]: v } }),
+        ),
+      ],
+    ),
+    // fixes35: any non-select custom field for shliach contacts.
+    ...shliachCustomFieldDefs.map(
+      (d): [string | null, string, ReactNode] => [
+        `customfield.contact_shliach.${d.field_key}`,
+        (lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) || d.field_key,
+        inlineCustomField(
+          d.field_key,
+          d.field_type as "text" | "number" | "boolean" | "date",
+          contact.custom_field_values?.[d.field_key] ?? null,
+        ),
+      ],
+    ),
   ];
 
   // Each entry: [fieldKey | null, label, value]. null = always shown (required).
@@ -442,6 +513,19 @@ export function ContactView({
                 customPicklists.labelFor(d.field_key, contact.picklist_values?.[d.field_key]) ||
                   "—",
                 (v) => ({ picklist_values: { [d.field_key]: v } }),
+              ),
+            ],
+          ),
+          // fixes35: any non-select custom field for mekurav contacts.
+          ...mekuravCustomFieldDefs.map(
+            (d): [string | null, string, ReactNode] => [
+              `customfield.contact_mekurav.${d.field_key}`,
+              (lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
+                d.field_key,
+              inlineCustomField(
+                d.field_key,
+                d.field_type as "text" | "number" | "boolean" | "date",
+                contact.custom_field_values?.[d.field_key] ?? null,
               ),
             ],
           ),

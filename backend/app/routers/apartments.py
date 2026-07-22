@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import case, func, nullslast, or_, select
 from sqlalchemy.orm import Session
 
-from app import models, picklist_utils
+from app import custom_field_utils, models, picklist_utils
 from app.core.shliach import resolve_shliach
 from app.database import get_db
 from app.deps import get_current_user, require_admin
@@ -73,6 +73,13 @@ def _split_picklist_changes(data: dict) -> dict[str, Optional[str]]:
     return changes
 
 
+def _split_custom_field_changes(data: dict):
+    """fixes35: pop the `custom_field_values` dict out of a payload dict
+    (mutates `data`) — the non-select custom-field counterpart to
+    `_split_picklist_changes`."""
+    return data.pop("custom_field_values", None) or {}
+
+
 def _apply_picklist_fields(out, values: dict[str, Optional[str]]) -> None:
     """Populate an ApartmentOut's 4 fixed fields + the dynamic picklist_values
     dict from a resolved {field_key: value} map."""
@@ -84,7 +91,10 @@ def _apply_picklist_fields(out, values: dict[str, Optional[str]]) -> None:
 
 
 def _apartment_out(
-    db: Session, a: models.Apartment, picklist_map: Optional[dict] = None
+    db: Session,
+    a: models.Apartment,
+    picklist_map: Optional[dict] = None,
+    custom_field_map: Optional[dict] = None,
 ) -> ApartmentOut:
     values = (
         picklist_map
@@ -93,6 +103,11 @@ def _apartment_out(
     )
     out = ApartmentOut.model_validate(a)
     _apply_picklist_fields(out, values)
+    out.custom_field_values = (
+        custom_field_map
+        if custom_field_map is not None
+        else custom_field_utils.get_values(db, a.organization_id, "apartment", a.id)
+    )
     return out
 
 
@@ -156,7 +171,11 @@ def _shliach_apartment_ids(db: Session, user: models.User) -> list[int]:
     return sorted(ids)
 
 
-def _enrich(a: models.Apartment, picklist_map: dict[str, Optional[str]]) -> ApartmentListOut:
+def _enrich(
+    a: models.Apartment,
+    picklist_map: dict[str, Optional[str]],
+    custom_field_map: Optional[dict] = None,
+) -> ApartmentListOut:
     building = a.building
     area = building.area if building else None
     mekurav = a.mekuravim[0] if a.mekuravim else None
@@ -166,6 +185,7 @@ def _enrich(a: models.Apartment, picklist_map: dict[str, Optional[str]]) -> Apar
         contact_name = f"{contact.name} {contact.last_name or ''}".strip()
     out = ApartmentListOut.model_validate(a)
     _apply_picklist_fields(out, picklist_map)
+    out.custom_field_values = custom_field_map or {}
     out.building_name = building.building_name if building else None
     out.building_address = building.building_address if building else None
     out.area_name = area.area_name if area else None
@@ -230,7 +250,13 @@ def list_apartments(
     picklist_map = picklist_utils.get_values_bulk(
         db, current_user.organization_id, "apartments", [r.id for r in rows]
     )
-    return [_apartment_out(db, a, picklist_map.get(a.id, {})) for a in rows]
+    custom_field_map = custom_field_utils.get_values_bulk(
+        db, current_user.organization_id, "apartment", [r.id for r in rows]
+    )
+    return [
+        _apartment_out(db, a, picklist_map.get(a.id, {}), custom_field_map.get(a.id, {}))
+        for a in rows
+    ]
 
 
 def _natural(col, db: Session):
@@ -450,8 +476,14 @@ def list_apartments_enriched(
     picklist_map = picklist_utils.get_values_bulk(
         db, current_user.organization_id, "apartments", [r.id for r in rows]
     )
+    custom_field_map = custom_field_utils.get_values_bulk(
+        db, current_user.organization_id, "apartment", [r.id for r in rows]
+    )
     return ApartmentPageOut(
-        items=[_enrich(a, picklist_map.get(a.id, {})) for a in rows],
+        items=[
+            _enrich(a, picklist_map.get(a.id, {}), custom_field_map.get(a.id, {}))
+            for a in rows
+        ],
         total=total,
         page=page,
         page_size=page_size,
@@ -470,6 +502,7 @@ def create_apartment(
     contact_id = data.pop("contact_id", None)
     picklist_changes = _split_picklist_changes(data)
     _validate_picklist_changes(picklist_changes, org_id, db)
+    custom_field_changes = _split_custom_field_changes(data)
     _validate_report_number(data, org_id, db)
     a = models.Apartment(**data, organization_id=org_id)
     db.add(a)
@@ -477,6 +510,9 @@ def create_apartment(
     for field_key, value in picklist_changes.items():
         if value is not None:
             picklist_utils.set_value(db, org_id, "apartments", a.id, field_key, value)
+    for field_key, value in custom_field_changes.items():
+        if value is not None:
+            custom_field_utils.set_value(db, org_id, "apartment", a.id, field_key, value)
 
     # Optionally link an existing mekurav contact to this apartment.
     if contact_id is not None:
@@ -868,13 +904,16 @@ def _apply_versioned_update(
     changes: dict,
     picklist_changes: dict[str, Optional[str]],
     editor: models.User,
+    custom_field_changes: Optional[dict] = None,
 ) -> models.Apartment:
     """Core of the fixes19 §3 versioning: retire the active row (is_display=False
     + last_edit/editor_id stamp) and insert a new active row carrying `changes`
-    (real columns) and `picklist_changes` (field_key -> value, fixes32).
-    Mekurav contact links follow the new row; every existing picklist link is
-    copied onto the new row first (so unrelated fields survive), then
-    `picklist_changes` is applied on top. Commits and returns the new row."""
+    (real columns), `picklist_changes` (field_key -> value, fixes32) and
+    `custom_field_changes` (field_key -> value, fixes35, non-select only).
+    Mekurav contact links follow the new row; every existing picklist link and
+    custom field value is copied onto the new row first (so unrelated fields
+    survive), then the changes are applied on top. Commits and returns the new
+    row."""
     org_id = active.organization_id
     active.is_display = False
     active.last_edit = datetime.datetime.utcnow()
@@ -897,6 +936,9 @@ def _apply_versioned_update(
     picklist_utils.copy_links(db, "apartments", active.id, new.id)
     for field_key, value in picklist_changes.items():
         picklist_utils.set_value(db, org_id, "apartments", new.id, field_key, value)
+    custom_field_utils.copy_values(db, "apartments", active.id, new.id)
+    for field_key, value in (custom_field_changes or {}).items():
+        custom_field_utils.set_value(db, org_id, "apartment", new.id, field_key, value)
     db.commit()
     db.refresh(new)
     return new
@@ -930,8 +972,14 @@ def update_apartment(
         _validate_building(data["building_id"], org_id, db)
     picklist_changes = _split_picklist_changes(data)
     _validate_picklist_changes(picklist_changes, org_id, db)
+    custom_field_changes = _split_custom_field_changes(data)
     _validate_report_number(data, org_id, db)
-    return _apartment_out(db, _apply_versioned_update(db, a, data, picklist_changes, current_user))
+    return _apartment_out(
+        db,
+        _apply_versioned_update(
+            db, a, data, picklist_changes, current_user, custom_field_changes
+        ),
+    )
 
 
 @router.delete("/{apartment_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -956,6 +1004,7 @@ def delete_apartment(
         .all()
     )
     picklist_utils.delete_links_many(db, "apartments", [row.id for row in lineage])
+    custom_field_utils.delete_values_many(db, "apartments", [row.id for row in lineage])
     for row in lineage:
         db.delete(row)
     db.commit()

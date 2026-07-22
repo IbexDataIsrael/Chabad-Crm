@@ -2,11 +2,13 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 
+import { CustomFieldValueInput } from "@/components/CustomFieldValueInput";
 import { EmailInput } from "@/components/EmailInput";
 import { PhoneInput } from "@/components/PhoneInput";
 import { PicklistSelect } from "@/components/PicklistSelect";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { apiFetch } from "@/lib/api";
+import { useCustomFieldDefs } from "@/lib/customFields";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { FIXED_APARTMENT_PICKLIST_KEYS } from "@/lib/picklists";
@@ -16,6 +18,7 @@ import {
   type Apartment,
   type Building,
   type Contact,
+  type CustomFieldValueMap,
   type Floor,
   type PicklistField,
   type ReportNumber,
@@ -79,6 +82,11 @@ export function ApartmentEditor({
   const [customDefs, setCustomDefs] = useState<PicklistField[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, string | null>>(
     apt?.picklist_values ?? {},
+  );
+  // fixes35: any non-select apartment custom field (text/number/boolean/date).
+  const customFieldDefs = useCustomFieldDefs("apartment").filter((d) => d.field_type !== "select");
+  const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>(
+    apt?.custom_field_values ?? {},
   );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -144,6 +152,7 @@ export function ApartmentEditor({
       apartment_notes: notes || null,
       report_number_id: reportNumberId === "" ? null : Number(reportNumberId),
       picklist_values: customValues,
+      custom_field_values: customFieldValues,
     };
     try {
       let saved: Apartment;
@@ -298,6 +307,22 @@ export function ApartmentEditor({
               value={customValues[d.field_key] ?? null}
               onChange={(v) =>
                 setCustomValues((prev) => ({ ...prev, [d.field_key]: v }))
+              }
+            />
+          </label>
+        ))}
+        {/* fixes35: any non-select apartment custom field. */}
+        {customFieldDefs.map((d) => (
+          <label key={d.field_key} className="block space-y-1">
+            <span className="block text-sm font-medium">
+              {(lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
+                d.field_key}
+            </span>
+            <CustomFieldValueInput
+              fieldType={d.field_type}
+              value={customFieldValues[d.field_key] ?? null}
+              onChange={(v) =>
+                setCustomFieldValues((prev) => ({ ...prev, [d.field_key]: v }))
               }
             />
           </label>

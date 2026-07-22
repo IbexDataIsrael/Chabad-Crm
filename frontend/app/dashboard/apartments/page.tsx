@@ -7,11 +7,13 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { PicklistSelect } from "@/components/PicklistSelect";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { CustomFieldValueDisplay, CustomFieldValueInput } from "@/components/CustomFieldValueInput";
 import { InlineEdit } from "@/components/ui/InlineEdit";
 import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { mapsHref } from "@/lib/contactActions";
+import { useCustomFieldDefs } from "@/lib/customFields";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
@@ -132,6 +134,13 @@ export default function ApartmentsPage() {
   // they explicitly hide one via the column-selector panel.
   const [visibleCustomKeys, setVisibleCustomKeys] = useDbPreference<string[] | null>(
     "apartments.customFields", null,
+  );
+  // fixes35 §3: any non-select apartment custom field — same column-selector
+  // treatment as the picklist ones above, in its own preference so existing
+  // "apartments.customFields" selections (picklist-only) are untouched.
+  const customFieldDefs = useCustomFieldDefs("apartment").filter((d) => d.field_type !== "select");
+  const [visibleCustomFieldKeys, setVisibleCustomFieldKeys] = useDbPreference<string[] | null>(
+    "apartments.customFieldFields", null,
   );
   const [query, setQuery] = usePersistentState("crm.apartments.q", "");
   const [sort, setSort] = usePersistentState<SortKey>("crm.apartments.sort", "floor");
@@ -512,6 +521,22 @@ export default function ApartmentsPage() {
         : [...current, fieldKey];
     });
   }
+  // fixes35 §3: same org-visibility + personal column-selector treatment for
+  // non-select apartment custom fields.
+  const orgVisibleCustomFieldDefs = customFieldDefs.filter((d) =>
+    vis(`customfield.apartment.${d.field_key}`),
+  );
+  const visibleCustomFieldDefs = orgVisibleCustomFieldDefs.filter(
+    (d) => visibleCustomFieldKeys === null || visibleCustomFieldKeys.includes(d.field_key),
+  );
+  function toggleCustomFieldColumn(fieldKey: string) {
+    setVisibleCustomFieldKeys((prev) => {
+      const current = prev ?? orgVisibleCustomFieldDefs.map((d) => d.field_key);
+      return current.includes(fieldKey)
+        ? current.filter((k) => k !== fieldKey)
+        : [...current, fieldKey];
+    });
+  }
   // fixes32 §6: the stored array's own order is now the display order — drag-
   // reordering the chips below persists it. (Previously this always rendered
   // in the fixed FIELD_KEYS order regardless of the stored array's order.)
@@ -607,7 +632,11 @@ export default function ApartmentsPage() {
   // Title + optional data columns + custom-picklist columns + optional
   // contact column + trailing filler.
   const colCount =
-    2 + renderedFields.length + visibleCustomDefs.length + (showContact ? 1 : 0);
+    2 +
+    renderedFields.length +
+    visibleCustomDefs.length +
+    visibleCustomFieldDefs.length +
+    (showContact ? 1 : 0);
 
   const lastPage = Math.max(1, Math.ceil(total / pageSize));
   const rangeText = t("pager.range", "{from}–{to} מתוך {total}")
@@ -953,6 +982,28 @@ export default function ApartmentsPage() {
                 </button>
               );
             })}
+            {/* fixes35 §3: one show/hide toggle per admin-added non-select
+                apartment custom field. */}
+            {orgVisibleCustomFieldDefs.map((d) => {
+              const active =
+                visibleCustomFieldKeys === null || visibleCustomFieldKeys.includes(d.field_key);
+              return (
+                <button
+                  key={d.field_key}
+                  type="button"
+                  onClick={() => toggleCustomFieldColumn(d.field_key)}
+                  className={`rounded-md border px-3 py-1.5 text-sm ${
+                    active
+                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
+                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {active ? "✓ " : ""}
+                  {(lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
+                    d.field_key}
+                </button>
+              );
+            })}
             {/* fixes30 §1b: the linked-contact column, previously always on. */}
             <button
               type="button"
@@ -1019,6 +1070,14 @@ export default function ApartmentsPage() {
               {visibleCustomDefs.map((d) => (
                 <th key={d.field_key} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
                   {customDefLabel(d)}
+                </th>
+              ))}
+              {/* fixes35 §3: one column per non-select apartment custom field
+                  the column-selector panel has left on. */}
+              {visibleCustomFieldDefs.map((d) => (
+                <th key={d.field_key} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
+                  {(lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
+                    d.field_key}
                 </th>
               ))}
               {/* fixes30 §1b: toggleable via the fields panel. */}
@@ -1102,6 +1161,36 @@ export default function ApartmentsPage() {
                                 fieldKey={d.field_key}
                                 value={draft}
                                 onChange={commit}
+                              />
+                            )}
+                          />
+                        </td>
+                      );
+                    })}
+                    {/* fixes35 §3: inline-editable, straight from the list row. */}
+                    {visibleCustomFieldDefs.map((d) => {
+                      const value = a.custom_field_values?.[d.field_key] ?? null;
+                      return (
+                        <td
+                          key={d.field_key}
+                          className="px-3 py-2 w-px whitespace-nowrap max-w-[14rem] truncate"
+                        >
+                          <InlineEdit<string | number | boolean | null>
+                            value={value}
+                            display={<CustomFieldValueDisplay fieldType={d.field_type} value={value} />}
+                            commitOnBlur={d.field_type === "text" || d.field_type === "number"}
+                            onSave={(v) =>
+                              saveListField(a, { custom_field_values: { [d.field_key]: v } })
+                            }
+                            editor={(draft, setDraft, commit) => (
+                              <CustomFieldValueInput
+                                fieldType={d.field_type}
+                                value={draft}
+                                onChange={
+                                  d.field_type === "boolean" || d.field_type === "date"
+                                    ? commit
+                                    : setDraft
+                                }
                               />
                             )}
                           />

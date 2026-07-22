@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { apiFetch } from "@/lib/api";
+import { useCustomFieldDefs } from "@/lib/customFields";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
-import { usePicklist } from "@/lib/picklists";
+import { usePicklist, usePicklistsMap } from "@/lib/picklists";
 import { useToast } from "@/lib/toast";
 import {
   MIVTZOIM_FLAGS,
@@ -15,6 +16,7 @@ import {
   type VisitInteraction,
 } from "@/lib/types";
 import { CustomFieldsEditor } from "./CustomFieldsEditor";
+import { CustomFieldValueDisplay, CustomFieldValueInput } from "./CustomFieldValueInput";
 import { DatePicker } from "./DatePicker";
 import { PicklistSelect } from "./PicklistSelect";
 import { InteractionsFields } from "./VisitForm";
@@ -52,6 +54,17 @@ export function VisitDetails({
   const showRebbe = vis("visits.connection_to_rebbe");
 
   const [busyFlag, setBusyFlag] = useState<MivtzoimFlag | null>(null);
+
+  // fixes35: any non-boolean, non-select visit custom field (boolean stays
+  // exclusively on the legacy CustomFieldsEditor checkbox+note path below),
+  // plus any visit-scoped select custom picklist.
+  const visitCustomFieldDefs = useCustomFieldDefs("visit").filter(
+    (d) => d.field_type !== "select" && d.field_type !== "boolean",
+  );
+  const visitPicklistDefs = useCustomFieldDefs("visit").filter((d) => d.field_type === "select");
+  const visitPicklists = usePicklistsMap(
+    visitPicklistDefs.map((d) => `checklist.${d.field_key}`),
+  );
 
   // Custom-field values (stored per visit, fixes25).
   const [customFields, setCustomFields] = useState<ContactCustomField[]>([]);
@@ -250,7 +263,12 @@ export function VisitDetails({
       {/* fixes25 §4: Mivtzoim flags logged on the visit. fixes27 §2/§4: the
           custom fields live inside this section (no separate heading), and
           every field honors its admin visibility toggle. */}
-      {(visibleFlags.length > 0 || showTorah || showRebbe || customFields.length > 0) && (
+      {(visibleFlags.length > 0 ||
+        showTorah ||
+        showRebbe ||
+        customFields.length > 0 ||
+        visitCustomFieldDefs.length > 0 ||
+        visitPicklistDefs.length > 0) && (
         <section className="space-y-2 border-t border-gray-100 pt-3">
           <h4 className="text-sm font-semibold">{t("visits.mivtzoim", "מבצעים")}</h4>
           {visibleFlags.length > 0 && (
@@ -316,6 +334,67 @@ export function VisitDetails({
                   ))}
                 </ul>
               )}
+            </div>
+          )}
+          {(visitPicklistDefs.length > 0 || visitCustomFieldDefs.length > 0) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* fixes35 §5: any visit-scoped select custom field. */}
+              {visitPicklistDefs.map((d) => {
+                const key = `checklist.${d.field_key}`;
+                const value = visit.picklist_values?.[d.field_key] ?? null;
+                return (
+                  <div key={d.field_key} className="flex flex-col">
+                    <span className="text-xs text-gray-500">{d.hebrew_label}</span>
+                    <span className="text-sm">
+                      {editable ? (
+                        <InlineEdit<string | null>
+                          value={value}
+                          display={visitPicklists.labelFor(key, value) || "—"}
+                          commitOnBlur={false}
+                          onSave={(v) => onPatch!({ picklist_values: { [d.field_key]: v } })}
+                          editor={(draft, _setDraft, commit) => (
+                            <PicklistSelect fieldKey={key} value={draft} onChange={commit} />
+                          )}
+                        />
+                      ) : (
+                        visitPicklists.labelFor(key, value) || "—"
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
+              {/* fixes35: any non-boolean, non-select visit custom field. */}
+              {visitCustomFieldDefs.map((d) => {
+                const value = visit.custom_field_values?.[d.field_key] ?? null;
+                return (
+                  <div key={d.field_key} className="flex flex-col">
+                    <span className="text-xs text-gray-500">{d.hebrew_label}</span>
+                    <span className="text-sm">
+                      {editable ? (
+                        <InlineEdit<string | number | boolean | null>
+                          value={value}
+                          display={
+                            <CustomFieldValueDisplay fieldType={d.field_type} value={value} />
+                          }
+                          commitOnBlur={d.field_type === "text" || d.field_type === "number"}
+                          onSave={(v) =>
+                            onPatch!({ custom_field_values: { [d.field_key]: v } })
+                          }
+                          editor={(draft, setDraft, commit) => (
+                            <CustomFieldValueInput
+                              fieldType={d.field_type}
+                              value={draft}
+                              onChange={d.field_type === "date" ? commit : setDraft}
+                            />
+                          )}
+                        />
+                      ) : (
+                        <CustomFieldValueDisplay fieldType={d.field_type} value={value} />
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>

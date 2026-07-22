@@ -142,7 +142,12 @@ def test_org_delete_purges_every_org_scoped_table(
     db_session.flush()
     db_session.add(
         models.CustomFieldValue(
-            visit_id=visit["id"], definition_id=cf_def.id, checked=True
+            organization_id=org_id,
+            entity_table="visit_history",
+            entity_id=visit["id"],
+            visit_id=visit["id"],
+            definition_id=cf_def.id,
+            checked=True,
         )
     )
     sd = models.SignificantDate(

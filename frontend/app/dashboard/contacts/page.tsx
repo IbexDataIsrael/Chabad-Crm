@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { CustomFieldValueDisplay, CustomFieldValueInput } from "@/components/CustomFieldValueInput";
 import { DatePicker } from "@/components/DatePicker";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { PicklistSelect } from "@/components/PicklistSelect";
@@ -14,6 +15,7 @@ import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { rowStyle } from "@/lib/colors";
 import { telHref, waHref } from "@/lib/contactActions";
+import { useCustomFieldDefs } from "@/lib/customFields";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
@@ -159,6 +161,29 @@ export default function ContactsPage() {
   const visibleCustomPicklistDefs = orgVisibleCustomPicklistDefs.filter(
     (d) => visibleCustomPicklistKeys == null || visibleCustomPicklistKeys.includes(d.field_key),
   );
+  // fixes35 §3: any non-select mekurav custom field — same column-selector
+  // treatment as the picklist ones above, in its own preference so existing
+  // "contacts.customFields" selections (picklist-only) are untouched.
+  const customFieldDefs = useCustomFieldDefs("contact_mekurav").filter(
+    (d) => d.field_type !== "select",
+  );
+  const orgVisibleCustomFieldDefs = customFieldDefs.filter((d) =>
+    vis(`customfield.contact_mekurav.${d.field_key}`),
+  );
+  const [visibleCustomFieldKeys, setVisibleCustomFieldKeys] = useDbPreference<string[] | null>(
+    "contacts.customFieldFields", null,
+  );
+  const visibleCustomFieldDefs = orgVisibleCustomFieldDefs.filter(
+    (d) => visibleCustomFieldKeys == null || visibleCustomFieldKeys.includes(d.field_key),
+  );
+  function toggleCustomFieldColumn(fieldKey: string) {
+    setVisibleCustomFieldKeys((prev) => {
+      const current = prev ?? orgVisibleCustomFieldDefs.map((d) => d.field_key);
+      return current.includes(fieldKey)
+        ? current.filter((k) => k !== fieldKey)
+        : [...current, fieldKey];
+    });
+  }
   // fixes25 §4: visit date range (טווח תאריכי ביקור) — only contacts holding a
   // visit inside the range.
   const [visitFrom, setVisitFrom] = usePersistentState<string | null>(
@@ -215,8 +240,11 @@ export default function ContactsPage() {
     if (!user) return;
     apiFetch<Area[]>("/api/areas").then(setAreas).catch(() => {});
     apiFetch<Building[]>("/api/buildings").then(setBuildings).catch(() => {});
-    apiFetch<CustomFieldDefinition[]>("/api/custom-fields")
-      .then(setCustomDefs)
+    // fixes35: /api/custom-fields now spans every entity_type — this
+    // dropdown is specifically the visit-level boolean checklist filter
+    // (mirrors the backend's own entity_type=visit/field_type=boolean scope).
+    apiFetch<CustomFieldDefinition[]>("/api/custom-fields?entity_type=visit")
+      .then((defs) => setCustomDefs(defs.filter((d) => d.field_type === "boolean")))
       .catch(() => {});
     // fixes34 §1.1: any admin-added contact picklist (excludes the fixed
     // contact ones plus apartment./visit./checklist./interaction.-prefixed
@@ -230,7 +258,8 @@ export default function ContactsPage() {
               !d.field_key.startsWith("apartment.") &&
               !d.field_key.startsWith("visit.") &&
               !d.field_key.startsWith("checklist.") &&
-              !d.field_key.startsWith("interaction."),
+              !d.field_key.startsWith("interaction.") &&
+              !d.field_key.startsWith("shliach."),
           ),
         ),
       )
@@ -453,7 +482,8 @@ export default function ContactsPage() {
     (k) => availability[k] && columns.includes(k),
   );
   // name + actions + quick actions + the trailing filler column.
-  const colCount = 4 + activeColumns.length + visibleCustomPicklistDefs.length;
+  const colCount =
+    4 + activeColumns.length + visibleCustomPicklistDefs.length + visibleCustomFieldDefs.length;
 
   function toggleColumn(k: ColumnKey) {
     setColumns((prev) =>
@@ -540,6 +570,28 @@ export default function ContactsPage() {
       )}
     />
   );
+
+  // fixes35 §3: same InlineEdit pattern for any non-select mekurav custom field.
+  const inlineCustomFieldCell = (c: Contact, d: CustomFieldDefinition) => {
+    const value = c.custom_field_values?.[d.field_key] ?? null;
+    return (
+      <InlineEdit<string | number | boolean | null>
+        value={value}
+        display={<CustomFieldValueDisplay fieldType={d.field_type} value={value} />}
+        commitOnBlur={d.field_type === "text" || d.field_type === "number"}
+        onSave={(v) => saveField(c, { custom_field_values: { [d.field_key]: v } })}
+        editor={(draft, setDraft, commit) => (
+          <CustomFieldValueInput
+            fieldType={d.field_type}
+            value={draft}
+            onChange={
+              d.field_type === "boolean" || d.field_type === "date" ? commit : setDraft
+            }
+          />
+        )}
+      />
+    );
+  };
 
   function cell(c: Contact, k: ColumnKey) {
     switch (k) {
@@ -973,6 +1025,27 @@ export default function ContactsPage() {
                 </button>
               );
             })}
+            {/* fixes35 §3: one toggle chip per non-select mekurav custom field. */}
+            {orgVisibleCustomFieldDefs.map((d) => {
+              const on =
+                visibleCustomFieldKeys == null || visibleCustomFieldKeys.includes(d.field_key);
+              return (
+                <button
+                  key={d.field_key}
+                  type="button"
+                  onClick={() => toggleCustomFieldColumn(d.field_key)}
+                  className={`rounded-md border px-3 py-1.5 text-sm ${
+                    on
+                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
+                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {on ? "✓ " : ""}
+                  {(lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
+                    d.field_key}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1026,6 +1099,14 @@ export default function ContactsPage() {
               {visibleCustomPicklistDefs.map((d) => (
                 <th key={d.field_key} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
                   {(lang === "en" ? d.english_label || d.label : d.label) || d.field_key}
+                </th>
+              ))}
+              {/* fixes35 §3: one column per non-select mekurav custom field
+                  the column-selector panel has left switched on. */}
+              {visibleCustomFieldDefs.map((d) => (
+                <th key={d.field_key} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
+                  {(lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
+                    d.field_key}
                 </th>
               ))}
               <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap"></th>
@@ -1105,6 +1186,16 @@ export default function ContactsPage() {
                       onClick={(e) => e.stopPropagation()}
                     >
                       {inlineCustomPicklistCell(c, d)}
+                    </td>
+                  ))}
+                  {/* fixes35 §3: non-select custom field columns. */}
+                  {visibleCustomFieldDefs.map((d) => (
+                    <td
+                      key={d.field_key}
+                      className="px-3 py-1.5 w-px whitespace-nowrap"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {inlineCustomFieldCell(c, d)}
                     </td>
                   ))}
                   {/* fixes15 §5.2: single-click call / WhatsApp / email. */}

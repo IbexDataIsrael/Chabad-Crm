@@ -146,4 +146,9 @@ def picklist_entity(system_name: str) -> str:
         return "apartment"
     if system_name.startswith(_VISIT_PICKLIST_PREFIXES):
         return "visit"
+    # fixes35 §5: a shliach-scoped select custom field (contact_shliach has
+    # no other dynamic-picklist bucket — everything else here falls through
+    # to contact_mekurav).
+    if system_name.startswith("shliach."):
+        return "contact_shliach"
     return "contact_mekurav"

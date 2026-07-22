@@ -56,10 +56,6 @@ SNAPSHOT_MODELS = [
     models.FieldSetting,
 ]
 
-# Models scoped through their visit rather than an organization_id column
-# (fixes25 — custom-field values moved from contacts onto visits).
-_VISIT_SCOPED = (models.CustomFieldValue,)
-
 # What the counts summary reports (tablename → summary key).
 _COUNT_TABLES = {
     "contacts": "contacts",
@@ -71,11 +67,11 @@ _COUNT_TABLES = {
 }
 
 
-def _dump_rows(db: Session, model, org_id: int, visit_ids: list[int]) -> list[dict]:
-    if model in _VISIT_SCOPED:
-        query = db.query(model).filter(model.visit_id.in_(visit_ids))
-    else:
-        query = db.query(model).filter(model.organization_id == org_id)
+def _dump_rows(db: Session, model, org_id: int) -> list[dict]:
+    # fixes35: CustomFieldValue gained its own organization_id column
+    # (mirroring PicklistLink), so it no longer needs the visit-join
+    # special-case every other model here never needed either.
+    query = db.query(model).filter(model.organization_id == org_id)
     rows = []
     for obj in query.all():
         row = {}
@@ -90,15 +86,8 @@ def _dump_rows(db: Session, model, org_id: int, visit_ids: list[int]) -> list[di
 
 def create_snapshot(db: Session, org_id: int) -> dict:
     """The org's CRM data as one JSON-serializable document."""
-    visit_ids = [
-        vid
-        for (vid,) in db.query(models.VisitHistory.id)
-        .filter(models.VisitHistory.organization_id == org_id)
-        .all()
-    ]
     tables = {
-        model.__tablename__: _dump_rows(db, model, org_id, visit_ids)
-        for model in SNAPSHOT_MODELS
+        model.__tablename__: _dump_rows(db, model, org_id) for model in SNAPSHOT_MODELS
     }
     return {
         "version": 1,
@@ -154,18 +143,10 @@ def restore_snapshot(
     tables = snapshot.get("tables", {})
 
     # Wipe the current org rows, children first.
-    visit_ids_query = db.query(models.VisitHistory.id).filter(
-        models.VisitHistory.organization_id == org_id
-    )
     for model in reversed(SNAPSHOT_MODELS):
-        if model in _VISIT_SCOPED:
-            db.query(model).filter(
-                model.visit_id.in_(visit_ids_query)
-            ).delete(synchronize_session=False)
-        else:
-            db.query(model).filter(model.organization_id == org_id).delete(
-                synchronize_session=False
-            )
+        db.query(model).filter(model.organization_id == org_id).delete(
+            synchronize_session=False
+        )
     db.flush()
 
     # Valid user links, for repairing references to since-deleted users.
@@ -183,8 +164,18 @@ def restore_snapshot(
         ]
         if model is models.CustomFieldValue:
             # Pre-fixes25 snapshots stored contact-scoped values (no visit_id);
-            # those rows can't satisfy the NOT NULL visit FK — skip them.
+            # those rows can't satisfy the (then-)NOT NULL visit FK — skip them.
             rows = [r for r in rows if r.get("visit_id") is not None]
+            # fixes35: pre-fixes35 snapshots have visit_id but no
+            # organization_id/entity_table/entity_id (those columns didn't
+            # exist yet) — synthesize them from visit_id + the org being
+            # restored into, instead of failing the new NOT NULL
+            # organization_id column on insert.
+            for r in rows:
+                if "organization_id" not in r:
+                    r["organization_id"] = org_id
+                    r["entity_table"] = "visit_history"
+                    r["entity_id"] = r["visit_id"]
         if not rows:
             continue
         if model is models.Apartment:

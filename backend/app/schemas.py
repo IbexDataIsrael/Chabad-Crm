@@ -1,12 +1,17 @@
 """Pydantic request/response schemas."""
 import re
 from datetime import datetime, time
-from typing import Literal, Optional
+from typing import Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 Role = Literal["admin", "staff", "shliach"]
 ContactType = Literal["mekurav", "shliach"]
+
+# fixes35: one non-select custom field's value — text/number/boolean/date all
+# fit here (date as an ISO string); select-type values live in
+# picklist_values instead, never in custom_field_values.
+CustomFieldValue = Union[str, float, bool, None]
 
 # Phone: Israeli (+972 / 0 prefix) or North-American (NANP). Mirrors the frontend
 # check in lib/validation.ts so client and server agree.
@@ -311,11 +316,21 @@ class ChangePasswordRequest(BaseModel):
 class CustomFieldDefinitionCreate(BaseModel):
     field_key: str
     hebrew_label: str
+    english_label: Optional[str] = None
+    # fixes35: contact_mekurav | contact_shliach | visit | apartment.
+    entity_type: str = "visit"
+    # fixes35: text | number | boolean | date | select.
+    field_type: str = "boolean"
+    # Required (non-empty) only when field_type == "select" — the field's
+    # initial dropdown options (Hebrew labels); provisions a PicklistDefinition
+    # + PicklistValue rows, see routers/custom_fields.py.
+    picklist_options: Optional[list[str]] = None
     sort_order: int = 0
 
 
 class CustomFieldDefinitionUpdate(BaseModel):
     hebrew_label: Optional[str] = None
+    english_label: Optional[str] = None
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
 
@@ -327,6 +342,9 @@ class CustomFieldDefinitionOut(BaseModel):
     guid: str
     field_key: str
     hebrew_label: str
+    english_label: Optional[str] = None
+    entity_type: str
+    field_type: str
     sort_order: int
     is_active: bool
 
@@ -564,6 +582,8 @@ class ApartmentBase(BaseModel):
     # fixes32: any apartment.* picklist beyond the 4 fixed fields above — an
     # admin-added custom picklist works without any dedicated schema field.
     picklist_values: dict[str, Optional[str]] = {}
+    # fixes35: any non-select apartment custom field, keyed by field_key.
+    custom_field_values: dict[str, CustomFieldValue] = {}
 
     @field_validator("phone")
     @classmethod
@@ -595,6 +615,7 @@ class ApartmentUpdate(BaseModel):
     email: Optional[str] = None
     report_number_id: Optional[int] = None
     picklist_values: Optional[dict[str, Optional[str]]] = None
+    custom_field_values: Optional[dict[str, CustomFieldValue]] = None
 
     @field_validator("phone")
     @classmethod
@@ -625,6 +646,7 @@ class ApartmentOut(BaseModel):
     email: Optional[str] = None
     report_number_id: Optional[int] = None
     picklist_values: dict[str, Optional[str]] = {}
+    custom_field_values: dict[str, CustomFieldValue] = {}
     # Versioning metadata (fixes19 §3):
     is_display: bool = True
     last_edit: Optional[datetime] = None
@@ -837,6 +859,9 @@ class ContactCreate(ContactBase):
     shliach: Optional[ShliachData] = None
     # Dynamic picklist selections: { system_name: value | None }.
     picklist_values: dict[str, Optional[str]] = {}
+    # fixes35: non-select custom field values (contact_mekurav or
+    # contact_shliach, whichever the contact's own contact_type resolves to).
+    custom_field_values: dict[str, CustomFieldValue] = {}
 
     # Validate on input only (not on ContactOut) so existing rows with legacy
     # bad numbers still read back without erroring. Blank normalizes to NULL.
@@ -863,6 +888,7 @@ class ContactUpdate(BaseModel):
     mekurav: Optional[MekuravData] = None
     shliach: Optional[ShliachData] = None
     picklist_values: Optional[dict[str, Optional[str]]] = None
+    custom_field_values: Optional[dict[str, CustomFieldValue]] = None
 
     @field_validator("phone")
     @classmethod
@@ -894,6 +920,9 @@ class ContactOut(ContactBase):
     # pipeline_status/color_tag — { system_name: value | None }, populated on
     # every read path (list + detail), mirroring ApartmentOut.picklist_values.
     picklist_values: dict[str, Optional[str]] = {}
+    # fixes35: non-select custom field values for this contact's own
+    # contact_type (mekurav or shliach).
+    custom_field_values: dict[str, CustomFieldValue] = {}
 
 
 class ContactDetailOut(ContactOut):
@@ -1027,6 +1056,13 @@ class VisitCreate(BaseModel):
     letter_in_torah: bool = False
     torah_thought: Optional[str] = None
     connection_to_rebbe: Optional[str] = None
+    # fixes35: non-select visit custom field values (boolean-type ones still
+    # go through the legacy /custom-fields sub-resource instead).
+    custom_field_values: dict[str, CustomFieldValue] = {}
+    # fixes35 §5: any admin-added visit-scoped select custom field, keyed by
+    # system_name (checklist.<field_key>) — mirrors ApartmentBase/ContactBase's
+    # own picklist_values; visits never had this generic dict before.
+    picklist_values: dict[str, Optional[str]] = {}
 
 
 class VisitUpdate(BaseModel):
@@ -1043,6 +1079,8 @@ class VisitUpdate(BaseModel):
     letter_in_torah: Optional[bool] = None
     torah_thought: Optional[str] = None
     connection_to_rebbe: Optional[str] = None
+    custom_field_values: Optional[dict[str, CustomFieldValue]] = None
+    picklist_values: Optional[dict[str, Optional[str]]] = None
 
 
 class VisitOut(BaseModel):
@@ -1064,6 +1102,8 @@ class VisitOut(BaseModel):
     letter_in_torah: bool = False
     torah_thought: Optional[str] = None
     connection_to_rebbe: Optional[str] = None
+    custom_field_values: dict[str, CustomFieldValue] = {}
+    picklist_values: dict[str, Optional[str]] = {}
 
 
 # --- Donations -------------------------------------------------------------

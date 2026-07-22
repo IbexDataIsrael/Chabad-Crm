@@ -1,11 +1,27 @@
 // fixes25: the contact-level Checklist type is gone — Mivtzoim flags live on
 // the visit (see Visit / MIVTZOIM_FLAGS).
 
+// fixes35: any of the 4 entities x 5 field types (originally visit-only
+// boolean+note — CustomFieldDefinition generalized in place, see
+// docs/fixes35-plan.md). field_type "select" never has its own value store:
+// its options/selected values ride the existing picklist system instead.
+export type CustomFieldEntityType =
+  | "contact_mekurav"
+  | "contact_shliach"
+  | "visit"
+  | "apartment";
+export type CustomFieldType = "text" | "number" | "boolean" | "date" | "select";
+/** One entity's non-select custom field values, keyed by field_key. */
+export type CustomFieldValueMap = Record<string, string | number | boolean | null>;
+
 export interface CustomFieldDefinition {
   id: number;
   guid: string;
   field_key: string;
   hebrew_label: string;
+  english_label: string | null;
+  entity_type: CustomFieldEntityType;
+  field_type: CustomFieldType;
   sort_order: number;
   is_active: boolean;
 }
@@ -104,6 +120,9 @@ export interface Contact {
   special_dates?: SignificantDate[];
   /** Dynamic picklist selections, keyed by system_name. */
   picklist_values?: Record<string, string | null>;
+  /** fixes35: non-select custom field values (contact_mekurav or
+   *  contact_shliach, matching this contact's own contact_type). */
+  custom_field_values?: CustomFieldValueMap;
   /** Enriched by /api/contacts/list only (fixes15 §5.1 grid columns;
    *  fixes18 §3.4 adds the linked admin-area name). */
   building_name?: string | null;
@@ -179,6 +198,9 @@ export interface Apartment {
    *  keyed by field_key (e.g. "apartment.diet"). Populated on every read;
    *  written back via ApartmentUpdate.picklist_values. */
   picklist_values?: Record<string, string | null>;
+  /** fixes35: any apartment custom field beyond select-type ones (which ride
+   *  picklist_values instead) — keyed by field_key. */
+  custom_field_values?: CustomFieldValueMap;
 }
 
 /** One historical apartment version (admin history view, fixes19 §3). */
@@ -299,6 +321,12 @@ export interface Visit {
   letter_in_torah: boolean;
   torah_thought: string | null;
   connection_to_rebbe: string | null;
+  /** fixes35: non-select visit custom field values — boolean-type ones still
+   *  ride the legacy /custom-fields checkbox+note sub-resource instead. */
+  custom_field_values?: CustomFieldValueMap;
+  /** fixes35 §5: any visit-scoped select custom field beyond visit_type/
+   *  torah_thought (which keep their own dedicated fields above). */
+  picklist_values?: Record<string, string | null>;
 }
 
 /** The visit's Mivtzoim boolean flags, with their visits.* label keys. */

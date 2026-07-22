@@ -20,7 +20,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app import models, picklist_utils
+from app import custom_field_utils, models, picklist_utils
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.picklist_utils import validate_picklist_value
@@ -50,7 +50,11 @@ _MIVTZOIM_FLAGS = (
 _VISIT_PICKLIST_FIELD_KEYS = ["visit.type", "checklist.torah_thought"]
 
 
-def _out(v: models.VisitHistory, picklist_map: dict[str, Optional[str]]) -> VisitOut:
+def _out(
+    v: models.VisitHistory,
+    picklist_map: dict[str, Optional[str]],
+    custom_field_map: Optional[dict] = None,
+) -> VisitOut:
     contact = v.contact
     name = f"{contact.name} {contact.last_name or ''}".strip() if contact else None
     return VisitOut(
@@ -70,23 +74,33 @@ def _out(v: models.VisitHistory, picklist_map: dict[str, Optional[str]]) -> Visi
         letter_in_torah=v.letter_in_torah,
         torah_thought=picklist_map.get("checklist.torah_thought"),
         connection_to_rebbe=v.connection_to_rebbe,
+        custom_field_values=custom_field_map or {},
+        # fixes35 §5: any visit-scoped select custom field beyond the 2
+        # fixed ones above — mirrors ApartmentOut.picklist_values.
+        picklist_values={
+            k: val for k, val in picklist_map.items() if k not in _VISIT_PICKLIST_FIELD_KEYS
+        },
     )
 
 
 def _out_one(db: Session, v: models.VisitHistory) -> VisitOut:
     """`_out` for a single visit (create/update endpoints)."""
-    values = picklist_utils.get_values(
-        db, v.organization_id, "visit_history", v.id, _VISIT_PICKLIST_FIELD_KEYS
+    values = picklist_utils.get_values(db, v.organization_id, "visit_history", v.id)
+    custom_values = custom_field_utils.get_values(
+        db, v.organization_id, "visit", v.id
     )
-    return _out(v, values)
+    return _out(v, values, custom_values)
 
 
 def _out_many(db: Session, org_id: int, rows: list[models.VisitHistory]) -> list[VisitOut]:
     """`_out` for a list of visits, resolving every picklist value in one query."""
     picklist_map = picklist_utils.get_values_bulk(
-        db, org_id, "visit_history", [v.id for v in rows], _VISIT_PICKLIST_FIELD_KEYS
+        db, org_id, "visit_history", [v.id for v in rows]
     )
-    return [_out(v, picklist_map.get(v.id, {})) for v in rows]
+    custom_field_map = custom_field_utils.get_values_bulk(
+        db, org_id, "visit", [v.id for v in rows]
+    )
+    return [_out(v, picklist_map.get(v.id, {}), custom_field_map.get(v.id, {})) for v in rows]
 
 
 def _contact_or_404(contact_id: int, org_id: int, db: Session) -> models.Contact:
@@ -167,16 +181,23 @@ def _apply_payload(
     interactions = data.pop("interactions", None)
     if interactions is not None:
         v.interactions = interactions  # already normalized by the caller
+    custom_field_changes = data.pop("custom_field_values", None) or {}
+    # fixes35 §5: any visit-scoped select custom field beyond the 2 fixed ones.
+    dynamic_picklist_changes = data.pop("picklist_values", None) or {}
     for field, value in data.items():
         setattr(v, field, value)
-    if has_visit_type or has_torah_thought:
-        db.flush()  # ensure v.id exists for the picklist links
+    if has_visit_type or has_torah_thought or custom_field_changes or dynamic_picklist_changes:
+        db.flush()  # ensure v.id exists for the picklist links / custom values
     if has_visit_type:
         picklist_utils.set_value(db, org_id, "visit_history", v.id, "visit.type", visit_type)
     if has_torah_thought:
         picklist_utils.set_value(
             db, org_id, "visit_history", v.id, "checklist.torah_thought", torah_thought
         )
+    for field_key, value in dynamic_picklist_changes.items():
+        picklist_utils.set_value(db, org_id, "visit_history", v.id, field_key, value)
+    for field_key, value in custom_field_changes.items():
+        custom_field_utils.set_value(db, org_id, "visit", v.id, field_key, value)
 
 
 # --- Per-contact sub-resource (contact page) -------------------------------
@@ -345,6 +366,11 @@ def get_visit_custom_fields(
         .filter(
             models.CustomFieldDefinition.organization_id == org_id,
             models.CustomFieldDefinition.is_active.is_(True),
+            # fixes35: this endpoint is the legacy boolean+note contract —
+            # scope it to exactly the fields it always covered, now that
+            # CustomFieldDefinition also holds apartment/contact fields.
+            models.CustomFieldDefinition.entity_type == "visit",
+            models.CustomFieldDefinition.field_type == "boolean",
         )
         .order_by(models.CustomFieldDefinition.sort_order, models.CustomFieldDefinition.id)
         .all()
@@ -377,7 +403,11 @@ def set_visit_custom_fields(
     valid_ids = {
         d.id
         for d in db.query(models.CustomFieldDefinition.id)
-        .filter(models.CustomFieldDefinition.organization_id == org_id)
+        .filter(
+            models.CustomFieldDefinition.organization_id == org_id,
+            models.CustomFieldDefinition.entity_type == "visit",
+            models.CustomFieldDefinition.field_type == "boolean",
+        )
         .all()
     }
     existing = {val.definition_id: val for val in v.custom_values}
@@ -394,6 +424,9 @@ def set_visit_custom_fields(
         else:
             db.add(
                 models.CustomFieldValue(
+                    organization_id=org_id,
+                    entity_table="visit_history",
+                    entity_id=v.id,
                     visit_id=v.id,
                     definition_id=item.definition_id,
                     checked=item.checked,

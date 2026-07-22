@@ -5,12 +5,14 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { CustomFieldValueDisplay, CustomFieldValueInput } from "@/components/CustomFieldValueInput";
 import { PicklistSelect } from "@/components/PicklistSelect";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { InlineEdit } from "@/components/ui/InlineEdit";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { mapsHref } from "@/lib/contactActions";
+import { useCustomFieldDefs } from "@/lib/customFields";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import {
@@ -70,6 +72,8 @@ export default function ApartmentDetailPage() {
   // same mechanism as the apartments list grid / ApartmentEditor, so a
   // custom picklist shows up here too with no further code changes.
   const [customDefs, setCustomDefs] = useState<PicklistField[]>([]);
+  // fixes35: any non-select apartment custom field.
+  const customFieldDefs = useCustomFieldDefs("apartment").filter((d) => d.field_type !== "select");
 
   const { labelFor: jewishLabel } = usePicklist("apartment.Jewish_status");
   const { labelFor: campaignLabel } = usePicklist("apartment.campaign_status");
@@ -451,6 +455,42 @@ export default function ApartmentDetailPage() {
                       onSave={(v) => patch({ picklist_values: { [d.field_key]: v } })}
                       editor={(draft, _setDraft, commit) => (
                         <PicklistSelect fieldKey={d.field_key} value={draft} onChange={commit} />
+                      )}
+                    />
+                  </dd>
+                </div>
+              ))}
+            {/* fixes35: any non-select apartment custom field. */}
+            {customFieldDefs
+              .filter((d) => vis(`customfield.apartment.${d.field_key}`))
+              .map((d) => (
+                <div key={d.field_key}>
+                  <dt className="text-gray-500">
+                    {(lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
+                      d.field_key}
+                  </dt>
+                  <dd className="font-medium">
+                    <InlineEdit<string | number | boolean | null>
+                      value={apt.custom_field_values?.[d.field_key] ?? null}
+                      display={
+                        <CustomFieldValueDisplay
+                          fieldType={d.field_type}
+                          value={apt.custom_field_values?.[d.field_key] ?? null}
+                        />
+                      }
+                      commitOnBlur={d.field_type === "text" || d.field_type === "number"}
+                      disabled={!editable}
+                      onSave={(v) => patch({ custom_field_values: { [d.field_key]: v } })}
+                      editor={(draft, setDraft, commit) => (
+                        <CustomFieldValueInput
+                          fieldType={d.field_type}
+                          value={draft}
+                          onChange={
+                            d.field_type === "boolean" || d.field_type === "date"
+                              ? commit
+                              : setDraft
+                          }
+                        />
                       )}
                     />
                   </dd>

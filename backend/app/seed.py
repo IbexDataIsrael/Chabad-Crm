@@ -412,6 +412,19 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("cf", "cf.add_field", "הוספת שדה", "Add field"),
     ("cf", "cf.key_placeholder", "מפתח (אנגלית) — hanuka_party", "Key (English) — hanuka_party"),
     ("cf", "cf.label_placeholder", "תווית בעברית", "Hebrew label"),
+    # --- fixes35: entity/type selectors + select-type options ---
+    ("cf", "cf.entity_type", "שייך ל", "Belongs to"),
+    ("cf", "cf.field_type", "סוג שדה", "Field type"),
+    ("cf", "cf.type.text", "טקסט", "Text"),
+    ("cf", "cf.type.number", "מספר", "Number"),
+    ("cf", "cf.type.boolean", "תיבת סימון", "Checkbox"),
+    ("cf", "cf.type.date", "תאריך", "Date"),
+    ("cf", "cf.type.select", "רשימת בחירה", "Select"),
+    ("cf", "cf.options", "אפשרויות (רשימת בחירה)", "Options (select list)"),
+    ("cf", "cf.option_placeholder", "אפשרות…", "Option…"),
+    ("cf", "cf.add_option", "+ אפשרות", "+ Option"),
+    ("cf", "cf.options_required", "יש להוסיף לפחות אפשרות אחת", "At least one option is required"),
+    ("cf", "cf.manage_visibility", "לניהול הצגה/הסתרה של שדות →", "Manage field visibility →"),
     # --- Picklists page ---
     ("pl", "pl.no_values", "אין ערכים.", "No values."),
     ("pl", "pl.move_up", "הזז למעלה", "Move up"),
@@ -972,6 +985,18 @@ LOCALIZATION_RENAMES: dict[str, tuple[set, str, set, str]] = {
     "pl.group_general": (
         {"כללי"}, "אנשי קשר", {"General"}, "Contacts",
     ),
+    # fixes35 §2: the custom-fields page now covers 4 entities x 5 field
+    # types, not just a visit checklist — exact spec wording for the nav
+    # label + a matching intro rewrite.
+    "nav.custom_fields": (
+        {"שדות מותאמים"}, "הוספת שדות מותאמים", {"Custom fields"}, "Add custom fields",
+    ),
+    "cf.intro": (
+        {"כל שדה הוא תיבת סימון + הערה, ויופיע בטופס הביקור. לדוגמה: מסיבת חנוכה."},
+        "הגדירו שדה מותאם אישית עבור אנשי קשר, פעילים, ביקורים או דירות — מכל סוג: טקסט, מספר, תיבת סימון, תאריך או רשימת בחירה.",
+        {"Each field is a checkbox + note logged on each visit. e.g. Hanukkah party."},
+        "Define a custom field for contacts, activists, visits or apartments — any type: text, number, checkbox, date or select.",
+    ),
 }
 
 
@@ -1231,7 +1256,13 @@ def _seed_sample_data(db: Session, org: models.Organization, admin: models.User)
     db.flush()
     db.add(
         models.CustomFieldValue(
-            visit_id=v1.id, definition_id=cf.id, checked=True, note="הגיע עם המשפחה"
+            organization_id=org.id,
+            entity_table="visit_history",
+            entity_id=v1.id,
+            visit_id=v1.id,
+            definition_id=cf.id,
+            checked=True,
+            note="הגיע עם המשפחה",
         )
     )
     db.commit()

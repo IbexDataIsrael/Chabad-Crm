@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
+import { useCustomFieldDefs } from "@/lib/customFields";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
@@ -12,11 +13,13 @@ import {
   type Contact,
   type ContactCustomField,
   type CustomFieldDefinition,
+  type CustomFieldValueMap,
   type MivtzoimFlag,
   type Visit,
   type VisitInteraction,
 } from "@/lib/types";
 import { CustomFieldsEditor } from "./CustomFieldsEditor";
+import { CustomFieldValueInput } from "./CustomFieldValueInput";
 import { DatePicker } from "./DatePicker";
 import { PicklistSelect } from "./PicklistSelect";
 import { SearchableSelect } from "./SearchableSelect";
@@ -39,6 +42,8 @@ export interface VisitPayload {
   letter_in_torah: boolean;
   torah_thought: string | null;
   connection_to_rebbe: string | null;
+  custom_field_values: CustomFieldValueMap;
+  picklist_values: Record<string, string | null>;
 }
 
 /**
@@ -93,6 +98,22 @@ export function VisitForm({
     initial?.interactions ?? [],
   );
   const [customFields, setCustomFields] = useState<ContactCustomField[]>([]);
+  // fixes35: any non-boolean, non-select visit custom field — boolean stays
+  // exclusively on the legacy CustomFieldsEditor checkbox+note path above.
+  const visitCustomFieldDefs = useCustomFieldDefs("visit").filter(
+    (d) => d.field_type !== "select" && d.field_type !== "boolean",
+  );
+  const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>(
+    initial?.custom_field_values ?? {},
+  );
+  // fixes35 §5: any admin-added visit-scoped select custom field — its
+  // options/value ride the existing checklist.* picklist convention, exactly
+  // like visit.type/checklist.torah_thought (no generic loop existed for
+  // visits before this round — see Visit.picklist_values).
+  const visitPicklistDefs = useCustomFieldDefs("visit").filter((d) => d.field_type === "select");
+  const [picklistValues, setPicklistValues] = useState<Record<string, string | null>>(
+    initial?.picklist_values ?? {},
+  );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -107,16 +128,23 @@ export function VisitForm({
         );
         if (active) setCustomFields(values);
       } else {
-        const defs = await apiFetch<CustomFieldDefinition[]>("/api/custom-fields");
+        // fixes35: /api/custom-fields now spans every entity_type — this is
+        // the legacy boolean+note contract specifically, so scope it exactly
+        // like the backend's own /api/visits/{id}/custom-fields does.
+        const defs = await apiFetch<CustomFieldDefinition[]>(
+          "/api/custom-fields?entity_type=visit",
+        );
         if (active) {
           setCustomFields(
-            defs.map((d) => ({
-              definition_id: d.id,
-              field_key: d.field_key,
-              hebrew_label: d.hebrew_label,
-              checked: false,
-              note: null,
-            })),
+            defs
+              .filter((d) => d.field_type === "boolean")
+              .map((d) => ({
+                definition_id: d.id,
+                field_key: d.field_key,
+                hebrew_label: d.hebrew_label,
+                checked: false,
+                note: null,
+              })),
           );
         }
       }
@@ -145,6 +173,8 @@ export function VisitForm({
         ...flags,
         torah_thought: torahThought,
         connection_to_rebbe: rebbe || null,
+        custom_field_values: customFieldValues,
+        picklist_values: picklistValues,
       });
       if (customFields.length > 0 && visit?.id) {
         await apiFetch(`/api/visits/${visit.id}/custom-fields`, {
@@ -209,7 +239,9 @@ export function VisitForm({
           visibleFlags.length === 0 &&
           !showTorah &&
           !showRebbe &&
-          customFields.length === 0
+          customFields.length === 0 &&
+          visitCustomFieldDefs.length === 0 &&
+          visitPicklistDefs.length === 0
         ) {
           return null;
         }
@@ -267,6 +299,35 @@ export function VisitForm({
             {customFields.length > 0 && (
               <CustomFieldsEditor items={customFields} onChange={setCustomFields} />
             )}
+            {/* fixes35 §5: any admin-added visit-scoped select custom field. */}
+            {visitPicklistDefs.map((d) => (
+              <label key={d.field_key} className="block space-y-1">
+                <span className="block text-sm font-medium">{d.hebrew_label}</span>
+                <PicklistSelect
+                  fieldKey={`checklist.${d.field_key}`}
+                  value={picklistValues[`checklist.${d.field_key}`] ?? null}
+                  onChange={(v) =>
+                    setPicklistValues((prev) => ({
+                      ...prev,
+                      [`checklist.${d.field_key}`]: v,
+                    }))
+                  }
+                />
+              </label>
+            ))}
+            {/* fixes35: any non-boolean, non-select visit custom field. */}
+            {visitCustomFieldDefs.map((d) => (
+              <label key={d.field_key} className="block space-y-1">
+                <span className="block text-sm font-medium">{d.hebrew_label}</span>
+                <CustomFieldValueInput
+                  fieldType={d.field_type}
+                  value={customFieldValues[d.field_key] ?? null}
+                  onChange={(v) =>
+                    setCustomFieldValues((prev) => ({ ...prev, [d.field_key]: v }))
+                  }
+                />
+              </label>
+            ))}
           </section>
         );
       })()}

@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app import models, picklist_utils
+from app import custom_field_utils, models, picklist_utils
 from app.core.display import building_display_name
 from app.core.email import send_shliach_welcome
 from app.core.geocode import geocode_address
@@ -216,6 +216,23 @@ def _apply_picklist_values(
         picklist_utils.set_value(db, org_id, "contacts", contact.id, system_name, value)
 
 
+# fixes35: a Contact's `contact_type` ("mekurav" | "shliach") is the bare
+# column value; custom_field_utils keys definitions by the fuller
+# "contact_mekurav" | "contact_shliach" entity_type.
+def _custom_field_entity_type(contact_type: str) -> str:
+    return f"contact_{contact_type}"
+
+
+def _apply_contact_custom_field_values(
+    db: Session, org_id: int, contact: models.Contact, values: dict
+) -> None:
+    """Upsert (or clear) a contact's non-select custom field values, scoped
+    to whichever entity_type this contact's own contact_type resolves to."""
+    entity_type = _custom_field_entity_type(contact.contact_type)
+    for field_key, value in values.items():
+        custom_field_utils.set_value(db, org_id, entity_type, contact.id, field_key, value)
+
+
 # --- Detail assembly --------------------------------------------------------
 def _shliach_login_status(contact: models.Contact, db: Session) -> str:
     """State of the shliach's login account (fixes26 §4): resolved by the
@@ -243,6 +260,9 @@ def _build_detail(contact: models.Contact, db: Session) -> ContactDetailOut:
     detail = ContactDetailOut.model_validate(contact)
     _apply_contact_picklist_fields(
         detail, picklist_utils.get_values(db, org_id, "contacts", contact.id)
+    )
+    detail.custom_field_values = custom_field_utils.get_values(
+        db, org_id, _custom_field_entity_type(contact.contact_type), contact.id
     )
     if contact.mekurav:
         detail.mekurav = MekuravOut.model_validate(contact.mekurav)
@@ -725,7 +745,14 @@ def _contacts_query(
             )
             .filter(
                 models.CustomFieldDefinition.organization_id
-                == current_user.organization_id
+                == current_user.organization_id,
+                # fixes35: this filter is specifically the visit-scoped
+                # boolean checklist (joined through VisitHistory below) —
+                # field_key is now only unique per (org, entity_type), so
+                # scope explicitly instead of risking a same-named
+                # non-visit custom field shadowing this lookup.
+                models.CustomFieldDefinition.entity_type == "visit",
+                models.CustomFieldDefinition.field_type == "boolean",
             )
             .all()
         }
@@ -825,14 +852,37 @@ def list_contacts(
     picklist_map = picklist_utils.get_values_bulk(
         db, current_user.organization_id, "contacts", [c.id for c in rows]
     )
-    return [_list_item(c, picklist_map.get(c.id, {})) for c in rows]
+    custom_field_map = _custom_field_map_bulk(
+        db, current_user.organization_id, [c.id for c in rows]
+    )
+    return [
+        _list_item(c, picklist_map.get(c.id, {}), custom_field_map.get(c.id, {}))
+        for c in rows
+    ]
 
 
-def _list_item(contact: models.Contact, picklist_map: dict[str, Optional[str]]) -> ContactOut:
+def _custom_field_map_bulk(db: Session, org_id: int, contact_ids: list[int]) -> dict[int, dict]:
+    """fixes35: a list of contacts can mix both contact_types (e.g. the plain
+    unfiltered /api/contacts), so bulk-fetch both entity_types' values and
+    merge — a given contact only ever appears in the map matching its own
+    contact_type, since values are only ever written under that type."""
+    mekurav_map = custom_field_utils.get_values_bulk(db, org_id, "contact_mekurav", contact_ids)
+    shliach_map = custom_field_utils.get_values_bulk(db, org_id, "contact_shliach", contact_ids)
+    return {
+        cid: {**mekurav_map.get(cid, {}), **shliach_map.get(cid, {})} for cid in contact_ids
+    }
+
+
+def _list_item(
+    contact: models.Contact,
+    picklist_map: dict[str, Optional[str]],
+    custom_field_map: Optional[dict[str, object]] = None,
+) -> ContactOut:
     """A list row enriched with the mekurav apartment's building/area names
     (fixes15 §5.1 optional grid columns)."""
     out = ContactOut.model_validate(contact)
     _apply_contact_picklist_fields(out, picklist_map)
+    out.custom_field_values = custom_field_map or {}
     apartment = contact.mekurav.apartment if contact.mekurav else None
     if apartment and apartment.building:
         out.building_name = building_display_name(apartment.building)
@@ -934,7 +984,13 @@ def list_contacts_paginated(
     picklist_map = picklist_utils.get_values_bulk(
         db, current_user.organization_id, "contacts", [c.id for c in rows]
     )
-    items = [_list_item(c, picklist_map.get(c.id, {})) for c in rows]
+    custom_field_map = _custom_field_map_bulk(
+        db, current_user.organization_id, [c.id for c in rows]
+    )
+    items = [
+        _list_item(c, picklist_map.get(c.id, {}), custom_field_map.get(c.id, {}))
+        for c in rows
+    ]
     # fixes27 §3: shliach rows carry their login-account state so the list can
     # flag suspended/deleted logins inline.
     statuses = _login_status_map(db, rows)
@@ -1023,7 +1079,9 @@ def create_contact(
     current_user: models.User = Depends(get_current_user),
 ):
     org_id = current_user.organization_id
-    data = payload.model_dump(exclude={"mekurav", "shliach", "picklist_values"})
+    data = payload.model_dump(
+        exclude={"mekurav", "shliach", "picklist_values", "custom_field_values"}
+    )
 
     # fixes10 §3.3/§3.4: a shliach may create mekurav contacts only (creating a
     # shliach contact provisions a login user — admin/staff flows), and their
@@ -1115,6 +1173,8 @@ def create_contact(
 
     if payload.picklist_values:
         _apply_picklist_values(db, org_id, contact, payload.picklist_values)
+    if payload.custom_field_values:
+        _apply_contact_custom_field_values(db, org_id, contact, payload.custom_field_values)
 
     db.commit()
     db.refresh(contact)
@@ -1144,7 +1204,8 @@ def update_contact(
     org_id = current_user.organization_id
     contact = _get_contact_or_404(contact_id, current_user, db)
     data = payload.model_dump(
-        exclude_unset=True, exclude={"mekurav", "shliach", "picklist_values"}
+        exclude_unset=True,
+        exclude={"mekurav", "shliach", "picklist_values", "custom_field_values"},
     )
     if current_user.role == "shliach":
         data.pop("assigned_user_id", None)  # a shliach cannot reassign ownership
@@ -1243,6 +1304,8 @@ def update_contact(
 
     if payload.picklist_values is not None:
         _apply_picklist_values(db, org_id, contact, payload.picklist_values)
+    if payload.custom_field_values is not None:
+        _apply_contact_custom_field_values(db, org_id, contact, payload.custom_field_values)
 
     db.commit()
     db.refresh(contact)
@@ -1265,6 +1328,10 @@ def delete_contact(
     if mekurav_id is not None:
         picklist_utils.delete_links(db, "contact_mekurav", mekurav_id)
     picklist_utils.delete_links_many(db, "visit_history", visit_ids)
+    # fixes35: contact-scoped (contact_mekurav/contact_shliach) custom field
+    # values — visit-scoped ones are cleaned up by VisitHistory.custom_values'
+    # own delete-orphan cascade instead (they still populate visit_id).
+    custom_field_utils.delete_values(db, "contacts", contact.id)
     db.delete(contact)
     db.commit()
 

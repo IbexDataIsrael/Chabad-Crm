@@ -25,8 +25,8 @@ export default function NewContactPage() {
   }, []);
 
   async function create(values: ContactFormValues) {
-    // fixes25: Mivtzoim / custom fields are logged per visit now — the create
-    // form carries only the contact's own data.
+    // fixes25: the Mivtzoim visit checklist is logged per visit, not here.
+    // fixes35: contact-level custom fields (any type) DO ride this payload.
     const contact = await apiFetch<Contact>("/api/contacts", {
       method: "POST",
       body: JSON.stringify(values),
