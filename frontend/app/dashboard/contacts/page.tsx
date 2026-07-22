@@ -64,6 +64,10 @@ type ColumnKey = (typeof COLUMN_KEYS)[number];
 // which the page always showed until now).
 const DEFAULT_COLUMNS: ColumnKey[] = ["phone", "owner", "created"];
 
+// fixes34 §1.1: which optional columns render an inline editor — their cells
+// must stop the row's navigate-onClick from swallowing the edit click.
+const EDITABLE_COLUMN_KEYS = new Set<ColumnKey>(["phone", "status", "priority", "address"]);
+
 /** The mitzvah checkbox filters (fixes17 §2.2); fixes25: the flags live on
  * visits — a contact matches through any of its visits. fixes27 §1: the org's
  * custom fields join the same dropdown, carried under a `cf:` id prefix so the
@@ -1079,13 +1083,27 @@ export default function ContactsPage() {
                     />
                   </td>
                   {activeColumns.map((k) => (
-                    <td key={k} className="px-3 py-1.5 w-px whitespace-nowrap">
+                    <td
+                      key={k}
+                      className="px-3 py-1.5 w-px whitespace-nowrap"
+                      // fixes34 §1.1: only the inline-editable columns need to
+                      // stop the row's navigate-onClick — read-only columns
+                      // (owner/building/created/admin_area) keep the existing
+                      // "click anywhere in the row to open" behavior.
+                      onClick={
+                        EDITABLE_COLUMN_KEYS.has(k) ? (e) => e.stopPropagation() : undefined
+                      }
+                    >
                       {cell(c, k)}
                     </td>
                   ))}
                   {/* fixes34 §1.1: custom picklist columns. */}
                   {visibleCustomPicklistDefs.map((d) => (
-                    <td key={d.field_key} className="px-3 py-1.5 w-px whitespace-nowrap">
+                    <td
+                      key={d.field_key}
+                      className="px-3 py-1.5 w-px whitespace-nowrap"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       {inlineCustomPicklistCell(c, d)}
                     </td>
                   ))}
