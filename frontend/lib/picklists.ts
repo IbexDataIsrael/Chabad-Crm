@@ -24,6 +24,7 @@ export const FIXED_APARTMENT_PICKLIST_KEYS = [
 // next-step, plus the 3 bare-named mekurav ones); anything else is a custom,
 // admin-added contact picklist, auto-wired wherever this constant filters it in.
 export const FIXED_CONTACT_PICKLIST_KEYS = [
+  "contact.contact_type",
   "contact.pipeline_status",
   "contact.color_tag",
   "contact.potential_next_step",

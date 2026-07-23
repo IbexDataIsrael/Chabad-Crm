@@ -91,7 +91,8 @@ export function ContactView({
               !d.field_key.startsWith("visit.") &&
               !d.field_key.startsWith("checklist.") &&
               !d.field_key.startsWith("interaction.") &&
-              !d.field_key.startsWith("shliach."),
+              !d.field_key.startsWith("shliach.") &&
+              !d.field_key.startsWith("significant_date."),
           ),
         ),
       )
