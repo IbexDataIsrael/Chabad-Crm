@@ -255,13 +255,14 @@ export default function ApartmentsPage() {
     apiFetch<ReportNumberBuildingLink[]>("/api/apartments/report-number-buildings")
       .then(setReportBuildingLinks)
       .catch(() => setReportBuildingLinks([]));
-    // fixes32 §6: any admin-added apartment.* picklist beyond the fixed 4.
+    // fixes32 §6 / fixes37: any admin-added apartment picklist beyond the
+    // fixed 4 — entity_type is real data now, not a prefix guess.
     apiFetch<PicklistField[]>("/api/picklists")
       .then((defs) =>
         setCustomDefs(
           defs.filter(
             (d) =>
-              d.field_key.startsWith("apartment.") &&
+              d.entity_type === "apartment" &&
               !FIXED_APARTMENT_PICKLIST_KEYS.includes(d.field_key),
           ),
         ),

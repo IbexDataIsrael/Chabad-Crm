@@ -142,8 +142,9 @@ export function ContactForm({
     apiFetch<AdminArea[]>("/api/admin-areas").then(setAdminAreas).catch(() => {});
   }, [isMekurav, isShliachUser]);
 
-  // fixes34 §1.1: any admin-added contact picklist beyond the fixed set —
-  // same mechanism as ApartmentEditor's `customDefs` (fixes32-stillnotdone §2).
+  // fixes34 §1.1 / fixes37: any admin-added contact picklist beyond the fixed
+  // set — same mechanism as ApartmentEditor's `customDefs`, entity_type is
+  // real data now rather than a prefix guess.
   const [customDefs, setCustomDefs] = useState<PicklistField[]>([]);
   useEffect(() => {
     apiFetch<PicklistField[]>("/api/picklists")
@@ -151,13 +152,8 @@ export function ContactForm({
         setCustomDefs(
           defs.filter(
             (d) =>
-              !FIXED_CONTACT_PICKLIST_KEYS.includes(d.field_key) &&
-              !d.field_key.startsWith("apartment.") &&
-              !d.field_key.startsWith("visit.") &&
-              !d.field_key.startsWith("checklist.") &&
-              !d.field_key.startsWith("interaction.") &&
-              !d.field_key.startsWith("shliach.") &&
-              !d.field_key.startsWith("significant_date."),
+              d.entity_type === "contact_mekurav" &&
+              !FIXED_CONTACT_PICKLIST_KEYS.includes(d.field_key),
           ),
         ),
       )
@@ -171,14 +167,14 @@ export function ContactForm({
   const shliachCustomFieldDefs = useCustomFieldDefs("contact_shliach").filter(
     (d) => d.field_type !== "select",
   );
-  // fixes35 §5: contact_shliach's own select-type custom picklists — the one
-  // dynamic-picklist bucket that didn't exist anywhere in this form before
-  // (mekurav's own customDefs above deliberately excludes shliach.* already).
+  // fixes35 §5 / fixes37: contact_shliach's own select-type custom picklists
+  // — the one dynamic-picklist bucket that didn't exist anywhere in this form
+  // before (mekurav's own customDefs above deliberately excludes these already).
   const [shliachPicklistDefs, setShliachPicklistDefs] = useState<PicklistField[]>([]);
   useEffect(() => {
     apiFetch<PicklistField[]>("/api/picklists")
       .then((defs) =>
-        setShliachPicklistDefs(defs.filter((d) => d.field_key.startsWith("shliach."))),
+        setShliachPicklistDefs(defs.filter((d) => d.entity_type === "contact_shliach")),
       )
       .catch(() => setShliachPicklistDefs([]));
   }, []);

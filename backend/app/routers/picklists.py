@@ -61,6 +61,7 @@ def list_field_keys(
             label=d.hebrew_display_name,
             english_label=d.english_display_name,
             is_system=d.is_system,
+            entity_type=d.entity_type,
         )
         for d in _definitions_query(db, current_user.organization_id).all()
     ]
@@ -90,11 +91,20 @@ def create_definition(
             f"picklist '{payload.system_name}' already exists",
         )
     last = _definitions_query(db, org_id).all()
+    # fixes37: shliach.* is a real sub-namespace of "contact_mekurav" (fixes35
+    # §5 — admin-added custom picklists scoped to shliach-type contacts only).
+    # The admin Picklists page's "contacts" tab has no separate UI section
+    # for it — an admin opts in purely by naming the field "shliach.xxx",
+    # exactly like field_registry.py's identical check for CustomFieldDefinition.
+    entity_type = payload.entity_type
+    if entity_type == "contact_mekurav" and payload.system_name.startswith("shliach."):
+        entity_type = "contact_shliach"
     row = models.PicklistDefinition(
         organization_id=org_id,
         system_name=payload.system_name,
         hebrew_display_name=payload.hebrew_display_name,
         english_display_name=payload.english_display_name,
+        entity_type=entity_type,
         is_system=False,  # admin-created lists are not system lists
         sort_order=(last[-1].sort_order + 1) if last else 0,
     )
@@ -107,6 +117,7 @@ def create_definition(
         label=row.hebrew_display_name,
         english_label=row.english_display_name,
         is_system=row.is_system,
+        entity_type=row.entity_type,
     )
 
 
@@ -137,6 +148,7 @@ def update_definition(
         label=row.hebrew_display_name,
         english_label=row.english_display_name,
         is_system=row.is_system,
+        entity_type=row.entity_type,
     )
 
 

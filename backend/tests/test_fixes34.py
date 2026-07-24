@@ -16,10 +16,16 @@ def _mk_mekurav(client, headers, name, **extra):
     return r.json()
 
 
-def _add_picklist(client, headers, system_name, hebrew="בדיקה34", values=None):
+def _add_picklist(
+    client, headers, system_name, hebrew="בדיקה34", values=None, entity_type="contact_mekurav"
+):
     r = client.post(
         "/api/picklists/definition",
-        json={"system_name": system_name, "hebrew_display_name": hebrew},
+        json={
+            "system_name": system_name,
+            "hebrew_display_name": hebrew,
+            "entity_type": entity_type,
+        },
         headers=headers,
     )
     assert r.status_code == 201, r.text

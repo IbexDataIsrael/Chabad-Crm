@@ -116,6 +116,10 @@ def create_definition(
             system_name=system_name,
             hebrew_display_name=payload.hebrew_label,
             english_display_name=payload.english_label,
+            # fixes37: CustomFieldDefinition.entity_type already uses the
+            # exact same vocabulary as PicklistDefinition.entity_type — pass
+            # it straight through instead of leaving it to the model default.
+            entity_type=payload.entity_type,
             is_system=False,
         )
         db.add(picklist_def)

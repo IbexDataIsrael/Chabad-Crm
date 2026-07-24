@@ -246,21 +246,16 @@ export default function ContactsPage() {
     apiFetch<CustomFieldDefinition[]>("/api/custom-fields?entity_type=visit")
       .then((defs) => setCustomDefs(defs.filter((d) => d.field_type === "boolean")))
       .catch(() => {});
-    // fixes34 §1.1: any admin-added contact picklist (excludes the fixed
-    // contact ones plus apartment./visit./checklist./interaction.-prefixed
-    // definitions, which belong to other entities' Picklists tabs).
+    // fixes34 §1.1 / fixes37: any admin-added contact picklist — entity_type
+    // is real data now, not a prefix guess (excludes the fixed contact ones
+    // plus every other entity's picklists, which belong to their own tabs).
     apiFetch<PicklistField[]>("/api/picklists")
       .then((defs) =>
         setCustomPicklistDefs(
           defs.filter(
             (d) =>
-              !FIXED_CONTACT_PICKLIST_KEYS.includes(d.field_key) &&
-              !d.field_key.startsWith("apartment.") &&
-              !d.field_key.startsWith("visit.") &&
-              !d.field_key.startsWith("checklist.") &&
-              !d.field_key.startsWith("interaction.") &&
-              !d.field_key.startsWith("shliach.") &&
-              !d.field_key.startsWith("significant_date."),
+              d.entity_type === "contact_mekurav" &&
+              !FIXED_CONTACT_PICKLIST_KEYS.includes(d.field_key),
           ),
         ),
       )

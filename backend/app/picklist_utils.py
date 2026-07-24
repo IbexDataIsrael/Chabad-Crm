@@ -14,26 +14,29 @@ from sqlalchemy.orm import Session
 
 from app import models
 
-# The full set of admin-managed picklists, with Hebrew display labels. Admins can
-# manage every one of these even before any options exist for their org.
-PICKLIST_FIELDS: dict[str, str] = {
-    "contact.contact_type": "סוג איש קשר",
-    "contact.pipeline_status": "סטטוס",
-    "contact.color_tag": "צבע",
-    "contact.potential_next_step": "פוטנציאל לצעד",
-    "checklist.torah_thought": "דבר תורה",
-    "interaction.category": "קטגוריה",
-    "visit.type": "סוג ביקור",
-    "significant_date.type": "סוג תאריך",
+# The full set of admin-managed picklists: Hebrew display label + the logical
+# entity each belongs to ("contact_mekurav" | "contact_shliach" | "apartment"
+# | "visit" | "significant_date" — fixes37; matches the same vocabulary
+# CustomFieldDefinition.entity_type already used). Admins can manage every
+# one of these even before any options exist for their org.
+PICKLIST_FIELDS: dict[str, tuple[str, str]] = {
+    "contact.contact_type": ("סוג איש קשר", "contact_mekurav"),
+    "contact.pipeline_status": ("סטטוס", "contact_mekurav"),
+    "contact.color_tag": ("צבע", "contact_mekurav"),
+    "contact.potential_next_step": ("פוטנציאל לצעד", "contact_mekurav"),
+    "checklist.torah_thought": ("דבר תורה", "visit"),
+    "interaction.category": ("קטגוריה", "visit"),
+    "visit.type": ("סוג ביקור", "visit"),
+    "significant_date.type": ("סוג תאריך", "significant_date"),
     # fixes4: significant_date.title is now free text (removed from the registry).
-    "Jewish_status": "יהדות",
-    "affiliation": "השתייכות דתית",
-    "language": "שפה",
+    "Jewish_status": ("יהדות", "contact_mekurav"),
+    "affiliation": ("השתייכות דתית", "contact_mekurav"),
+    "language": ("שפה", "contact_mekurav"),
     # fixes7 §4: apartment status picklists (grouped under "דירה" in the UI).
-    "apartment.Jewish_status": "יהדות (דירה)",
-    "apartment.campaign_status": "סטטוס קמפיין",
-    "apartment.mezuzah_status": "מזוזה",
-    "apartment.language": "שפה",  # fixes13
+    "apartment.Jewish_status": ("יהדות (דירה)", "apartment"),
+    "apartment.campaign_status": ("סטטוס קמפיין", "apartment"),
+    "apartment.mezuzah_status": ("מזוזה", "apartment"),
+    "apartment.language": ("שפה", "apartment"),  # fixes13
 }
 
 
@@ -225,10 +228,12 @@ def set_value(
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST, f"unknown picklist '{field_key}'"
             )
+        hebrew_label, entity_type = PICKLIST_FIELDS[field_key]
         definition = models.PicklistDefinition(
             organization_id=organization_id,
             system_name=field_key,
-            hebrew_display_name=PICKLIST_FIELDS[field_key],
+            hebrew_display_name=hebrew_label,
+            entity_type=entity_type,
             is_system=True,
         )
         db.add(definition)

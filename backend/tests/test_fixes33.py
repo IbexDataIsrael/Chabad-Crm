@@ -129,10 +129,21 @@ class TestAreaDeleteWithBuildings:
 
 # --- §5.1 Manage Fields: dynamic custom-picklist rows -------------------------
 class TestDynamicPicklistFieldSettings:
-    def _add_picklist(self, client, headers, system_name, hebrew="בדיקה"):
+    def _add_picklist(self, client, headers, system_name, hebrew="בדיקה", entity_type=None):
+        if entity_type is None:
+            if system_name.startswith("apartment."):
+                entity_type = "apartment"
+            elif system_name.startswith("visit."):
+                entity_type = "visit"
+            else:
+                entity_type = "contact_mekurav"
         r = client.post(
             "/api/picklists/definition",
-            json={"system_name": system_name, "hebrew_display_name": hebrew},
+            json={
+                "system_name": system_name,
+                "hebrew_display_name": hebrew,
+                "entity_type": entity_type,
+            },
             headers=headers,
         )
         assert r.status_code == 201, r.text

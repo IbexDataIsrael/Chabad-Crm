@@ -10,14 +10,14 @@ import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 import type { PicklistField, PicklistValue } from "@/lib/types";
 
-// fixes33 §4: field_key namespace (confirmed via picklist_utils.py /
-// routers/visits.py) — visit.*/checklist.*/interaction.* are visit-level
-// picklists even though only "visit." reads as such at a glance.
+// fixes33 §4 / fixes37: which of the 3 admin tabs a picklist is managed
+// from. Driven by the real entity_type column now, not a prefix guess.
+// "contact_mekurav"/"contact_shliach"/"significant_date" all group under
+// "contacts" — same grouping fixes33 chose deliberately for significant_date.*.
 type PicklistTab = "contacts" | "visit" | "apartment";
-const VISIT_PREFIXES = ["visit.", "checklist.", "interaction."];
-function tabFor(fieldKey: string): PicklistTab {
-  if (fieldKey.startsWith("apartment.")) return "apartment";
-  if (VISIT_PREFIXES.some((p) => fieldKey.startsWith(p))) return "visit";
+function tabFor(entityType: string): PicklistTab {
+  if (entityType === "apartment") return "apartment";
+  if (entityType === "visit") return "visit";
   return "contacts";
 }
 
@@ -115,9 +115,9 @@ export default function PicklistsPage() {
   // apartment.* (unchanged rule), visit.*/checklist.*/interaction.*, and
   // everything else (contact.*, significant_date.*, bare Jewish_status/
   // affiliation/language, and any custom addition with no recognized prefix).
-  const contactDefs = fields.filter((f) => tabFor(f.field_key) === "contacts");
-  const visitDefs = fields.filter((f) => tabFor(f.field_key) === "visit");
-  const apartmentDefs = fields.filter((f) => tabFor(f.field_key) === "apartment");
+  const contactDefs = fields.filter((f) => tabFor(f.entity_type) === "contacts");
+  const visitDefs = fields.filter((f) => tabFor(f.entity_type) === "visit");
+  const apartmentDefs = fields.filter((f) => tabFor(f.entity_type) === "apartment");
 
   const TABS: { key: PicklistTab; icon: string; labelKey: string; fallback: string }[] = [
     { key: "contacts", icon: "👤", labelKey: "pl.tab_contacts", fallback: "אנשי קשר" },
@@ -159,6 +159,7 @@ export default function PicklistsPage() {
           <AddPicklist
             heading={t("pl.add_list_contact", "הוספת רשימת בחירה לאיש קשר")}
             prefix=""
+            entityType="contact_mekurav"
             onAdded={loadAll}
           />
         </section>
@@ -170,6 +171,7 @@ export default function PicklistsPage() {
           <AddPicklist
             heading={t("pl.add_list_visit", "הוספת רשימת בחירה לביקור")}
             prefix="visit."
+            entityType="visit"
             onAdded={loadAll}
           />
         </section>
@@ -181,6 +183,7 @@ export default function PicklistsPage() {
           <AddPicklist
             heading={t("pl.add_list_apartment", "הוספת רשימת בחירה לדירה")}
             prefix="apartment."
+            entityType="apartment"
             onAdded={loadAll}
           />
         </section>
@@ -268,14 +271,19 @@ function DefinitionEditor({
 /** Create a brand-new (custom) picklist definition (fixes32 §7: one variant
  *  per section — `prefix` is silently prepended to whatever the admin types,
  *  so an apartment-section addition always lands in the apartment group and
- *  is immediately picked up by the apartments page's dynamic filter/column). */
+ *  is immediately picked up by the apartments page's dynamic filter/column;
+ *  fixes37: `entityType` is sent to the API as real data alongside it — the
+ *  backend still auto-splits "contact" into "contact_shliach" for a typed
+ *  "shliach.*" name, so the contacts tab keeps working exactly as before). */
 function AddPicklist({
   heading,
   prefix,
+  entityType,
   onAdded,
 }: {
   heading: string;
   prefix: string;
+  entityType: string;
   onAdded: (systemName: string) => Promise<void>;
 }) {
   const { t } = useLocalization();
@@ -295,6 +303,7 @@ function AddPicklist({
           system_name: fullSystemName,
           hebrew_display_name: he,
           english_display_name: en || null,
+          entity_type: entityType,
         }),
       });
       setSystemName("");

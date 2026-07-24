@@ -874,6 +874,14 @@ class PicklistDefinition(Base):
     system_name = Column(String(100), nullable=False, index=True)
     hebrew_display_name = Column(String(150), nullable=False)
     english_display_name = Column(String(150), nullable=True)
+    # fixes37: which logical entity this picklist belongs to —
+    # "contact_mekurav" | "contact_shliach" | "apartment" | "visit" |
+    # "significant_date" (matches CustomFieldDefinition.entity_type's
+    # vocabulary). Previously only implicit in system_name's string prefix,
+    # re-derived independently by every consumer, including the backend's
+    # own now-removed field_registry.picklist_entity() (see
+    # fixes37-plan.md); now a real column, set explicitly at creation.
+    entity_type = Column(String(30), nullable=False, default="contact_mekurav")
     is_system = Column(Boolean, nullable=False, default=True)
     sort_order = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)

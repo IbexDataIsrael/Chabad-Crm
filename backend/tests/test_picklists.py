@@ -1,3 +1,4 @@
+from app.picklist_utils import PICKLIST_FIELDS
 from app.seed import seed_picklist_definitions, seed_picklists
 
 FK = "contact.pipeline_status"
@@ -154,3 +155,55 @@ def test_out_of_picklist_value_rejected(client, admin_headers, db_session):
         headers=admin_headers,
     )
     assert bad_ix.status_code == 400
+
+
+# --- fixes37: PicklistDefinition.entity_type as real data --------------------
+def test_seed_backfills_entity_type_per_registry_key(client, admin_headers, db_session):
+    seed_picklist_definitions(db_session, _org_id(client, admin_headers))
+    rows = {
+        d["field_key"]: d["entity_type"]
+        for d in client.get("/api/picklists", headers=admin_headers).json()
+    }
+    for system_name, (_, expected_entity) in PICKLIST_FIELDS.items():
+        assert rows[system_name] == expected_entity, system_name
+
+
+def test_create_definition_round_trips_entity_type(client, admin_headers):
+    r = client.post(
+        "/api/picklists/definition",
+        json={
+            "system_name": "apartment.diet37",
+            "hebrew_display_name": "בדיקה37",
+            "entity_type": "apartment",
+        },
+        headers=admin_headers,
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["entity_type"] == "apartment"
+
+    listed = {
+        d["field_key"]: d["entity_type"]
+        for d in client.get("/api/picklists", headers=admin_headers).json()
+    }
+    assert listed["apartment.diet37"] == "apartment"
+
+
+def test_create_definition_auto_upgrades_shliach_prefix_to_contact_shliach(
+    client, admin_headers
+):
+    """A "contacts"-tab addition named shliach.* is a real, existing
+    sub-namespace (fixes35 §5) — the router must still split it out of the
+    generic "contact_mekurav" bucket even though the caller (matching the
+    admin Picklists page's actual UI, which has no separate shliach tab)
+    only ever sends entity_type="contact_mekurav" for it."""
+    r = client.post(
+        "/api/picklists/definition",
+        json={
+            "system_name": "shliach.role37",
+            "hebrew_display_name": "תפקיד37",
+            "entity_type": "contact_mekurav",
+        },
+        headers=admin_headers,
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["entity_type"] == "contact_shliach"

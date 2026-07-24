@@ -78,7 +78,8 @@ export function ContactView({
     apiFetch<AdminArea[]>("/api/admin-areas").then(setAdminAreas).catch(() => {});
   }, [canEdit, isMekurav, isShliachUser]);
 
-  // fixes34 §1.1: any admin-added contact picklist beyond the fixed set.
+  // fixes34 §1.1 / fixes37: any admin-added contact picklist beyond the fixed
+  // set — entity_type is real data now, not a prefix guess.
   const [customDefs, setCustomDefs] = useState<PicklistField[]>([]);
   useEffect(() => {
     apiFetch<PicklistField[]>("/api/picklists")
@@ -86,13 +87,8 @@ export function ContactView({
         setCustomDefs(
           defs.filter(
             (d) =>
-              !FIXED_CONTACT_PICKLIST_KEYS.includes(d.field_key) &&
-              !d.field_key.startsWith("apartment.") &&
-              !d.field_key.startsWith("visit.") &&
-              !d.field_key.startsWith("checklist.") &&
-              !d.field_key.startsWith("interaction.") &&
-              !d.field_key.startsWith("shliach.") &&
-              !d.field_key.startsWith("significant_date."),
+              d.entity_type === "contact_mekurav" &&
+              !FIXED_CONTACT_PICKLIST_KEYS.includes(d.field_key),
           ),
         ),
       )
@@ -107,12 +103,12 @@ export function ContactView({
   const shliachCustomFieldDefs = useCustomFieldDefs("contact_shliach").filter(
     (d) => d.field_type !== "select",
   );
-  // fixes35 §5: contact_shliach's own select-type custom picklists.
+  // fixes35 §5 / fixes37: contact_shliach's own select-type custom picklists.
   const [shliachPicklistDefs, setShliachPicklistDefs] = useState<PicklistField[]>([]);
   useEffect(() => {
     apiFetch<PicklistField[]>("/api/picklists")
       .then((defs) =>
-        setShliachPicklistDefs(defs.filter((d) => d.field_key.startsWith("shliach."))),
+        setShliachPicklistDefs(defs.filter((d) => d.entity_type === "contact_shliach")),
       )
       .catch(() => setShliachPicklistDefs([]));
   }, []);

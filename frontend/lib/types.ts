@@ -369,6 +369,9 @@ export interface PicklistField {
   label: string; // hebrew display name
   english_label: string | null;
   is_system: boolean;
+  // fixes37: "contact" | "contact_shliach" | "apartment" | "visit" |
+  // "significant_date" — which logical entity this picklist belongs to.
+  entity_type: string;
 }
 
 export interface OrgDetails {

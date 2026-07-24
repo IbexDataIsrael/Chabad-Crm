@@ -133,22 +133,3 @@ def label_and_entity(field_key: str) -> tuple[str, str]:
 def default_visible(field_key: str) -> bool:
     return field_key not in DEFAULT_HIDDEN
 
-
-# fixes33 §5.1: entity bucket for an admin-added custom picklist's field_key,
-# so it lands in the right group on /dashboard/fields — same prefix rule the
-# Picklists dashboard's 3-tab reorg uses (visit.*/checklist.*/interaction.*
-# are visit-level even though only "visit." reads as such at a glance).
-_VISIT_PICKLIST_PREFIXES = ("visit.", "checklist.", "interaction.")
-
-
-def picklist_entity(system_name: str) -> str:
-    if system_name.startswith("apartment."):
-        return "apartment"
-    if system_name.startswith(_VISIT_PICKLIST_PREFIXES):
-        return "visit"
-    # fixes35 §5: a shliach-scoped select custom field (contact_shliach has
-    # no other dynamic-picklist bucket — everything else here falls through
-    # to contact_mekurav).
-    if system_name.startswith("shliach."):
-        return "contact_shliach"
-    return "contact_mekurav"

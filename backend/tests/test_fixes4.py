@@ -253,11 +253,17 @@ def test_picklist_definition_management(client, admin_headers, db_session):
 
     created = client.post(
         "/api/picklists/definition",
-        json={"system_name": "diet", "hebrew_display_name": "תזונה", "english_display_name": "Diet"},
+        json={
+            "system_name": "diet",
+            "hebrew_display_name": "תזונה",
+            "english_display_name": "Diet",
+            "entity_type": "contact_mekurav",
+        },
         headers=admin_headers,
     )
     assert created.status_code == 201
     assert created.json()["is_system"] is False
+    assert created.json()["entity_type"] == "contact_mekurav"
     did = created.json()["id"]
 
     keys = [d["field_key"] for d in client.get("/api/picklists", headers=admin_headers).json()]

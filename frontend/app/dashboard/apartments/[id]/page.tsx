@@ -95,7 +95,7 @@ export default function ApartmentDetailPage() {
     setCustomDefs(
       defs.filter(
         (d) =>
-          d.field_key.startsWith("apartment.") &&
+          d.entity_type === "apartment" &&
           !FIXED_APARTMENT_PICKLIST_KEYS.includes(d.field_key),
       ),
     );

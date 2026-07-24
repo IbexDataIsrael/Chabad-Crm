@@ -18,7 +18,6 @@ from app.field_registry import (
     TOGGLEABLE_KEYS,
     default_visible,
     label_and_entity,
-    picklist_entity,
 )
 
 router = APIRouter(prefix="/api/field-settings", tags=["field-settings"])
@@ -128,7 +127,10 @@ def list_field_settings(
         FieldSettingOut(
             field_key=d.system_name,
             label_key=f"picklist_def.{d.system_name}",
-            entity=picklist_entity(d.system_name),
+            # fixes37: entity comes straight from the definition's own
+            # entity_type column now — no prefix-sniffing needed, same as
+            # the CustomFieldDefinition rows just below.
+            entity=d.entity_type,
             is_visible=saved.get(d.system_name, True),
             label=d.hebrew_display_name,
             english_label=d.english_display_name,
@@ -231,7 +233,10 @@ def set_field_setting(
     return FieldSettingOut(
         field_key=payload.field_key,
         label_key=f"picklist_def.{payload.field_key}",
-        entity=picklist_entity(payload.field_key),
+        # fixes37: entity comes straight from the definition's entity_type
+        # column now — no prefix-sniffing. `definition` is only ever missing
+        # here if the field_key check above raced a concurrent delete.
+        entity=definition.entity_type if definition else "contact_mekurav",
         is_visible=payload.is_visible,
         label=definition.hebrew_display_name if definition else None,
         english_label=definition.english_display_name if definition else None,

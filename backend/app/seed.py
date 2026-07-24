@@ -1111,10 +1111,13 @@ def seed_picklist_definitions(db: Session, organization_id: int) -> None:
             system_name=system_name,
             hebrew_display_name=hebrew_display,
             english_display_name=PICKLIST_ENGLISH_DISPLAY.get(system_name),
+            entity_type=entity_type,
             is_system=True,
             sort_order=index,
         )
-        for index, (system_name, hebrew_display) in enumerate(PICKLIST_FIELDS.items())
+        for index, (system_name, (hebrew_display, entity_type)) in enumerate(
+            PICKLIST_FIELDS.items()
+        )
         if system_name not in existing
     ]
     if new_rows:

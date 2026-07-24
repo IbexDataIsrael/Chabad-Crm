@@ -994,12 +994,22 @@ class PicklistFieldOut(BaseModel):
     label: str  # hebrew_display_name
     english_label: Optional[str] = None
     is_system: bool = True
+    # fixes37: "contact_mekurav" | "contact_shliach" | "apartment" | "visit" |
+    # "significant_date" — which logical entity this picklist belongs to.
+    entity_type: str = "contact_mekurav"
 
 
 class PicklistDefinitionCreate(BaseModel):
     system_name: str
     hebrew_display_name: str
     english_display_name: Optional[str] = None
+    # fixes37: caller states which entity this new picklist belongs to
+    # ("contact_mekurav" | "apartment" | "visit") — the router auto-upgrades
+    # "contact_mekurav" to "contact_shliach" when system_name starts with
+    # "shliach." (mirrors field_registry.py's identical convention), so
+    # callers never need to pass "contact_shliach" or "significant_date"
+    # themselves.
+    entity_type: str
 
 
 class PicklistDefinitionUpdate(BaseModel):
