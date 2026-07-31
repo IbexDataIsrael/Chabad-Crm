@@ -26,10 +26,9 @@ import {
 } from "@/lib/picklists";
 import { useDbPreference } from "@/lib/preferences";
 import { useToast } from "@/lib/toast";
-import { useChipReorder } from "@/lib/useChipReorder";
+import { useSortableList } from "@/lib/useSortableList";
 import { PHONE_HINT, isValidPhone } from "@/lib/validation";
 import {
-  MIVTZOIM_FLAGS,
   contactFullName,
   type AdminArea,
   type Area,
@@ -74,8 +73,10 @@ const EDITABLE_COLUMN_KEYS = new Set<ColumnKey>(["phone", "status", "priority", 
 /** The mitzvah checkbox filters (fixes17 §2.2); fixes25: the flags live on
  * visits — a contact matches through any of its visits. fixes27 §1: the org's
  * custom fields join the same dropdown, carried under a `cf:` id prefix so the
- * request can split them into the separate `custom_fields` query param. */
-const MITZVAH_KEYS: string[] = [...MIVTZOIM_FLAGS];
+ * request can send them all as `custom_fields`. fixes39: the 5 former
+ * hardcoded Mivtzoim columns are ordinary entity_type="visit" boolean custom
+ * fields now, so `customDefs` (fetched below) already includes them — there
+ * is no separate fixed-key list anymore. */
 const CF_PREFIX = "cf:";
 
 export default function ContactsPage() {
@@ -213,10 +214,11 @@ export default function ContactsPage() {
     "contacts.columns", DEFAULT_COLUMNS,
   );
   const [columnsOpen, setColumnsOpen] = useState(false);
-  // fixes38: pointer-events-based reorder (native HTML5 drag-and-drop never
-  // engages on many Windows trackpads — see useChipReorder's doc comment).
-  const { draggedKey: draggedColumn, hoverKey: hoverColumn, chipProps: columnChipProps, withClickGuard } =
-    useChipReorder<ColumnKey>(moveColumn);
+  // fixes39: SortableJS-backed reorder, mobile-first (native HTML5
+  // drag-and-drop never engages on many Windows trackpads — see
+  // useSortableList's doc comment).
+  const { containerRef: columnsSortableRef, withClickGuard } =
+    useSortableList<HTMLDivElement>(reorderColumns);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   // Debounce the text filter; the `debouncedQ` value hits the server.
@@ -299,16 +301,20 @@ export default function ContactsPage() {
   }
 
   // fixes28 §3: the filter strictly obeys the hidden state — a persisted
-  // selection of a since-hidden (or deactivated) field must neither render in
-  // the dropdown/chip count nor keep filtering the list. The effective
+  // selection of a since-deactivated field must neither render in the
+  // dropdown/chip count nor keep filtering the list. The effective
   // selection is the persisted one intersected with the visible options.
-  const visibleMitzvahIds = new Set<string>([
-    ...MITZVAH_KEYS.filter((m) => vis(`visits.${m}`)),
-    ...customDefs.map((d) => `${CF_PREFIX}${d.field_key}`),
-  ]);
+  // fixes39: `customDefs` (active entity_type="visit" boolean custom
+  // fields) already includes the 5 former Mivtzoim columns once seeded —
+  // no separate fixed-key list to union in anymore.
+  const visibleMitzvahIds = new Set<string>(
+    customDefs.map((d) => `${CF_PREFIX}${d.field_key}`),
+  );
   const effectiveMitzvot = mitzvotFilter.filter((m) => visibleMitzvahIds.has(m));
   const effectiveTorah = vis("visits.torah_thought") ? torahFilter : [];
-  const effectiveRebbe = vis("visits.connection_to_rebbe") ? debouncedRebbe : "";
+  // fixes39: connection_to_rebbe is a custom field now, not a field_settings
+  // toggle — always shown (same as any other text-search filter).
+  const effectiveRebbe = debouncedRebbe;
   // Same rule for the two filters whose CONTROLS can be absent: a pipeline
   // status the org hid, and admin areas for a shliach, must not keep
   // filtering from persisted state the user can no longer see or clear.
@@ -369,14 +375,13 @@ export default function ContactsPage() {
     buildingIds.forEach((id) => params.append("building_ids", String(id)));
     // fixes18 §3.5: admin-area filter.
     effectiveAdminAreaIds.forEach((id) => params.append("admin_area_ids", String(id)));
-    // fixes17 §2.2: individual mitzvah checkboxes; fixes18 §3.2: the tzedaka
-    // value is an exact selection from the aggregated dropdown. fixes27 §1:
-    // `cf:`-prefixed selections are custom-field keys (their own param).
-    // fixes28 §3: only the *effective* (still-visible) selections are sent.
+    // fixes17 §2.2: individual mitzvah checkboxes (fixes39: every option is
+    // an entity_type="visit" boolean custom field, sent as `custom_fields`).
+    // fixes18 §3.2: the tzedaka value is an exact selection from the
+    // aggregated dropdown. fixes28 §3: only the *effective* (still-visible)
+    // selections are sent.
     effectiveMitzvot.forEach((m) =>
-      m.startsWith(CF_PREFIX)
-        ? params.append("custom_fields", m.slice(CF_PREFIX.length))
-        : params.append("mitzvot", m),
+      params.append("custom_fields", m.slice(CF_PREFIX.length)),
     );
     if (tzedaka.trim()) {
       params.set("tzedaka_potential", tzedaka.trim());
@@ -498,25 +503,20 @@ export default function ContactsPage() {
     );
   }
 
-  // fixes38 §1.1: drag one active-column chip to another position — mirrors
-  // the (now fixed) Apartments moveField; the insert index accounts for the
-  // shift caused by removing `from` first so the result is direction-
-  // independent (dragging right vs. left both land the chip at the target's
-  // original slot).
-  function moveColumn(from: ColumnKey, to: ColumnKey) {
-    if (from === to) return;
+  // fixes39 §3: SortableJS's container holds every chip (active + inactive
+  // — an inactive one can't be dragged, per useSortableList's `filter`, but
+  // a dragged active chip can still land next to/among them), so rather
+  // than translate a single from/to index pair against two different lists,
+  // just recompute the active order from the container's resulting DOM
+  // order directly: keep whichever of `orderedKeys` are currently "on", in
+  // their new relative order.
+  function reorderColumns(orderedKeys: string[]) {
     setColumns((prev) => {
-      const known = prev.filter((k): k is ColumnKey =>
-        (COLUMN_KEYS as readonly string[]).includes(k),
+      const activeSet = new Set(
+        prev.filter((k): k is ColumnKey => (COLUMN_KEYS as readonly string[]).includes(k)),
       );
-      const fromIdx = known.indexOf(from);
-      const toIdx = known.indexOf(to);
-      if (fromIdx === -1 || toIdx === -1) return prev;
-      const next = [...known];
-      next.splice(fromIdx, 1);
-      const insertIdx = fromIdx < toIdx ? toIdx - 1 : toIdx;
-      next.splice(insertIdx, 0, from);
-      return next;
+      const reordered = orderedKeys.filter((k): k is ColumnKey => activeSet.has(k as ColumnKey));
+      return reordered.length > 0 ? reordered : prev;
     });
   }
 
@@ -773,66 +773,67 @@ export default function ContactsPage() {
           <p className="text-xs text-gray-400">
             {t("columns.reorder_hint", "גרור עמודה פעילה כדי לשנות את סדר ההצגה.")}
           </p>
-          <div className="flex flex-wrap gap-2">
-            {/* fixes38 §1.1: active chips render FIRST, in their actual
-                current (reordered) order — mirrors the Apartments panel fix
-                (fixes32-stillnotdone §1) so a successful drag is immediately
-                visible here, not just in the table. Pointer-events drag (see
-                useChipReorder) — native HTML5 drag-and-drop never engages on
-                many Windows trackpads. */}
-            {[
-              ...activeColumns,
-              ...COLUMN_KEYS.filter((k) => !activeColumns.includes(k)),
-            ].filter((k) => availability[k]).map((k) => {
-              const on = columns.includes(k);
+          {/* fixes39 §3: one real SortableJS-managed container for every
+              chip, active or not (mobile-first — see useSortableList's doc
+              comment). An inactive chip is marked `data-sortable-disabled`
+              so it can't itself be dragged (its plain toggle-on click still
+              works — `preventOnFilter: false`), but still occupies a normal
+              slot so active ones keep flowing in the same row. Active chips
+              render FIRST, in their actual current (reordered) order, so a
+              successful drag is immediately visible here, not just in the
+              table. */}
+          <div ref={columnsSortableRef} className="flex flex-wrap gap-2">
+            {activeColumns.filter((k) => availability[k]).map((k) => {
               const activeIdx = activeColumns.indexOf(k);
               return (
-                <span key={k} className="inline-flex items-center gap-0.5">
+                <span key={k} data-sort-key={k} className="inline-flex items-center gap-0.5">
                   <button
                     type="button"
-                    {...columnChipProps(k, on)}
                     onClick={withClickGuard(() => toggleColumn(k))}
-                    className={`rounded-md border px-3 py-1.5 text-sm ${
-                      on
-                        ? "border-status-magenta bg-status-magenta/10 text-status-magenta cursor-grab active:cursor-grabbing"
-                        : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                    } ${draggedColumn === k ? "opacity-40" : ""} ${
-                      hoverColumn === k && draggedColumn && draggedColumn !== k
-                        ? "ring-2 ring-status-magenta"
-                        : ""
-                    }`}
+                    className="rounded-md border px-3 py-1.5 text-sm border-status-magenta bg-status-magenta/10 text-status-magenta cursor-grab active:cursor-grabbing"
                   >
-                    {on ? "⠿ " : ""}
-                    {columnLabels[k]}
+                    ⠿ {columnLabels[k]}
                   </button>
-                  {/* fixes38: guaranteed-reliable fallback for dragging (see
-                      moveActiveColumn) — a click always works, unlike a drag
-                      gesture on some trackpads. */}
-                  {on && (
-                    <span className="flex flex-col gap-0.5">
-                      <button
-                        type="button"
-                        disabled={activeIdx === 0}
-                        onClick={() => moveActiveColumn(k, -1)}
-                        title={t("action.move_up", "העלה")}
-                        className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
-                      >
-                        ▲
-                      </button>
-                      <button
-                        type="button"
-                        disabled={activeIdx === activeColumns.length - 1}
-                        onClick={() => moveActiveColumn(k, 1)}
-                        title={t("action.move_down", "הורד")}
-                        className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
-                      >
-                        ▼
-                      </button>
-                    </span>
-                  )}
+                  {/* fixes38: guaranteed-reliable fallback for dragging —
+                      a click always works, unlike a drag gesture on some
+                      trackpads. */}
+                  <span className="flex flex-col gap-0.5">
+                    <button
+                      type="button"
+                      disabled={activeIdx === 0}
+                      onClick={() => moveActiveColumn(k, -1)}
+                      title={t("action.move_up", "העלה")}
+                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
+                    >
+                      ▲
+                    </button>
+                    <button
+                      type="button"
+                      disabled={activeIdx === activeColumns.length - 1}
+                      onClick={() => moveActiveColumn(k, 1)}
+                      title={t("action.move_down", "הורד")}
+                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
+                    >
+                      ▼
+                    </button>
+                  </span>
                 </span>
               );
             })}
+            {COLUMN_KEYS.filter((k) => !activeColumns.includes(k) && availability[k]).map(
+              (k) => (
+                <button
+                  key={k}
+                  type="button"
+                  data-sort-key={k}
+                  data-sortable-disabled=""
+                  onClick={() => toggleColumn(k)}
+                  className="rounded-md border px-3 py-1.5 text-sm border-gray-200 text-gray-600 hover:bg-gray-50"
+                >
+                  {columnLabels[k]}
+                </button>
+              ),
+            )}
             {/* fixes34 §1.1: one toggle chip per admin-added contact
                 picklist — same "contacts.customFields" preference the
                 filter/column rendering below consults. */}
@@ -844,6 +845,7 @@ export default function ContactsPage() {
                 <button
                   key={d.field_key}
                   type="button"
+                  data-sortable-disabled=""
                   onClick={() =>
                     setVisibleCustomPicklistKeys((prev) => {
                       const current =
@@ -872,6 +874,7 @@ export default function ContactsPage() {
                 <button
                   key={d.field_key}
                   type="button"
+                  data-sortable-disabled=""
                   onClick={() => toggleCustomFieldColumn(d.field_key)}
                   className={`rounded-md border px-3 py-1.5 text-sm ${
                     on
@@ -958,21 +961,16 @@ export default function ContactsPage() {
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
         />
-        {/* fixes17 §2.2: one checkbox per mitzvah (fixes25: visit-level flags).
-            fixes27 §1/§4: the org's custom fields join the list; hidden visit
-            fields drop out of the options. */}
+        {/* fixes17 §2.2: one checkbox per mitzvah (fixes25: visit-level
+            flags; fixes39: every option — migrated or admin-added — is an
+            active entity_type="visit" boolean custom field, so deactivated
+            ones already drop out of `customDefs` server-side). */}
         <MultiSelectFilter
           allLabel={t("filter.all_mitzvot", "מבצעים")}
-          options={[
-            ...MITZVAH_KEYS.filter((m) => vis(`visits.${m}`)).map((m) => ({
-              id: m,
-              label: t(`visits.${m}`, m),
-            })),
-            ...customDefs.map((d) => ({
-              id: `${CF_PREFIX}${d.field_key}`,
-              label: d.hebrew_label,
-            })),
-          ]}
+          options={customDefs.map((d) => ({
+            id: `${CF_PREFIX}${d.field_key}`,
+            label: d.hebrew_label,
+          }))}
           value={effectiveMitzvot}
           onChange={(ids) => {
             setMitzvotFilter(ids);

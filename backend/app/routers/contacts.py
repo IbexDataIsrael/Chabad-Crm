@@ -487,17 +487,6 @@ def _set_shliach_areas(
 
 
 # --- CRUD -------------------------------------------------------------------
-# The Mivtzoim booleans a "has mitzvot" filter checks (fixes15 §5.1). fixes25:
-# these live on visits now — a contact matches through any of its visits.
-_MITZVAH_COLUMNS = (
-    "tefillin",
-    "tzedakah",
-    "shabbat_candles",
-    "torah_pamphlet",
-    "letter_in_torah",
-)
-
-
 def _contacts_query(
     db: Session,
     current_user: models.User,
@@ -508,7 +497,6 @@ def _contacts_query(
     area_ids: Optional[list[int]] = None,
     building_ids: Optional[list[int]] = None,
     has_mitzvot: bool = False,
-    mitzvot: Optional[list[str]] = None,
     tzedaka_potential: Optional[str] = None,
     admin_area_ids: Optional[list[int]] = None,
     visit_from: Optional[datetime.datetime] = None,
@@ -524,11 +512,17 @@ def _contacts_query(
     fixes15 §5.1: `q` matches name / last name / phone / email; `area_ids` /
     `building_ids` narrow geographically — a mekurav belongs through its
     apartment's building, a shliach through its coverage links; `has_mitzvot`
-    keeps only contacts with at least one community-mitzvah checked.
-    fixes17 §2.2: `mitzvot` names specific checklist booleans that must ALL be
-    checked. fixes18 §3: `tzedaka_potential` is an exact match (the value comes
-    from the aggregated dropdown); `admin_area_ids` narrows to mekuravim linked
-    to those admin areas."""
+    keeps only contacts with at least one community-mitzvah checked. fixes18
+    §3: `tzedaka_potential` is an exact match (the value comes from the
+    aggregated dropdown); `admin_area_ids` narrows to mekuravim linked to
+    those admin areas. fixes39: `has_mitzvot` used to check a fixed set of
+    `VisitHistory` boolean columns — now that those are ordinary
+    entity_type="visit" boolean custom fields, it generalizes to "any active
+    one is checked" (covers admin-added checklist items too, e.g.
+    "mezuzah"). The old *named*-list `mitzvot` param (AND-across-keys) is
+    gone — `custom_fields` below is mechanistically identical to it now that
+    the fields it names are just custom fields, so it absorbed that job
+    instead of the app carrying two params that do the same query."""
     query = db.query(models.Contact).filter(
         models.Contact.organization_id == current_user.organization_id
     )
@@ -643,53 +637,34 @@ def _contacts_query(
                     .where(models.Building.area_id.in_(area_ids))
                 )
             )
+    # fixes15 §5.1 / fixes39: at least one active entity_type="visit" boolean
+    # custom field is checked on one of the contact's visits — the fixed
+    # 5-column check generalizes to "any active one" now that those columns
+    # are ordinary custom fields alongside any admin-added checklist item.
     if has_mitzvot:
         query = query.filter(
             models.Contact.id.in_(
-                select(models.VisitHistory.contact_id).where(
+                select(models.VisitHistory.contact_id)
+                .join(
+                    models.CustomFieldValue,
+                    models.CustomFieldValue.visit_id == models.VisitHistory.id,
+                )
+                .join(
+                    models.CustomFieldDefinition,
+                    models.CustomFieldDefinition.id
+                    == models.CustomFieldValue.definition_id,
+                )
+                .where(
                     models.VisitHistory.contact_id.isnot(None),
-                    or_(
-                        *[
-                            getattr(models.VisitHistory, col).is_(True)
-                            for col in _MITZVAH_COLUMNS
-                        ]
-                    ),
+                    models.CustomFieldDefinition.organization_id
+                    == current_user.organization_id,
+                    models.CustomFieldDefinition.entity_type == "visit",
+                    models.CustomFieldDefinition.field_type == "boolean",
+                    models.CustomFieldDefinition.is_active.is_(True),
+                    models.CustomFieldValue.checked.is_(True),
                 )
             )
         )
-    # fixes17 §2.2: specific mitzvot, AND semantics — every named flag must be
-    # checked on at least one of the contact's visits (fixes25).
-    if mitzvot:
-        # fixes28 §3: a flag the org hid on the custom-fields page must not
-        # filter — a stale persisted selection would silently narrow the list.
-        hidden_flags = {
-            row.field_key
-            for row in db.query(models.FieldSetting)
-            .filter(
-                models.FieldSetting.organization_id
-                == current_user.organization_id,
-                models.FieldSetting.field_key.in_(
-                    [f"visits.{col}" for col in mitzvot]
-                ),
-                models.FieldSetting.is_visible.is_(False),
-            )
-            .all()
-        }
-        for col in mitzvot:
-            if col not in _MITZVAH_COLUMNS:
-                raise HTTPException(
-                    status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    f"'{col}' is not a mitzvah field",
-                )
-            if f"visits.{col}" in hidden_flags:
-                continue
-            query = query.filter(
-                models.Contact.id.in_(
-                    select(models.VisitHistory.contact_id).where(
-                        getattr(models.VisitHistory, col).is_(True)
-                    )
-                )
-            )
     if tzedaka_potential and tzedaka_potential.strip():
         query = query.filter(
             models.Contact.id.in_(
@@ -709,7 +684,7 @@ def _contacts_query(
             )
         )
     # fixes27 §1: more visit-level filters, same through-any-visit semantics
-    # as the mitzvot flags.
+    # as the custom-field filters below.
     if torah_thought:
         query = query.filter(
             models.Contact.id.in_(
@@ -723,19 +698,38 @@ def _contacts_query(
                 )
             )
         )
+    # fixes39: connection_to_rebbe is now a text-type entity_type="visit"
+    # custom field (CustomFieldValue.value) — no longer a VisitHistory column.
     if connection_to_rebbe and connection_to_rebbe.strip():
         query = query.filter(
             models.Contact.id.in_(
-                select(models.VisitHistory.contact_id).where(
+                select(models.VisitHistory.contact_id)
+                .join(
+                    models.CustomFieldValue,
+                    models.CustomFieldValue.visit_id == models.VisitHistory.id,
+                )
+                .join(
+                    models.CustomFieldDefinition,
+                    models.CustomFieldDefinition.id
+                    == models.CustomFieldValue.definition_id,
+                )
+                .where(
                     models.VisitHistory.contact_id.isnot(None),
-                    models.VisitHistory.connection_to_rebbe.ilike(
+                    models.CustomFieldDefinition.organization_id
+                    == current_user.organization_id,
+                    models.CustomFieldDefinition.entity_type == "visit",
+                    models.CustomFieldDefinition.field_key == "connection_to_rebbe",
+                    models.CustomFieldValue.value.ilike(
                         f"%{connection_to_rebbe.strip()}%"
                     ),
                 )
             )
         )
-    # fixes27 §1: dynamic custom-field filters — every named field_key must be
-    # checked on at least one visit (AND across keys, mirroring `mitzvot`).
+    # fixes27 §1 / fixes39: dynamic custom-field filters — every named
+    # field_key must be checked on at least one visit (AND across keys). This
+    # is also where the pre-fixes39 `mitzvot` filter's job lives now that
+    # tefillin/tzedakah/shabbat_candles/torah_pamphlet/letter_in_torah are
+    # ordinary boolean custom fields like any admin-added one.
     if custom_fields:
         org_keys = {
             row[0]: row[1]
@@ -940,7 +934,6 @@ def list_contacts_paginated(
     area_ids: Optional[list[int]] = Query(None),
     building_ids: Optional[list[int]] = Query(None),
     has_mitzvot: bool = False,
-    mitzvot: Optional[list[str]] = Query(None),
     tzedaka_potential: Optional[str] = None,
     admin_area_ids: Optional[list[int]] = Query(None),
     visit_from: Optional[datetime.datetime] = None,
@@ -966,7 +959,7 @@ def list_contacts_paginated(
     query = _contacts_query(
         db, current_user, pipeline_status, contact_type, assigned_user_id,
         q=q, area_ids=area_ids, building_ids=building_ids, has_mitzvot=has_mitzvot,
-        mitzvot=mitzvot, tzedaka_potential=tzedaka_potential,
+        tzedaka_potential=tzedaka_potential,
         admin_area_ids=admin_area_ids, visit_from=visit_from, visit_to=visit_to,
         torah_thought=torah_thought, connection_to_rebbe=connection_to_rebbe,
         custom_fields=custom_fields, picklist=picklist,
@@ -1016,7 +1009,6 @@ def list_contact_emails(
     area_ids: Optional[list[int]] = Query(None),
     building_ids: Optional[list[int]] = Query(None),
     has_mitzvot: bool = False,
-    mitzvot: Optional[list[str]] = Query(None),
     tzedaka_potential: Optional[str] = None,
     admin_area_ids: Optional[list[int]] = Query(None),
     torah_thought: Optional[list[str]] = Query(None),
@@ -1030,7 +1022,7 @@ def list_contact_emails(
     query = _contacts_query(
         db, current_user, pipeline_status, contact_type, assigned_user_id,
         q=q, area_ids=area_ids, building_ids=building_ids, has_mitzvot=has_mitzvot,
-        mitzvot=mitzvot, tzedaka_potential=tzedaka_potential,
+        tzedaka_potential=tzedaka_potential,
         admin_area_ids=admin_area_ids, torah_thought=torah_thought,
         connection_to_rebbe=connection_to_rebbe, custom_fields=custom_fields,
         picklist=picklist,

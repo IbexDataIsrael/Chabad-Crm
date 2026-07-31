@@ -10,7 +10,7 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from app import models, picklist_utils
+from app import custom_field_utils, models, picklist_utils
 from app.config import settings
 from app.core.security import hash_password
 from app.picklist_utils import PICKLIST_FIELDS
@@ -698,14 +698,14 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
         "The total width should not be over 100%",
     ),
     # --- fixes25: VISITS namespace (visit-level Mivtzoim / interactions / fields) ---
+    # fixes39: the per-flag rows (visits.tefillin / visits.tzedakah /
+    # visits.shabbat_candles / visits.torah_pamphlet / visits.letter_in_torah /
+    # visits.connection_to_rebbe) are gone — those are now ordinary custom
+    # fields whose hebrew_label/english_label live directly on the
+    # CustomFieldDefinition row (see seed_visit_mivtzoim_custom_fields), not
+    # in this localization table.
     ("visits", "visits.mivtzoim", "מבצעים", "Mivtzoim"),
-    ("visits", "visits.tefillin", "תפילין", "Tefillin"),
-    ("visits", "visits.tzedakah", "צדקה", "Tzedakah"),
-    ("visits", "visits.shabbat_candles", "נרות", "Shabbat candles"),
-    ("visits", "visits.torah_pamphlet", "עלון", "Torah pamphlet"),
-    ("visits", "visits.letter_in_torah", "אות בספר", "Letter in a Torah"),
     ("visits", "visits.torah_thought", "דבר תורה", "Torah thought"),
-    ("visits", "visits.connection_to_rebbe", "קשר לרבי", "Connection to the Rebbe"),
     ("visits", "visits.interactions", "אינטראקציות", "Interactions"),
     ("visits", "visits.no_interactions", "אין אינטראקציות עדיין.", "No interactions yet."),
     ("visits", "visits.add_interaction", "הוסף", "Add"),
@@ -1149,10 +1149,82 @@ def seed_default_options_for_empty_lists(db: Session, organization_id: int) -> N
         db.commit()
 
 
+# fixes39: the Mivtzoim booleans + connection-to-the-Rebbe note used to be
+# hardcoded VisitHistory columns; they are now ordinary entity_type="visit"
+# custom fields, seeded per org exactly like every other default. Each entry
+# is (field_key, field_type, hebrew_label, english_label, sort_order) — the
+# same key names the columns used to have, and the same he/en labels that
+# used to live in LOCALIZATION_SEED under "visits.*".
+VISIT_MIVTZOIM_CUSTOM_FIELDS: list[tuple[str, str, str, str, int]] = [
+    ("tefillin", "boolean", "תפילין", "Tefillin", 0),
+    ("tzedakah", "boolean", "צדקה", "Tzedakah", 1),
+    ("shabbat_candles", "boolean", "נרות", "Shabbat candles", 2),
+    ("torah_pamphlet", "boolean", "עלון", "Torah pamphlet", 3),
+    ("letter_in_torah", "boolean", "אות בספר", "Letter in a Torah", 4),
+    ("connection_to_rebbe", "text", "קשר לרבי", "Connection to the Rebbe", 5),
+]
+
+
+def seed_visit_mivtzoim_custom_fields(db: Session, organization_id: int) -> None:
+    """Idempotently create/reactivate the 6 default visit custom fields for
+    one org (fixes39 §1). Matched by (org, entity_type="visit", field_key) —
+    an existing row (e.g. re-run at every boot, like seed_picklist_definitions)
+    is updated in place, never duplicated. Deliberately does NOT touch the
+    unrelated dormant duplicate rows fixes38 deactivated (tfilin/nerot/alon/
+    ot/Kesher_Larabi/dvar_torah) — those keep their own non-standard
+    field_keys and stay as historical, inactive artifacts."""
+    existing = {
+        row.field_key: row
+        for row in db.query(models.CustomFieldDefinition).filter(
+            models.CustomFieldDefinition.organization_id == organization_id,
+            models.CustomFieldDefinition.entity_type == "visit",
+            models.CustomFieldDefinition.field_key.in_(
+                [key for key, *_ in VISIT_MIVTZOIM_CUSTOM_FIELDS]
+            ),
+        )
+    }
+    changed = False
+    for field_key, field_type, hebrew_label, english_label, sort_order in (
+        VISIT_MIVTZOIM_CUSTOM_FIELDS
+    ):
+        row = existing.get(field_key)
+        if row is None:
+            db.add(
+                models.CustomFieldDefinition(
+                    organization_id=organization_id,
+                    entity_type="visit",
+                    field_key=field_key,
+                    field_type=field_type,
+                    hebrew_label=hebrew_label,
+                    english_label=english_label,
+                    sort_order=sort_order,
+                    is_active=True,
+                )
+            )
+            changed = True
+        elif (
+            row.field_type != field_type
+            or row.hebrew_label != hebrew_label
+            or row.english_label != english_label
+            or row.sort_order != sort_order
+            or not row.is_active
+        ):
+            row.field_type = field_type
+            row.hebrew_label = hebrew_label
+            row.english_label = english_label
+            row.sort_order = sort_order
+            row.is_active = True
+            changed = True
+    if changed:
+        db.commit()
+
+
 def provision_org(db: Session, organization_id: int) -> None:
-    """Set up a newly activated organization with its default picklists."""
+    """Set up a newly activated organization with its default picklists and
+    default visit custom fields (fixes39)."""
     seed_picklists(db, organization_id)
     seed_picklist_definitions(db, organization_id)
+    seed_visit_mivtzoim_custom_fields(db, organization_id)
 
 
 def _seed_sample_data(db: Session, org: models.Organization, admin: models.User) -> None:
@@ -1214,8 +1286,6 @@ def _seed_sample_data(db: Session, org: models.Organization, admin: models.User)
         organization_id=org.id,
         contact_id=c1.id,
         visit_date=datetime.datetime.utcnow(),
-        tefillin=True,
-        tzedakah=True,
         interactions=[
             {
                 "category": "heart_connection",
@@ -1229,6 +1299,9 @@ def _seed_sample_data(db: Session, org: models.Organization, admin: models.User)
     db.flush()
     # fixes32: torah_thought is picklist-backed (PicklistLink).
     picklist_utils.set_value(db, org.id, "visit_history", v1.id, "checklist.torah_thought", "given")
+    # fixes39: tefillin/tzedakah are now custom-field values, not columns.
+    custom_field_utils.set_value(db, org.id, "visit", v1.id, "tefillin", True)
+    custom_field_utils.set_value(db, org.id, "visit", v1.id, "tzedakah", True)
 
     # Example custom checklist field for the demo org.
     cf = models.CustomFieldDefinition(
@@ -1364,6 +1437,7 @@ def seed_all(db: Session) -> None:
         seed_picklist_definitions(db, org_id)
         seed_default_options_for_empty_lists(db, org_id)
         backfill_picklist_english_values(db, org_id)
+        seed_visit_mivtzoim_custom_fields(db, org_id)
 
     if not settings.seed_demo_data:
         return
@@ -1413,4 +1487,5 @@ def seed_all(db: Session) -> None:
 
     seed_picklists(db, org.id)
     seed_picklist_definitions(db, org.id)
+    seed_visit_mivtzoim_custom_fields(db, org.id)
     _seed_sample_data(db, org, admin)

@@ -78,6 +78,22 @@ const FILTER_PARAM_KEYS = [
   "jewish_status", "mezuzah_status", "language", "picklist", "q",
 ] as const;
 
+// fixes39 §4: the source-mode + picked report-numbers/apartments — the one
+// input on this page that was pure component state (lost on navigation)
+// before the permanent Save button. `mode` here is the user's last plain
+// (non-deep-linked) choice; a URL deep-link always overrides it at render
+// time (see the `mode` derivation below), never overwrites it.
+interface ReportSelection {
+  mode: ReportMode;
+  selectedIds: number[];
+  selectedAptIds: number[];
+}
+const DEFAULT_REPORT_SELECTION: ReportSelection = {
+  mode: "reports",
+  selectedIds: [],
+  selectedAptIds: [],
+};
+
 export default function CreateReportsPage() {
   return (
     <Suspense fallback={<p className="text-gray-400">…</p>}>
@@ -101,12 +117,28 @@ function CreateReportsInner() {
   for (const key of FILTER_PARAM_KEYS) {
     for (const v of searchParams.getAll(key)) filterParams.append(key, v);
   }
-  const [mode, setMode] = useState<ReportMode>(hasFilterParams ? "filters" : "reports");
+  // fixes39 §4: the source-mode/selection inputs are persisted the same way
+  // the column config already was (fixes38 §4.4) — `mode` still defers to a
+  // URL deep-link (the persisted value is never overwritten by one, so it's
+  // there again on the next plain visit).
+  const [selection, setSelection] = useDbPreference<ReportSelection>(
+    "reports.selection", DEFAULT_REPORT_SELECTION,
+  );
+  const mode: ReportMode = hasFilterParams ? "filters" : selection.mode;
+  function setMode(m: ReportMode) {
+    setSelection((prev) => ({ ...prev, mode: m }));
+  }
+  const selectedIds = selection.selectedIds;
+  function setSelectedIds(ids: number[]) {
+    setSelection((prev) => ({ ...prev, selectedIds: ids }));
+  }
+  const selectedAptIds = selection.selectedAptIds;
+  function setSelectedAptIds(ids: number[]) {
+    setSelection((prev) => ({ ...prev, selectedAptIds: ids }));
+  }
   const [reportNumbers, setReportNumbers] = useState<ReportNumber[]>([]);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  // fixes30 §3: the direct-selection option pool + chosen apartment ids.
+  // fixes30 §3: the direct-selection option pool.
   const [apartmentOptions, setApartmentOptions] = useState<ApartmentListItem[] | null>(null);
-  const [selectedAptIds, setSelectedAptIds] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
   const [noData, setNoData] = useState(false);
   // fixes38 §4.1: report description moved here from the global Settings
@@ -114,7 +146,7 @@ function CreateReportsInner() {
   // the report page itself now.
   const [reportNotes, setReportNotes] = useState("");
   const [notesDirty, setNotesDirty] = useState(false);
-  const [savingNotes, setSavingNotes] = useState(false);
+  const [savingReport, setSavingReport] = useState(false);
   // fixes38 §4.2/§4.4: column selection/subheadings/widths, persisted per user.
   const [reportColumns, setReportColumns] = useDbPreference<ReportColumnConfig>(
     "reports.apartmentColumns", DEFAULT_REPORT_COLUMNS,
@@ -124,20 +156,38 @@ function CreateReportsInner() {
     if (!notesDirty) setReportNotes(user?.organization?.report_notes ?? "");
   }, [user?.organization?.report_notes, notesDirty]);
 
-  async function saveReportNotes() {
-    setSavingNotes(true);
+  // fixes39 §4: one permanent, explicit Save button for every input on this
+  // page — report notes (unchanged endpoint), the column config and the
+  // mode/selection (both already persisted via useDbPreference's own
+  // 400ms-debounced background write, same as Contacts/Apartments' column
+  // preferences) get an immediate, non-debounced write here too so a click
+  // is a real guarantee, not just "probably saved by now".
+  async function saveReportPage() {
+    setSavingReport(true);
     try {
-      await apiFetch("/api/organizations/me", {
-        method: "PUT",
-        body: JSON.stringify({ report_notes: reportNotes.trim() || null }),
-      });
-      await refresh();
-      setNotesDirty(false);
+      if (isAdmin) {
+        await apiFetch("/api/organizations/me", {
+          method: "PUT",
+          body: JSON.stringify({ report_notes: reportNotes.trim() || null }),
+        });
+        await refresh();
+        setNotesDirty(false);
+      }
+      await Promise.all([
+        apiFetch("/api/preferences", {
+          method: "PUT",
+          body: JSON.stringify({ key: "reports.apartmentColumns", value: reportColumns }),
+        }),
+        apiFetch("/api/preferences", {
+          method: "PUT",
+          body: JSON.stringify({ key: "reports.selection", value: selection }),
+        }),
+      ]);
       success(t("msg.saved", "נשמר בהצלחה"));
     } catch (err) {
       toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
     } finally {
-      setSavingNotes(false);
+      setSavingReport(false);
     }
   }
 
@@ -465,7 +515,21 @@ function CreateReportsInner() {
 
   return (
     <div className="space-y-5 max-w-4xl">
-      <h1 className="text-2xl font-bold">{t("reports.create_reports", "יצירת דוחות")}</h1>
+      {/* fixes39 §4: one permanent, explicit Save button for every input on
+          this page (notes, column config, source-mode/selection) — visible
+          confirmation instead of relying on an invisible background
+          autosave, or on remembering to click Generate PDF first. */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-2xl font-bold">{t("reports.create_reports", "יצירת דוחות")}</h1>
+        <button
+          type="button"
+          onClick={saveReportPage}
+          disabled={savingReport}
+          className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {savingReport ? t("action.saving", "שומר…") : t("action.save", "שמור")}
+        </button>
+      </div>
 
       {/* fixes38 §4.1: report description moved here from the global Settings
           page — admin-only edit, same org-wide report_notes field. */}
@@ -487,14 +551,6 @@ function CreateReportsInner() {
               "טקסט חופשי שיופיע בראש כל דוח שמופק (הבהרה, כותרת, הערת שוליים...)",
             )}
           />
-          <button
-            type="button"
-            onClick={saveReportNotes}
-            disabled={savingNotes || !notesDirty}
-            className="rounded-md border border-status-magenta text-status-magenta px-4 py-1.5 text-sm font-medium hover:bg-status-magenta/10 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {savingNotes ? t("action.saving", "שומר…") : t("action.save", "שמור")}
-          </button>
         </div>
       )}
 

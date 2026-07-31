@@ -9,12 +9,10 @@ import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
 import {
   contactFullName,
-  MIVTZOIM_FLAGS,
   type Contact,
   type ContactCustomField,
   type CustomFieldDefinition,
   type CustomFieldValueMap,
-  type MivtzoimFlag,
   type Visit,
   type VisitInteraction,
 } from "@/lib/types";
@@ -35,13 +33,10 @@ export interface VisitPayload {
   notes: string | null;
   // fixes25: visit-level engagement data.
   interactions: VisitInteraction[];
-  tefillin: boolean;
-  tzedakah: boolean;
-  shabbat_candles: boolean;
-  torah_pamphlet: boolean;
-  letter_in_torah: boolean;
   torah_thought: string | null;
-  connection_to_rebbe: string | null;
+  // fixes39: this is also where connection_to_rebbe (field_type="text")
+  // travels — the 5 boolean Mivtzoim flags go through the separate
+  // /custom-fields sub-resource instead (see `customFields` state below).
   custom_field_values: CustomFieldValueMap;
   picklist_values: Record<string, string | null>;
 }
@@ -82,18 +77,9 @@ export function VisitForm({
   const [type, setType] = useState<string | null>(initial?.visit_type ?? null);
   const [location, setLocation] = useState(initial?.location ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
-  // fixes25: visit-level engagement data.
-  const [flags, setFlags] = useState<Record<MivtzoimFlag, boolean>>({
-    tefillin: initial?.tefillin ?? false,
-    tzedakah: initial?.tzedakah ?? false,
-    shabbat_candles: initial?.shabbat_candles ?? false,
-    torah_pamphlet: initial?.torah_pamphlet ?? false,
-    letter_in_torah: initial?.letter_in_torah ?? false,
-  });
   const [torahThought, setTorahThought] = useState<string | null>(
     initial?.torah_thought ?? null,
   );
-  const [rebbe, setRebbe] = useState(initial?.connection_to_rebbe ?? "");
   const [interactions, setInteractions] = useState<VisitInteraction[]>(
     initial?.interactions ?? [],
   );
@@ -170,9 +156,7 @@ export function VisitForm({
         location: location || null,
         notes: notes || null,
         interactions,
-        ...flags,
         torah_thought: torahThought,
-        connection_to_rebbe: rebbe || null,
         custom_field_values: customFieldValues,
         picklist_values: picklistValues,
       });
@@ -232,13 +216,15 @@ export function VisitForm({
           custom fields live inside this section (no separate heading), and
           every field honors its admin visibility toggle. */}
       {(() => {
-        const visibleFlags = MIVTZOIM_FLAGS.filter((f) => vis(`visits.${f}`));
+        // fixes39: the Mivtzoim boolean flags render via `customFields`
+        // below (the legacy checkbox+note sub-resource — they're ordinary
+        // entity_type="visit" boolean custom fields now) and
+        // connection_to_rebbe renders via `visitCustomFieldDefs` below (a
+        // field_type="text" custom field) — neither has dedicated markup
+        // here anymore.
         const showTorah = vis("visits.torah_thought");
-        const showRebbe = vis("visits.connection_to_rebbe");
         if (
-          visibleFlags.length === 0 &&
           !showTorah &&
-          !showRebbe &&
           customFields.length === 0 &&
           visitCustomFieldDefs.length === 0 &&
           visitPicklistDefs.length === 0
@@ -248,52 +234,18 @@ export function VisitForm({
         return (
           <section className="space-y-2 border-t border-gray-100 pt-3">
             <h4 className="text-sm font-semibold">{t("visits.mivtzoim", "מבצעים")}</h4>
-            {visibleFlags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {visibleFlags.map((flag) => (
-                  <button
-                    key={flag}
-                    type="button"
-                    onClick={() => setFlags((prev) => ({ ...prev, [flag]: !prev[flag] }))}
-                    className={`flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm ${
-                      flags[flag]
-                        ? "border-status-green bg-status-green/10 text-status-green"
-                        : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                    }`}
-                  >
-                    <span>{t(`visits.${flag}`)}</span>
-                    <span>{flags[flag] ? "✓" : ""}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {(showTorah || showRebbe) && (
+            {showTorah && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {showTorah && (
-                  <label className="block space-y-1">
-                    <span className="block text-sm font-medium">
-                      {t("visits.torah_thought", "דבר תורה")}
-                    </span>
-                    <PicklistSelect
-                      fieldKey="checklist.torah_thought"
-                      value={torahThought}
-                      onChange={setTorahThought}
-                    />
-                  </label>
-                )}
-                {showRebbe && (
-                  <label className="block space-y-1">
-                    <span className="block text-sm font-medium">
-                      {t("visits.connection_to_rebbe", "קשר לרבי")}
-                    </span>
-                    <textarea
-                      className={inputClass}
-                      rows={2}
-                      value={rebbe}
-                      onChange={(e) => setRebbe(e.target.value)}
-                    />
-                  </label>
-                )}
+                <label className="block space-y-1">
+                  <span className="block text-sm font-medium">
+                    {t("visits.torah_thought", "דבר תורה")}
+                  </span>
+                  <PicklistSelect
+                    fieldKey="checklist.torah_thought"
+                    value={torahThought}
+                    onChange={setTorahThought}
+                  />
+                </label>
               </div>
             )}
             {customFields.length > 0 && (

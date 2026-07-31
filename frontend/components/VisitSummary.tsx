@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { DatePicker } from "@/components/DatePicker";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import type { VisitSummaryOut } from "@/lib/types";
 
@@ -38,7 +37,6 @@ const dateInputClass =
 export function VisitSummary({ contactId }: { contactId?: number }) {
   const { t, lang } = useLocalization();
   const { isAdmin } = useAuth();
-  const { isFieldVisible: vis } = useFieldSettings();
   const [[defaultFrom, defaultTo]] = useState(() => currentWeekRange(lang));
   const [dateFrom, setDateFrom] = useState<string | null>(defaultFrom);
   const [dateTo, setDateTo] = useState<string | null>(defaultTo);
@@ -64,9 +62,11 @@ export function VisitSummary({ contactId }: { contactId?: number }) {
     };
   }, [dateFrom, dateTo, contactId, scopeAll, isAdmin]);
 
-  // fixes38 §1.2.3: respect the Manage Fields visibility toggle for each
-  // Mivtzoim category (visits.tefillin etc.).
-  const visibleCategories = (data?.categories ?? []).filter((c) => vis(`visits.${c.key}`));
+  // fixes39: the breakdown is dynamic (any active entity_type="visit"
+  // boolean custom field) — the server only ever returns active
+  // (CustomFieldDefinition.is_active) definitions, so there's no separate
+  // client-side visibility filter to apply anymore.
+  const categories = data?.categories ?? [];
 
   return (
     <div className="space-y-3">
@@ -107,14 +107,16 @@ export function VisitSummary({ contactId }: { contactId?: number }) {
           <p className="text-sm font-medium">
             {t("visitsummary.total", "סה\"כ ביקורים: {n}").replace("{n}", String(data.total))}
           </p>
-          {visibleCategories.length === 0 ? (
+          {categories.length === 0 ? (
             <p className="text-sm text-gray-400">{t("visitsummary.none", "אין ביקורים בטווח שנבחר.")}</p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
-              {visibleCategories.map((cat) => (
+              {categories.map((cat) => (
                 <div key={cat.key} className="rounded-md border border-gray-200 p-3">
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-sm font-medium">{t(`visits.${cat.key}`, cat.key)}</span>
+                    <span className="text-sm font-medium">
+                      {(lang === "en" ? cat.english_label : null) || cat.hebrew_label}
+                    </span>
                     <span className="rounded-full bg-status-magenta/10 text-status-magenta px-2 py-0.5 text-xs">
                       {cat.count}
                     </span>

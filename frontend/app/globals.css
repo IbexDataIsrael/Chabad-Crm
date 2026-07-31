@@ -9,3 +9,15 @@
 body {
   font-family: var(--font-sans);
 }
+
+/* fixes39 §3: SortableJS drag states for the "visible columns/fields"
+   chip reorder (lib/useSortableList.ts). */
+.sortable-ghost {
+  @apply opacity-30 border-status-magenta bg-status-magenta/10;
+}
+.sortable-chosen {
+  @apply ring-2 ring-status-magenta;
+}
+.sortable-drag {
+  @apply opacity-90 shadow-lg;
+}

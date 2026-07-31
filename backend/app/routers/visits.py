@@ -8,10 +8,12 @@ Two routers over the same `VisitHistory` entity:
                   member (it backs the contact-page visit editor too).
 
 fixes25: a visit carries the engagement data that used to live on the contact —
-an `interactions` JSON log (picklist `interaction.category`), the Mivtzoim
-boolean flags, `torah_thought` (picklist `checklist.torah_thought`) and
-`connection_to_rebbe`. Custom-field values attach to visits
-(`/api/visits/{id}/custom-fields`).
+an `interactions` JSON log (picklist `interaction.category`) and
+`torah_thought` (picklist `checklist.torah_thought`). fixes39: the Mivtzoim
+boolean flags and `connection_to_rebbe` moved from dedicated columns onto
+custom-field values attached to the visit
+(`/api/visits/{id}/custom-fields` for the booleans; `custom_field_values` on
+the visit payload for `connection_to_rebbe`, now a text-type field).
 """
 import datetime
 
@@ -38,17 +40,6 @@ from app.schemas import (
 router = APIRouter(prefix="/api/contacts", tags=["visits"])
 all_router = APIRouter(prefix="/api/visits", tags=["visits"])
 
-# Visit fields settable straight from a payload dict (picklist-validated ones
-# are handled explicitly).
-_MIVTZOIM_FLAGS = (
-    "tefillin",
-    "tzedakah",
-    "shabbat_candles",
-    "torah_pamphlet",
-    "letter_in_torah",
-)
-
-
 # The 2 picklist-backed visit fields (fixes32 — no longer real columns).
 _VISIT_PICKLIST_FIELD_KEYS = ["visit.type", "checklist.torah_thought"]
 
@@ -70,13 +61,7 @@ def _out(
         location=v.location,
         notes=v.notes,
         interactions=v.interactions or [],
-        tefillin=v.tefillin,
-        tzedakah=v.tzedakah,
-        shabbat_candles=v.shabbat_candles,
-        torah_pamphlet=v.torah_pamphlet,
-        letter_in_torah=v.letter_in_torah,
         torah_thought=picklist_map.get("checklist.torah_thought"),
-        connection_to_rebbe=v.connection_to_rebbe,
         custom_field_values=custom_field_map or {},
         # fixes35 §5: any visit-scoped select custom field beyond the 2
         # fixed ones above — mirrors ApartmentOut.picklist_values.
@@ -310,9 +295,13 @@ def visits_summary(
     current_user: models.User = Depends(get_current_user),
 ):
     """fixes38 §1.2/§1.3: "Summary of Visits" report + per-contact Visit
-    Summary — total count + per-Mivtzoim-category breakdown, scoped to the
-    caller's assigned contacts unless a specific contact is requested or the
-    caller is an admin who opted into `scope_all`."""
+    Summary — total count + per-category breakdown, scoped to the caller's
+    assigned contacts unless a specific contact is requested or the caller
+    is an admin who opted into `scope_all`.
+
+    fixes39 §2: the breakdown is dynamic — every active
+    entity_type="visit" boolean custom field (the 6 former Mivtzoim columns
+    plus any org-added checklist item, e.g. "mezuzah"), not a fixed tuple."""
     org_id = current_user.organization_id
     q = db.query(models.VisitHistory).filter(
         models.VisitHistory.organization_id == org_id,
@@ -330,12 +319,40 @@ def visits_summary(
             models.Contact, models.VisitHistory.contact_id == models.Contact.id
         ).filter(models.Contact.assigned_user_id == current_user.guid)
     rows = q.order_by(models.VisitHistory.visit_date.desc()).all()
+
+    defs = (
+        db.query(models.CustomFieldDefinition)
+        .filter(
+            models.CustomFieldDefinition.organization_id == org_id,
+            models.CustomFieldDefinition.entity_type == "visit",
+            models.CustomFieldDefinition.field_type == "boolean",
+            models.CustomFieldDefinition.is_active.is_(True),
+        )
+        .order_by(models.CustomFieldDefinition.sort_order, models.CustomFieldDefinition.id)
+        .all()
+    )
+    visit_ids = [v.id for v in rows]
+    checked_visit_ids_by_def: dict[int, set[int]] = {}
+    if defs and visit_ids:
+        checked_rows = db.query(
+            models.CustomFieldValue.definition_id, models.CustomFieldValue.visit_id
+        ).filter(
+            models.CustomFieldValue.definition_id.in_([d.id for d in defs]),
+            models.CustomFieldValue.visit_id.in_(visit_ids),
+            models.CustomFieldValue.checked.is_(True),
+        )
+        for definition_id, visit_id in checked_rows:
+            checked_visit_ids_by_def.setdefault(definition_id, set()).add(visit_id)
+
     categories = []
-    for key in _MIVTZOIM_FLAGS:
-        matching = [v for v in rows if getattr(v, key) and v.contact_id]
+    for d in defs:
+        checked_ids = checked_visit_ids_by_def.get(d.id, set())
+        matching = [v for v in rows if v.id in checked_ids and v.contact_id]
         categories.append(
             VisitSummaryCategory(
-                key=key,
+                key=d.field_key,
+                hebrew_label=d.hebrew_label,
+                english_label=d.english_label,
                 count=len(matching),
                 items=[
                     VisitSummaryItem(

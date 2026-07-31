@@ -563,8 +563,9 @@ class VisitHistory(Base):
     """A visit (היסטורית ביקורים). Many per contact; may be unlinked to a contact.
 
     fixes25: visits carry the engagement data that used to sit on the contact —
-    an `interactions` JSON log, the Mivtzoim boolean flags, the torah thought
-    and the connection-to-the-Rebbe note. Custom-field values hang off visits.
+    an `interactions` JSON log and the torah thought (picklist-backed).
+    fixes39: the Mivtzoim boolean flags and the connection-to-the-Rebbe note
+    moved off dedicated columns onto ordinary custom-field values.
     """
 
     __tablename__ = "visit_history"
@@ -583,12 +584,12 @@ class VisitHistory(Base):
     notes = Column(Text, nullable=True)  # הערות
     # fixes25: [{category, note, created_at, author_name}] (picklist interaction.category)
     interactions = Column(JSON, nullable=True)
-    tefillin = Column(Boolean, default=False, nullable=False)  # תפילין
-    tzedakah = Column(Boolean, default=False, nullable=False)  # צדקה
-    shabbat_candles = Column(Boolean, default=False, nullable=False)  # נרות
-    torah_pamphlet = Column(Boolean, default=False, nullable=False)  # עלון
-    letter_in_torah = Column(Boolean, default=False, nullable=False)  # אות בספר
-    connection_to_rebbe = Column(Text, nullable=True)  # קשר לרבי
+    # fixes39: the Mivtzoim booleans (tefillin/tzedakah/shabbat_candles/
+    # torah_pamphlet/letter_in_torah) and connection_to_rebbe used to be real
+    # columns here — they are now ordinary entity_type="visit" custom fields
+    # (CustomFieldDefinition/CustomFieldValue), the same mechanism org-added
+    # checklist items ("mezuzah" etc.) already used. See
+    # app.seed.seed_visit_mivtzoim_custom_fields.
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     contact = relationship("Contact", back_populates="visits")

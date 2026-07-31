@@ -12,7 +12,10 @@ def test_localization_endpoint_shape(client, db_session):
     # Flat map keyed by technical_name, each value carrying he + en.
     assert data["contacts.pipeline_status"]["he"] == "סטטוס"
     assert data["contacts.pipeline_status"]["en"] == "Status"
-    assert data["visits.shabbat_candles"]["he"] == "נרות"
+    # fixes39: visits.shabbat_candles (and the other 5 former Mivtzoim
+    # columns) are no longer in the localization table — they're ordinary
+    # custom fields whose labels live on CustomFieldDefinition directly.
+    assert data["visits.torah_thought"]["he"] == "דבר תורה"
     assert data["nav.contacts"]["he"] == "אנשי קשר"
 
 

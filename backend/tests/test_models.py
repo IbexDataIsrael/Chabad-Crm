@@ -45,22 +45,25 @@ def test_contact_has_new_fields():
 
 
 def test_visit_has_engagement_fields():
-    """fixes25: visits carry the Mivtzoim flags, the interactions JSON log and
-    the moved contact-level extras."""
+    """fixes25: visits carry the interactions JSON log and the moved
+    contact-level extras. fixes39: the Mivtzoim flags + connection_to_rebbe
+    are no longer columns — they moved to custom_field_values."""
     Base.metadata.create_all(bind=engine)
     visit_cols = {c["name"] for c in inspect(engine).get_columns("visit_history")}
-    assert {
-        "interactions",
+    assert "interactions" in visit_cols
+    # fixes32: torah_thought/visit_type (picklist-backed) moved to PicklistLink.
+    assert "torah_thought" not in visit_cols
+    assert "visit_type" not in visit_cols
+    # fixes39: the former hardcoded columns are gone.
+    for col in (
         "tefillin",
         "tzedakah",
         "shabbat_candles",
         "torah_pamphlet",
         "letter_in_torah",
         "connection_to_rebbe",
-    }.issubset(visit_cols)
-    # fixes32: torah_thought/visit_type (picklist-backed) moved to PicklistLink.
-    assert "torah_thought" not in visit_cols
-    assert "visit_type" not in visit_cols
+    ):
+        assert col not in visit_cols
     value_cols = {c["name"] for c in inspect(engine).get_columns("custom_field_values")}
     assert "visit_id" in value_cols
     assert "contact_id" not in value_cols

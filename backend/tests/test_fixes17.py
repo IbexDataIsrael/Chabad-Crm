@@ -56,6 +56,40 @@ def _list(client, headers, qs=""):
     return r.json()
 
 
+def _log_mivtzoim_visit(client, headers, db_session, contact_id, visit_date, *flags):
+    """fixes39: the Mivtzoim flags are boolean entity_type="visit" custom
+    fields now — seed the org's default set, create a visit, then check the
+    named flags on it via the legacy boolean custom-fields sub-resource."""
+    from app.seed import seed_visit_mivtzoim_custom_fields
+
+    org_id = (
+        db_session.query(models.Contact.organization_id)
+        .filter(models.Contact.id == contact_id)
+        .scalar()
+    )
+    seed_visit_mivtzoim_custom_fields(db_session, org_id)
+    defs = {
+        d.field_key: d.id
+        for d in db_session.query(models.CustomFieldDefinition).filter_by(
+            organization_id=org_id, entity_type="visit"
+        )
+    }
+    r = client.post(
+        f"/api/contacts/{contact_id}/visits",
+        json={"visit_date": visit_date},
+        headers=headers,
+    )
+    assert r.status_code == 201, r.text
+    visit_id = r.json()["id"]
+    flip = client.put(
+        f"/api/visits/{visit_id}/custom-fields",
+        json=[{"definition_id": defs[f], "checked": True, "note": None} for f in flags],
+        headers=headers,
+    )
+    assert flip.status_code == 200, flip.text
+    return visit_id
+
+
 # --- §1.1 user preferences -------------------------------------------------------
 class TestPreferences:
     def test_roundtrip(self, client, admin_headers):
@@ -97,36 +131,33 @@ class TestPreferences:
 
 # --- §2.2 mitzvot + tzedaka filters ------------------------------------------------
 class TestContactFilters17:
-    def test_mitzvot_and_semantics(self, client, admin_headers):
+    def test_mitzvot_and_semantics(self, client, admin_headers, db_session):
+        """fixes39: the old `mitzvot` param folded into `custom_fields` — same
+        AND-across-keys semantics, now that tefillin/tzedakah are ordinary
+        entity_type="visit" boolean custom fields."""
         c1 = _mk_contact(client, admin_headers, name="שתיים")
         c2 = _mk_contact(client, admin_headers, name="אחת")
         # fixes25: flags live on visits — c1 even splits them across two visits
         # (AND semantics hold across the contact's whole visit history).
-        client.post(
-            f"/api/contacts/{c1['id']}/visits",
-            json={"visit_date": "2026-07-01T00:00:00", "tefillin": True},
-            headers=admin_headers,
+        _log_mivtzoim_visit(
+            client, admin_headers, db_session, c1["id"], "2026-07-01T00:00:00", "tefillin"
         )
-        client.post(
-            f"/api/contacts/{c1['id']}/visits",
-            json={"visit_date": "2026-07-02T00:00:00", "tzedakah": True},
-            headers=admin_headers,
+        _log_mivtzoim_visit(
+            client, admin_headers, db_session, c1["id"], "2026-07-02T00:00:00", "tzedakah"
         )
-        client.post(
-            f"/api/contacts/{c2['id']}/visits",
-            json={"visit_date": "2026-07-01T00:00:00", "tzedakah": True},
-            headers=admin_headers,
+        _log_mivtzoim_visit(
+            client, admin_headers, db_session, c2["id"], "2026-07-01T00:00:00", "tzedakah"
         )
-        both = _list(client, admin_headers, "?mitzvot=tzedakah")
+        both = _list(client, admin_headers, "?custom_fields=tzedakah")
         assert {c["id"] for c in both["items"]} == {c1["id"], c2["id"]}
         only_both = _list(
-            client, admin_headers, "?mitzvot=tzedakah&mitzvot=tefillin"
+            client, admin_headers, "?custom_fields=tzedakah&custom_fields=tefillin"
         )
         assert [c["id"] for c in only_both["items"]] == [c1["id"]]
 
     def test_invalid_mitzvah_rejected(self, client, admin_headers):
         r = client.get(
-            "/api/contacts/list?mitzvot=not_a_field", headers=admin_headers
+            "/api/contacts/list?custom_fields=not_a_field", headers=admin_headers
         )
         assert r.status_code == 422
 
@@ -143,16 +174,15 @@ class TestContactFilters17:
         assert _list(client, admin_headers, "?tzedaka_potential=גבוה")["total"] == 0
         assert _list(client, admin_headers, "?tzedaka_potential=נמוך")["total"] == 0
 
-    def test_emails_respect_new_filters(self, client, admin_headers):
+    def test_emails_respect_new_filters(self, client, admin_headers, db_session):
         c = _mk_contact(client, admin_headers, name="עם", email="with@x.com")
         _mk_contact(client, admin_headers, name="בלי", email="without@x.com")
-        client.post(
-            f"/api/contacts/{c['id']}/visits",
-            json={"visit_date": "2026-07-01T00:00:00", "letter_in_torah": True},
-            headers=admin_headers,
+        _log_mivtzoim_visit(
+            client, admin_headers, db_session, c["id"], "2026-07-01T00:00:00",
+            "letter_in_torah",
         )
         r = client.get(
-            "/api/contacts/emails?mitzvot=letter_in_torah", headers=admin_headers
+            "/api/contacts/emails?custom_fields=letter_in_torah", headers=admin_headers
         )
         assert r.json() == ["with@x.com"]
 

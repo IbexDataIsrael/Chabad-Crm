@@ -9,9 +9,7 @@ import { useLocalization } from "@/lib/localization";
 import { usePicklist, usePicklistsMap } from "@/lib/picklists";
 import { useToast } from "@/lib/toast";
 import {
-  MIVTZOIM_FLAGS,
   type ContactCustomField,
-  type MivtzoimFlag,
   type Visit,
   type VisitInteraction,
 } from "@/lib/types";
@@ -49,11 +47,7 @@ export function VisitDetails({
   const visitType = usePicklist("visit.type");
   const torah = usePicklist("checklist.torah_thought");
   const editable = !readOnly && onPatch != null;
-  const visibleFlags = MIVTZOIM_FLAGS.filter((f) => vis(`visits.${f}`));
   const showTorah = vis("visits.torah_thought");
-  const showRebbe = vis("visits.connection_to_rebbe");
-
-  const [busyFlag, setBusyFlag] = useState<MivtzoimFlag | null>(null);
 
   // fixes35: any non-boolean, non-select visit custom field (boolean stays
   // exclusively on the legacy CustomFieldsEditor checkbox+note path below),
@@ -114,20 +108,6 @@ export function VisitDetails({
     if (checkedFlipped) void persistCustomFields(next);
   }
 
-  async function toggleFlag(flag: MivtzoimFlag) {
-    if (!editable || busyFlag) return;
-    setBusyFlag(flag);
-    try {
-      await onPatch!({ [flag]: !visit[flag] });
-    } catch (err) {
-      toastError(
-        err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"),
-      );
-    } finally {
-      setBusyFlag(null);
-    }
-  }
-
   async function saveInteractions(items: VisitInteraction[]) {
     try {
       await onPatch!({ interactions: items });
@@ -140,7 +120,7 @@ export function VisitDetails({
 
   /** Inline single-line/textarea editor for a plain visit text column. */
   function inlineText(
-    field: "location" | "notes" | "connection_to_rebbe",
+    field: "location" | "notes",
     multiline = false,
   ): ReactNode {
     const value = visit[field];
@@ -262,55 +242,25 @@ export function VisitDetails({
 
       {/* fixes25 §4: Mivtzoim flags logged on the visit. fixes27 §2/§4: the
           custom fields live inside this section (no separate heading), and
-          every field honors its admin visibility toggle. */}
-      {(visibleFlags.length > 0 ||
-        showTorah ||
-        showRebbe ||
+          every field honors its admin visibility toggle. fixes39: the
+          boolean flags render via `customFields` below (legacy
+          checkbox+note sub-resource) and connection_to_rebbe via
+          `visitCustomFieldDefs` below (field_type="text") — neither has
+          dedicated markup here anymore. */}
+      {(showTorah ||
         customFields.length > 0 ||
         visitCustomFieldDefs.length > 0 ||
         visitPicklistDefs.length > 0) && (
         <section className="space-y-2 border-t border-gray-100 pt-3">
           <h4 className="text-sm font-semibold">{t("visits.mivtzoim", "מבצעים")}</h4>
-          {visibleFlags.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {visibleFlags.map((flag) => (
-                <button
-                  key={flag}
-                  type="button"
-                  onClick={() => toggleFlag(flag)}
-                  disabled={!editable || busyFlag === flag}
-                  className={`flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm ${
-                    visit[flag]
-                      ? "border-status-green bg-status-green/10 text-status-green"
-                      : "border-gray-200 text-gray-600"
-                  } ${editable ? "hover:bg-gray-50" : "cursor-default"} ${
-                    busyFlag === flag ? "opacity-60" : ""
-                  }`}
-                >
-                  <span>{t(`visits.${flag}`)}</span>
-                  <span>{visit[flag] ? "✓" : ""}</span>
-                </button>
-              ))}
-            </div>
-          )}
-          {(showTorah || showRebbe) && (
+          {showTorah && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {showTorah && (
-                <div className="flex flex-col">
-                  <span className="text-xs text-gray-500">
-                    {t("visits.torah_thought", "דבר תורה")}
-                  </span>
-                  <span className="text-sm">{torahNode}</span>
-                </div>
-              )}
-              {showRebbe && (
-                <div className="flex flex-col">
-                  <span className="text-xs text-gray-500">
-                    {t("visits.connection_to_rebbe", "קשר לרבי")}
-                  </span>
-                  <span className="text-sm">{inlineText("connection_to_rebbe", true)}</span>
-                </div>
-              )}
+              <div className="flex flex-col">
+                <span className="text-xs text-gray-500">
+                  {t("visits.torah_thought", "דבר תורה")}
+                </span>
+                <span className="text-sm">{torahNode}</span>
+              </div>
             </div>
           )}
           {customFields.length > 0 && (

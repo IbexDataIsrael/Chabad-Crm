@@ -59,13 +59,33 @@ class TestVisitDateRangeFilter:
         # An empty range matches nobody (never has no visits at all).
         assert ids("?visit_from=2027-01-01") == set()
 
-    def test_range_combines_with_other_filters(self, client, admin_headers):
+    def test_range_combines_with_other_filters(self, client, admin_headers, db_session):
+        from app import models
+        from app.seed import seed_visit_mivtzoim_custom_fields
+
         a = _mk_contact(client, admin_headers, name="גם וגם")
         b = _mk_contact(client, admin_headers, name="רק ביקור")
-        _add_visit(client, admin_headers, a["id"], "2026-05-01T10:00:00", tefillin=True)
+        org_id = (
+            db_session.query(models.Contact.organization_id)
+            .filter(models.Contact.id == a["id"])
+            .scalar()
+        )
+        seed_visit_mivtzoim_custom_fields(db_session, org_id)
+        tefillin_def_id = (
+            db_session.query(models.CustomFieldDefinition.id)
+            .filter_by(organization_id=org_id, entity_type="visit", field_key="tefillin")
+            .scalar()
+        )
+        va = _add_visit(client, admin_headers, a["id"], "2026-05-01T10:00:00")
+        flip = client.put(
+            f"/api/visits/{va['id']}/custom-fields",
+            json=[{"definition_id": tefillin_def_id, "checked": True, "note": None}],
+            headers=admin_headers,
+        )
+        assert flip.status_code == 200, flip.text
         _add_visit(client, admin_headers, b["id"], "2026-05-01T10:00:00")
         r = client.get(
-            "/api/contacts/list?visit_from=2026-04-01&mitzvot=tefillin",
+            "/api/contacts/list?visit_from=2026-04-01&custom_fields=tefillin",
             headers=admin_headers,
         )
         assert {c["id"] for c in r.json()["items"]} == {a["id"]}

@@ -121,7 +121,6 @@ def test_org_delete_purges_every_org_scoped_table(
             "visit_date": "2026-07-01T00:00:00",
             "notes": "ביקור",
             # fixes25: engagement data rides on the visit.
-            "tefillin": True,
             "interactions": [{"category": "call", "note": "שיחה"}],
         },
         headers=admin_headers,

@@ -1059,15 +1059,11 @@ class VisitCreate(BaseModel):
     notes: Optional[str] = None
     # fixes25: visit-level engagement data.
     interactions: list[VisitInteraction] = []
-    tefillin: bool = False
-    tzedakah: bool = False
-    shabbat_candles: bool = False
-    torah_pamphlet: bool = False
-    letter_in_torah: bool = False
     torah_thought: Optional[str] = None
-    connection_to_rebbe: Optional[str] = None
     # fixes35: non-select visit custom field values (boolean-type ones still
-    # go through the legacy /custom-fields sub-resource instead).
+    # go through the legacy /custom-fields sub-resource instead). fixes39:
+    # this is also where connection_to_rebbe (now field_type="text") and the
+    # 5 Mivtzoim flags (via the legacy sub-resource) travel.
     custom_field_values: dict[str, CustomFieldValue] = {}
     # fixes35 §5: any admin-added visit-scoped select custom field, keyed by
     # system_name (checklist.<field_key>) — mirrors ApartmentBase/ContactBase's
@@ -1082,13 +1078,7 @@ class VisitUpdate(BaseModel):
     location: Optional[str] = None
     notes: Optional[str] = None
     interactions: Optional[list[VisitInteraction]] = None
-    tefillin: Optional[bool] = None
-    tzedakah: Optional[bool] = None
-    shabbat_candles: Optional[bool] = None
-    torah_pamphlet: Optional[bool] = None
-    letter_in_torah: Optional[bool] = None
     torah_thought: Optional[str] = None
-    connection_to_rebbe: Optional[str] = None
     custom_field_values: Optional[dict[str, CustomFieldValue]] = None
     picklist_values: Optional[dict[str, Optional[str]]] = None
 
@@ -1105,13 +1095,7 @@ class VisitOut(BaseModel):
     location: Optional[str] = None
     notes: Optional[str] = None
     interactions: list[VisitInteraction] = []
-    tefillin: bool = False
-    tzedakah: bool = False
-    shabbat_candles: bool = False
-    torah_pamphlet: bool = False
-    letter_in_torah: bool = False
     torah_thought: Optional[str] = None
-    connection_to_rebbe: Optional[str] = None
     custom_field_values: dict[str, CustomFieldValue] = {}
     picklist_values: dict[str, Optional[str]] = {}
 
@@ -1126,6 +1110,12 @@ class VisitSummaryItem(BaseModel):
 
 class VisitSummaryCategory(BaseModel):
     key: str
+    # fixes39: the breakdown is now driven by CustomFieldDefinition rows
+    # (any active entity_type="visit" boolean field, not a fixed tuple) — the
+    # labels ride along so the frontend doesn't need a localization lookup
+    # keyed on a fixed set of field names.
+    hebrew_label: str
+    english_label: Optional[str] = None
     count: int
     items: list[VisitSummaryItem]
 

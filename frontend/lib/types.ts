@@ -1,5 +1,7 @@
 // fixes25: the contact-level Checklist type is gone — Mivtzoim flags live on
-// the visit (see Visit / MIVTZOIM_FLAGS).
+// the visit. fixes39: they're ordinary entity_type="visit" boolean custom
+// fields now (checked via the legacy /custom-fields sub-resource, same as
+// any admin-added checklist item) — no dedicated Visit fields for them.
 
 // fixes35: any of the 4 entities x 5 field types (originally visit-only
 // boolean+note — CustomFieldDefinition generalized in place, see
@@ -314,30 +316,16 @@ export interface Visit {
   notes: string | null;
   // fixes25: visit-level engagement data.
   interactions: VisitInteraction[];
-  tefillin: boolean;
-  tzedakah: boolean;
-  shabbat_candles: boolean;
-  torah_pamphlet: boolean;
-  letter_in_torah: boolean;
   torah_thought: string | null;
-  connection_to_rebbe: string | null;
   /** fixes35: non-select visit custom field values — boolean-type ones still
-   *  ride the legacy /custom-fields checkbox+note sub-resource instead. */
+   *  ride the legacy /custom-fields checkbox+note sub-resource instead.
+   *  fixes39: this is also where connection_to_rebbe (now field_type="text")
+   *  travels — it's no longer a dedicated field on this interface. */
   custom_field_values?: CustomFieldValueMap;
   /** fixes35 §5: any visit-scoped select custom field beyond visit_type/
    *  torah_thought (which keep their own dedicated fields above). */
   picklist_values?: Record<string, string | null>;
 }
-
-/** The visit's Mivtzoim boolean flags, with their visits.* label keys. */
-export const MIVTZOIM_FLAGS = [
-  "tefillin",
-  "tzedakah",
-  "shabbat_candles",
-  "torah_pamphlet",
-  "letter_in_torah",
-] as const;
-export type MivtzoimFlag = (typeof MIVTZOIM_FLAGS)[number];
 
 // fixes38 §1.2/§1.3: "Summary of Visits" report + per-contact Visit Summary.
 export interface VisitSummaryItem {
@@ -348,7 +336,13 @@ export interface VisitSummaryItem {
 }
 
 export interface VisitSummaryCategory {
-  key: MivtzoimFlag;
+  /** fixes39: the field_key of the active entity_type="visit" boolean
+   *  custom field this category summarizes — no longer a fixed union of the
+   *  5 former Mivtzoim columns (any admin-added boolean checklist item now
+   *  appears here too). */
+  key: string;
+  hebrew_label: string;
+  english_label: string | null;
   count: number;
   items: VisitSummaryItem[];
 }

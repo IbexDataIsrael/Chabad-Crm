@@ -105,21 +105,42 @@ class TestBackupCreate:
 
 # --- Restore round-trip ---------------------------------------------------------
 class TestRestore:
-    def test_restore_replaces_current_data(self, client, admin_headers):
+    def test_restore_replaces_current_data(self, client, admin_headers, db_session):
+        from app import models
+        from app.seed import seed_visit_mivtzoim_custom_fields
+
         # World at backup time: area→building→apartment, a contact linked to
         # the apartment with a mitzvah-flagged visit + a significant date
-        # reminder (fixes25: the flag lives on the visit).
+        # reminder (fixes25: the flag lives on the visit; fixes39: as a
+        # boolean custom-field value, not a dedicated column).
         area = _mk_area(client, admin_headers)
         building = _mk_building(client, admin_headers, area["id"])
         apt = _mk_apartment(client, admin_headers, building["id"], apartment_name="1")
         a = _mk_contact(
             client, admin_headers, name="ישן", mekurav={"apartment_id": apt["id"]}
         )
-        client.post(
+        org_id = (
+            db_session.query(models.Contact.organization_id)
+            .filter(models.Contact.id == a["id"])
+            .scalar()
+        )
+        seed_visit_mivtzoim_custom_fields(db_session, org_id)
+        tzedakah_def_id = (
+            db_session.query(models.CustomFieldDefinition.id)
+            .filter_by(organization_id=org_id, entity_type="visit", field_key="tzedakah")
+            .scalar()
+        )
+        v = client.post(
             f"/api/contacts/{a['id']}/visits",
-            json={"visit_date": "2026-06-01T00:00:00", "tzedakah": True},
+            json={"visit_date": "2026-06-01T00:00:00"},
+            headers=admin_headers,
+        ).json()
+        flip = client.put(
+            f"/api/visits/{v['id']}/custom-fields",
+            json=[{"definition_id": tzedakah_def_id, "checked": True, "note": None}],
             headers=admin_headers,
         )
+        assert flip.status_code == 200, flip.text
         r = client.post(
             f"/api/contacts/{a['id']}/special-dates",
             json={
@@ -156,7 +177,11 @@ class TestRestore:
         visits = client.get(
             f"/api/contacts/{a['id']}/visits", headers=admin_headers
         ).json()
-        assert len(visits) == 1 and visits[0]["tzedakah"] is True
+        assert len(visits) == 1
+        flags = client.get(
+            f"/api/visits/{visits[0]['id']}/custom-fields", headers=admin_headers
+        ).json()
+        assert {f["field_key"]: f["checked"] for f in flags}["tzedakah"] is True
         assert body["mekurav"]["apartment_id"] == apt["id"]
         assert body["special_dates"][0]["reminders"][0]["offset_minutes"] == 60
         # …and the post-backup contact is gone. (Compared by name, not id —

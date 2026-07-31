@@ -76,13 +76,26 @@ class TestTorahThoughtFilter:
 
 
 class TestRebbeFilter:
-    def test_contains_match(self, client, admin_headers):
+    def test_contains_match(self, client, admin_headers, db_session):
+        from app import models
+        from app.seed import seed_visit_mivtzoim_custom_fields
+
         strong = _mk_mekurav(client, admin_headers, "קשר חזק")
+        org_id = (
+            db_session.query(models.Contact.organization_id)
+            .filter(models.Contact.id == strong["id"])
+            .scalar()
+        )
+        seed_visit_mivtzoim_custom_fields(db_session, org_id)
         _mk_visit(
-            client, admin_headers, strong["id"], connection_to_rebbe="קשר חזק מאוד"
+            client, admin_headers, strong["id"],
+            custom_field_values={"connection_to_rebbe": "קשר חזק מאוד"},
         )
         weak = _mk_mekurav(client, admin_headers, "קשר אחר")
-        _mk_visit(client, admin_headers, weak["id"], connection_to_rebbe="התחלה")
+        _mk_visit(
+            client, admin_headers, weak["id"],
+            custom_field_values={"connection_to_rebbe": "התחלה"},
+        )
 
         ids = _list_ids(
             client, admin_headers, "contact_type=mekurav&connection_to_rebbe=חזק"
@@ -192,29 +205,33 @@ class TestListLoginStatus:
 # --- §4 visit fields in the visibility registry ----------------------------------
 class TestVisitFieldSettings:
     def test_registry_lists_visit_fields(self, client, admin_headers):
+        """fixes39: only visits.torah_thought (picklist-backed) is left in
+        this registry — the Mivtzoim flags + connection_to_rebbe are now
+        ordinary custom fields, hidden via CustomFieldDefinition.is_active
+        instead (see TestCustomFieldFilter above), not field_settings."""
         r = client.get("/api/field-settings", headers=admin_headers)
         assert r.status_code == 200, r.text
         by_key = {f["field_key"]: f for f in r.json()}
+        assert "visits.torah_thought" in by_key
+        assert by_key["visits.torah_thought"]["entity"] == "visit"
+        assert by_key["visits.torah_thought"]["is_visible"] is True  # default-visible
         for key in (
             "visits.tefillin",
             "visits.tzedakah",
             "visits.shabbat_candles",
             "visits.torah_pamphlet",
             "visits.letter_in_torah",
-            "visits.torah_thought",
             "visits.connection_to_rebbe",
         ):
-            assert key in by_key, key
-            assert by_key[key]["entity"] == "visit"
-            assert by_key[key]["is_visible"] is True  # default-visible
+            assert key not in by_key, key
 
     def test_toggle_roundtrip(self, client, admin_headers):
         r = client.put(
             "/api/field-settings",
-            json={"field_key": "visits.tefillin", "is_visible": False},
+            json={"field_key": "visits.torah_thought", "is_visible": False},
             headers=admin_headers,
         )
         assert r.status_code == 200, r.text
         r = client.get("/api/field-settings", headers=admin_headers)
-        row = next(f for f in r.json() if f["field_key"] == "visits.tefillin")
+        row = next(f for f in r.json() if f["field_key"] == "visits.torah_thought")
         assert row["is_visible"] is False

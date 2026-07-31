@@ -20,7 +20,7 @@ import { usePersistentState } from "@/lib/persist";
 import { FIXED_APARTMENT_PICKLIST_KEYS, usePicklist, usePicklistsMap } from "@/lib/picklists";
 import { useDbPreference } from "@/lib/preferences";
 import { useToast } from "@/lib/toast";
-import { useChipReorder } from "@/lib/useChipReorder";
+import { useSortableList } from "@/lib/useSortableList";
 import { EMAIL_HINT, PHONE_HINT, isValidEmail, isValidPhone } from "@/lib/validation";
 import {
   apartmentTitle,
@@ -170,10 +170,11 @@ export default function ApartmentsPage() {
     "crm.apartments.filtersOpen", true,
   );
   const [fieldsOpen, setFieldsOpen] = useState(false);
-  // fixes38: pointer-events-based reorder (native HTML5 drag-and-drop never
-  // engages on many Windows trackpads — see useChipReorder's doc comment).
-  const { draggedKey: draggedField, hoverKey: hoverField, chipProps: fieldChipProps, withClickGuard } =
-    useChipReorder<FieldKey>(moveField);
+  // fixes39: SortableJS-backed reorder, mobile-first (native HTML5
+  // drag-and-drop never engages on many Windows trackpads — see
+  // useSortableList's doc comment).
+  const { containerRef: fieldsSortableRef, withClickGuard } =
+    useSortableList<HTMLDivElement>(reorderFields);
   const [debouncedQ, setDebouncedQ] = useState(query);
   const [batchOpen, setBatchOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -411,26 +412,20 @@ export default function ApartmentsPage() {
     );
   }
 
-  // fixes32 §6: drag one active-field chip to another position — reorders the
-  // stored preference array itself (no separate "column order" preference).
-  // fixes38 §2.1: the insert index must account for the shift caused by
-  // removing `from` first — otherwise a rightward drag lands the chip AFTER
-  // the drop target while a leftward drag lands it BEFORE, which reads as
-  // "reordering is broken" (same gesture, direction-dependent result).
-  function moveField(from: FieldKey, to: FieldKey) {
-    if (from === to) return;
+  // fixes39 §3: SortableJS's container holds every chip (active + inactive
+  // — an inactive one can't be dragged, per useSortableList's `filter`, but
+  // a dragged active chip can still land next to/among them), so rather
+  // than translate a single from/to index pair against two different lists,
+  // just recompute the active order from the container's resulting DOM
+  // order directly: keep whichever of `orderedKeys` are currently active,
+  // in their new relative order.
+  function reorderFields(orderedKeys: string[]) {
     setFields((prev) => {
-      const known = prev.filter((k): k is FieldKey =>
-        (FIELD_KEYS as readonly string[]).includes(k),
+      const activeSet = new Set(
+        prev.filter((k): k is FieldKey => (FIELD_KEYS as readonly string[]).includes(k)),
       );
-      const fromIdx = known.indexOf(from);
-      const toIdx = known.indexOf(to);
-      if (fromIdx === -1 || toIdx === -1) return prev;
-      const next = [...known];
-      next.splice(fromIdx, 1);
-      const insertIdx = fromIdx < toIdx ? toIdx - 1 : toIdx;
-      next.splice(insertIdx, 0, from);
-      return next;
+      const reordered = orderedKeys.filter((k): k is FieldKey => activeSet.has(k as FieldKey));
+      return reordered.length > 0 ? reordered : prev;
     });
   }
 
@@ -767,68 +762,68 @@ export default function ApartmentsPage() {
               )}
             </p>
           )}
-          <div className="flex flex-wrap gap-2">
-            {/* fixes32-stillnotdone §1: active chips render FIRST, in their
-                actual current (reordered) order — rendering every chip in
-                the fixed FIELD_KEYS order regardless of drag state meant a
-                successful drag changed the table but never visibly moved
-                anything in this panel, reading as "nothing happened".
-                fixes33 §5.2: fields an admin hid org-wide aren't offered.
-                fixes38: pointer-events drag (see useChipReorder) — native
-                HTML5 drag-and-drop never engages on many Windows trackpads. */}
-            {[
-              ...activeFields,
-              ...FIELD_KEYS.filter((k) => !activeFields.includes(k)),
-            ].filter(fieldVisible).map((k) => {
-              const active = activeFields.includes(k);
+          {/* fixes39 §3: one real SortableJS-managed container for every
+              chip (mobile-first — see useSortableList's doc comment). Only
+              the active-field chips are actually reorderable — every other
+              chip here (inactive fields, custom-picklist/custom-field/
+              linked-contact toggles) is marked `data-sortable-disabled` so
+              it can't be dragged (its own click still works —
+              `preventOnFilter: false`) but still occupies a normal slot so
+              the active ones keep flowing in the same row. Active chips
+              render FIRST, in their actual current (reordered) order.
+              fixes33 §5.2: fields an admin hid org-wide aren't offered. */}
+          <div ref={fieldsSortableRef} className="flex flex-wrap gap-2">
+            {activeFields.filter(fieldVisible).map((k) => {
               const activeIdx = activeFields.indexOf(k);
               return (
-                <span key={k} className="inline-flex items-center gap-0.5">
+                <span key={k} data-sort-key={k} className="inline-flex items-center gap-0.5">
                   <button
                     type="button"
-                    {...fieldChipProps(k, active)}
                     onClick={withClickGuard(() => toggleField(k))}
-                    className={`rounded-md border px-3 py-1.5 text-sm ${
-                      active
-                        ? "border-status-magenta bg-status-magenta/10 text-status-magenta cursor-grab active:cursor-grabbing"
-                        : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                    } ${draggedField === k ? "opacity-40" : ""} ${
-                      hoverField === k && draggedField && draggedField !== k
-                        ? "ring-2 ring-status-magenta"
-                        : ""
-                    }`}
+                    className="rounded-md border px-3 py-1.5 text-sm border-status-magenta bg-status-magenta/10 text-status-magenta cursor-grab active:cursor-grabbing"
                   >
-                    {active ? "⠿ " : ""}
-                    {fieldLabels[k]}
+                    ⠿ {fieldLabels[k]}
                   </button>
-                  {/* fixes38: guaranteed-reliable fallback for dragging (see
-                      moveActiveField) — a click always works, unlike a drag
-                      gesture on some trackpads. */}
-                  {active && (
-                    <span className="flex flex-col gap-0.5">
-                      <button
-                        type="button"
-                        disabled={activeIdx === 0}
-                        onClick={() => moveActiveField(k, -1)}
-                        title={t("action.move_up", "העלה")}
-                        className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
-                      >
-                        ▲
-                      </button>
-                      <button
-                        type="button"
-                        disabled={activeIdx === activeFields.length - 1}
-                        onClick={() => moveActiveField(k, 1)}
-                        title={t("action.move_down", "הורד")}
-                        className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
-                      >
-                        ▼
-                      </button>
-                    </span>
-                  )}
+                  {/* fixes38: guaranteed-reliable fallback for dragging —
+                      a click always works, unlike a drag gesture on some
+                      trackpads. */}
+                  <span className="flex flex-col gap-0.5">
+                    <button
+                      type="button"
+                      disabled={activeIdx === 0}
+                      onClick={() => moveActiveField(k, -1)}
+                      title={t("action.move_up", "העלה")}
+                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
+                    >
+                      ▲
+                    </button>
+                    <button
+                      type="button"
+                      disabled={activeIdx === activeFields.length - 1}
+                      onClick={() => moveActiveField(k, 1)}
+                      title={t("action.move_down", "הורד")}
+                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
+                    >
+                      ▼
+                    </button>
+                  </span>
                 </span>
               );
             })}
+            {FIELD_KEYS.filter((k) => !activeFields.includes(k) && fieldVisible(k)).map(
+              (k) => (
+                <button
+                  key={k}
+                  type="button"
+                  data-sort-key={k}
+                  data-sortable-disabled=""
+                  onClick={() => toggleField(k)}
+                  className="rounded-md border px-3 py-1.5 text-sm border-gray-200 text-gray-600 hover:bg-gray-50"
+                >
+                  {fieldLabels[k]}
+                </button>
+              ),
+            )}
             {/* fixes33 §3.1: one show/hide toggle per admin-added apartment.*
                 picklist — a personal preference, separate from whether the
                 field is hidden org-wide (Manage Fields, fixes33 §5.2). */}
@@ -838,6 +833,7 @@ export default function ApartmentsPage() {
                 <button
                   key={d.field_key}
                   type="button"
+                  data-sortable-disabled=""
                   onClick={() => toggleCustomField(d.field_key)}
                   className={`rounded-md border px-3 py-1.5 text-sm ${
                     active
@@ -859,6 +855,7 @@ export default function ApartmentsPage() {
                 <button
                   key={d.field_key}
                   type="button"
+                  data-sortable-disabled=""
                   onClick={() => toggleCustomFieldColumn(d.field_key)}
                   className={`rounded-md border px-3 py-1.5 text-sm ${
                     active
@@ -875,6 +872,7 @@ export default function ApartmentsPage() {
             {/* fixes30 §1b: the linked-contact column, previously always on. */}
             <button
               type="button"
+              data-sortable-disabled=""
               onClick={() => setShowContact(!showContact)}
               className={`rounded-md border px-3 py-1.5 text-sm ${
                 showContact

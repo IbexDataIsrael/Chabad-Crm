@@ -49,8 +49,8 @@ def _mk_staff_same_org(client, admin_headers, email="staff38@example.com"):
 class TestVisitsSummary:
     def test_date_range_filters(self, client, admin_headers):
         c = _mk_mekurav(client, admin_headers, "טווח תאריכים")
-        _mk_visit(client, admin_headers, c["id"], "2026-01-05T10:00:00", tefillin=True)
-        _mk_visit(client, admin_headers, c["id"], "2026-02-05T10:00:00", tefillin=True)
+        _mk_visit(client, admin_headers, c["id"], "2026-01-05T10:00:00")
+        _mk_visit(client, admin_headers, c["id"], "2026-02-05T10:00:00")
         r = client.get(
             "/api/visits/summary",
             params={
@@ -63,13 +63,52 @@ class TestVisitsSummary:
         assert r.status_code == 200, r.text
         assert r.json()["total"] == 1
 
-    def test_category_breakdown_and_contact_links(self, client, admin_headers):
+    def test_category_breakdown_and_contact_links(self, client, admin_headers, db_session):
+        """fixes39: the breakdown is dynamic — driven by active
+        entity_type="visit" boolean custom fields, not a fixed tuple. Checks
+        both a migrated default field (tefillin) and an admin-added one
+        (a Purim-party checklist item) show up side by side."""
+        from app import models
+        from app.seed import seed_visit_mivtzoim_custom_fields
+
         c = _mk_mekurav(client, admin_headers, "פירוט קטגוריות")
-        _mk_visit(
-            client, admin_headers, c["id"], "2026-03-01T10:00:00",
-            tefillin=True, tzedakah=True,
+        org_id = (
+            db_session.query(models.Contact.organization_id)
+            .filter(models.Contact.id == c["id"])
+            .scalar()
         )
-        _mk_visit(client, admin_headers, c["id"], "2026-03-02T10:00:00", tefillin=True)
+        seed_visit_mivtzoim_custom_fields(db_session, org_id)
+        defs = {
+            d.field_key: d.id
+            for d in db_session.query(models.CustomFieldDefinition).filter_by(
+                organization_id=org_id, entity_type="visit"
+            )
+        }
+        purim = client.post(
+            "/api/custom-fields",
+            json={"field_key": "purim_party38", "hebrew_label": "מסיבת פורים"},
+            headers=admin_headers,
+        ).json()
+
+        v1 = _mk_visit(client, admin_headers, c["id"], "2026-03-01T10:00:00")
+        r = client.put(
+            f"/api/visits/{v1['id']}/custom-fields",
+            json=[
+                {"definition_id": defs["tefillin"], "checked": True, "note": None},
+                {"definition_id": defs["tzedakah"], "checked": True, "note": None},
+                {"definition_id": purim["id"], "checked": True, "note": None},
+            ],
+            headers=admin_headers,
+        )
+        assert r.status_code == 200, r.text
+        v2 = _mk_visit(client, admin_headers, c["id"], "2026-03-02T10:00:00")
+        r = client.put(
+            f"/api/visits/{v2['id']}/custom-fields",
+            json=[{"definition_id": defs["tefillin"], "checked": True, "note": None}],
+            headers=admin_headers,
+        )
+        assert r.status_code == 200, r.text
+
         r = client.get(
             "/api/visits/summary",
             params={
@@ -84,8 +123,14 @@ class TestVisitsSummary:
         assert body["total"] == 2
         by_key = {cat["key"]: cat for cat in body["categories"]}
         assert by_key["tefillin"]["count"] == 2
+        assert by_key["tefillin"]["hebrew_label"] == "תפילין"
         assert by_key["tzedakah"]["count"] == 1
         assert by_key["shabbat_candles"]["count"] == 0
+        # An admin-added checklist item shows up in the breakdown too — this
+        # never happened before fixes39 (the endpoint only knew about the 5
+        # fixed columns).
+        assert by_key["purim_party38"]["count"] == 1
+        assert by_key["purim_party38"]["hebrew_label"] == "מסיבת פורים"
         item = by_key["tefillin"]["items"][0]
         assert item["contact_id"] == c["id"]
         assert item["contact_name"]
@@ -97,8 +142,8 @@ class TestVisitsSummary:
             client, admin_headers, "משויך לצוות", assigned_user_id=me["guid"]
         )
         unassigned = _mk_mekurav(client, admin_headers, "לא משויך")
-        _mk_visit(client, admin_headers, assigned["id"], "2026-04-01T10:00:00", tefillin=True)
-        _mk_visit(client, admin_headers, unassigned["id"], "2026-04-01T10:00:00", tefillin=True)
+        _mk_visit(client, admin_headers, assigned["id"], "2026-04-01T10:00:00")
+        _mk_visit(client, admin_headers, unassigned["id"], "2026-04-01T10:00:00")
 
         r = client.get(
             "/api/visits/summary",
@@ -117,7 +162,7 @@ class TestVisitsSummary:
         c = _mk_mekurav(
             client, admin_headers, "לא משויך למנהל", assigned_user_id=me["guid"]
         )
-        _mk_visit(client, admin_headers, c["id"], "2026-05-01T10:00:00", tefillin=True)
+        _mk_visit(client, admin_headers, c["id"], "2026-05-01T10:00:00")
         r = client.get(
             "/api/visits/summary",
             params={"date_from": "2026-05-01", "date_to": "2026-05-31"},
@@ -132,7 +177,7 @@ class TestVisitsSummary:
         c = _mk_mekurav(
             client, admin_headers, "לא משויך למנהל 2", assigned_user_id=me["guid"]
         )
-        _mk_visit(client, admin_headers, c["id"], "2026-06-01T10:00:00", tefillin=True)
+        _mk_visit(client, admin_headers, c["id"], "2026-06-01T10:00:00")
         r = client.get(
             "/api/visits/summary",
             params={
@@ -148,7 +193,7 @@ class TestVisitsSummary:
     def test_contact_id_scoping_ignores_assignment(self, client, admin_headers):
         _mk_staff_same_org(client, admin_headers, email="staff38b@example.com")
         c = _mk_mekurav(client, admin_headers, "לצפייה ישירה")
-        _mk_visit(client, admin_headers, c["id"], "2026-07-01T10:00:00", tefillin=True)
+        _mk_visit(client, admin_headers, c["id"], "2026-07-01T10:00:00")
         r = client.get(
             "/api/visits/summary",
             params={

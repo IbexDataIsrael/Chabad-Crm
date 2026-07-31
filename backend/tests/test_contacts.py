@@ -117,36 +117,65 @@ def test_contact_new_fields_roundtrip(client, auth_headers):
     assert mk["first_visit"].startswith("2026-01-15")
 
 
-def test_visit_mivtzoim_roundtrip(client, auth_headers):
-    """fixes25: the Mivtzoim flags + engagement extras live on the visit."""
+def test_visit_mivtzoim_roundtrip(client, auth_headers, db_session):
+    """fixes39: the Mivtzoim flags are now boolean custom fields (checked via
+    the legacy /custom-fields sub-resource, same as any admin-added
+    checklist item); connection_to_rebbe is a text-type custom field carried
+    in the visit payload's custom_field_values."""
+    from app import models
+    from app.seed import seed_visit_mivtzoim_custom_fields
+
     cid = _make_contact(client, auth_headers).json()["id"]
+    org_id = db_session.get(models.Contact, cid).organization_id
+    seed_visit_mivtzoim_custom_fields(db_session, org_id)
+    defs = {
+        d.field_key: d.id
+        for d in db_session.query(models.CustomFieldDefinition).filter_by(
+            organization_id=org_id, entity_type="visit"
+        )
+    }
+
     r = client.post(
         f"/api/contacts/{cid}/visits",
         json={
             "visit_date": "2026-02-01T10:00:00",
-            "tefillin": True,
-            "shabbat_candles": True,
-            "connection_to_rebbe": "קשר חזק",
+            "custom_field_values": {"connection_to_rebbe": "קשר חזק"},
         },
         headers=auth_headers,
     )
     assert r.status_code == 201, r.text
     body = r.json()
-    assert body["tefillin"] is True
-    assert body["shabbat_candles"] is True
-    assert body["tzedakah"] is False
-    assert body["letter_in_torah"] is False
-    assert body["connection_to_rebbe"] == "קשר חזק"
+    assert body["custom_field_values"]["connection_to_rebbe"] == "קשר חזק"
 
-    # Partial update flips one flag and leaves the others alone.
+    flip = client.put(
+        f"/api/visits/{body['id']}/custom-fields",
+        json=[
+            {"definition_id": defs["tefillin"], "checked": True, "note": None},
+            {"definition_id": defs["shabbat_candles"], "checked": True, "note": None},
+        ],
+        headers=auth_headers,
+    )
+    assert flip.status_code == 200, flip.text
+    flags = {f["field_key"]: f["checked"] for f in flip.json()}
+    assert flags["tefillin"] is True
+    assert flags["shabbat_candles"] is True
+    assert flags["tzedakah"] is False
+    assert flags["letter_in_torah"] is False
+
+    # Setting one more flag leaves the earlier ones alone.
     upd = client.put(
-        f"/api/contacts/{cid}/visits/{body['id']}",
-        json={"tzedakah": True},
+        f"/api/visits/{body['id']}/custom-fields",
+        json=[
+            {"definition_id": defs["tefillin"], "checked": True, "note": None},
+            {"definition_id": defs["shabbat_candles"], "checked": True, "note": None},
+            {"definition_id": defs["tzedakah"], "checked": True, "note": None},
+        ],
         headers=auth_headers,
     )
     assert upd.status_code == 200
-    assert upd.json()["tzedakah"] is True
-    assert upd.json()["tefillin"] is True
+    flags2 = {f["field_key"]: f["checked"] for f in upd.json()}
+    assert flags2["tzedakah"] is True
+    assert flags2["tefillin"] is True
 
     # The contact-level checklist endpoint is gone.
     assert (

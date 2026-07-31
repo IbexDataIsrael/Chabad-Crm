@@ -98,17 +98,14 @@ TOGGLEABLE_FIELDS: list[tuple[str, str, str]] = [
     ("apartment.language", "picklist.apartment.language", "apartment"),  # fixes13
     # fixes19: linked report number (מספר דוח).
     ("apartments.report_number_id", "apartments.report_number_id", "apartment"),
-    # fixes27 §4: built-in visit fields (Mivtzoim flags + torah thought +
-    # connection to the Rebbe). Hiding one removes it from the visit forms,
-    # the visit detail cards and the contacts-page filter options. Labels
-    # reuse the seeded visits.* rows.
-    ("visits.tefillin", "visits.tefillin", "visit"),
-    ("visits.tzedakah", "visits.tzedakah", "visit"),
-    ("visits.shabbat_candles", "visits.shabbat_candles", "visit"),
-    ("visits.torah_pamphlet", "visits.torah_pamphlet", "visit"),
-    ("visits.letter_in_torah", "visits.letter_in_torah", "visit"),
+    # fixes27 §4: built-in visit field (torah thought — picklist-backed,
+    # untouched by fixes39). Hiding it removes it from the visit forms and
+    # detail cards. fixes39: the Mivtzoim flags + connection_to_rebbe moved
+    # off dedicated columns onto ordinary entity_type="visit" custom fields —
+    # their visibility is now controlled the same way any org-added visit
+    # custom field's is (CustomFieldDefinition.is_active, via the
+    # custom-fields admin UI), not this field_settings mechanism.
     ("visits.torah_thought", "visits.torah_thought", "visit"),
-    ("visits.connection_to_rebbe", "visits.connection_to_rebbe", "visit"),
 ]
 
 # Fields concealed by default (an explicit field_settings row overrides this).

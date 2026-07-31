@@ -186,32 +186,64 @@ class TestRestrictedUserNoShliach:
 
 # --- §3 hidden fields never filter --------------------------------------------
 class TestHiddenMivtzoimFilter:
-    def _hide(self, client, headers, field_key, hidden=True):
-        r = client.put(
-            "/api/field-settings",
-            json={"field_key": field_key, "is_visible": not hidden},
-            headers=headers,
-        )
-        assert r.status_code == 200, r.text
+    def test_hidden_flag_is_ignored(self, client, admin_headers, db_session):
+        """fixes39: tefillin is an ordinary boolean custom field now — it's
+        hidden the same way any admin-added checklist item is (deactivate via
+        the custom-fields page), not via field_settings — mirrors
+        TestCustomFieldFilter.test_unknown_key_is_422 /
+        test_inactive_custom_field_key_is_ignored below, but for a migrated
+        default field instead of an admin-added one."""
+        from app import models
+        from app.seed import seed_visit_mivtzoim_custom_fields
 
-    def test_hidden_flag_is_ignored(self, client, admin_headers):
         with_flag = _mk_mekurav(client, admin_headers, "עם תפילין")
-        _mk_visit(client, admin_headers, with_flag["id"], tefillin=True)
+        org_id = (
+            db_session.query(models.Contact.organization_id)
+            .filter(models.Contact.id == with_flag["id"])
+            .scalar()
+        )
+        seed_visit_mivtzoim_custom_fields(db_session, org_id)
+        tefillin_def_id = (
+            db_session.query(models.CustomFieldDefinition.id)
+            .filter_by(organization_id=org_id, entity_type="visit", field_key="tefillin")
+            .scalar()
+        )
+        v = _mk_visit(client, admin_headers, with_flag["id"])
+        flip = client.put(
+            f"/api/visits/{v['id']}/custom-fields",
+            json=[{"definition_id": tefillin_def_id, "checked": True, "note": None}],
+            headers=admin_headers,
+        )
+        assert flip.status_code == 200, flip.text
         without = _mk_mekurav(client, admin_headers, "בלי תפילין")
         _mk_visit(client, admin_headers, without["id"])
 
         # Visible → the flag filters as before.
-        ids = _list_ids(client, admin_headers, "contact_type=mekurav&mitzvot=tefillin")
+        ids = _list_ids(
+            client, admin_headers, "contact_type=mekurav&custom_fields=tefillin"
+        )
         assert ids == [with_flag["id"]]
+        assert _list_ids(
+            client, admin_headers, "contact_type=mekurav&has_mitzvot=true"
+        ) == [with_flag["id"]]
 
-        # Hidden → the stale selection stops narrowing the list.
-        self._hide(client, admin_headers, "visits.tefillin")
-        ids = _list_ids(client, admin_headers, "contact_type=mekurav&mitzvot=tefillin")
+        # Deactivated → the stale selection stops narrowing the list (both
+        # the named `custom_fields` filter and the generic `has_mitzvot` one).
+        r = client.delete(
+            f"/api/custom-fields/{tefillin_def_id}", headers=admin_headers
+        )
+        assert r.status_code == 200, r.text
+        ids = _list_ids(
+            client, admin_headers, "contact_type=mekurav&custom_fields=tefillin"
+        )
         assert set(ids) >= {with_flag["id"], without["id"]}
+        assert set(
+            _list_ids(client, admin_headers, "contact_type=mekurav&has_mitzvot=true")
+        ).isdisjoint({with_flag["id"], without["id"]})
 
-        # Unknown names still 422 even while others are hidden.
+        # Unknown names still 422 even while others are deactivated.
         r = client.get(
-            "/api/contacts/list?contact_type=mekurav&mitzvot=nope",
+            "/api/contacts/list?contact_type=mekurav&custom_fields=nope",
             headers=admin_headers,
         )
         assert r.status_code == 422

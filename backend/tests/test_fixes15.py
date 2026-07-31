@@ -151,16 +151,36 @@ class TestContactGeoFilters:
 
 # --- §5.1 mitzvot filter --------------------------------------------------------
 class TestMitzvotFilter:
-    def test_has_mitzvot_keeps_only_checked_contacts(self, client, admin_headers):
+    def test_has_mitzvot_keeps_only_checked_contacts(self, client, admin_headers, db_session):
+        from app.seed import seed_visit_mivtzoim_custom_fields
+
         c1 = _mk_contact(client, admin_headers, name="עם מצווה")
         _mk_contact(client, admin_headers, name="בלי מצווה")
-        # fixes25: Mivtzoim flags are logged per visit.
+        # fixes39: the Mivtzoim flags are boolean custom fields now.
+        org_id = (
+            db_session.query(models.Contact.organization_id)
+            .filter(models.Contact.id == c1["id"])
+            .scalar()
+        )
+        seed_visit_mivtzoim_custom_fields(db_session, org_id)
+        tzedakah_def = (
+            db_session.query(models.CustomFieldDefinition)
+            .filter_by(organization_id=org_id, entity_type="visit", field_key="tzedakah")
+            .one()
+        )
         r = client.post(
             f"/api/contacts/{c1['id']}/visits",
-            json={"visit_date": "2026-07-01T00:00:00", "tzedakah": True},
+            json={"visit_date": "2026-07-01T00:00:00"},
             headers=admin_headers,
         )
         assert r.status_code == 201, r.text
+        visit_id = r.json()["id"]
+        flip = client.put(
+            f"/api/visits/{visit_id}/custom-fields",
+            json=[{"definition_id": tzedakah_def.id, "checked": True, "note": None}],
+            headers=admin_headers,
+        )
+        assert flip.status_code == 200, flip.text
         got = _list(client, admin_headers, "?has_mitzvot=true")
         assert [c["id"] for c in got["items"]] == [c1["id"]]
         # Without the flag both come back.

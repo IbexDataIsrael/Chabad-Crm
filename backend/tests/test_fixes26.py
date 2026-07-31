@@ -132,22 +132,52 @@ class TestVisitPatch:
         assert fresh["notes"] == "הערה"
         assert fresh["location"] == "בבית"  # untouched by the partial patch
 
-    def test_patch_alias_per_contact(self, client, admin_headers):
+    def test_patch_alias_per_contact(self, client, admin_headers, db_session):
+        """fixes39: a boolean Mivtzoim flag (checked via the separate
+        /custom-fields sub-resource) and connection_to_rebbe (a text custom
+        field carried in the visit's own custom_field_values) now live in two
+        different places — a partial PATCH to the visit's plain fields must
+        not disturb the boolean flag set through the other endpoint."""
+        from app import models
+        from app.seed import seed_visit_mivtzoim_custom_fields
+
         c = _mk_mekurav(client, admin_headers, name="מקורב ביקור")
+        org_id = (
+            db_session.query(models.Contact.organization_id)
+            .filter(models.Contact.id == c["id"])
+            .scalar()
+        )
+        seed_visit_mivtzoim_custom_fields(db_session, org_id)
+        tefillin_def_id = (
+            db_session.query(models.CustomFieldDefinition.id)
+            .filter_by(organization_id=org_id, entity_type="visit", field_key="tefillin")
+            .scalar()
+        )
         visit = client.post(
             f"/api/contacts/{c['id']}/visits",
-            json={"visit_date": "2026-07-02T10:00:00", "tefillin": True},
+            json={"visit_date": "2026-07-02T10:00:00"},
             headers=admin_headers,
         ).json()
+        flip = client.put(
+            f"/api/visits/{visit['id']}/custom-fields",
+            json=[{"definition_id": tefillin_def_id, "checked": True, "note": None}],
+            headers=admin_headers,
+        )
+        assert flip.status_code == 200, flip.text
+
         r = client.patch(
             f"/api/contacts/{c['id']}/visits/{visit['id']}",
-            json={"tzedakah": True},
+            json={"custom_field_values": {"connection_to_rebbe": "קשר חדש"}},
             headers=admin_headers,
         )
         assert r.status_code == 200, r.text
         fresh = r.json()
-        assert fresh["tzedakah"] is True
-        assert fresh["tefillin"] is True  # untouched by the partial patch
+        assert fresh["custom_field_values"]["connection_to_rebbe"] == "קשר חדש"
+
+        flags = client.get(
+            f"/api/visits/{visit['id']}/custom-fields", headers=admin_headers
+        ).json()
+        assert {f["field_key"]: f["checked"] for f in flags}["tefillin"] is True
 
 
 # --- §4 shliach login status + recreate ----------------------------------------
