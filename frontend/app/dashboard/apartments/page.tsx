@@ -805,13 +805,13 @@ export default function ApartmentsPage() {
                       moveActiveField) — a click always works, unlike a drag
                       gesture on some trackpads. */}
                   {active && (
-                    <span className="flex flex-col">
+                    <span className="flex flex-col gap-0.5">
                       <button
                         type="button"
                         disabled={activeIdx === 0}
                         onClick={() => moveActiveField(k, -1)}
                         title={t("action.move_up", "העלה")}
-                        className="rounded text-[10px] leading-none px-1 text-gray-400 hover:text-status-magenta disabled:opacity-20"
+                        className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
                       >
                         ▲
                       </button>
@@ -820,7 +820,7 @@ export default function ApartmentsPage() {
                         disabled={activeIdx === activeFields.length - 1}
                         onClick={() => moveActiveField(k, 1)}
                         title={t("action.move_down", "הורד")}
-                        className="rounded text-[10px] leading-none px-1 text-gray-400 hover:text-status-magenta disabled:opacity-20"
+                        className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
                       >
                         ▼
                       </button>

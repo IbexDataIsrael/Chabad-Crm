@@ -171,24 +171,41 @@ function CustomFieldsSection() {
           {t("cf.none", "אין שדות מותאמים עדיין.")}
         </p>
       ) : (
-        <ul className="divide-y divide-gray-100">
-          {defs.map((d) => (
-            <li key={d.id} className="px-4 py-2 flex items-center justify-between gap-3">
-              <span className={`text-sm ${d.is_active ? "" : "text-gray-400"}`}>
-                {d.hebrew_label}
-              </span>
-              <label className="inline-flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
-                {d.is_active ? t("fields.shown", "מוצג") : t("fields.hidden", "מוסתר")}
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-status-magenta"
-                  checked={d.is_active}
-                  onChange={(e) => toggle(d, e.target.checked)}
-                />
-              </label>
-            </li>
-          ))}
-        </ul>
+        // fixes38b: grouped by entity with a visible heading per group — this
+        // used to be one flat, unlabeled list, which is exactly why it read
+        // as "unclear which entity" / "mixed up" (a visit-scoped Mivtzoim-
+        // style custom field and a contact field looked identical here, even
+        // though each already appears correctly labeled in its own entity
+        // section above).
+        ENTITY_GROUPS.filter(({ entity }) =>
+          defs.some((d) => d.entity_type === entity),
+        ).map(({ entity, labelKey, fallback }) => (
+          <div key={entity}>
+            <h3 className="px-4 py-1.5 bg-gray-50 text-xs font-medium text-gray-500 border-b border-t border-gray-100">
+              {t(labelKey, fallback)}
+            </h3>
+            <ul className="divide-y divide-gray-100">
+              {defs
+                .filter((d) => d.entity_type === entity)
+                .map((d) => (
+                  <li key={d.id} className="px-4 py-2 flex items-center justify-between gap-3">
+                    <span className={`text-sm ${d.is_active ? "" : "text-gray-400"}`}>
+                      {d.hebrew_label}
+                    </span>
+                    <label className="inline-flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
+                      {d.is_active ? t("fields.shown", "מוצג") : t("fields.hidden", "מוסתר")}
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-status-magenta"
+                        checked={d.is_active}
+                        onChange={(e) => toggle(d, e.target.checked)}
+                      />
+                    </label>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        ))
       )}
     </section>
   );

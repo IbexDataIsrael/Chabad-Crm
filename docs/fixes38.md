@@ -255,3 +255,31 @@ fallback that has no gesture-detection step at all:
       at each boundary is correct, plain-click toggle still works (4/4), and
       the full original 18-check suite still passes unchanged (18/18) — all
       on the same running docker-compose stack.
+
+### Proactive mobile check (same day)
+
+User noted the real end users are primarily on mobile, not desktop. Checked
+the new arrow buttons against an emulated mobile viewport (390×844,
+`is_mobile`/`has_touch`) before they tested: the buttons were only ~17×10 CSS
+px — well under the WCAG minimum touch-target size (24×24px) and far below
+Apple/Google's recommended 44-48px, so a real thumb would miss them
+constantly even though a synthetic `.tap()` at the exact center still
+"worked."
+
+- [x] Enlarged both arrow buttons on both pages from `text-[10px] px-1`
+      (~17×10px) to a proper `w-7 h-7` (28×28px) tap target with
+      `active:bg-gray-100` touch feedback.
+- [x] Re-verified via mobile-emulated Playwright: buttons now measure 28×28
+      CSS px, a real `.tap()` (not just a synthetic click) still correctly
+      reorders, and the panel layout wraps sensibly at a 390px viewport
+      (screenshot reviewed). Full 18-check suite still green.
+- [x] Saved two persistent memories for future sessions: the real user base
+      is mobile-first (design touch targets accordingly), and native HTML5
+      drag-and-drop is unreliable enough on trackpads/touch that any
+      drag-reorder feature in this app should ship with a click/tap
+      fallback from the start, not bolted on after a user report.
+
+**Not done:** the user is still going to test on their own mobile device and
+report back — this proactive pass only covers what an emulated mobile
+viewport can catch (sizing/layout), not real-device quirks (actual touch
+latency, OS-level gesture conflicts, browser chrome differences).

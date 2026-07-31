@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
@@ -26,6 +27,10 @@ export default function ShluchimPage() {
   const { isAdmin, loading } = useAuth();
   const { t } = useLocalization();
   const { success, error: toastError } = useToast();
+  // fixes38b: "Created On" wasn't actually gated here — Manage Fields could
+  // hide it, but this list ignored the setting entirely.
+  const { isFieldVisible: vis } = useFieldSettings();
+  const showCreated = vis("contacts.created_at");
   const [shluchim, setShluchim] = useState<Contact[]>([]);
   // fixes27 §3: id of the row whose login is being re-created right now.
   const [recreatingId, setRecreatingId] = useState<number | null>(null);
@@ -210,22 +215,24 @@ export default function ShluchimPage() {
               <th className="px-4 py-2 text-start font-medium">{t("common.name", "שם")}</th>
               <th className="px-4 py-2 text-start font-medium">{t("contacts.phone", "טלפון")}</th>
               <th className="px-4 py-2 text-start font-medium">{t("contacts.email", "אימייל")}</th>
-              <th className="px-4 py-2 text-start font-medium">
-                {t("contacts.created_at", "נוצר בתאריך")}
-              </th>
+              {showCreated && (
+                <th className="px-4 py-2 text-start font-medium">
+                  {t("contacts.created_at", "נוצר בתאריך")}
+                </th>
+              )}
               <th className="px-4 py-2" />
             </tr>
           </thead>
           <tbody>
             {busy ? (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={showCreated ? 5 : 4} className="px-4 py-6 text-center text-gray-400">
                   {t("action.loading", "טוען…")}
                 </td>
               </tr>
             ) : shluchim.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={showCreated ? 5 : 4} className="px-4 py-6 text-center text-gray-400">
                   {t("page.no_shluchim", "אין פעילים עדיין.")}
                 </td>
               </tr>
@@ -267,9 +274,11 @@ export default function ShluchimPage() {
                   </td>
                   <td className="px-4 py-2" dir="ltr">{c.phone}</td>
                   <td className="px-4 py-2" dir="ltr">{c.email ?? ""}</td>
-                  <td className="px-4 py-2" dir="ltr">
-                    {new Date(c.created_at).toLocaleDateString("he-IL")}
-                  </td>
+                  {showCreated && (
+                    <td className="px-4 py-2" dir="ltr">
+                      {new Date(c.created_at).toLocaleDateString("he-IL")}
+                    </td>
+                  )}
                   <td className="px-4 py-2 text-end">
                     <Link
                       href={`/dashboard/contacts/${c.id}`}

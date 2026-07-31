@@ -464,7 +464,10 @@ export default function ContactsPage() {
     // fixes18 §3.4: the admin-areas section is blocked for shliach (fixes10).
     admin_area: !isShliach && vis("contact_mekurav.admin_area_id"),
     building: true,
-    created: true,
+    // fixes38b: this was hardcoded true, ignoring the contacts.created_at
+    // toggle entirely — hiding "Created On" in Manage Fields only ever
+    // affected the contact detail page's row, never this grid column.
+    created: vis("contacts.created_at"),
     status: vis("contacts.pipeline_status"),
     priority: vis("contacts.priority_score"),
     address: vis("contacts.address"),
@@ -806,13 +809,13 @@ export default function ContactsPage() {
                       moveActiveColumn) — a click always works, unlike a drag
                       gesture on some trackpads. */}
                   {on && (
-                    <span className="flex flex-col">
+                    <span className="flex flex-col gap-0.5">
                       <button
                         type="button"
                         disabled={activeIdx === 0}
                         onClick={() => moveActiveColumn(k, -1)}
                         title={t("action.move_up", "העלה")}
-                        className="rounded text-[10px] leading-none px-1 text-gray-400 hover:text-status-magenta disabled:opacity-20"
+                        className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
                       >
                         ▲
                       </button>
@@ -821,7 +824,7 @@ export default function ContactsPage() {
                         disabled={activeIdx === activeColumns.length - 1}
                         onClick={() => moveActiveColumn(k, 1)}
                         title={t("action.move_down", "הורד")}
-                        className="rounded text-[10px] leading-none px-1 text-gray-400 hover:text-status-magenta disabled:opacity-20"
+                        className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
                       >
                         ▼
                       </button>
