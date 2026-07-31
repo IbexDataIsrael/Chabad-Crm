@@ -10,6 +10,12 @@ import { useLocalization } from "@/lib/localization";
  *   - withTime=false → "YYYY-MM-DD"
  *   - withTime=true  → "YYYY-MM-DDTHH:mm"
  */
+// Fallback values for the t() calls below (fixes: these used to render
+// directly with no localization involved at all).
+const MONTH_KEYS = [
+  "jan", "feb", "mar", "apr", "may", "jun",
+  "jul", "aug", "sep", "oct", "nov", "dec",
+] as const;
 const MONTHS_HE = [
   "ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני",
   "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר",
@@ -18,6 +24,7 @@ const MONTHS_EN = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
+const WEEKDAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 const WEEKDAYS_HE = ["א", "ב", "ג", "ד", "ה", "ו", "ש"];
 const WEEKDAYS_EN = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
@@ -47,8 +54,12 @@ export function DatePicker({
   placeholder?: string;
 }) {
   const { t, lang } = useLocalization();
-  const MONTHS = lang === "en" ? MONTHS_EN : MONTHS_HE;
-  const WEEKDAYS = lang === "en" ? WEEKDAYS_EN : WEEKDAYS_HE;
+  const MONTHS = MONTH_KEYS.map((k, i) =>
+    t(`date.month.${k}`, lang === "en" ? MONTHS_EN[i] : MONTHS_HE[i]),
+  );
+  const WEEKDAYS = WEEKDAY_KEYS.map((k, i) =>
+    t(`date.weekday.${k}`, lang === "en" ? WEEKDAYS_EN[i] : WEEKDAYS_HE[i]),
+  );
   const { date: selected, time } = parse(value);
   const [open, setOpen] = useState(false);
   const [view, setView] = useState(() => selected ?? new Date());

@@ -113,35 +113,31 @@ class TestMivtzoimRename:
 
     def test_fresh_seed_uses_new_labels(self, db_session):
         seed_localization(db_session)
-        assert self._labels(db_session, "community_checklists") == ("מבצעים", "Mivtzoim")
         assert self._labels(db_session, "filter.all_mitzvot") == ("מבצעים", "Mivtzoim")
-        assert self._labels(db_session, "filter.mitzvot_only") == (
-            "רק עם מבצעים", "Mivtzoim only",
-        )
 
     def test_old_labels_are_force_renamed(self, db_session):
         seed_localization(db_session)
         row = (
             db_session.query(models.FieldLocalization)
-            .filter(models.FieldLocalization.technical_name == "community_checklists")
+            .filter(models.FieldLocalization.technical_name == "filter.all_mitzvot")
             .one()
         )
         row.hebrew_label, row.english_label = "מצוות קהילה", "Community mitzvot"
         db_session.commit()
         seed_localization(db_session)
-        assert self._labels(db_session, "community_checklists") == ("מבצעים", "Mivtzoim")
+        assert self._labels(db_session, "filter.all_mitzvot") == ("מבצעים", "Mivtzoim")
 
     def test_admin_customized_labels_survive(self, db_session):
         seed_localization(db_session)
         row = (
             db_session.query(models.FieldLocalization)
-            .filter(models.FieldLocalization.technical_name == "community_checklists")
+            .filter(models.FieldLocalization.technical_name == "filter.all_mitzvot")
             .one()
         )
         row.hebrew_label = "מותאם אישית"
         db_session.commit()
         seed_localization(db_session)
-        he, _ = self._labels(db_session, "community_checklists")
+        he, _ = self._labels(db_session, "filter.all_mitzvot")
         assert he == "מותאם אישית"
 
     def test_new_fixes18_keys_are_seeded(self, db_session):

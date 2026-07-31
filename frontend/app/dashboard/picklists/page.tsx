@@ -336,7 +336,7 @@ function AddPicklist({
         />
         <input
           className={`${input} w-40`}
-          placeholder="עברית"
+          placeholder={t("common.hebrew_label", "עברית")}
           value={he}
           onChange={(e) => setHe(e.target.value)}
           dir="rtl"
@@ -440,7 +440,7 @@ function OptionRow({
       </code>
       <input
         className={`${input} flex-1 min-w-[7rem]`}
-        placeholder="עברית"
+        placeholder={t("common.hebrew_label", "עברית")}
         dir="rtl"
         value={label}
         onChange={(e) => setLabel(e.target.value)}
@@ -569,7 +569,7 @@ function AddOption({
         />
         <input
           className={`${input} flex-1 min-w-[7rem]`}
-          placeholder="עברית"
+          placeholder={t("common.hebrew_label", "עברית")}
           dir="rtl"
           value={label}
           onChange={(e) => setLabel(e.target.value)}

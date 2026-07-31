@@ -10,7 +10,8 @@ import {
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 
-// Friendly section headings per entity_type. Unknown types fall back to the raw key.
+// Friendly section headings per entity_type — fallback values for the
+// t(`loc.entity.${entity}`, ...) calls below. Unknown types fall back to the raw key.
 const ENTITY_LABELS: Record<string, string> = {
   error: "הודעות שגיאה",
   msg: "הודעות מערכת",
@@ -99,7 +100,7 @@ export default function LocalizationPage() {
         {groups.map(([entity, entityRows]) => (
           <section key={entity}>
             <h2 className="text-sm font-semibold mb-2">
-              {ENTITY_LABELS[entity] ?? entity}{" "}
+              {t(`loc.entity.${entity}`, ENTITY_LABELS[entity] ?? entity)}{" "}
               <span className="text-gray-400 font-normal">({entityRows.length})</span>
             </h2>
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -107,7 +108,9 @@ export default function LocalizationPage() {
                 <thead className="bg-gray-50 text-gray-500 text-xs">
                   <tr>
                     <th className="text-start px-3 py-2 font-medium">key</th>
-                    <th className="text-start px-3 py-2 font-medium">עברית</th>
+                    <th className="text-start px-3 py-2 font-medium">
+                      {t("common.hebrew_label", "עברית")}
+                    </th>
                     <th className="text-start px-3 py-2 font-medium">English</th>
                     <th className="px-3 py-2" />
                   </tr>

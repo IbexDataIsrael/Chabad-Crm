@@ -235,7 +235,7 @@ export async function login(
     body,
   });
   if (!res.ok) {
-    let detail = "התחברות נכשלה";
+    let detail = "Login failed";
     try {
       const data = await res.json();
       if (data?.detail) detail = data.detail;

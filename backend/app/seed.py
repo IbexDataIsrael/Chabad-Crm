@@ -21,10 +21,7 @@ logger = logging.getLogger("app.seed")
 # entity_type groups them ('table'/'column'/'interaction_category'/'nav'/'action'/
 # 'auth'/'page'/'msg'/'field'). technical_name is the key used by the frontend `t()`.
 LOCALIZATION: list[tuple[str, str, str, str]] = [
-    ("table", "users", "משתמשים", "Users"),
     ("table", "contacts", "אנשי קשר", "Contacts"),
-    ("table", "community_checklists", "מבצעים", "Mivtzoim"),
-    ("table", "interactions", "אינטראקציות", "Interactions"),
     ("table", "areas", "אזורים", "Areas"),
     ("table", "buildings", "בניינים", "Buildings"),
     ("table", "apartments", "דירות", "Apartments"),
@@ -56,8 +53,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("column", "buildings.area_id", "אזור", "Area"),
     ("column", "buildings.building_name", "שם בניין", "Building name"),
     ("column", "buildings.building_address", "כתובת בניין", "Building address"),
-    ("column", "buildings.longitude", "קו אורך", "Longitude"),
-    ("column", "buildings.latitude", "קו רוחב", "Latitude"),
     ("column", "apartments.building_id", "בניין", "Building"),
     # fixes13: the apartment label is its NUMBER (was "כותרת"/"Title"; existing
     # rows are updated by a one-off data fix since re-seeding never overwrites).
@@ -67,27 +62,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("column", "significant_dates.hebrew_date", "תאריך עברי", "Hebrew date"),
     ("column", "significant_dates.special_date_type", "סוג תאריך", "Date type"),
     ("column", "significant_dates.special_date_title", "כותרת", "Title"),
-    ("column", "significant_dates.is_set_reminder", "האם לשלוח תזכורת", "Send a reminder"),
-    ("column", "users.username", "שם משתמש", "Username"),
     ("column", "users.full_name", "שם מלא", "Full name"),
-    ("column", "users.role", "תפקיד", "Role"),
-    ("column", "interactions.category", "קטגוריה", "Category"),
-    ("column", "interactions.note", "הערה", "Note"),
-    ("column", "interactions.created_at", "נוצר בתאריך", "Created at"),
-    ("column", "community_checklists.tefillin", "תפילין", "Tefillin"),
-    ("column", "community_checklists.tefillin_notes", "הערה תפילין", "Tefillin note"),
-    ("column", "community_checklists.tzedakah", "צדקה", "Tzedakah"),
-    ("column", "community_checklists.charity_note", "הערה צדקה", "Tzedakah note"),
-    ("column", "community_checklists.shabbat_candles", "נרות", "Shabbat candles"),
-    ("column", "community_checklists.shabbat_candles_notes", "הערה נרות", "Candles note"),
-    ("column", "community_checklists.torah_pamphlet", "עלון", "Torah pamphlet"),
-    ("column", "community_checklists.torah_pamphlet_notes", "הערה עלון", "Pamphlet note"),
-    ("column", "community_checklists.torah_thought", "דבר תורה", "Torah thought"),
-    ("column", "community_checklists.torah_letter", "אות בספר", "Letter in a Torah"),
-    ("column", "community_checklists.letter_torah_notes", "הערה אות בספר", "Letter note"),
-    ("interaction_category", "heart_connection", "חיבור לב", "Heart connection"),
-    ("interaction_category", "recommendation", "המלצה", "Recommendation"),
-    ("interaction_category", "background", "רקע", "Background"),
     # --- Navigation ---
     ("nav", "nav.home", "בית", "Home"),
     ("nav", "nav.contacts", "אנשי קשר", "Contacts"),
@@ -100,7 +75,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("nav", "nav.localization", "תרגומים", "Translations"),
     ("nav", "nav.settings", "הגדרות", "Settings"),
     ("nav", "nav.donations", "תרומות", "Donations"),
-    ("nav", "nav.visits", "ביקורים", "Visits"),
     ("nav", "nav.system_admin", "מנהל מערכת", "System admin"),
     # --- System admin (platform superadmin dashboard) ---
     ("admin", "admin.title", "ניהול מערכת", "System administration"),
@@ -162,7 +136,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("nav", "nav.group.more", "עוד", "More"),
     # --- Common actions / words ---
     ("action", "action.save", "שמור", "Save"),
-    ("action", "action.save_changes", "שמור שינויים", "Save changes"),
     ("action", "action.cancel", "ביטול", "Cancel"),
     ("action", "action.add", "הוסף", "Add"),
     ("action", "action.edit", "ערוך", "Edit"),
@@ -175,9 +148,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("action", "action.saved", "נשמר ✓", "Saved ✓"),
     ("action", "common.admin", "מנהל", "Admin"),
     ("action", "common.or", "או", "or"),
-    ("action", "common.yes", "כן", "Yes"),
-    ("action", "common.no", "לא", "No"),
-    ("action", "common.none_dash", "—", "—"),
     ("action", "lang.toggle", "English", "עברית"),
     # --- Auth (login / signup) ---
     ("auth", "auth.app_title", "מיני CRM", "Mini CRM"),
@@ -194,7 +164,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("auth", "auth.verify_email_first", "עליך לאמת את כתובת האימייל לפני ההתחברות.", "You must verify your email address before signing in."),
     ("auth", "auth.your_email", "האימייל שלך", "Your email"),
     ("auth", "auth.resend_verification", "שליחת קישור אימות מחדש", "Resend verification link"),
-    ("auth", "auth.google_failed", "התחברות עם Google נכשלה", "Google sign-in failed"),
     ("auth", "auth.google_load_failed", "טעינת ההתחברות עם Google נכשלה", "Failed to load Google sign-in"),
     # fixes14 §feature 1: multi-organization login selection
     ("auth", "auth.select_org_title", "בחירת ארגון", "Choose an organization"),
@@ -203,13 +172,8 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("auth", "signup.title", "פתיחת חשבון ארגון", "Open an organization account"),
     ("auth", "signup.subtitle", "צור ארגון חדש ב-CRM", "Create a new CRM organization"),
     ("auth", "signup.org_name", "שם הארגון", "Organization name"),
-    ("auth", "signup.create", "צור חשבון", "Create account"),
     ("auth", "signup.creating", "נרשם…", "Registering…"),
-    ("auth", "signup.google_hint", "הרשמה מהירה עם Google — די למלא שם ארגון בלבד.", "Quick sign-up with Google — just fill in an organization name."),
     ("auth", "signup.google_failed", "ההרשמה עם Google נכשלה", "Google sign-up failed"),
-    ("auth", "signup.org_required_for_google", "יש למלא שם ארגון לפני ההרשמה עם Google", "Please enter an organization name before signing up with Google"),
-    ("auth", "signup.check_email_title", "בדוק את האימייל שלך", "Check your email"),
-    ("auth", "signup.resend_link", "שליחת הקישור מחדש", "Resend the link"),
     ("auth", "signup.failed", "ההרשמה נכשלה", "Registration failed"),
     # --- Pages / sections ---
     ("page", "page.areas_intro", "אזורים גאוגרפיים עם תחום פוליגון על המפה. השלוחים המכסים כל אזור מוצגים תחתיו.", "Geographic areas with a polygon boundary on the map. The activists covering each area are listed below it."),
@@ -219,12 +183,8 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("page", "page.no_areas", "אין אזורים עדיין.", "No areas yet."),
     ("page", "page.area_has_boundary", "תחום מוגדר", "Boundary set"),
     ("page", "page.area_no_boundary", "ללא תחום", "No boundary"),
-    ("page", "page.show_details", "הצג פרטים ומפה", "Show details & map"),
-    ("page", "page.hide_details", "הסתר פרטים", "Hide details"),
     ("page", "page.shluchim", "פעילים", "Activists"),
-    ("page", "page.hide_shluchim", "הסתר פעילים", "Hide activists"),
     ("page", "page.no_shluchim_area", "אין פעילים המכסים אזור זה.", "No activists cover this area."),
-    ("page", "page.org_settings", "הגדרות ארגון", "Organization settings"),
     ("page", "page.map_in_english", "השלמת כתובות במפה באנגלית", "Address autocomplete in English"),
     ("page", "page.map_in_english_hint", "כאשר מסומן, הצעות הכתובת מ-Google יוחזרו באנגלית במקום בעברית.", "When checked, Google address suggestions are returned in English instead of Hebrew."),
     ("page", "page.map_default_center", "מרכז ברירת מחדל למפה", "Default map center"),
@@ -256,8 +216,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("verify", "verify.back_to_login", "חזרה להתחברות", "Back to sign in"),
     # --- Signup extras ---
     ("auth", "signup.passwords_no_match", "הסיסמאות אינן תואמות", "Passwords don't match"),
-    ("auth", "signup.sent_to", "שלחנו קישור אימות אל", "We sent a verification link to"),
-    ("auth", "signup.click_to_activate", "יש ללחוץ על הקישור כדי להפעיל את חשבון הארגון.", "Click the link to activate your organization account."),
     ("auth", "signup.back_to_login", "חזרה להתחברות", "Back to sign in"),
     ("auth", "signup.verify_password", "אימות סיסמה", "Confirm password"),
     # --- Validation hints ---
@@ -309,10 +267,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("apt", "apt.notes_optional", "הערות (לא חובה)", "Notes (optional)"),
     ("apt", "apt.save_apartment", "שמור דירה", "Save apartment"),
     ("apt", "apt.add_apartment", "הוסף דירה", "Add apartment"),
-    ("apt", "apt.no_apartments", "אין דירות עדיין.", "No apartments yet."),
-    ("apt", "apt.add_building_apartment", "הוסף בניין ודירה", "Add a building and apartment"),
-    ("apt", "apt.to_link_shliach", "כדי לשייך לפעיל.", "to assign to an activist."),
-    ("apt", "apt.search_placeholder", "חפש דירה לפי שם דירה או בניין…", "Search by apartment or building name…"),
     ("apt", "apt.no_apartments_page", "אין דירות להצגה.", "No apartments to show."),
     ("apt", "apt.no_contact", "ללא איש קשר", "No contact"),
     ("apt", "apt.select_building", "יש לבחור בניין", "Please select a building"),
@@ -328,12 +282,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("visitsummary", "visitsummary.category_empty", "אין רשומות", "No records"),
     # --- Visit history ---
     ("visit", "visit.history", "היסטורית ביקורים", "Visit history"),
-    ("visit", "visit.add", "הוסף ביקור", "Add visit"),
-    ("visit", "visit.none", "אין ביקורים עדיין.", "No visits yet."),
-    ("visit", "visit.date", "תאריך", "Date"),
-    ("visit", "visit.notes", "הערות", "Notes"),
-    ("visit", "visit.pick_date", "יש לבחור תאריך", "Please choose a date"),
-    ("visit", "visit.delete_confirm", "למחוק ביקור זה?", "Delete this visit?"),
     # fixes28 §1: the visit row expands to inline editing on click.
     ("visit", "visit.click_to_edit", "לחצו לפתיחה ולעריכה", "Click to open and edit"),
     # --- Donations ---
@@ -367,9 +315,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("sd", "sd.offset_week", "שבוע לפני", "A week before"),
     ("msg", "msg.delete_date_confirm", "למחוק תאריך זה?", "Delete this date?"),
     # --- Interactions / maps / dates / address ---
-    ("int", "int.category_placeholder", "קטגוריה…", "Category…"),
-    ("int", "int.add_note_placeholder", "הוסף הערה…", "Add a note…"),
-    ("int", "int.none", "אין אינטראקציות עדיין.", "No interactions yet."),
     ("map", "map.open_in_google", "הצג מיקום במפות גוגל ›", "Open location in Google Maps ›"),
     ("addr", "addr.start_typing", "התחל להקליד כתובת…", "Start typing an address…"),
     ("date", "date.pick", "בחר תאריך", "Pick a date"),
@@ -383,9 +328,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("field", "fields.shown", "מוצג", "Shown"),
     ("field", "fields.hidden", "מוסתר", "Hidden"),
     ("field", "fields.manage_custom", "הוספה / מחיקה", "Add / delete"),
-    ("shliach", "shliach.add_area_first", "נא להוסיף אזור קודם", "Please add an area first"),
-    ("shliach", "shliach.select_area_first", "יש לבחור אזור תחילה", "Select an area first"),
-    ("shliach", "shliach.no_buildings_in_area", "אין בניינים באזורים שנבחרו.", "No buildings in the selected areas."),
     # --- User-facing error messages (editable in the localization page) ---
     ("error", "error.no_areas_for_shliach", "נא להוסיף לפחות אזור אחד למערכת", "Please add at least 1 area to the system"),
     # fixes14: shliach login password (set from the contact form)
@@ -445,7 +387,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("pl", "pl.delete_list_confirm", "למחוק רשימה זו וכל הערכים שלה?", "Delete this list and all its values?"),
     ("pl", "pl.system_list", "רשימת מערכת", "System list"),
     ("pl", "pl.delete_list", "מחק רשימה", "Delete list"),
-    ("pl", "pl.add_list", "הוספת רשימת בחירה", "Add picklist"),
     ("pl", "pl.system_name_placeholder", "מזהה (אנגלית) — diet", "Identifier (English) — diet"),
     # fixes32 §7: dedicated add-picklist forms per dashboard section.
     ("pl", "pl.add_list_contact", "הוספת רשימת בחירה לאיש קשר", "Add picklist to contact"),
@@ -460,8 +401,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("search", "search.group.apartments", "דירות", "Apartments"),
     # --- Digital-twin AI chat ---
     ("nav", "nav.ai_chat", "צ'אט AI", "AI chat"),
-    ("ai", "ai.title", "תאום דיגיטלי", "Digital twin"),
-    ("ai", "ai.intro", "שאל את התאום הדיגיטלי שאלות על הקריירה שלי.", "Ask the digital twin questions about my career."),
     # CRM-grounded assistant (replaces the career twin; new keys because the
     # old rows already exist in tenant DBs and re-seeding never overwrites).
     ("ai", "ai.crm_title", "עוזר AI", "AI assistant"),
@@ -488,7 +427,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("users", "users.deleted", "המשתמש נמחק", "User deleted"),
     ("users", "users.delete_confirm", "למחוק את המשתמש?", "Delete this user?"),
     ("users", "users.self_guard", "לא ניתן לשנות או למחוק את עצמך", "You cannot change or delete yourself"),
-    ("users", "users.status_active", "פעיל", "Active"),
     ("users", "users.status_disabled", "מושבת", "Disabled"),
     ("users", "users.you", "אני", "me"),
     # --- fixes7 §2/§3: buildings, floors ---
@@ -499,7 +437,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("floors", "floors.name", "שם קומה", "Floor name"),
     ("floors", "floors.none", "אין קומות בבניין זה.", "No floors in this building."),
     ("floors", "floors.delete_confirm", "למחוק קומה זו?", "Delete this floor?"),
-    ("filter", "filter.by_building", "סנן לפי בניין:", "Filter by building:"),
     ("filter", "filter.all_buildings", "כל הבניינים", "All buildings"),
     ("apt", "apt.street_search", "חיפוש לפי שם רחוב…", "Search by street name…"),
     ("apt", "apt.edit_apartment", "עריכת דירה", "Edit apartment"),
@@ -514,10 +451,8 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("picklist", "picklist.apartment.language", "שפה", "Language"),
     ("table", "building", "בניין", "Building"),
     ("table", "apartment", "דירה", "Apartment"),
-    ("pl", "pl.group_apartment", "דירה", "Apartment"),
     # fixes32 §7: renamed from "כללי"/"General" — the dashboard's two
     # sections are now explicitly Contact vs. Apartment.
-    ("pl", "pl.group_general", "אנשי קשר", "Contacts"),
     # --- fixes7 §5: bulk apartment generator ---
     ("batch", "batch.open", "יצירה מרובה", "Bulk create"),
     ("batch", "batch.title", "יצירת דירות מרובות", "Bulk apartment generator"),
@@ -593,9 +528,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("geo", "geo.check_hint", "בדוק את הכתובת או בחר אזור אחר.", "Check the address or pick a different area."),
     # --- fixes15: filters / columns / quick actions / superadmin modals ---
     ("filter", "filter.search_contacts", "חיפוש לפי שם, טלפון או אימייל…", "Search by name, phone or email…"),
-    ("filter", "filter.mitzvot_only", "רק עם מבצעים", "Mivtzoim only"),
-    ("filter", "filter.areas_multi", "אזורים", "Areas"),
-    ("filter", "filter.buildings_multi", "בניינים", "Buildings"),
     ("filter", "filter.n_selected", "{n} נבחרו", "{n} selected"),
     ("filter", "filter.search_name", "חיפוש לפי שם…", "Search by name…"),
     ("filter", "filter.clear", "נקה סינון", "Clear filters"),
@@ -616,7 +548,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("columns", "columns.reset", "איפוס ברירת מחדל", "Reset to defaults"),
     ("columns", "columns.reorder_hint", "גרור עמודה פעילה כדי לשנות את סדר ההצגה.", "Drag an active column to change the display order."),
     ("columns", "columns.fields_configure", "התאמת שדות", "Customize fields"),
-    ("column", "contacts.area", "אזור", "Area"),
     ("column", "contacts.building", "בניין", "Building"),
     ("action", "action.call", "חיוג", "Call"),
     ("action", "action.whatsapp", "וואטסאפ", "WhatsApp"),
@@ -635,7 +566,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("admin", "admin.deps_intro", "למשתמש זה קיימים נתונים מקושרים במערכת:", "This user has connected data in the system:"),
     ("admin", "admin.deps_none", "אין נתונים מקושרים למשתמש זה.", "No connected data for this user."),
     ("admin", "admin.deps_assigned_contacts", "אנשי קשר משויכים: {n}", "Assigned contacts: {n}"),
-    ("admin", "admin.deps_interactions", "אינטראקציות שנוצרו: {n}", "Interactions created: {n}"),
     ("admin", "admin.deps_shliach_contact", "מקושר לכרטיס פעיל: {name}", "Linked activist card: {name}"),
     ("admin", "admin.deps_report_numbers", "מספרי דוח באחריות: {n}", "Report numbers covered: {n}"),
     ("admin", "admin.deps_areas", "אזורים באחריות: {n}", "Areas covered: {n}"),
@@ -698,7 +628,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("page", "page.shliach_view_contacts", "פעילים רשאים לצפות באנשי קשר", "Activists may view contacts"),
     ("page", "page.shliach_view_contacts_hint", "כאשר כבוי (ברירת המחדל), משתמשי פעיל אינם רואים את רשימת אנשי הקשר.", "When off (the default), activist users do not see the contacts list."),
     # --- fixes19: report numbers (מספר דוח) ---
-    ("table", "report_number", "מספר דוח", "Report number"),
     ("column", "report_number.name", "שם", "Name"),
     ("nav", "nav.report_numbers", "מספרי דוח", "Report numbers"),
     ("page", "page.report_numbers", "מספרי דוח", "Report numbers"),
@@ -769,7 +698,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
         "The total width should not be over 100%",
     ),
     # --- fixes25: VISITS namespace (visit-level Mivtzoim / interactions / fields) ---
-    ("visits", "visits.details", "פרטי ביקור", "Visit details"),
     ("visits", "visits.mivtzoim", "מבצעים", "Mivtzoim"),
     ("visits", "visits.tefillin", "תפילין", "Tefillin"),
     ("visits", "visits.tzedakah", "צדקה", "Tzedakah"),
@@ -783,7 +711,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("visits", "visits.add_interaction", "הוסף", "Add"),
     ("visits", "visits.interaction_category_ph", "קטגוריה…", "Category…"),
     ("visits", "visits.interaction_note_ph", "הוסף הערה…", "Add a note…"),
-    ("visits", "visits.extra_fields", "שדות נוספים", "Extra fields"),
     ("visits", "visits.date_range", "טווח תאריכי ביקור", "Visit date range"),
     ("visits", "visits.date_from", "מתאריך", "From"),
     ("visits", "visits.date_to", "עד תאריך", "To"),
@@ -818,8 +745,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     # --- fixes27: visit-level contact filters + visit-field visibility ---
     ("filter", "filter.all_torah_thoughts", "דבר תורה", "Torah thought"),
     ("filter", "filter.rebbe_ph", "קשר לרבי…", "Connection to the Rebbe…"),
-    ("cf", "cf.visit_fields", "שדות ביקור מובנים", "Built-in visit fields"),
-    ("cf", "cf.visit_fields_intro", "שדה מוסתר לא יופיע בטופסי הביקור, בכרטיסי הביקור או באפשרויות הסינון.", "A hidden field disappears from the visit forms, visit cards and filter options."),
     # --- fixes30 (round 2): building grouping, segment order, apartment reports,
     # shliach Maps navigation ---
     ("apt", "apt.group_by_building", "קיבוץ לפי בניין", "Group by building"),
@@ -851,10 +776,48 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("pl", "pl.tab_visit", "ביקורים", "Visits"),
     ("pl", "pl.tab_apartment", "דירה", "Apartment"),
     ("pl", "pl.add_list_visit", "הוספת רשימת בחירה לביקור", "Add picklist to visit"),
-    ("pl", "pl.group_visit", "ביקורים", "Visits"),
     # --- fixes33 §6/§7: report notes setting + PDF header ---
     ("settings", "settings.report_notes", "הערות לדוח", "Report notes"),
     ("settings", "settings.report_notes_hint", "טקסט חופשי שיופיע בראש כל דוח שמופק (הבהרה, כותרת, הערת שוליים...)", "Free text shown at the top of every generated report (disclaimer, header, footer note...)"),
+    # --- fixes38d: hardcoded-Hebrew audit — DatePicker month/weekday names,
+    # previously rendered from local constant arrays with no t() involved. ---
+    ("date", "date.month.jan", "ינואר", "January"),
+    ("date", "date.month.feb", "פברואר", "February"),
+    ("date", "date.month.mar", "מרץ", "March"),
+    ("date", "date.month.apr", "אפריל", "April"),
+    ("date", "date.month.may", "מאי", "May"),
+    ("date", "date.month.jun", "יוני", "June"),
+    ("date", "date.month.jul", "יולי", "July"),
+    ("date", "date.month.aug", "אוגוסט", "August"),
+    ("date", "date.month.sep", "ספטמבר", "September"),
+    ("date", "date.month.oct", "אוקטובר", "October"),
+    ("date", "date.month.nov", "נובמבר", "November"),
+    ("date", "date.month.dec", "דצמבר", "December"),
+    ("date", "date.weekday.sun", "א", "Su"),
+    ("date", "date.weekday.mon", "ב", "Mo"),
+    ("date", "date.weekday.tue", "ג", "Tu"),
+    ("date", "date.weekday.wed", "ד", "We"),
+    ("date", "date.weekday.thu", "ה", "Th"),
+    ("date", "date.weekday.fri", "ו", "Fr"),
+    ("date", "date.weekday.sat", "ש", "Sa"),
+    # --- fixes38d: hardcoded-Hebrew audit — Translations admin page's
+    # section headings, previously a raw (unlocalized) lookup object. ---
+    ("loc", "loc.entity.error", "הודעות שגיאה", "Error messages"),
+    ("loc", "loc.entity.msg", "הודעות מערכת", "System messages"),
+    ("loc", "loc.entity.table", "טבלאות", "Tables"),
+    ("loc", "loc.entity.column", "שדות", "Fields"),
+    ("loc", "loc.entity.page", "דפים", "Pages"),
+    ("loc", "loc.entity.nav", "ניווט", "Navigation"),
+    ("loc", "loc.entity.action", "פעולות", "Actions"),
+    ("loc", "loc.entity.auth", "התחברות", "Login"),
+    ("loc", "loc.entity.field", "ניהול שדות", "Field management"),
+    ("loc", "loc.entity.filter", "סינון", "Filters"),
+    ("loc", "loc.entity.apt", "דירות", "Apartments"),
+    ("loc", "loc.entity.apm", "מפת אזורים", "Area map"),
+    ("loc", "loc.entity.shliach", "פעיל", "Activist"),
+    ("loc", "loc.entity.verify", "אימות", "Verification"),
+    ("loc", "loc.entity.signup", "הרשמה", "Signup"),
+    ("loc", "loc.entity.interaction_category", "קטגוריות אינטראקציה", "Interaction categories"),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)
@@ -977,13 +940,11 @@ LOCALIZATION_RENAMES: dict[str, tuple[set, str, set, str]] = {
     "apartments.apartment_name": (
         {"כותרת", "תווית"}, "מספר דירה", {"Title", "Label"}, "Apartment number",
     ),
-    # fixes18 §general: "מצוות קהילה" is now branded "מבצעים" (3 rows).
-    "community_checklists": (
-        {"מצוות קהילה"}, "מבצעים", {"Community mitzvot"}, "Mivtzoim",
-    ),
-    "filter.mitzvot_only": (
-        {"רק עם מצוות קהילה"}, "רק עם מבצעים", {"Community-mitzvot only"}, "Mivtzoim only",
-    ),
+    # fixes18 §general: "מצוות קהילה" is now branded "מבצעים".
+    # fixes38d: dropped the "community_checklists"/"filter.mitzvot_only" rename
+    # entries alongside their now-removed LOCALIZATION rows (dead since the
+    # fixes25 visit-restructure migration dropped both underlying tables);
+    # filter.all_mitzvot is still live and keeps its rename entry.
     "filter.all_mitzvot": (
         {"מצוות קהילה"}, "מבצעים", {"Community mitzvot"}, "Mivtzoim",
     ),

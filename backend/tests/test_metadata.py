@@ -12,8 +12,8 @@ def test_localization_endpoint_shape(client, db_session):
     # Flat map keyed by technical_name, each value carrying he + en.
     assert data["contacts.pipeline_status"]["he"] == "סטטוס"
     assert data["contacts.pipeline_status"]["en"] == "Status"
-    assert data["community_checklists.shabbat_candles"]["he"] == "נרות"
-    assert data["heart_connection"]["he"] == "חיבור לב"
+    assert data["visits.shabbat_candles"]["he"] == "נרות"
+    assert data["nav.contacts"]["he"] == "אנשי קשר"
 
 
 def test_localization_requires_no_auth(client, db_session):
