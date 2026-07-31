@@ -20,6 +20,7 @@ import { usePersistentState } from "@/lib/persist";
 import { FIXED_APARTMENT_PICKLIST_KEYS, usePicklist, usePicklistsMap } from "@/lib/picklists";
 import { useDbPreference } from "@/lib/preferences";
 import { useToast } from "@/lib/toast";
+import { useChipReorder } from "@/lib/useChipReorder";
 import { EMAIL_HINT, PHONE_HINT, isValidEmail, isValidPhone } from "@/lib/validation";
 import {
   apartmentTitle,
@@ -169,8 +170,10 @@ export default function ApartmentsPage() {
     "crm.apartments.filtersOpen", true,
   );
   const [fieldsOpen, setFieldsOpen] = useState(false);
-  // fixes32 §6: native HTML5 drag state for reordering the active-field chips.
-  const [draggedField, setDraggedField] = useState<FieldKey | null>(null);
+  // fixes38: pointer-events-based reorder (native HTML5 drag-and-drop never
+  // engages on many Windows trackpads — see useChipReorder's doc comment).
+  const { draggedKey: draggedField, hoverKey: hoverField, chipProps: fieldChipProps, withClickGuard } =
+    useChipReorder<FieldKey>(moveField);
   const [debouncedQ, setDebouncedQ] = useState(query);
   const [batchOpen, setBatchOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -427,6 +430,26 @@ export default function ApartmentsPage() {
       next.splice(fromIdx, 1);
       const insertIdx = fromIdx < toIdx ? toIdx - 1 : toIdx;
       next.splice(insertIdx, 0, from);
+      return next;
+    });
+  }
+
+  // fixes38: guaranteed-reliable fallback for the pointer/drag reorder above
+  // — a trackpad's drag gesture is ultimately at the mercy of the OS/driver
+  // ever reporting a sustained press-and-move, which nothing in-app can force
+  // 100% of the time. These buttons swap adjacent active fields directly, the
+  // same one-step arrow-button pattern the contact page's Display Order
+  // settings already use (moveSegment) — no gesture involved at all.
+  function moveActiveField(key: FieldKey, delta: -1 | 1) {
+    setFields((prev) => {
+      const known = prev.filter((k): k is FieldKey =>
+        (FIELD_KEYS as readonly string[]).includes(k),
+      );
+      const idx = known.indexOf(key);
+      const to = idx + delta;
+      if (idx === -1 || to < 0 || to >= known.length) return prev;
+      const next = [...known];
+      [next[idx], next[to]] = [next[to], next[idx]];
       return next;
     });
   }
@@ -746,50 +769,64 @@ export default function ApartmentsPage() {
           )}
           <div className="flex flex-wrap gap-2">
             {/* fixes32-stillnotdone §1: active chips render FIRST, in their
-                actual current (draggable-reordered) order — rendering every
-                chip in the fixed FIELD_KEYS order regardless of drag state
-                meant a successful drag changed the table but never visibly
-                moved anything in this panel, reading as "nothing happened".
-                fixes33 §5.2: fields an admin hid org-wide aren't offered. */}
+                actual current (reordered) order — rendering every chip in
+                the fixed FIELD_KEYS order regardless of drag state meant a
+                successful drag changed the table but never visibly moved
+                anything in this panel, reading as "nothing happened".
+                fixes33 §5.2: fields an admin hid org-wide aren't offered.
+                fixes38: pointer-events drag (see useChipReorder) — native
+                HTML5 drag-and-drop never engages on many Windows trackpads. */}
             {[
               ...activeFields,
               ...FIELD_KEYS.filter((k) => !activeFields.includes(k)),
             ].filter(fieldVisible).map((k) => {
               const active = activeFields.includes(k);
+              const activeIdx = activeFields.indexOf(k);
               return (
-                <button
-                  key={k}
-                  type="button"
-                  draggable={active}
-                  onClick={() => toggleField(k)}
-                  onDragStart={(e) => {
-                    if (!active) return;
-                    setDraggedField(k);
-                    e.dataTransfer.effectAllowed = "move";
-                    // Some browsers (Firefox) won't fire `drop` at all unless
-                    // the drag event carries data.
-                    e.dataTransfer.setData("text/plain", k);
-                  }}
-                  onDragOver={(e) => {
-                    if (!active || !draggedField || draggedField === k) return;
-                    e.preventDefault();
-                  }}
-                  onDrop={(e) => {
-                    if (!active || !draggedField) return;
-                    e.preventDefault();
-                    moveField(draggedField, k);
-                    setDraggedField(null);
-                  }}
-                  onDragEnd={() => setDraggedField(null)}
-                  className={`rounded-md border px-3 py-1.5 text-sm ${
-                    active
-                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta cursor-grab active:cursor-grabbing"
-                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                  } ${draggedField === k ? "opacity-40" : ""}`}
-                >
-                  {active ? "⠿ " : ""}
-                  {fieldLabels[k]}
-                </button>
+                <span key={k} className="inline-flex items-center gap-0.5">
+                  <button
+                    type="button"
+                    {...fieldChipProps(k, active)}
+                    onClick={withClickGuard(() => toggleField(k))}
+                    className={`rounded-md border px-3 py-1.5 text-sm ${
+                      active
+                        ? "border-status-magenta bg-status-magenta/10 text-status-magenta cursor-grab active:cursor-grabbing"
+                        : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                    } ${draggedField === k ? "opacity-40" : ""} ${
+                      hoverField === k && draggedField && draggedField !== k
+                        ? "ring-2 ring-status-magenta"
+                        : ""
+                    }`}
+                  >
+                    {active ? "⠿ " : ""}
+                    {fieldLabels[k]}
+                  </button>
+                  {/* fixes38: guaranteed-reliable fallback for dragging (see
+                      moveActiveField) — a click always works, unlike a drag
+                      gesture on some trackpads. */}
+                  {active && (
+                    <span className="flex flex-col">
+                      <button
+                        type="button"
+                        disabled={activeIdx === 0}
+                        onClick={() => moveActiveField(k, -1)}
+                        title={t("action.move_up", "העלה")}
+                        className="rounded text-[10px] leading-none px-1 text-gray-400 hover:text-status-magenta disabled:opacity-20"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        type="button"
+                        disabled={activeIdx === activeFields.length - 1}
+                        onClick={() => moveActiveField(k, 1)}
+                        title={t("action.move_down", "הורד")}
+                        className="rounded text-[10px] leading-none px-1 text-gray-400 hover:text-status-magenta disabled:opacity-20"
+                      >
+                        ▼
+                      </button>
+                    </span>
+                  )}
+                </span>
               );
             })}
             {/* fixes33 §3.1: one show/hide toggle per admin-added apartment.*

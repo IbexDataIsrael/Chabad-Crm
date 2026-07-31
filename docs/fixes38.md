@@ -186,3 +186,72 @@ migrations in this round — every feature rides existing tables
 **Not done:** not committed/pushed (standing rule: only on explicit ask); not
 deployed (Neon/Render are already several fixes rounds behind per project
 notes — should ship in the same batch).
+
+### Correction (same day): drag-and-drop still didn't work on a real trackpad
+
+The first pass above fixed a real bug (the direction-dependent splice-index
+math) and verified the reorder via Playwright's `drag_to()` — but the user
+reported drag-and-drop still did nothing at all on their laptop trackpad,
+for both Contacts and Apartments. Root cause: native HTML5 drag-and-drop
+(`draggable` / `dragstart` / `dragover` / `drop`) depends on the browser's
+own separate "is this really a drag gesture" heuristic layered on top of the
+raw pointer input — on many Windows trackpads that heuristic never fires at
+all, so `dragstart` never happens and nothing visibly happens, even though
+the underlying reorder logic was already correct. My original Playwright
+verification used a synthetic `drag_to()` that engaged the native drag path
+successfully in headless Chromium, which is why it didn't catch this class
+of failure — a real trackpad gesture doesn't reliably do the same.
+
+- [x] Replaced native HTML5 drag-and-drop entirely with a Pointer-Events
+      implementation (`frontend/lib/useChipReorder.ts`, shared by both
+      `contacts/page.tsx` and `apartments/page.tsx`): `pointerdown` +
+      `setPointerCapture`, `pointermove` for live hover feedback (via
+      `document.elementFromPoint`), `pointerup` to commit the reorder. This
+      only depends on the same low-level pointer events every input device
+      (mouse, trackpad, touch) already produces reliably — no native-drag
+      heuristic involved.
+- [x] Added a movement-distance guard (>4px) so a plain click/tap isn't
+      misread as a drag, plus a click-suppression flag so a genuine drag
+      doesn't also fire the chip's own show/hide toggle on release.
+- [x] `tsc --noEmit` clean.
+- [x] Re-verified live against the same running docker-compose stack with an
+      instrumented Playwright script driving a real step-by-step manual
+      mouse sequence (down → 12 incremental moves with pauses → up, not the
+      high-level `drag_to()` helper): confirmed `pointerdown`/`pointermove`
+      ×12/`pointerup` all fire and the reorder lands correctly (Apartments:
+      resident moved from position 2 to immediately before "area"); separately
+      confirmed a plain click with no movement still toggles a column
+      on/off normally (4/4 checks) and did not regress any of the original
+      18 live checks (re-ran: still 18/18).
+
+### Second correction (same day): still intermittent — added a non-gesture fallback
+
+Even after the Pointer-Events rewrite, the user reported the drag "still only
+works sometimes." That's consistent with the underlying problem being at the
+OS/trackpad-driver level — whether a given trackpad gesture is ever reported
+to the browser as a sustained press-and-move is not something any in-page
+code can fully guarantee, regardless of which web API reads it. Rather than
+keep chasing driver-level gesture reliability, added a **click-only**
+fallback that has no gesture-detection step at all:
+
+- [x] `moveActiveField`/`moveActiveColumn` (adjacent-swap, one call each) plus
+      ▲/▼ buttons next to every active chip, on both Contacts and Apartments —
+      the exact same one-step arrow-button pattern already proven elsewhere
+      in this codebase for the contact page's "Display Order" settings
+      (`moveSegment`). A plain click is unambiguous; there is no drag
+      heuristic for a browser or OS to get wrong.
+- [x] Caught and fixed a real bug in my own first implementation of this via
+      live testing, not assumption: the two stacked arrow buttons used a
+      Tailwind `-space-y-1` negative margin to sit tightly together, which
+      made them visually overlap — `document.elementFromPoint` at the "move
+      down" button's own on-screen center resolved to the "move up" button
+      instead, silently swallowing the click. Confirmed via a Playwright
+      script that compared a real coordinate-based click (failed) against a
+      bypassed direct DOM `el.click()` call (succeeded) — proof the button's
+      own `onClick` logic was correct all along and the bug was purely a CSS
+      overlap. Fixed by dropping the negative margin.
+- [x] Re-verified with genuine (non-bypassed) clicks after the CSS fix: both
+      pages' arrow buttons correctly reorder (5/5 checks), the disabled state
+      at each boundary is correct, plain-click toggle still works (4/4), and
+      the full original 18-check suite still passes unchanged (18/18) — all
+      on the same running docker-compose stack.

@@ -25,8 +25,9 @@ import {
   usePicklistsMap,
 } from "@/lib/picklists";
 import { useDbPreference } from "@/lib/preferences";
-import { PHONE_HINT, isValidPhone } from "@/lib/validation";
 import { useToast } from "@/lib/toast";
+import { useChipReorder } from "@/lib/useChipReorder";
+import { PHONE_HINT, isValidPhone } from "@/lib/validation";
 import {
   MIVTZOIM_FLAGS,
   contactFullName,
@@ -212,8 +213,10 @@ export default function ContactsPage() {
     "contacts.columns", DEFAULT_COLUMNS,
   );
   const [columnsOpen, setColumnsOpen] = useState(false);
-  // fixes38 §1.1: native HTML5 drag state for reordering the active-column chips.
-  const [draggedColumn, setDraggedColumn] = useState<ColumnKey | null>(null);
+  // fixes38: pointer-events-based reorder (native HTML5 drag-and-drop never
+  // engages on many Windows trackpads — see useChipReorder's doc comment).
+  const { draggedKey: draggedColumn, hoverKey: hoverColumn, chipProps: columnChipProps, withClickGuard } =
+    useChipReorder<ColumnKey>(moveColumn);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   // Debounce the text filter; the `debouncedQ` value hits the server.
@@ -514,6 +517,26 @@ export default function ContactsPage() {
     });
   }
 
+  // fixes38: guaranteed-reliable fallback for the pointer/drag reorder above
+  // — a trackpad's drag gesture is ultimately at the mercy of the OS/driver
+  // ever reporting a sustained press-and-move, which nothing in-app can force
+  // 100% of the time. These buttons swap adjacent active columns directly,
+  // the same one-step arrow-button pattern the contact page's own Display
+  // Order settings already use (moveSegment) — no gesture involved at all.
+  function moveActiveColumn(key: ColumnKey, delta: -1 | 1) {
+    setColumns((prev) => {
+      const known = prev.filter((k): k is ColumnKey =>
+        (COLUMN_KEYS as readonly string[]).includes(k),
+      );
+      const idx = known.indexOf(key);
+      const to = idx + delta;
+      if (idx === -1 || to < 0 || to >= known.length) return prev;
+      const next = [...known];
+      [next[idx], next[to]] = [next[to], next[idx]];
+      return next;
+    });
+  }
+
   // fixes34 §1.1: one-field inline save straight from the list row — contacts
   // aren't versioned (unlike apartments), so a plain PATCH suffices; merge
   // the response back into the row in place so scroll/filters/page stay put.
@@ -749,46 +772,62 @@ export default function ContactsPage() {
           </p>
           <div className="flex flex-wrap gap-2">
             {/* fixes38 §1.1: active chips render FIRST, in their actual
-                current (draggable-reordered) order — mirrors the Apartments
-                panel fix (fixes32-stillnotdone §1) so a successful drag is
-                immediately visible here, not just in the table. */}
+                current (reordered) order — mirrors the Apartments panel fix
+                (fixes32-stillnotdone §1) so a successful drag is immediately
+                visible here, not just in the table. Pointer-events drag (see
+                useChipReorder) — native HTML5 drag-and-drop never engages on
+                many Windows trackpads. */}
             {[
               ...activeColumns,
               ...COLUMN_KEYS.filter((k) => !activeColumns.includes(k)),
             ].filter((k) => availability[k]).map((k) => {
               const on = columns.includes(k);
+              const activeIdx = activeColumns.indexOf(k);
               return (
-                <button
-                  key={k}
-                  type="button"
-                  draggable={on}
-                  onClick={() => toggleColumn(k)}
-                  onDragStart={(e) => {
-                    if (!on) return;
-                    setDraggedColumn(k);
-                    e.dataTransfer.effectAllowed = "move";
-                    e.dataTransfer.setData("text/plain", k);
-                  }}
-                  onDragOver={(e) => {
-                    if (!on || !draggedColumn || draggedColumn === k) return;
-                    e.preventDefault();
-                  }}
-                  onDrop={(e) => {
-                    if (!on || !draggedColumn) return;
-                    e.preventDefault();
-                    moveColumn(draggedColumn, k);
-                    setDraggedColumn(null);
-                  }}
-                  onDragEnd={() => setDraggedColumn(null)}
-                  className={`rounded-md border px-3 py-1.5 text-sm ${
-                    on
-                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta cursor-grab active:cursor-grabbing"
-                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                  } ${draggedColumn === k ? "opacity-40" : ""}`}
-                >
-                  {on ? "⠿ " : ""}
-                  {columnLabels[k]}
-                </button>
+                <span key={k} className="inline-flex items-center gap-0.5">
+                  <button
+                    type="button"
+                    {...columnChipProps(k, on)}
+                    onClick={withClickGuard(() => toggleColumn(k))}
+                    className={`rounded-md border px-3 py-1.5 text-sm ${
+                      on
+                        ? "border-status-magenta bg-status-magenta/10 text-status-magenta cursor-grab active:cursor-grabbing"
+                        : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                    } ${draggedColumn === k ? "opacity-40" : ""} ${
+                      hoverColumn === k && draggedColumn && draggedColumn !== k
+                        ? "ring-2 ring-status-magenta"
+                        : ""
+                    }`}
+                  >
+                    {on ? "⠿ " : ""}
+                    {columnLabels[k]}
+                  </button>
+                  {/* fixes38: guaranteed-reliable fallback for dragging (see
+                      moveActiveColumn) — a click always works, unlike a drag
+                      gesture on some trackpads. */}
+                  {on && (
+                    <span className="flex flex-col">
+                      <button
+                        type="button"
+                        disabled={activeIdx === 0}
+                        onClick={() => moveActiveColumn(k, -1)}
+                        title={t("action.move_up", "העלה")}
+                        className="rounded text-[10px] leading-none px-1 text-gray-400 hover:text-status-magenta disabled:opacity-20"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        type="button"
+                        disabled={activeIdx === activeColumns.length - 1}
+                        onClick={() => moveActiveColumn(k, 1)}
+                        title={t("action.move_down", "הורד")}
+                        className="rounded text-[10px] leading-none px-1 text-gray-400 hover:text-status-magenta disabled:opacity-20"
+                      >
+                        ▼
+                      </button>
+                    </span>
+                  )}
+                </span>
               );
             })}
             {/* fixes34 §1.1: one toggle chip per admin-added contact
