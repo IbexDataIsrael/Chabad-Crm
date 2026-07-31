@@ -28,6 +28,14 @@ TOGGLEABLE_FIELDS: list[tuple[str, str, str]] = [
     # shliach's email-based login identity even when hidden from their form.
     ("contacts.phone", "contacts.phone", "contact"),
     ("contacts.email", "contacts.email", "contact"),
+    # fixes38 §3.1: the quick-action icons (list row + contact detail header)
+    # get their own toggles, independent of the phone/email fields themselves.
+    ("contacts.action_call", "contacts.action_call", "contact"),
+    ("contacts.action_whatsapp", "contacts.action_whatsapp", "contact"),
+    ("contacts.action_email", "contacts.action_email", "contact"),
+    # fixes38 §3.1: created_at was previously always shown (key `null` in
+    # ContactView.tsx); now toggleable like contact_mekurav.first_visit.
+    ("contacts.created_at", "contacts.created_at", "contact"),
     ("contacts.assigned_user_id", "contacts.assigned_user_id", "contact"),
     ("contacts.pipeline_status", "contacts.pipeline_status", "contact"),
     ("contacts.color_tag", "contacts.color_tag", "contact"),

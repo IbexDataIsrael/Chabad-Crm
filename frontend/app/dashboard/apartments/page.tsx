@@ -410,6 +410,10 @@ export default function ApartmentsPage() {
 
   // fixes32 §6: drag one active-field chip to another position — reorders the
   // stored preference array itself (no separate "column order" preference).
+  // fixes38 §2.1: the insert index must account for the shift caused by
+  // removing `from` first — otherwise a rightward drag lands the chip AFTER
+  // the drop target while a leftward drag lands it BEFORE, which reads as
+  // "reordering is broken" (same gesture, direction-dependent result).
   function moveField(from: FieldKey, to: FieldKey) {
     if (from === to) return;
     setFields((prev) => {
@@ -421,7 +425,8 @@ export default function ApartmentsPage() {
       if (fromIdx === -1 || toIdx === -1) return prev;
       const next = [...known];
       next.splice(fromIdx, 1);
-      next.splice(toIdx, 0, from);
+      const insertIdx = fromIdx < toIdx ? toIdx - 1 : toIdx;
+      next.splice(insertIdx, 0, from);
       return next;
     });
   }
@@ -677,6 +682,15 @@ export default function ApartmentsPage() {
               </span>
             )}
           </button>
+          {/* fixes38 §2.1: the columns toggle lives outside the filtersOpen
+              block so collapsing filters never hides it. */}
+          <button
+            type="button"
+            onClick={() => setFieldsOpen((v) => !v)}
+            className="rounded-md border border-gray-300 px-4 py-1.5 text-sm font-medium hover:bg-gray-50"
+          >
+            ⚙ {t("columns.fields_configure", "התאמת שדות")}
+          </button>
           {!isShliach && (
             <>
               {!batchOpen && (
@@ -699,10 +713,148 @@ export default function ApartmentsPage() {
         </div>
       </div>
 
-      {/* fixes32 §6: both filter rows (+ the column-config panel opened from
-          the second one) unmount while the toggle is off; the persisted
-          filter state is untouched, so it keeps filtering the list — the
-          exact fixes29 §1 pattern from the Contacts page. */}
+      {/* fixes38 §2.1: the columns panel is deliberately OUTSIDE the
+          filtersOpen fragment below, so collapsing filters never hides it. */}
+      {fieldsOpen && (
+        <div className="bg-white rounded-xl shadow-sm p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">{t("columns.title", "עמודות מוצגות")}</h3>
+            <button
+              type="button"
+              onClick={() => setFields(DEFAULT_FIELDS)}
+              className="text-xs text-status-magenta hover:underline"
+            >
+              {t("columns.reset", "איפוס ברירת מחדל")}
+            </button>
+          </div>
+          <p className="text-xs text-gray-400">
+            {t(
+              "columns.hint",
+              "בחר אילו עמודות יוצגו בטבלה. ההעדפה נשמרת בדפדפן זה.",
+            )}
+          </p>
+          <p className="text-xs text-gray-400">
+            {t("columns.reorder_hint", "גרור עמודה פעילה כדי לשנות את סדר ההצגה.")}
+          </p>
+          {orgVisibleCustomDefs.length > 0 && (
+            <p className="text-xs text-gray-400">
+              {t(
+                "columns.custom_picklists_hint",
+                "עמודות רשימת בחירה מותאמות אישית — ניתן להסתיר כל אחת בנפרד.",
+              )}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {/* fixes32-stillnotdone §1: active chips render FIRST, in their
+                actual current (draggable-reordered) order — rendering every
+                chip in the fixed FIELD_KEYS order regardless of drag state
+                meant a successful drag changed the table but never visibly
+                moved anything in this panel, reading as "nothing happened".
+                fixes33 §5.2: fields an admin hid org-wide aren't offered. */}
+            {[
+              ...activeFields,
+              ...FIELD_KEYS.filter((k) => !activeFields.includes(k)),
+            ].filter(fieldVisible).map((k) => {
+              const active = activeFields.includes(k);
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  draggable={active}
+                  onClick={() => toggleField(k)}
+                  onDragStart={(e) => {
+                    if (!active) return;
+                    setDraggedField(k);
+                    e.dataTransfer.effectAllowed = "move";
+                    // Some browsers (Firefox) won't fire `drop` at all unless
+                    // the drag event carries data.
+                    e.dataTransfer.setData("text/plain", k);
+                  }}
+                  onDragOver={(e) => {
+                    if (!active || !draggedField || draggedField === k) return;
+                    e.preventDefault();
+                  }}
+                  onDrop={(e) => {
+                    if (!active || !draggedField) return;
+                    e.preventDefault();
+                    moveField(draggedField, k);
+                    setDraggedField(null);
+                  }}
+                  onDragEnd={() => setDraggedField(null)}
+                  className={`rounded-md border px-3 py-1.5 text-sm ${
+                    active
+                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta cursor-grab active:cursor-grabbing"
+                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  } ${draggedField === k ? "opacity-40" : ""}`}
+                >
+                  {active ? "⠿ " : ""}
+                  {fieldLabels[k]}
+                </button>
+              );
+            })}
+            {/* fixes33 §3.1: one show/hide toggle per admin-added apartment.*
+                picklist — a personal preference, separate from whether the
+                field is hidden org-wide (Manage Fields, fixes33 §5.2). */}
+            {orgVisibleCustomDefs.map((d) => {
+              const active = visibleCustomKeys === null || visibleCustomKeys.includes(d.field_key);
+              return (
+                <button
+                  key={d.field_key}
+                  type="button"
+                  onClick={() => toggleCustomField(d.field_key)}
+                  className={`rounded-md border px-3 py-1.5 text-sm ${
+                    active
+                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
+                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {active ? "✓ " : ""}
+                  {customDefLabel(d)}
+                </button>
+              );
+            })}
+            {/* fixes35 §3: one show/hide toggle per admin-added non-select
+                apartment custom field. */}
+            {orgVisibleCustomFieldDefs.map((d) => {
+              const active =
+                visibleCustomFieldKeys === null || visibleCustomFieldKeys.includes(d.field_key);
+              return (
+                <button
+                  key={d.field_key}
+                  type="button"
+                  onClick={() => toggleCustomFieldColumn(d.field_key)}
+                  className={`rounded-md border px-3 py-1.5 text-sm ${
+                    active
+                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
+                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {active ? "✓ " : ""}
+                  {(lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
+                    d.field_key}
+                </button>
+              );
+            })}
+            {/* fixes30 §1b: the linked-contact column, previously always on. */}
+            <button
+              type="button"
+              onClick={() => setShowContact(!showContact)}
+              className={`rounded-md border px-3 py-1.5 text-sm ${
+                showContact
+                  ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
+                  : "border-gray-200 text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              {showContact ? "✓ " : ""}
+              {t("apartments.contact", "איש קשר")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* fixes32 §6: both filter rows unmount while the toggle is off; the
+          persisted filter state is untouched, so it keeps filtering the list
+          — the exact fixes29 §1 pattern from the Contacts page. */}
       {filtersOpen && (<>
       {/* Dataset filters (fixes8 §2): multi-area (fixes15 §7.1) + building
           bounds, street lookup. */}
@@ -841,13 +993,6 @@ export default function ApartmentsPage() {
           {groupByBuilding ? "✓ " : ""}
           {t("apt.group_by_building", "קיבוץ לפי בניין")}
         </button>
-        <button
-          type="button"
-          onClick={() => setFieldsOpen((v) => !v)}
-          className="rounded-md border border-gray-300 px-3 py-2 hover:bg-gray-50"
-        >
-          ⚙ {t("columns.fields_configure", "התאמת שדות")}
-        </button>
         {/* fixes23 §3: bulk edit the apartments matching the active filters —
             enabled only while there are matching rows to change. */}
         {!isShliach && (
@@ -884,143 +1029,6 @@ export default function ApartmentsPage() {
         </select>
       </div>
 
-      {/* fixes15 §7.2: user-selected row attributes (persisted per browser). */}
-      {fieldsOpen && (
-        <div className="bg-white rounded-xl shadow-sm p-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">{t("columns.title", "עמודות מוצגות")}</h3>
-            <button
-              type="button"
-              onClick={() => setFields(DEFAULT_FIELDS)}
-              className="text-xs text-status-magenta hover:underline"
-            >
-              {t("columns.reset", "איפוס ברירת מחדל")}
-            </button>
-          </div>
-          <p className="text-xs text-gray-400">
-            {t(
-              "columns.hint",
-              "בחר אילו עמודות יוצגו בטבלה. ההעדפה נשמרת בדפדפן זה.",
-            )}
-          </p>
-          <p className="text-xs text-gray-400">
-            {t("columns.reorder_hint", "גרור עמודה פעילה כדי לשנות את סדר ההצגה.")}
-          </p>
-          {orgVisibleCustomDefs.length > 0 && (
-            <p className="text-xs text-gray-400">
-              {t(
-                "columns.custom_picklists_hint",
-                "עמודות רשימת בחירה מותאמות אישית — ניתן להסתיר כל אחת בנפרד.",
-              )}
-            </p>
-          )}
-          <div className="flex flex-wrap gap-2">
-            {/* fixes32-stillnotdone §1: active chips render FIRST, in their
-                actual current (draggable-reordered) order — rendering every
-                chip in the fixed FIELD_KEYS order regardless of drag state
-                meant a successful drag changed the table but never visibly
-                moved anything in this panel, reading as "nothing happened".
-                fixes33 §5.2: fields an admin hid org-wide aren't offered. */}
-            {[
-              ...activeFields,
-              ...FIELD_KEYS.filter((k) => !activeFields.includes(k)),
-            ].filter(fieldVisible).map((k) => {
-              const active = activeFields.includes(k);
-              return (
-                <button
-                  key={k}
-                  type="button"
-                  draggable={active}
-                  onClick={() => toggleField(k)}
-                  onDragStart={(e) => {
-                    if (!active) return;
-                    setDraggedField(k);
-                    e.dataTransfer.effectAllowed = "move";
-                    // Some browsers (Firefox) won't fire `drop` at all unless
-                    // the drag event carries data.
-                    e.dataTransfer.setData("text/plain", k);
-                  }}
-                  onDragOver={(e) => {
-                    if (!active || !draggedField || draggedField === k) return;
-                    e.preventDefault();
-                  }}
-                  onDrop={(e) => {
-                    if (!active || !draggedField) return;
-                    e.preventDefault();
-                    moveField(draggedField, k);
-                    setDraggedField(null);
-                  }}
-                  onDragEnd={() => setDraggedField(null)}
-                  className={`rounded-md border px-3 py-1.5 text-sm ${
-                    active
-                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta cursor-grab active:cursor-grabbing"
-                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                  } ${draggedField === k ? "opacity-40" : ""}`}
-                >
-                  {active ? "⠿ " : ""}
-                  {fieldLabels[k]}
-                </button>
-              );
-            })}
-            {/* fixes33 §3.1: one show/hide toggle per admin-added apartment.*
-                picklist — a personal preference, separate from whether the
-                field is hidden org-wide (Manage Fields, fixes33 §5.2). */}
-            {orgVisibleCustomDefs.map((d) => {
-              const active = visibleCustomKeys === null || visibleCustomKeys.includes(d.field_key);
-              return (
-                <button
-                  key={d.field_key}
-                  type="button"
-                  onClick={() => toggleCustomField(d.field_key)}
-                  className={`rounded-md border px-3 py-1.5 text-sm ${
-                    active
-                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
-                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  {active ? "✓ " : ""}
-                  {customDefLabel(d)}
-                </button>
-              );
-            })}
-            {/* fixes35 §3: one show/hide toggle per admin-added non-select
-                apartment custom field. */}
-            {orgVisibleCustomFieldDefs.map((d) => {
-              const active =
-                visibleCustomFieldKeys === null || visibleCustomFieldKeys.includes(d.field_key);
-              return (
-                <button
-                  key={d.field_key}
-                  type="button"
-                  onClick={() => toggleCustomFieldColumn(d.field_key)}
-                  className={`rounded-md border px-3 py-1.5 text-sm ${
-                    active
-                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
-                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  {active ? "✓ " : ""}
-                  {(lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
-                    d.field_key}
-                </button>
-              );
-            })}
-            {/* fixes30 §1b: the linked-contact column, previously always on. */}
-            <button
-              type="button"
-              onClick={() => setShowContact(!showContact)}
-              className={`rounded-md border px-3 py-1.5 text-sm ${
-                showContact
-                  ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
-                  : "border-gray-200 text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              {showContact ? "✓ " : ""}
-              {t("apartments.contact", "איש קשר")}
-            </button>
-          </div>
-        </div>
-      )}
       </>)}
 
       {batchOpen && (

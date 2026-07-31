@@ -212,6 +212,8 @@ export default function ContactsPage() {
     "contacts.columns", DEFAULT_COLUMNS,
   );
   const [columnsOpen, setColumnsOpen] = useState(false);
+  // fixes38 §1.1: native HTML5 drag state for reordering the active-column chips.
+  const [draggedColumn, setDraggedColumn] = useState<ColumnKey | null>(null);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   // Debounce the text filter; the `debouncedQ` value hits the server.
@@ -474,8 +476,11 @@ export default function ContactsPage() {
     priority: t("contacts.priority_score", "ציון עדיפות"),
     address: t("contacts.address", "כתובת"),
   };
-  const activeColumns = COLUMN_KEYS.filter(
-    (k) => availability[k] && columns.includes(k),
+  // fixes38 §1.1: iterate `columns` (the ordered preference), not the fixed
+  // COLUMN_KEYS array — otherwise a user's chosen order is stored but never
+  // rendered, which reads as "drag-and-drop reordering doesn't work".
+  const activeColumns = columns.filter(
+    (k): k is ColumnKey => (COLUMN_KEYS as readonly string[]).includes(k) && availability[k],
   );
   // name + actions + quick actions + the trailing filler column.
   const colCount =
@@ -485,6 +490,28 @@ export default function ContactsPage() {
     setColumns((prev) =>
       prev.includes(k) ? prev.filter((c) => c !== k) : [...prev, k],
     );
+  }
+
+  // fixes38 §1.1: drag one active-column chip to another position — mirrors
+  // the (now fixed) Apartments moveField; the insert index accounts for the
+  // shift caused by removing `from` first so the result is direction-
+  // independent (dragging right vs. left both land the chip at the target's
+  // original slot).
+  function moveColumn(from: ColumnKey, to: ColumnKey) {
+    if (from === to) return;
+    setColumns((prev) => {
+      const known = prev.filter((k): k is ColumnKey =>
+        (COLUMN_KEYS as readonly string[]).includes(k),
+      );
+      const fromIdx = known.indexOf(from);
+      const toIdx = known.indexOf(to);
+      if (fromIdx === -1 || toIdx === -1) return prev;
+      const next = [...known];
+      next.splice(fromIdx, 1);
+      const insertIdx = fromIdx < toIdx ? toIdx - 1 : toIdx;
+      next.splice(insertIdx, 0, from);
+      return next;
+    });
   }
 
   // fixes34 §1.1: one-field inline save straight from the list row — contacts
@@ -670,6 +697,15 @@ export default function ContactsPage() {
               </span>
             )}
           </button>
+          {/* fixes38 §1.1: the columns toggle lives outside the filtersOpen
+              block so collapsing filters never hides it. */}
+          <button
+            type="button"
+            onClick={() => setColumnsOpen((v) => !v)}
+            className="rounded-md border border-gray-300 text-gray-600 px-4 py-2 text-sm font-medium hover:bg-gray-50"
+          >
+            ⚙ {t("columns.configure", "התאמת עמודות")}
+          </button>
           <button
             type="button"
             onClick={bulkEmail}
@@ -687,10 +723,134 @@ export default function ContactsPage() {
         </div>
       </div>
 
+      {/* fixes15 §5.1: user-selected grid columns (persisted per browser).
+          fixes38 §1.1: deliberately OUTSIDE the filtersOpen fragment below,
+          so collapsing filters never hides it. */}
+      {columnsOpen && (
+        <div className="bg-white rounded-xl shadow-sm p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">{t("columns.title", "עמודות מוצגות")}</h3>
+            <button
+              type="button"
+              onClick={() => setColumns(DEFAULT_COLUMNS)}
+              className="text-xs text-status-magenta hover:underline"
+            >
+              {t("columns.reset", "איפוס ברירת מחדל")}
+            </button>
+          </div>
+          <p className="text-xs text-gray-400">
+            {t(
+              "columns.hint",
+              "בחר אילו עמודות יוצגו בטבלה. ההעדפה נשמרת בדפדפן זה.",
+            )}
+          </p>
+          <p className="text-xs text-gray-400">
+            {t("columns.reorder_hint", "גרור עמודה פעילה כדי לשנות את סדר ההצגה.")}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {/* fixes38 §1.1: active chips render FIRST, in their actual
+                current (draggable-reordered) order — mirrors the Apartments
+                panel fix (fixes32-stillnotdone §1) so a successful drag is
+                immediately visible here, not just in the table. */}
+            {[
+              ...activeColumns,
+              ...COLUMN_KEYS.filter((k) => !activeColumns.includes(k)),
+            ].filter((k) => availability[k]).map((k) => {
+              const on = columns.includes(k);
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  draggable={on}
+                  onClick={() => toggleColumn(k)}
+                  onDragStart={(e) => {
+                    if (!on) return;
+                    setDraggedColumn(k);
+                    e.dataTransfer.effectAllowed = "move";
+                    e.dataTransfer.setData("text/plain", k);
+                  }}
+                  onDragOver={(e) => {
+                    if (!on || !draggedColumn || draggedColumn === k) return;
+                    e.preventDefault();
+                  }}
+                  onDrop={(e) => {
+                    if (!on || !draggedColumn) return;
+                    e.preventDefault();
+                    moveColumn(draggedColumn, k);
+                    setDraggedColumn(null);
+                  }}
+                  onDragEnd={() => setDraggedColumn(null)}
+                  className={`rounded-md border px-3 py-1.5 text-sm ${
+                    on
+                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta cursor-grab active:cursor-grabbing"
+                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  } ${draggedColumn === k ? "opacity-40" : ""}`}
+                >
+                  {on ? "⠿ " : ""}
+                  {columnLabels[k]}
+                </button>
+              );
+            })}
+            {/* fixes34 §1.1: one toggle chip per admin-added contact
+                picklist — same "contacts.customFields" preference the
+                filter/column rendering below consults. */}
+            {orgVisibleCustomPicklistDefs.map((d) => {
+              const on =
+                visibleCustomPicklistKeys == null ||
+                visibleCustomPicklistKeys.includes(d.field_key);
+              return (
+                <button
+                  key={d.field_key}
+                  type="button"
+                  onClick={() =>
+                    setVisibleCustomPicklistKeys((prev) => {
+                      const current =
+                        prev ?? orgVisibleCustomPicklistDefs.map((cd) => cd.field_key);
+                      return current.includes(d.field_key)
+                        ? current.filter((k) => k !== d.field_key)
+                        : [...current, d.field_key];
+                    })
+                  }
+                  className={`rounded-md border px-3 py-1.5 text-sm ${
+                    on
+                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
+                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {on ? "✓ " : ""}
+                  {(lang === "en" ? d.english_label || d.label : d.label) || d.field_key}
+                </button>
+              );
+            })}
+            {/* fixes35 §3: one toggle chip per non-select mekurav custom field. */}
+            {orgVisibleCustomFieldDefs.map((d) => {
+              const on =
+                visibleCustomFieldKeys == null || visibleCustomFieldKeys.includes(d.field_key);
+              return (
+                <button
+                  key={d.field_key}
+                  type="button"
+                  onClick={() => toggleCustomFieldColumn(d.field_key)}
+                  className={`rounded-md border px-3 py-1.5 text-sm ${
+                    on
+                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
+                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {on ? "✓ " : ""}
+                  {(lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
+                    d.field_key}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* fixes15 §5.1: apartments-style filters — geo multi-selects + search.
-          fixes29 §1: both filter rows (and the columns panel opened from the
-          second one) unmount while the header toggle is off; the persisted
-          filter state is untouched, so they keep filtering the list. */}
+          fixes29 §1: both filter rows unmount while the header toggle is off;
+          the persisted filter state is untouched, so they keep filtering the
+          list. */}
       {filtersOpen && (<>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <MultiSelectFilter
@@ -927,13 +1087,6 @@ export default function ContactsPage() {
           </button>
         </span>
         <span className="ms-auto flex items-center gap-2 text-sm text-gray-500">
-          <button
-            type="button"
-            onClick={() => setColumnsOpen((v) => !v)}
-            className="rounded-md border border-gray-300 px-3 py-2 hover:bg-gray-50"
-          >
-            ⚙ {t("columns.configure", "התאמת עמודות")}
-          </button>
           {t("pager.page_size", "בעמוד:")}
           <select
             className={selectClass}
@@ -952,99 +1105,6 @@ export default function ContactsPage() {
         </span>
       </div>
 
-      {/* fixes15 §5.1: user-selected grid columns (persisted per browser). */}
-      {columnsOpen && (
-        <div className="bg-white rounded-xl shadow-sm p-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">{t("columns.title", "עמודות מוצגות")}</h3>
-            <button
-              type="button"
-              onClick={() => setColumns(DEFAULT_COLUMNS)}
-              className="text-xs text-status-magenta hover:underline"
-            >
-              {t("columns.reset", "איפוס ברירת מחדל")}
-            </button>
-          </div>
-          <p className="text-xs text-gray-400">
-            {t(
-              "columns.hint",
-              "בחר אילו עמודות יוצגו בטבלה. ההעדפה נשמרת בדפדפן זה.",
-            )}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {COLUMN_KEYS.filter((k) => availability[k]).map((k) => {
-              const on = columns.includes(k);
-              return (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => toggleColumn(k)}
-                  className={`rounded-md border px-3 py-1.5 text-sm ${
-                    on
-                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
-                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  {on ? "✓ " : ""}
-                  {columnLabels[k]}
-                </button>
-              );
-            })}
-            {/* fixes34 §1.1: one toggle chip per admin-added contact
-                picklist — same "contacts.customFields" preference the
-                filter/column rendering below consults. */}
-            {orgVisibleCustomPicklistDefs.map((d) => {
-              const on =
-                visibleCustomPicklistKeys == null ||
-                visibleCustomPicklistKeys.includes(d.field_key);
-              return (
-                <button
-                  key={d.field_key}
-                  type="button"
-                  onClick={() =>
-                    setVisibleCustomPicklistKeys((prev) => {
-                      const current =
-                        prev ?? orgVisibleCustomPicklistDefs.map((cd) => cd.field_key);
-                      return current.includes(d.field_key)
-                        ? current.filter((k) => k !== d.field_key)
-                        : [...current, d.field_key];
-                    })
-                  }
-                  className={`rounded-md border px-3 py-1.5 text-sm ${
-                    on
-                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
-                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  {on ? "✓ " : ""}
-                  {(lang === "en" ? d.english_label || d.label : d.label) || d.field_key}
-                </button>
-              );
-            })}
-            {/* fixes35 §3: one toggle chip per non-select mekurav custom field. */}
-            {orgVisibleCustomFieldDefs.map((d) => {
-              const on =
-                visibleCustomFieldKeys == null || visibleCustomFieldKeys.includes(d.field_key);
-              return (
-                <button
-                  key={d.field_key}
-                  type="button"
-                  onClick={() => toggleCustomFieldColumn(d.field_key)}
-                  className={`rounded-md border px-3 py-1.5 text-sm ${
-                    on
-                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
-                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  {on ? "✓ " : ""}
-                  {(lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
-                    d.field_key}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
       </>)}
 
       {/* fixes30 §2a: quick visit modal — the shared VisitForm pinned to the
@@ -1194,10 +1254,11 @@ export default function ContactsPage() {
                       {inlineCustomFieldCell(c, d)}
                     </td>
                   ))}
-                  {/* fixes15 §5.2: single-click call / WhatsApp / email. */}
+                  {/* fixes15 §5.2: single-click call / WhatsApp / email.
+                      fixes38 §3.1: each icon now has its own Manage Fields toggle. */}
                   <td className="px-3 py-1.5 w-px whitespace-nowrap">
                     <span className="inline-flex items-center gap-1.5">
-                      {c.phone && (
+                      {c.phone && vis("contacts.action_call") && (
                         <a
                           href={telHref(c.phone)}
                           onClick={(e) => e.stopPropagation()}
@@ -1207,7 +1268,7 @@ export default function ContactsPage() {
                           📞
                         </a>
                       )}
-                      {c.phone && (
+                      {c.phone && vis("contacts.action_whatsapp") && (
                         <a
                           href={waHref(c.phone)}
                           target="_blank"
@@ -1219,7 +1280,7 @@ export default function ContactsPage() {
                           💬
                         </a>
                       )}
-                      {c.email && (
+                      {c.email && vis("contacts.action_email") && (
                         <a
                           href={`mailto:${c.email}`}
                           onClick={(e) => e.stopPropagation()}

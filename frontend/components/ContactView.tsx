@@ -304,7 +304,8 @@ export function ContactView({
     [null, t("contacts.phone", "טלפון"), phoneNode],
     [null, t("contacts.email", "אימייל"), emailNode],
     [null, t("contacts.contact_type", "סוג איש קשר"), contactType.labelFor(contact.contact_type) || "—"],
-    [null, t("contacts.created_at", "נוצר בתאריך"), createdNode],
+    // fixes38 §3.1: created_at is now toggleable (was always shown, key null).
+    ["contacts.created_at", t("contacts.created_at", "נוצר בתאריך"), createdNode],
     // fixes35 §5: any admin-added shliach.* custom picklist.
     ...shliachPicklistDefs.map(
       (d): [string | null, string, ReactNode] => [
@@ -396,7 +397,8 @@ export function ContactView({
       ),
     ],
     ["contacts.address", t("contacts.address", "כתובת"), addressNode],
-    [null, t("contacts.created_at", "נוצר בתאריך"), createdNode],
+    // fixes38 §3.1: created_at is now toggleable (was always shown, key null).
+    ["contacts.created_at", t("contacts.created_at", "נוצר בתאריך"), createdNode],
   ];
 
   // fixes20 §2: coordinates ride their own (default-hidden) toggle; they come

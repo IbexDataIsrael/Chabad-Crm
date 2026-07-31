@@ -15,6 +15,7 @@ import {
   PDF_CONTENT_TOP,
 } from "@/lib/pdfRtl";
 import { displayPicklistValue } from "@/lib/picklists";
+import { useDbPreference } from "@/lib/preferences";
 import { useToast } from "@/lib/toast";
 import {
   apartmentTitle,
@@ -28,9 +29,41 @@ import {
 /** PDF geometry (A4 portrait, points). */
 const MARGIN = 40;
 const CELL_PADDING = 4;
-// Logical column order per the spec: floor, apartment number, Jewish status,
-// mezuzah, language, notes. Notes takes the rest of the usable ~515pt.
-const COLUMN_WIDTHS = [50, 70, 85, 75, 70, 160];
+
+// fixes38 §4.2/§4.3/§4.4: which of the 6 fixed logical columns render, each
+// with an optional custom subheading and a target width percentage. Persisted
+// per-user via the existing DB-preference mechanism (no backend model needed
+// — mirrors how Contacts/Apartments already persist column selections).
+const REPORT_COLUMN_KEYS = [
+  "floor",
+  "apartment_name",
+  "jewish_status",
+  "mezuzah_status",
+  "language",
+  "apartment_notes",
+] as const;
+type ReportColumnKey = (typeof REPORT_COLUMN_KEYS)[number];
+
+interface ReportColumnConfig {
+  columns: ReportColumnKey[];
+  subheadings: Partial<Record<ReportColumnKey, string>>;
+  widths: Partial<Record<ReportColumnKey, number>>;
+}
+
+// Default widths sum to 100 and roughly mirror the previous fixed pixel
+// widths' proportions (50, 70, 85, 75, 70, 160 of 510pt total).
+const DEFAULT_REPORT_COLUMNS: ReportColumnConfig = {
+  columns: [...REPORT_COLUMN_KEYS],
+  subheadings: {},
+  widths: {
+    floor: 10,
+    apartment_name: 14,
+    jewish_status: 17,
+    mezuzah_status: 15,
+    language: 14,
+    apartment_notes: 30,
+  },
+};
 
 /** fixes30 §3 / fixes33 §3.2: the page offers three source modes — the
  *  classic report-number selection, an arbitrary hand-picked set of
@@ -54,9 +87,9 @@ export default function CreateReportsPage() {
 }
 
 function CreateReportsInner() {
-  const { loading, user } = useAuth();
+  const { loading, user, isAdmin, refresh } = useAuth();
   const { t, lang } = useLocalization();
-  const { error: toastError } = useToast();
+  const { error: toastError, success } = useToast();
   const searchParams = useSearchParams();
   // fixes33 §3.2: the `from` marker — not just "any filter param present" —
   // decides this, since an apartments-page visit with every filter cleared
@@ -76,6 +109,79 @@ function CreateReportsInner() {
   const [selectedAptIds, setSelectedAptIds] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
   const [noData, setNoData] = useState(false);
+  // fixes38 §4.1: report description moved here from the global Settings
+  // page — still the same org-wide `report_notes` column, just edited from
+  // the report page itself now.
+  const [reportNotes, setReportNotes] = useState("");
+  const [notesDirty, setNotesDirty] = useState(false);
+  const [savingNotes, setSavingNotes] = useState(false);
+  // fixes38 §4.2/§4.4: column selection/subheadings/widths, persisted per user.
+  const [reportColumns, setReportColumns] = useDbPreference<ReportColumnConfig>(
+    "reports.apartmentColumns", DEFAULT_REPORT_COLUMNS,
+  );
+
+  useEffect(() => {
+    if (!notesDirty) setReportNotes(user?.organization?.report_notes ?? "");
+  }, [user?.organization?.report_notes, notesDirty]);
+
+  async function saveReportNotes() {
+    setSavingNotes(true);
+    try {
+      await apiFetch("/api/organizations/me", {
+        method: "PUT",
+        body: JSON.stringify({ report_notes: reportNotes.trim() || null }),
+      });
+      await refresh();
+      setNotesDirty(false);
+      success(t("msg.saved", "נשמר בהצלחה"));
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+    } finally {
+      setSavingNotes(false);
+    }
+  }
+
+  // fixes38 §4.2: which of the 6 columns are active, in their fixed logical
+  // order (the spec asks only for inclusion, not reordering).
+  const activeReportColumns = REPORT_COLUMN_KEYS.filter((k) =>
+    reportColumns.columns.includes(k),
+  );
+  const columnLabels: Record<ReportColumnKey, string> = {
+    floor: t("reports.floor", "קומה"),
+    apartment_name: t("reports.apartment_name", "מספר דירה"),
+    jewish_status: t("reports.jewish_status", "מצב יהדות"),
+    mezuzah_status: t("reports.mezuzah_status", "מזוזה"),
+    language: t("reports.language", "שפה"),
+    apartment_notes: t("reports.apartment_notes", "הערות"),
+  };
+  const totalReportWidth = activeReportColumns.reduce(
+    (sum, k) => sum + (reportColumns.widths[k] ?? 0), 0,
+  );
+  // fixes38 §4.3: sum of active column widths must not exceed 100%.
+  const widthOverLimit = totalReportWidth > 100;
+
+  function toggleReportColumn(k: ReportColumnKey) {
+    setReportColumns((prev) => ({
+      ...prev,
+      columns: prev.columns.includes(k)
+        ? prev.columns.filter((c) => c !== k)
+        : [...prev.columns, k],
+    }));
+  }
+
+  function setReportSubheading(k: ReportColumnKey, value: string) {
+    setReportColumns((prev) => ({
+      ...prev,
+      subheadings: { ...prev.subheadings, [k]: value },
+    }));
+  }
+
+  function setReportWidth(k: ReportColumnKey, value: number) {
+    setReportColumns((prev) => ({
+      ...prev,
+      widths: { ...prev.widths, [k]: value },
+    }));
+  }
 
   useEffect(() => {
     if (loading) return;
@@ -120,7 +226,8 @@ function CreateReportsInner() {
         : mode === "apartments"
           ? selectedAptIds.length === 0
           : false; // "filters": the URL's filter params drive the query, nothing to pick
-    if (nothingSelected || busy) return;
+    // fixes38 §4.2/§4.3: no columns selected, or the widths exceed 100%.
+    if (nothingSelected || busy || activeReportColumns.length === 0 || widthOverLimit) return;
     setBusy(true);
     setNoData(false);
     try {
@@ -170,19 +277,40 @@ function CreateReportsInner() {
       const pageH = doc.internal.pageSize.getHeight();
       const bottom = pageH - MARGIN;
 
+      // fixes38 §4.2: only the user's selected columns render, in their fixed
+      // logical order; a subheading (if set) renders as a second line via
+      // "\n" — jspdf-autotable wraps multi-line header/body strings natively.
+      const rowValueFor = (a: ApartmentListItem, k: ReportColumnKey): string => {
+        switch (k) {
+          case "floor":
+            return a.floor ?? "";
+          case "apartment_name":
+            return a.apartment_name ?? "";
+          case "jewish_status":
+            return labelFor(jewish, a.jewish_status);
+          case "mezuzah_status":
+            return labelFor(mezuzah, a.mezuzah_status);
+          case "language":
+            return labelFor(language, a.language);
+          case "apartment_notes":
+            return a.apartment_notes ?? "";
+        }
+      };
+      // fixes38 §4.2: width % of the usable page width, per active column.
+      const usableWidth = pageW - MARGIN * 2;
+      const logicalWidths = activeReportColumns.map(
+        (k) => (usableWidth * (reportColumns.widths[k] ?? 0)) / 100,
+      );
+
       // Visual order is the reverse of the logical (RTL) column order —
       // autotable lays columns out left-to-right, so קומה must come last to
       // land rightmost.
-      const logicalHeads = [
-        t("reports.floor", "קומה"),
-        t("reports.apartment_name", "מספר דירה"),
-        t("reports.jewish_status", "מצב יהדות"),
-        t("reports.mezuzah_status", "מזוזה"),
-        t("reports.language", "שפה"),
-        t("reports.apartment_notes", "הערות"),
-      ];
+      const logicalHeads = activeReportColumns.map((k) => {
+        const subheading = reportColumns.subheadings[k]?.trim();
+        return subheading ? `${columnLabels[k]}\n${subheading}` : columnLabels[k];
+      });
       const head = [...logicalHeads].reverse();
-      const visualWidths = [...COLUMN_WIDTHS].reverse();
+      const visualWidths = [...logicalWidths].reverse();
       const columnStyles = Object.fromEntries(
         visualWidths.map((w, i) => [i, { cellWidth: w }]),
       );
@@ -196,14 +324,13 @@ function CreateReportsInner() {
       });
       y += 34;
 
-      // fixes33 §7.1: the org's configured report_notes, once, at the very
-      // top of the document — before the first report/building section.
-      const reportNotes = user?.organization?.report_notes?.trim();
-      if (reportNotes) {
+      // fixes33 §7.1 / fixes38 §4.1: the report description, once, at the
+      // very top of the document — before the first report/building section.
+      const trimmedNotes = reportNotes.trim();
+      if (trimmedNotes) {
         doc.setFont(HEBREW_FONT, "normal");
         doc.setFontSize(10);
-        const usableWidth = pageW - MARGIN * 2;
-        const lines = doc.splitTextToSize(reportNotes, usableWidth) as string[];
+        const lines = doc.splitTextToSize(trimmedNotes, usableWidth) as string[];
         for (const line of lines) {
           doc.text(line, pageW - MARGIN, y, { align: "right" });
           y += 13;
@@ -240,14 +367,7 @@ function CreateReportsInner() {
           y += 12;
 
           const body = byBuilding.get(buildingKey)!.map((a) =>
-            [
-              a.floor ?? "",
-              a.apartment_name ?? "",
-              labelFor(jewish, a.jewish_status),
-              labelFor(mezuzah, a.mezuzah_status),
-              labelFor(language, a.language),
-              a.apartment_notes ?? "",
-            ].reverse(),
+            activeReportColumns.map((k) => rowValueFor(a, k)).reverse(),
           );
 
           autoTable(doc, {
@@ -256,7 +376,7 @@ function CreateReportsInner() {
             margin: { left: MARGIN, right: MARGIN, top: PDF_CONTENT_TOP, bottom: MARGIN },
             // Explicit total width — with 'auto' this autotable version logs a
             // spurious "content width could not fit page" warning.
-            tableWidth: COLUMN_WIDTHS.reduce((a, b) => a + b, 0),
+            tableWidth: logicalWidths.reduce((a, b) => a + b, 0),
             head: [head],
             body,
             theme: "grid",
@@ -344,8 +464,113 @@ function CreateReportsInner() {
         : false;
 
   return (
-    <div className="space-y-5 max-w-2xl">
+    <div className="space-y-5 max-w-4xl">
       <h1 className="text-2xl font-bold">{t("reports.create_reports", "יצירת דוחות")}</h1>
+
+      {/* fixes38 §4.1: report description moved here from the global Settings
+          page — admin-only edit, same org-wide report_notes field. */}
+      {isAdmin && (
+        <div className="bg-white rounded-xl shadow-sm p-5 space-y-2">
+          <span className="block text-sm font-medium">
+            {t("settings.report_notes", "הערות לדוח")}
+          </span>
+          <textarea
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
+            rows={3}
+            value={reportNotes}
+            onChange={(e) => {
+              setReportNotes(e.target.value);
+              setNotesDirty(true);
+            }}
+            placeholder={t(
+              "settings.report_notes_hint",
+              "טקסט חופשי שיופיע בראש כל דוח שמופק (הבהרה, כותרת, הערת שוליים...)",
+            )}
+          />
+          <button
+            type="button"
+            onClick={saveReportNotes}
+            disabled={savingNotes || !notesDirty}
+            className="rounded-md border border-status-magenta text-status-magenta px-4 py-1.5 text-sm font-medium hover:bg-status-magenta/10 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {savingNotes ? t("action.saving", "שומר…") : t("action.save", "שמור")}
+          </button>
+        </div>
+      )}
+
+      {/* fixes38 §4.2/§4.3/§4.4: column selection + custom subheadings + width
+          percentages, persisted per user and reused on the next visit. */}
+      <div className="bg-white rounded-xl shadow-sm p-5 space-y-3">
+        <h2 className="text-sm font-semibold">
+          {t("reports.column_config_title", "עמודות הדוח")}
+        </h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-gray-500 text-start">
+              <tr>
+                <th className="py-1 pe-3 font-medium">{t("columns.title", "עמודות מוצגות")}</th>
+                <th className="py-1 pe-3 font-medium">
+                  {t("reports.column_subheading", "כותרת משנה")}
+                </th>
+                <th className="py-1 font-medium">{t("reports.column_width", "רוחב (%)")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {REPORT_COLUMN_KEYS.map((k) => {
+                const on = reportColumns.columns.includes(k);
+                return (
+                  <tr key={k} className="border-t border-gray-100">
+                    <td className="py-1.5 pe-3">
+                      <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="accent-status-magenta"
+                          checked={on}
+                          onChange={() => toggleReportColumn(k)}
+                        />
+                        {columnLabels[k]}
+                      </label>
+                    </td>
+                    <td className="py-1.5 pe-3">
+                      <input
+                        type="text"
+                        disabled={!on}
+                        className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm disabled:bg-gray-50 disabled:text-gray-300"
+                        value={reportColumns.subheadings[k] ?? ""}
+                        onChange={(e) => setReportSubheading(k, e.target.value)}
+                      />
+                    </td>
+                    <td className="py-1.5">
+                      <input
+                        type="number"
+                        dir="ltr"
+                        min={0}
+                        max={100}
+                        disabled={!on}
+                        className="w-20 rounded-md border border-gray-300 px-2 py-1 text-sm disabled:bg-gray-50 disabled:text-gray-300"
+                        value={reportColumns.widths[k] ?? 0}
+                        onChange={(e) => setReportWidth(k, Number(e.target.value))}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className={`text-sm ${widthOverLimit ? "text-status-darkred font-medium" : "text-gray-500"}`}>
+          {t("reports.column_width_total", "סך הכל: {n}%").replace("{n}", String(totalReportWidth))}
+        </p>
+        {/* fixes38 §4.3: bilingual validation message via the usual t() mechanism. */}
+        {widthOverLimit && (
+          <p className="text-sm text-status-darkred">
+            {t(
+              "validation.report_width_over_100",
+              "סך הרוחב של העמודות אינו יכול להיות יותר ממאה אחוז",
+            )}
+          </p>
+        )}
+      </div>
 
       <div className="bg-white rounded-xl shadow-sm p-5 space-y-4">
         {/* fixes33 §3.2: opened from the Apartments page's filtered list — the
@@ -450,7 +675,7 @@ function CreateReportsInner() {
         <button
           type="button"
           onClick={generatePdf}
-          disabled={busy || nothingSelected}
+          disabled={busy || nothingSelected || activeReportColumns.length === 0 || widthOverLimit}
           className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {busy ? t("action.loading", "טוען…") : t("reports.generate_pdf", "הפק דוח PDF")}

@@ -21,8 +21,6 @@ export default function SettingsPage() {
   const [mapInEnglish, setMapInEnglish] = useState(false);
   // fixes18 §6: shliach contacts-visibility permission (default off).
   const [shliachViewContacts, setShliachViewContacts] = useState(false);
-  // fixes33 §6: free text injected at the top of every generated PDF report.
-  const [reportNotes, setReportNotes] = useState("");
   const [lat, setLat] = useState<string>("");
   const [lng, setLng] = useState<string>("");
   const [zoom, setZoom] = useState<string>("13");
@@ -40,7 +38,6 @@ export default function SettingsPage() {
         setLogoUrl(o.logo_url);
         setMapInEnglish(o.map_in_english);
         setShliachViewContacts(o.shliach_can_view_contacts ?? false);
-        setReportNotes(o.report_notes ?? "");
         setLat(o.default_lat?.toString() ?? "");
         setLng(o.default_lng?.toString() ?? "");
         setZoom(o.default_zoom?.toString() ?? "13");
@@ -60,7 +57,6 @@ export default function SettingsPage() {
           logo_url: logoUrl,
           map_in_english: mapInEnglish,
           shliach_can_view_contacts: shliachViewContacts,
-          report_notes: reportNotes.trim() || null,
           default_lat: lat === "" ? null : Number(lat),
           default_lng: lng === "" ? null : Number(lng),
           default_zoom: zoom === "" ? 13 : Number(zoom),
@@ -136,23 +132,6 @@ export default function SettingsPage() {
             "כאשר כבוי (ברירת המחדל), משתמשי פעיל אינם רואים את רשימת אנשי הקשר.",
           )}
         </p>
-
-        {/* fixes33 §6: injected at the top of every generated PDF report. */}
-        <label className="block space-y-1">
-          <span className="block text-sm font-medium">
-            {t("settings.report_notes", "הערות לדוח")}
-          </span>
-          <textarea
-            className={inputClass}
-            rows={3}
-            value={reportNotes}
-            onChange={(e) => setReportNotes(e.target.value)}
-            placeholder={t(
-              "settings.report_notes_hint",
-              "טקסט חופשי שיופיע בראש כל דוח שמופק (הבהרה, כותרת, הערת שוליים...)",
-            )}
-          />
-        </label>
 
         <div className="border-t border-gray-100 pt-4 space-y-2">
           <span className="block text-sm font-medium">

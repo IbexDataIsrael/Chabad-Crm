@@ -1116,6 +1116,25 @@ class VisitOut(BaseModel):
     picklist_values: dict[str, Optional[str]] = {}
 
 
+# fixes38 §1.2/§1.3: "Summary of Visits" report + per-contact Visit Summary.
+class VisitSummaryItem(BaseModel):
+    visit_id: int
+    visit_date: datetime
+    contact_id: int
+    contact_name: str
+
+
+class VisitSummaryCategory(BaseModel):
+    key: str
+    count: int
+    items: list[VisitSummaryItem]
+
+
+class VisitSummaryOut(BaseModel):
+    total: int
+    categories: list[VisitSummaryCategory]
+
+
 # --- Donations -------------------------------------------------------------
 class DonationCreate(BaseModel):
     contact_id: Optional[int] = None

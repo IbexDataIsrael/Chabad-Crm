@@ -36,19 +36,28 @@ function DashboardChrome({ children }: { children: ReactNode }) {
     ...(shliachContactsBlocked
       ? []
       : [{ href: "/dashboard/contacts", label: t("nav.contacts", "אנשי קשר") }]),
+    // fixes38 §1.1: Manage Areas relocated here from Places — hidden from
+    // shliach users (fixes10 §3.7 — the whole section is blocked for them).
+    ...(isShliach
+      ? []
+      : [{ href: "/dashboard/admin-areas", label: t("nav.admin_areas", "אזור מנהל") }]),
     { href: "/dashboard/shluchim", label: t("nav.shluchim", "פעילים"), admin: true },
     { href: "/dashboard/users", label: t("nav.users", "משתמשים"), admin: true },
     // fixes25 §4: the Visits menu entry is retired (visit logging happens from
     // the contact page); /dashboard/visits still serves by direct URL.
     // fixes24 §2: donations moved from a standalone header link into People.
     { href: "/dashboard/donations", label: t("nav.donations", "תרומות"), admin: true },
+    // fixes38 §1.2: Summary of Visits report.
+    ...(shliachContactsBlocked
+      ? []
+      : [
+          {
+            href: "/dashboard/contacts/visit-summary",
+            label: t("nav.visit_summary", "סיכום ביקורים"),
+          },
+        ]),
   ]);
   const placeItems = adminOnly([
-    // fixes9 §2B: Admin Area sits immediately before Areas; hidden from
-    // shliach users (fixes10 §3.7 — the whole section is blocked for them).
-    ...(isShliach
-      ? []
-      : [{ href: "/dashboard/admin-areas", label: t("nav.admin_areas", "אזור מנהל") }]),
     { href: "/dashboard/areas", label: t("nav.areas", "אזורים") },
     { href: "/dashboard/buildings", label: t("nav.buildings", "בניינים"), admin: true },
     { href: "/dashboard/apartments", label: t("nav.apartments", "דירות") },

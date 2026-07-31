@@ -339,6 +339,25 @@ export const MIVTZOIM_FLAGS = [
 ] as const;
 export type MivtzoimFlag = (typeof MIVTZOIM_FLAGS)[number];
 
+// fixes38 §1.2/§1.3: "Summary of Visits" report + per-contact Visit Summary.
+export interface VisitSummaryItem {
+  visit_id: number;
+  visit_date: string;
+  contact_id: number;
+  contact_name: string;
+}
+
+export interface VisitSummaryCategory {
+  key: MivtzoimFlag;
+  count: number;
+  items: VisitSummaryItem[];
+}
+
+export interface VisitSummaryOut {
+  total: number;
+  categories: VisitSummaryCategory[];
+}
+
 export interface Donation {
   id: number;
   guid: string;

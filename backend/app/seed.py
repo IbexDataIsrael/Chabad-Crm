@@ -320,6 +320,12 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("apt", "apt.associate_contact", "שייך איש קשר קיים (לא חובה)", "Link an existing contact (optional)"),
     ("page", "page.no_shluchim", "אין פעילים עדיין.", "No activists yet."),
     ("page", "page.donations_intro", "היסטורית תרומות. ניתן לשייך תרומה לאיש קשר או להשאיר ללא שיוך.", "Donation history. A donation can be linked to a contact or left unlinked."),
+    # --- fixes38 §1.2/§1.3: Summary of Visits report + per-contact section ---
+    ("nav", "nav.visit_summary", "סיכום ביקורים", "Summary of Visits"),
+    ("visitsummary", "visitsummary.total", 'סה"כ ביקורים: {n}', "Total visits: {n}"),
+    ("visitsummary", "visitsummary.scope_all", "הצג את כל הביקורים בארגון", "Show all visits org-wide"),
+    ("visitsummary", "visitsummary.none", "אין ביקורים בטווח שנבחר.", "No visits in the selected range."),
+    ("visitsummary", "visitsummary.category_empty", "אין רשומות", "No records"),
     # --- Visit history ---
     ("visit", "visit.history", "היסטורית ביקורים", "Visit history"),
     ("visit", "visit.add", "הוסף ביקור", "Add visit"),
@@ -615,6 +621,10 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("action", "action.call", "חיוג", "Call"),
     ("action", "action.whatsapp", "וואטסאפ", "WhatsApp"),
     ("action", "action.send_email", "שליחת מייל", "Send email"),
+    # fixes38 §3.1: Manage Fields toggle labels for the quick-action icons.
+    ("column", "contacts.action_call", "כפתור חיוג טלפוני", "Phone call button"),
+    ("column", "contacts.action_whatsapp", "כפתור וואטסאפ", "WhatsApp button"),
+    ("column", "contacts.action_email", "כפתור שליחת מייל", "Email button"),
     ("action", "action.bulk_email", "מייל לכל התוצאות", "Email all results"),
     ("msg", "msg.no_emails_in_list", "אין כתובות אימייל ברשימה המסוננת.", "No email addresses in the filtered list."),
     ("sort", "sort.address", "כתובת", "Address"),
@@ -747,6 +757,17 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("reports", "reports.apartment_notes", "הערות", "Notes"),
     ("reports", "reports.no_data", "לא נמצאו נתונים עבור הדוחות שנבחרו", "No data found for the selected reports"),
     ("reports", "reports.pdf_title", "דוח ריכוז דירות", "Apartment Summary Report"),
+    # --- fixes38 §4.2/§4.3: report column customization toolbar ---
+    ("reports", "reports.column_config_title", "עמודות הדוח", "Report columns"),
+    ("reports", "reports.column_subheading", "כותרת משנה", "Subheading"),
+    ("reports", "reports.column_width", "רוחב (%)", "Width (%)"),
+    ("reports", "reports.column_width_total", "סך הכל: {n}%", "Total: {n}%"),
+    (
+        "field",
+        "validation.report_width_over_100",
+        "סך הרוחב של העמודות אינו יכול להיות יותר ממאה אחוז",
+        "The total width should not be over 100%",
+    ),
     # --- fixes25: VISITS namespace (visit-level Mivtzoim / interactions / fields) ---
     ("visits", "visits.details", "פרטי ביקור", "Visit details"),
     ("visits", "visits.mivtzoim", "מבצעים", "Mivtzoim"),

@@ -29,6 +29,9 @@ from app.schemas import (
     CustomFieldValueIn,
     VisitCreate,
     VisitOut,
+    VisitSummaryCategory,
+    VisitSummaryItem,
+    VisitSummaryOut,
     VisitUpdate,
 )
 
@@ -295,6 +298,57 @@ def list_all_visits(
         q = q.filter(models.VisitHistory.contact_id == contact_id)
     rows = q.order_by(models.VisitHistory.visit_date.desc()).all()
     return _out_many(db, admin.organization_id, rows)
+
+
+@all_router.get("/summary", response_model=VisitSummaryOut)
+def visits_summary(
+    date_from: datetime.date,
+    date_to: datetime.date,
+    contact_id: Optional[int] = None,
+    scope_all: bool = False,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """fixes38 §1.2/§1.3: "Summary of Visits" report + per-contact Visit
+    Summary — total count + per-Mivtzoim-category breakdown, scoped to the
+    caller's assigned contacts unless a specific contact is requested or the
+    caller is an admin who opted into `scope_all`."""
+    org_id = current_user.organization_id
+    q = db.query(models.VisitHistory).filter(
+        models.VisitHistory.organization_id == org_id,
+        models.VisitHistory.visit_date
+        >= datetime.datetime.combine(date_from, datetime.time.min),
+        models.VisitHistory.visit_date
+        <= datetime.datetime.combine(date_to, datetime.time.max),
+    )
+    if contact_id is not None:
+        q = q.filter(models.VisitHistory.contact_id == contact_id)
+    elif not (current_user.role == "admin" and scope_all):
+        # Standard user (or admin without the "all" toggle): only visits for
+        # contacts assigned to them. The inner join drops unlinked visits.
+        q = q.join(
+            models.Contact, models.VisitHistory.contact_id == models.Contact.id
+        ).filter(models.Contact.assigned_user_id == current_user.guid)
+    rows = q.order_by(models.VisitHistory.visit_date.desc()).all()
+    categories = []
+    for key in _MIVTZOIM_FLAGS:
+        matching = [v for v in rows if getattr(v, key) and v.contact_id]
+        categories.append(
+            VisitSummaryCategory(
+                key=key,
+                count=len(matching),
+                items=[
+                    VisitSummaryItem(
+                        visit_id=v.id,
+                        visit_date=v.visit_date,
+                        contact_id=v.contact_id,
+                        contact_name=f"{v.contact.name} {v.contact.last_name or ''}".strip(),
+                    )
+                    for v in matching
+                ],
+            )
+        )
+    return VisitSummaryOut(total=len(rows), categories=categories)
 
 
 @all_router.post("", response_model=VisitOut, status_code=status.HTTP_201_CREATED)

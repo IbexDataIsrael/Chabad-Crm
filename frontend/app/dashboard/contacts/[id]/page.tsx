@@ -8,10 +8,12 @@ import { ContactView, type ContactPatch } from "@/components/ContactView";
 import { DonationsEditor } from "@/components/DonationsEditor";
 import { SignificantDatesEditor } from "@/components/SignificantDatesEditor";
 import { VisitHistoryEditor } from "@/components/VisitHistoryEditor";
+import { VisitSummary } from "@/components/VisitSummary";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useConfirm } from "@/lib/confirm";
 import { telHref, waHref } from "@/lib/contactActions";
+import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { useDbPreference } from "@/lib/preferences";
 import { useToast } from "@/lib/toast";
@@ -19,7 +21,7 @@ import { contactFullName, type Contact, type UserSummary } from "@/lib/types";
 
 /** fixes30 §2b: the orderable page segments; the stored preference is
  *  sanitized against this list (unknown keys dropped, missing appended). */
-const SEGMENT_KEYS = ["main", "visits", "dates", "donations"] as const;
+const SEGMENT_KEYS = ["main", "visits", "visitSummary", "dates", "donations"] as const;
 type SegmentKey = (typeof SEGMENT_KEYS)[number];
 const DEFAULT_SEGMENT_ORDER: SegmentKey[] = [...SEGMENT_KEYS];
 
@@ -31,6 +33,7 @@ export default function ContactDetailPage() {
   const confirmDialog = useConfirm();
   const { isAdmin } = useAuth();
   const { success, error: toastError } = useToast();
+  const { isFieldVisible: vis } = useFieldSettings();
 
   const [contact, setContact] = useState<Contact | null>(null);
   const [users, setUsers] = useState<UserSummary[]>([]);
@@ -120,6 +123,7 @@ export default function ContactDetailPage() {
   const segmentLabels: Record<SegmentKey, string> = {
     main: t("contact.segment_main", "תצוגה עיקרית של איש קשר"),
     visits: t("visit.history", "היסטורית ביקורים"),
+    visitSummary: t("nav.visit_summary", "סיכום ביקורים"),
     dates: t("significant_dates", "תאריכים חשובים"),
     donations: t("donation.history", "היסטורית תרומות"),
   };
@@ -148,6 +152,15 @@ export default function ContactDetailPage() {
           <section key="visits" className="bg-white rounded-xl shadow-sm p-6">
             <h2 className="font-semibold mb-4">{t("visit.history", "היסטורית ביקורים")}</h2>
             <VisitHistoryEditor contactId={contact!.id} />
+          </section>
+        );
+      case "visitSummary":
+        // fixes38 §1.3: same scoping as the "visits" segment.
+        if (contact!.contact_type !== "mekurav") return null;
+        return (
+          <section key="visitSummary" className="bg-white rounded-xl shadow-sm p-6">
+            <h2 className="font-semibold mb-4">{t("nav.visit_summary", "סיכום ביקורים")}</h2>
+            <VisitSummary contactId={contact!.id} />
           </section>
         );
       case "dates":
@@ -271,9 +284,10 @@ export default function ContactDetailPage() {
 
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-bold">{contactFullName(contact)}</h1>
-        {/* fixes17 §2.1: one-click call / WhatsApp / mail from the profile. */}
+        {/* fixes17 §2.1: one-click call / WhatsApp / mail from the profile.
+            fixes38 §3.1: each icon now has its own Manage Fields toggle. */}
         <span className="flex items-center gap-2">
-          {contact.phone && (
+          {contact.phone && vis("contacts.action_call") && (
             <a
               href={telHref(contact.phone)}
               title={t("action.call", "חיוג")}
@@ -282,7 +296,7 @@ export default function ContactDetailPage() {
               📞 {t("action.call", "חיוג")}
             </a>
           )}
-          {contact.phone && (
+          {contact.phone && vis("contacts.action_whatsapp") && (
             <a
               href={waHref(contact.phone)}
               target="_blank"
@@ -293,7 +307,7 @@ export default function ContactDetailPage() {
               💬 {t("action.whatsapp", "וואטסאפ")}
             </a>
           )}
-          {contact.email && (
+          {contact.email && vis("contacts.action_email") && (
             <a
               href={`mailto:${contact.email}`}
               title={t("action.send_email", "שליחת מייל")}
