@@ -17,6 +17,7 @@ import {
 import { displayPicklistValue } from "@/lib/picklists";
 import { useDbPreference } from "@/lib/preferences";
 import { useToast } from "@/lib/toast";
+import { useSortableList } from "@/lib/useSortableList";
 import {
   apartmentTitle,
   buildingDisplayName,
@@ -30,17 +31,29 @@ import {
 const MARGIN = 40;
 const CELL_PADDING = 4;
 
-// fixes38 §4.2/§4.3/§4.4: which of the 6 fixed logical columns render, each
-// with an optional custom subheading and a target width percentage. Persisted
-// per-user via the existing DB-preference mechanism (no backend model needed
-// — mirrors how Contacts/Apartments already persist column selections).
+// fixes38 §4.2/§4.3/§4.4, expanded fixes40 §5: which logical columns can
+// render, each with an optional custom subheading and a target width
+// percentage. Persisted per-user via the existing DB-preference mechanism
+// (no backend model needed — mirrors how Contacts/Apartments already
+// persist column selections). fixes40 §5: the set now matches the
+// Apartments page's own "Customize Fields" vocabulary exactly (its
+// `FIELD_KEYS` plus the two always-on identity columns, floor/
+// apartment_name) — "notes"/"resident" etc. use the same key names, not
+// the report's old bespoke "apartment_notes" naming.
 const REPORT_COLUMN_KEYS = [
   "floor",
   "apartment_name",
-  "jewish_status",
-  "mezuzah_status",
+  "resident",
+  "building",
+  "area",
+  "report_number",
+  "notes",
+  "phone",
+  "email",
   "language",
-  "apartment_notes",
+  "jewish_status",
+  "campaign_status",
+  "mezuzah_status",
 ] as const;
 type ReportColumnKey = (typeof REPORT_COLUMN_KEYS)[number];
 
@@ -50,10 +63,15 @@ interface ReportColumnConfig {
   widths: Partial<Record<ReportColumnKey, number>>;
 }
 
-// Default widths sum to 100 and roughly mirror the previous fixed pixel
-// widths' proportions (50, 70, 85, 75, 70, 160 of 510pt total).
+// fixes40 §5: only the original 6 are active by default (same widths,
+// summing to 100, as before) — the other 7 new columns are available but
+// opt-in, so an existing saved preference isn't suddenly overflowing past
+// 100% width. A pre-fixes40 preference's old "apartment_notes" key is
+// silently dropped by the membership filter below (renamed to "notes") —
+// the same graceful-degradation the Apartments page itself already relies
+// on for renamed/removed keys.
 const DEFAULT_REPORT_COLUMNS: ReportColumnConfig = {
-  columns: [...REPORT_COLUMN_KEYS],
+  columns: ["floor", "apartment_name", "jewish_status", "mezuzah_status", "language", "notes"],
   subheadings: {},
   widths: {
     floor: 10,
@@ -61,7 +79,7 @@ const DEFAULT_REPORT_COLUMNS: ReportColumnConfig = {
     jewish_status: 17,
     mezuzah_status: 15,
     language: 14,
-    apartment_notes: 30,
+    notes: 30,
   },
 };
 
@@ -191,18 +209,26 @@ function CreateReportsInner() {
     }
   }
 
-  // fixes38 §4.2: which of the 6 columns are active, in their fixed logical
-  // order (the spec asks only for inclusion, not reordering).
-  const activeReportColumns = REPORT_COLUMN_KEYS.filter((k) =>
-    reportColumns.columns.includes(k),
+  // fixes40 §5: which columns are active, in their user-chosen (now
+  // reorderable) order — was fixed-logical-order-only ("the spec asks only
+  // for inclusion, not reordering") before this round.
+  const activeReportColumns = reportColumns.columns.filter((k) =>
+    (REPORT_COLUMN_KEYS as readonly string[]).includes(k),
   );
   const columnLabels: Record<ReportColumnKey, string> = {
     floor: t("reports.floor", "קומה"),
     apartment_name: t("reports.apartment_name", "מספר דירה"),
+    resident: t("apartments.name", "שם דייר"),
+    building: t("apartments.building_id", "בניין"),
+    area: t("buildings.area_id", "אזור"),
+    report_number: t("apartments.report_number_id", "מספר דוח"),
+    notes: t("reports.apartment_notes", "הערות"),
+    phone: t("apartments.phone", "טלפון"),
+    email: t("apartments.email", "אימייל"),
     jewish_status: t("reports.jewish_status", "מצב יהדות"),
     mezuzah_status: t("reports.mezuzah_status", "מזוזה"),
     language: t("reports.language", "שפה"),
-    apartment_notes: t("reports.apartment_notes", "הערות"),
+    campaign_status: t("picklist.apartment.campaign_status", "סטטוס קמפיין"),
   };
   const totalReportWidth = activeReportColumns.reduce(
     (sum, k) => sum + (reportColumns.widths[k] ?? 0), 0,
@@ -219,6 +245,31 @@ function CreateReportsInner() {
     }));
   }
 
+  // fixes40 §5: SortableJS's container holds every chip (active + inactive
+  // — same pattern the Apartments page's own Customize Fields panel uses,
+  // see useSortableList's doc comment) — recompute the active order from
+  // the container's resulting DOM order directly.
+  function reorderReportColumns(orderedKeys: string[]) {
+    setReportColumns((prev) => {
+      const activeSet = new Set(prev.columns);
+      const reordered = orderedKeys.filter(
+        (k): k is ReportColumnKey => activeSet.has(k as ReportColumnKey),
+      );
+      return reordered.length > 0 ? { ...prev, columns: reordered } : prev;
+    });
+  }
+
+  function moveActiveReportColumn(key: ReportColumnKey, delta: -1 | 1) {
+    setReportColumns((prev) => {
+      const idx = prev.columns.indexOf(key);
+      const to = idx + delta;
+      if (idx === -1 || to < 0 || to >= prev.columns.length) return prev;
+      const next = [...prev.columns];
+      [next[idx], next[to]] = [next[to], next[idx]];
+      return { ...prev, columns: next };
+    });
+  }
+
   function setReportSubheading(k: ReportColumnKey, value: string) {
     setReportColumns((prev) => ({
       ...prev,
@@ -232,6 +283,11 @@ function CreateReportsInner() {
       widths: { ...prev.widths, [k]: value },
     }));
   }
+
+  // fixes40 §5: SortableJS-backed reorder for the column chip panel,
+  // mobile-first — identical mechanism to Apartments' Customize Fields.
+  const { containerRef: reportColumnsSortableRef, withClickGuard: withColumnClickGuard } =
+    useSortableList<HTMLDivElement>(reorderReportColumns);
 
   useEffect(() => {
     if (loading) return;
@@ -305,10 +361,13 @@ function CreateReportsInner() {
       // Picklist labels are fetched here (not via usePicklist) so a fast
       // click right after page load can't produce raw technical values.
       // fixes26 §1: the org logo rides along for the per-page header.
-      const [jewish, mezuzah, language, headerLogo] = await Promise.all([
+      // fixes40 §5: campaign_status joins the other 3 fixed apartment
+      // picklists now that it's a selectable report column.
+      const [jewish, mezuzah, language, campaign, headerLogo] = await Promise.all([
         apiFetch<PicklistValue[]>("/api/picklists/apartment.Jewish_status"),
         apiFetch<PicklistValue[]>("/api/picklists/apartment.mezuzah_status"),
         apiFetch<PicklistValue[]>("/api/picklists/apartment.language"),
+        apiFetch<PicklistValue[]>("/api/picklists/apartment.campaign_status"),
         loadHeaderLogo(user?.organization?.logo_url),
       ]);
       const labelFor = (opts: PicklistValue[], value: string | null): string => {
@@ -327,23 +386,42 @@ function CreateReportsInner() {
       const pageH = doc.internal.pageSize.getHeight();
       const bottom = pageH - MARGIN;
 
-      // fixes38 §4.2: only the user's selected columns render, in their fixed
-      // logical order; a subheading (if set) renders as a second line via
-      // "\n" — jspdf-autotable wraps multi-line header/body strings natively.
+      // fixes38 §4.2 / fixes40 §5: only the user's selected columns render,
+      // in their own (now reorderable) order; a subheading (if set) renders
+      // as a second line via "\n" — jspdf-autotable wraps multi-line
+      // header/body strings natively.
       const rowValueFor = (a: ApartmentListItem, k: ReportColumnKey): string => {
         switch (k) {
           case "floor":
             return a.floor ?? "";
           case "apartment_name":
             return a.apartment_name ?? "";
+          case "resident":
+            return a.name ?? "";
+          case "building":
+            return buildingDisplayName({
+              id: a.building_id,
+              building_name: a.building_name,
+              building_address: a.building_address,
+            });
+          case "area":
+            return a.area_name ?? "";
+          case "report_number":
+            return a.report_number_name ?? "";
+          case "notes":
+            return a.apartment_notes ?? "";
+          case "phone":
+            return a.phone ?? "";
+          case "email":
+            return a.email ?? "";
           case "jewish_status":
             return labelFor(jewish, a.jewish_status);
           case "mezuzah_status":
             return labelFor(mezuzah, a.mezuzah_status);
           case "language":
             return labelFor(language, a.language);
-          case "apartment_notes":
-            return a.apartment_notes ?? "";
+          case "campaign_status":
+            return labelFor(campaign, a.campaign_status);
         }
       };
       // fixes38 §4.2: width % of the usable page width, per active column.
@@ -554,13 +632,71 @@ function CreateReportsInner() {
         </div>
       )}
 
-      {/* fixes38 §4.2/§4.3/§4.4: column selection + custom subheadings + width
-          percentages, persisted per user and reused on the next visit. */}
+      {/* fixes38 §4.2/§4.3/§4.4, fixes40 §5: column selection + reorder +
+          custom subheadings + width percentages, persisted per user. The
+          selection/reorder panel is now the exact chip pattern the
+          Apartments page's own "Customize Fields" panel uses (fixes39 §3's
+          SortableJS + ▲/▼ fallback), over the same expanded column set. */}
       <div className="bg-white rounded-xl shadow-sm p-5 space-y-3">
         <h2 className="text-sm font-semibold">
           {t("reports.column_config_title", "עמודות הדוח")}
         </h2>
-        <div className="overflow-x-auto">
+        <p className="text-xs text-gray-400">
+          {t("columns.reorder_hint", "גרור עמודה פעילה כדי לשנות את סדר ההצגה.")}
+        </p>
+        <div ref={reportColumnsSortableRef} className="flex flex-wrap gap-2">
+          {activeReportColumns.map((k) => {
+            const activeIdx = activeReportColumns.indexOf(k);
+            return (
+              <span key={k} data-sort-key={k} className="inline-flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={withColumnClickGuard(() => toggleReportColumn(k))}
+                  className="rounded-md border px-3 py-1.5 text-sm border-status-magenta bg-status-magenta/10 text-status-magenta cursor-grab active:cursor-grabbing"
+                >
+                  ⠿ {columnLabels[k]}
+                </button>
+                <span className="flex flex-col gap-0.5">
+                  <button
+                    type="button"
+                    disabled={activeIdx === 0}
+                    onClick={() => moveActiveReportColumn(k, -1)}
+                    title={t("action.move_up", "העלה")}
+                    className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeIdx === activeReportColumns.length - 1}
+                    onClick={() => moveActiveReportColumn(k, 1)}
+                    title={t("action.move_down", "הורד")}
+                    className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
+                  >
+                    ▼
+                  </button>
+                </span>
+              </span>
+            );
+          })}
+          {REPORT_COLUMN_KEYS.filter((k) => !activeReportColumns.includes(k)).map((k) => (
+            <button
+              key={k}
+              type="button"
+              data-sort-key={k}
+              data-sortable-disabled=""
+              onClick={() => toggleReportColumn(k)}
+              className="rounded-md border px-3 py-1.5 text-sm border-gray-200 text-gray-600 hover:bg-gray-50"
+            >
+              {columnLabels[k]}
+            </button>
+          ))}
+        </div>
+
+        {/* fixes40 §5: subheading + width-% detail, one row per *active*
+            column, in the chip panel's live order — a report-specific
+            concept the Apartments page has no equivalent of. */}
+        <div className="overflow-x-auto pt-2">
           <table className="w-full text-sm">
             <thead className="text-gray-500 text-start">
               <tr>
@@ -572,45 +708,37 @@ function CreateReportsInner() {
               </tr>
             </thead>
             <tbody>
-              {REPORT_COLUMN_KEYS.map((k) => {
-                const on = reportColumns.columns.includes(k);
-                return (
-                  <tr key={k} className="border-t border-gray-100">
-                    <td className="py-1.5 pe-3">
-                      <label className="inline-flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          className="accent-status-magenta"
-                          checked={on}
-                          onChange={() => toggleReportColumn(k)}
-                        />
-                        {columnLabels[k]}
-                      </label>
-                    </td>
-                    <td className="py-1.5 pe-3">
-                      <input
-                        type="text"
-                        disabled={!on}
-                        className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm disabled:bg-gray-50 disabled:text-gray-300"
-                        value={reportColumns.subheadings[k] ?? ""}
-                        onChange={(e) => setReportSubheading(k, e.target.value)}
-                      />
-                    </td>
-                    <td className="py-1.5">
-                      <input
-                        type="number"
-                        dir="ltr"
-                        min={0}
-                        max={100}
-                        disabled={!on}
-                        className="w-20 rounded-md border border-gray-300 px-2 py-1 text-sm disabled:bg-gray-50 disabled:text-gray-300"
-                        value={reportColumns.widths[k] ?? 0}
-                        onChange={(e) => setReportWidth(k, Number(e.target.value))}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
+              {activeReportColumns.map((k) => (
+                <tr key={k} className="border-t border-gray-100">
+                  <td className="py-1.5 pe-3">{columnLabels[k]}</td>
+                  <td className="py-1.5 pe-3">
+                    <input
+                      type="text"
+                      className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+                      value={reportColumns.subheadings[k] ?? ""}
+                      onChange={(e) => setReportSubheading(k, e.target.value)}
+                    />
+                  </td>
+                  <td className="py-1.5">
+                    <input
+                      type="number"
+                      dir="ltr"
+                      min={0}
+                      max={100}
+                      className="w-20 rounded-md border border-gray-300 px-2 py-1 text-sm"
+                      value={reportColumns.widths[k] ?? 0}
+                      onChange={(e) => setReportWidth(k, Number(e.target.value))}
+                    />
+                  </td>
+                </tr>
+              ))}
+              {activeReportColumns.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="py-4 text-center text-gray-400">
+                    {t("reports.no_columns_selected", "לא נבחרו עמודות")}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

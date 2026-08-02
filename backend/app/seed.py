@@ -627,6 +627,14 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     # --- fixes18: shliach contacts-visibility permission ---
     ("page", "page.shliach_view_contacts", "פעילים רשאים לצפות באנשי קשר", "Activists may view contacts"),
     ("page", "page.shliach_view_contacts_hint", "כאשר כבוי (ברירת המחדל), משתמשי פעיל אינם רואים את רשימת אנשי הקשר.", "When off (the default), activist users do not see the contacts list."),
+    # --- fixes40 §4: global field-label text styling ---
+    ("page", "page.label_styling", "עיצוב טקסט תוויות שדות", "Field label text styling"),
+    ("page", "page.label_styling_hint", "משפיע על תוויות השדות בכל המערכת. השאירו ריק לשימוש בעיצוב ברירת המחדל.", "Affects field labels across the system. Leave blank to use the default styling."),
+    ("page", "page.label_font_size", "גודל גופן", "Font size"),
+    ("page", "page.label_color", "צבע", "Color"),
+    ("page", "page.label_font_family", "גופן", "Font"),
+    ("page", "page.label_default", "ברירת מחדל", "Default"),
+    ("page", "page.label_reset", "איפוס", "Reset"),
     # --- fixes19: report numbers (מספר דוח) ---
     ("column", "report_number.name", "שם", "Name"),
     ("nav", "nav.report_numbers", "מספרי דוח", "Report numbers"),
@@ -691,6 +699,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("reports", "reports.column_subheading", "כותרת משנה", "Subheading"),
     ("reports", "reports.column_width", "רוחב (%)", "Width (%)"),
     ("reports", "reports.column_width_total", "סך הכל: {n}%", "Total: {n}%"),
+    ("reports", "reports.no_columns_selected", "לא נבחרו עמודות", "No columns selected"),
     (
         "field",
         "validation.report_width_over_100",

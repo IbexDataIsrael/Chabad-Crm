@@ -12,6 +12,19 @@ import { useToast } from "@/lib/toast";
 import type { OrgDetails } from "@/lib/types";
 import { isMediumPassword, PASSWORD_HINT } from "@/lib/validation";
 
+// fixes40 §4: global field-label text styling options.
+const LABEL_FONT_SIZES = [10, 11, 12, 13, 14, 16, 18, 20, 24];
+const LABEL_FONTS = [
+  "Arial",
+  "Inter",
+  "Roboto",
+  "Times New Roman",
+  "Segoe UI",
+  "Georgia",
+  "Verdana",
+];
+const DEFAULT_LABEL_COLOR = "#374151";
+
 export default function SettingsPage() {
   const { isAdmin, loading, refresh } = useAuth();
   const { t } = useLocalization();
@@ -21,6 +34,10 @@ export default function SettingsPage() {
   const [mapInEnglish, setMapInEnglish] = useState(false);
   // fixes18 §6: shliach contacts-visibility permission (default off).
   const [shliachViewContacts, setShliachViewContacts] = useState(false);
+  // fixes40 §4: global field-label text styling — "" means unset (app default).
+  const [labelFontSize, setLabelFontSize] = useState<string>("");
+  const [labelColor, setLabelColor] = useState<string>("");
+  const [labelFontFamily, setLabelFontFamily] = useState<string>("");
   const [lat, setLat] = useState<string>("");
   const [lng, setLng] = useState<string>("");
   const [zoom, setZoom] = useState<string>("13");
@@ -38,6 +55,9 @@ export default function SettingsPage() {
         setLogoUrl(o.logo_url);
         setMapInEnglish(o.map_in_english);
         setShliachViewContacts(o.shliach_can_view_contacts ?? false);
+        setLabelFontSize(o.label_font_size?.toString() ?? "");
+        setLabelColor(o.label_color ?? "");
+        setLabelFontFamily(o.label_font_family ?? "");
         setLat(o.default_lat?.toString() ?? "");
         setLng(o.default_lng?.toString() ?? "");
         setZoom(o.default_zoom?.toString() ?? "13");
@@ -57,6 +77,9 @@ export default function SettingsPage() {
           logo_url: logoUrl,
           map_in_english: mapInEnglish,
           shliach_can_view_contacts: shliachViewContacts,
+          label_font_size: labelFontSize === "" ? null : Number(labelFontSize),
+          label_color: labelColor === "" ? null : labelColor,
+          label_font_family: labelFontFamily === "" ? null : labelFontFamily,
           default_lat: lat === "" ? null : Number(lat),
           default_lng: lng === "" ? null : Number(lng),
           default_zoom: zoom === "" ? 13 : Number(zoom),
@@ -132,6 +155,78 @@ export default function SettingsPage() {
             "כאשר כבוי (ברירת המחדל), משתמשי פעיל אינם רואים את רשימת אנשי הקשר.",
           )}
         </p>
+
+        {/* fixes40 §4: global field-label text styling — applies across the
+            system; each property is independent and optional. */}
+        <div className="border-t border-gray-100 pt-4 space-y-3">
+          <span className="block text-sm font-medium">
+            {t("page.label_styling", "עיצוב טקסט תוויות שדות")}
+          </span>
+          <p className="text-xs text-gray-400">
+            {t(
+              "page.label_styling_hint",
+              "משפיע על תוויות השדות בכל המערכת. השאירו ריק לשימוש בעיצוב ברירת המחדל.",
+            )}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="space-y-1">
+              <span className="block text-xs text-gray-500">
+                {t("page.label_font_size", "גודל גופן")}
+              </span>
+              <select
+                className={inputClass}
+                value={labelFontSize}
+                onChange={(e) => setLabelFontSize(e.target.value)}
+              >
+                <option value="">{t("page.label_default", "ברירת מחדל")}</option>
+                {LABEL_FONT_SIZES.map((size) => (
+                  <option key={size} value={size}>
+                    {size}px
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1">
+              <span className="block text-xs text-gray-500">
+                {t("page.label_color", "צבע")}
+              </span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  className="h-9 w-12 rounded-md border border-gray-300 p-0.5"
+                  value={labelColor || DEFAULT_LABEL_COLOR}
+                  onChange={(e) => setLabelColor(e.target.value)}
+                />
+                {labelColor && (
+                  <button
+                    type="button"
+                    onClick={() => setLabelColor("")}
+                    className="text-xs text-status-magenta hover:underline"
+                  >
+                    {t("page.label_reset", "איפוס")}
+                  </button>
+                )}
+              </div>
+            </label>
+            <label className="space-y-1">
+              <span className="block text-xs text-gray-500">
+                {t("page.label_font_family", "גופן")}
+              </span>
+              <select
+                className={inputClass}
+                value={labelFontFamily}
+                onChange={(e) => setLabelFontFamily(e.target.value)}
+              >
+                <option value="">{t("page.label_default", "ברירת מחדל")}</option>
+                {LABEL_FONTS.map((font) => (
+                  <option key={font} value={font}>
+                    {font}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
 
         <div className="border-t border-gray-100 pt-4 space-y-2">
           <span className="block text-sm font-medium">

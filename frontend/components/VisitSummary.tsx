@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { DatePicker } from "@/components/DatePicker";
+import { SearchableSelect } from "@/components/SearchableSelect";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
-import type { VisitSummaryOut } from "@/lib/types";
+import { visibleOwnerOptions } from "@/lib/ownerFilter";
+import type { UserSummary, VisitSummaryOut } from "@/lib/types";
 
 function pad(n: number): string {
   return String(n).padStart(2, "0");
@@ -36,17 +38,39 @@ const dateInputClass =
  *  the admin "view all" toggle (irrelevant once a specific contact is picked). */
 export function VisitSummary({ contactId }: { contactId?: number }) {
   const { t, lang } = useLocalization();
-  const { isAdmin } = useAuth();
+  const { user, isAdmin, isShliach } = useAuth();
   const [[defaultFrom, defaultTo]] = useState(() => currentWeekRange(lang));
   const [dateFrom, setDateFrom] = useState<string | null>(defaultFrom);
   const [dateTo, setDateTo] = useState<string | null>(defaultTo);
   const [scopeAll, setScopeAll] = useState(false);
   const [data, setData] = useState<VisitSummaryOut | null>(null);
+  // fixes40 §3: "Filter by contact owner" — same permission/search logic as
+  // the Contacts page (fixes40 §2), shown next to the org-wide toggle.
+  const [users, setUsers] = useState<UserSummary[]>([]);
+  const [assignedFilter, setAssignedFilter] = useState<string>("");
+  const showOwnerFilter = contactId == null && !isShliach;
+  const activistsMayViewContacts = user?.organization?.shliach_can_view_contacts ?? false;
+  const ownerOptions = visibleOwnerOptions(users, activistsMayViewContacts);
+
+  useEffect(() => {
+    if (!showOwnerFilter) return;
+    apiFetch<UserSummary[]>("/api/users").then(setUsers).catch(() => {});
+  }, [showOwnerFilter]);
+
+  // A selected owner that fell out of `ownerOptions` (deleted user, or the
+  // org just turned "Activists may view contacts" off) resets to "all".
+  useEffect(() => {
+    if (assignedFilter && !ownerOptions.some((u) => u.guid === assignedFilter)) {
+      setAssignedFilter("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownerOptions, assignedFilter]);
 
   useEffect(() => {
     if (!dateFrom || !dateTo) return;
     const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
     if (contactId != null) params.set("contact_id", String(contactId));
+    else if (assignedFilter) params.set("assigned_user_id", assignedFilter);
     else if (isAdmin && scopeAll) params.set("scope_all", "true");
     let active = true;
     setData(null);
@@ -60,7 +84,7 @@ export function VisitSummary({ contactId }: { contactId?: number }) {
     return () => {
       active = false;
     };
-  }, [dateFrom, dateTo, contactId, scopeAll, isAdmin]);
+  }, [dateFrom, dateTo, contactId, assignedFilter, scopeAll, isAdmin]);
 
   // fixes39: the breakdown is dynamic (any active entity_type="visit"
   // boolean custom field) — the server only ever returns active
@@ -84,15 +108,37 @@ export function VisitSummary({ contactId }: { contactId?: number }) {
           className={dateInputClass}
           placeholder={t("visits.date_to", "עד תאריך")}
         />
+        {/* fixes40 §3: "Filter by contact owner" — same permission/search
+            logic as the Contacts page (fixes40 §2). Picking a specific
+            owner supersedes the org-wide toggle below (same priority the
+            backend applies), so that toggle is disabled while one is set. */}
+        {showOwnerFilter && ownerOptions.length > 0 && (
+          <span className="flex items-center gap-2 text-sm text-gray-500">
+            {t("filter.by_assigned", "משויך ל:")}
+            <SearchableSelect
+              className="w-48"
+              value={assignedFilter || null}
+              onChange={(guid) => setAssignedFilter(guid ?? "")}
+              options={ownerOptions.map((u) => ({ id: u.guid, label: u.full_name }))}
+              placeholder={t("filter.all_users", "כל המשתמשים")}
+              emptyLabel={t("filter.all_users", "כל המשתמשים")}
+            />
+          </span>
+        )}
         {/* fixes38 §1.2.4: admin-only toggle to view org-wide visits instead
             of just the ones assigned to this admin. Irrelevant (and hidden)
             once scoped to a single contact. */}
         {contactId == null && isAdmin && (
-          <label className="inline-flex items-center gap-1.5 text-sm cursor-pointer">
+          <label
+            className={`inline-flex items-center gap-1.5 text-sm ${
+              assignedFilter ? "text-gray-400" : "cursor-pointer"
+            }`}
+          >
             <input
               type="checkbox"
               className="accent-status-magenta"
               checked={scopeAll}
+              disabled={!!assignedFilter}
               onChange={(e) => setScopeAll(e.target.checked)}
             />
             {t("visitsummary.scope_all", "הצג את כל הביקורים בארגון")}

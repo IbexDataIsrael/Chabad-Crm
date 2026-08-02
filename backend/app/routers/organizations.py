@@ -43,7 +43,17 @@ def update_my_org(
         and data["shliach_can_view_contacts"] is not None
     ):
         org.shliach_can_view_contacts = data["shliach_can_view_contacts"]
-    for field in ("default_lat", "default_lng", "default_zoom", "report_notes"):
+    for field in (
+        "default_lat",
+        "default_lng",
+        "default_zoom",
+        "report_notes",
+        # fixes40 §4: global field-label text styling (each independently
+        # nullable — present-but-null clears just that one property).
+        "label_font_size",
+        "label_color",
+        "label_font_family",
+    ):
         if field in data:
             setattr(org, field, data[field])
     db.commit()

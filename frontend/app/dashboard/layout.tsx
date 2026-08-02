@@ -4,6 +4,7 @@ import Link from "next/link";
 import { type ReactNode } from "react";
 
 import { GlobalSearch } from "@/components/GlobalSearch";
+import { LabelStyleInjector } from "@/components/LabelStyleInjector";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { NavMenu, type NavMenuItem } from "@/components/NavMenu";
 import { RequireAuth } from "@/components/RequireAuth";
@@ -88,6 +89,7 @@ function DashboardChrome({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen">
+      <LabelStyleInjector />
       <header className="bg-white border-b border-gray-200">
         <div className="w-full px-4 md:px-6 py-3 flex flex-wrap items-center justify-between gap-y-2">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">

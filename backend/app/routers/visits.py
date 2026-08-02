@@ -290,6 +290,7 @@ def visits_summary(
     date_from: datetime.date,
     date_to: datetime.date,
     contact_id: Optional[int] = None,
+    assigned_user_id: Optional[str] = None,
     scope_all: bool = False,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
@@ -301,7 +302,16 @@ def visits_summary(
 
     fixes39 §2: the breakdown is dynamic — every active
     entity_type="visit" boolean custom field (the 6 former Mivtzoim columns
-    plus any org-added checklist item, e.g. "mezuzah"), not a fixed tuple."""
+    plus any org-added checklist item, e.g. "mezuzah"), not a fixed tuple.
+
+    fixes40 §3: `assigned_user_id` scopes to one specific user's contacts
+    (the "Filter by contact owner" control) — takes priority over
+    `scope_all`/the default self-scoping, but only for a non-shliach caller.
+    A shliach account is never allowed to self-serve another user's data
+    through this param — same guarantee the default branch already gave
+    them (they only ever fell into the self-scoping "else" below), just
+    made explicit now that a second, caller-suppliable scoping path exists.
+    """
     org_id = current_user.organization_id
     q = db.query(models.VisitHistory).filter(
         models.VisitHistory.organization_id == org_id,
@@ -312,6 +322,10 @@ def visits_summary(
     )
     if contact_id is not None:
         q = q.filter(models.VisitHistory.contact_id == contact_id)
+    elif current_user.role != "shliach" and assigned_user_id is not None:
+        q = q.join(
+            models.Contact, models.VisitHistory.contact_id == models.Contact.id
+        ).filter(models.Contact.assigned_user_id == assigned_user_id)
     elif not (current_user.role == "admin" and scope_all):
         # Standard user (or admin without the "all" toggle): only visits for
         # contacts assigned to them. The inner join drops unlinked visits.

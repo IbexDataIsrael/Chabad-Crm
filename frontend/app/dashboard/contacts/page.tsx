@@ -18,6 +18,7 @@ import { telHref, waHref } from "@/lib/contactActions";
 import { useCustomFieldDefs } from "@/lib/customFields";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
+import { visibleOwnerOptions } from "@/lib/ownerFilter";
 import { usePersistentState } from "@/lib/persist";
 import {
   FIXED_CONTACT_PICKLIST_KEYS,
@@ -278,17 +279,24 @@ export default function ContactsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assignedFilter, user, isShliach]);
 
+  // fixes40 §2: when "Activists may view contacts" is off, shliach-role
+  // users drop out of the owner-filter options entirely (they're not valid
+  // "contact owners" to filter by in that mode).
+  const activistsMayViewContacts = user?.organization?.shliach_can_view_contacts ?? false;
+  const ownerOptions = visibleOwnerOptions(users, activistsMayViewContacts);
+
   // fixes17 §5.1 (admin/staff): a persisted owner guid that no longer matches
-  // anyone in the org (other login, deleted/recreated user) resets to "all
-  // users" — resetting to the current user re-created the invisible-subset
-  // trap this round removed.
+  // anyone in the org (other login, deleted/recreated user) — or that fell
+  // out of `ownerOptions` because the org just turned the permission off
+  // (fixes40 §2) — resets to "all users". Resetting to the current user
+  // re-created the invisible-subset trap this round removed.
   useEffect(() => {
     if (isShliach || !user || users.length === 0) return;
-    if (assignedFilter && !users.some((u) => u.guid === assignedFilter)) {
+    if (assignedFilter && !ownerOptions.some((u) => u.guid === assignedFilter)) {
       setAssignedFilter("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [users, assignedFilter, user, isShliach]);
+  }, [ownerOptions, assignedFilter, user, isShliach]);
 
   const ownerName = (guid: string | null) =>
     (guid && users.find((u) => u.guid === guid)?.full_name) || "—";
@@ -1079,25 +1087,23 @@ export default function ContactsPage() {
             ))}
           </select>
         )}
-        {/* fixes11 §2.2: owner filter, defaulting to the logged-in user. */}
-        {!isShliach && users.length > 0 && (
+        {/* fixes11 §2.2: owner filter, defaulting to the logged-in user.
+            fixes40 §2: searchable, and restricted to admin/staff options
+            when activists may not view contacts. */}
+        {!isShliach && ownerOptions.length > 0 && (
           <span className="flex items-center gap-2 text-sm text-gray-500">
             {t("filter.by_assigned", "משויך ל:")}
-            <select
-              className={selectClass}
-              value={assignedFilter ?? ""}
-              onChange={(e) => {
-                setAssignedFilter(e.target.value);
+            <SearchableSelect
+              className="w-48"
+              value={assignedFilter || null}
+              onChange={(guid) => {
+                setAssignedFilter(guid ?? "");
                 setPage(1);
               }}
-            >
-              <option value="">{t("filter.all_users", "כל המשתמשים")}</option>
-              {users.map((u) => (
-                <option key={u.guid} value={u.guid}>
-                  {u.full_name}
-                </option>
-              ))}
-            </select>
+              options={ownerOptions.map((u) => ({ id: u.guid, label: u.full_name }))}
+              placeholder={t("filter.all_users", "כל המשתמשים")}
+              emptyLabel={t("filter.all_users", "כל המשתמשים")}
+            />
           </span>
         )}
         {/* fixes11 §2.3: sorting — default is creation date, newest first. */}

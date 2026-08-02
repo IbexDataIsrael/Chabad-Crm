@@ -32,6 +32,10 @@ export interface Organization {
   shliach_can_view_contacts?: boolean;
   /** fixes33 §6: free text injected at the top of every generated PDF report. */
   report_notes?: string | null;
+  /** fixes40 §4: global field-label text styling (null/unset = app default). */
+  label_font_size?: number | null;
+  label_color?: string | null;
+  label_font_family?: string | null;
 }
 
 export interface User {

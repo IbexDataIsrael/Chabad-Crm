@@ -67,6 +67,10 @@ class OrganizationOut(BaseModel):
     shliach_can_view_contacts: bool = False
     # fixes33 §6: free text injected at the top of every generated PDF report.
     report_notes: Optional[str] = None
+    # fixes40 §4: global field-label text styling (null = app default).
+    label_font_size: Optional[int] = None
+    label_color: Optional[str] = None
+    label_font_family: Optional[str] = None
 
 
 class OrganizationUpdate(BaseModel):
@@ -78,6 +82,9 @@ class OrganizationUpdate(BaseModel):
     default_zoom: Optional[int] = None
     shliach_can_view_contacts: Optional[bool] = None
     report_notes: Optional[str] = None
+    label_font_size: Optional[int] = None
+    label_color: Optional[str] = None
+    label_font_family: Optional[str] = None
 
 
 class UserOut(BaseModel):

@@ -62,6 +62,11 @@ class Organization(Base):
     )
     # fixes33 §6: free text injected at the top of every generated PDF report.
     report_notes = Column(Text, nullable=True)
+    # fixes40 §4: global field-label text styling. Each is nullable/independent
+    # — null means "use the app's built-in styling", so no org needs a backfill.
+    label_font_size = Column(Integer, nullable=True)  # px
+    label_color = Column(String(20), nullable=True)  # hex, e.g. "#374151"
+    label_font_family = Column(String(100), nullable=True)
     # Platform-level enable/disable (superadmin). A disabled org's users can't log in.
     is_active = Column(Boolean, nullable=False, default=True, server_default=text("true"))
     # Signup approval workflow: 'pending' (awaiting superadmin approval) | 'approved'.

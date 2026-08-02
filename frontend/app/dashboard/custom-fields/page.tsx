@@ -6,6 +6,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
+import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 import type { CustomFieldDefinition, CustomFieldEntityType, CustomFieldType } from "@/lib/types";
 import { useConfirm } from "@/lib/confirm";
@@ -27,10 +28,27 @@ const FIELD_TYPES: { value: CustomFieldType; labelKey: string; fallback: string 
   { value: "select", labelKey: "cf.type.select", fallback: "רשימת בחירה" },
 ];
 
+// fixes40 §1: which of the 3 admin tabs a custom field is managed from —
+// same grouping `dashboard/picklists` uses for the exact same entity_type
+// vocabulary (contact_mekurav/contact_shliach group under "contacts").
+type CFTab = "contacts" | "visit" | "apartment";
+function tabFor(entityType: CustomFieldEntityType): CFTab {
+  if (entityType === "apartment") return "apartment";
+  if (entityType === "visit") return "visit";
+  return "contacts";
+}
+
+const TABS: { key: CFTab; icon: string; labelKey: string; fallback: string }[] = [
+  { key: "contacts", icon: "👤", labelKey: "pl.tab_contacts", fallback: "אנשי קשר" },
+  { key: "visit", icon: "📋", labelKey: "pl.tab_visit", fallback: "ביקורים" },
+  { key: "apartment", icon: "🏠", labelKey: "pl.tab_apartment", fallback: "דירה" },
+];
+
 export default function CustomFieldsPage() {
   const { isAdmin, loading } = useAuth();
   const { t } = useLocalization();
   const [defs, setDefs] = useState<CustomFieldDefinition[]>([]);
+  const [tab, setTab] = usePersistentState<CFTab>("crm.customfields.tab", "contacts");
 
   async function reload() {
     setDefs(
@@ -51,38 +69,99 @@ export default function CustomFieldsPage() {
     );
   }
 
+  // fixes40 §1: each tab's own entity_type subset — "contacts" spans two
+  // (mekurav/shliach), "visit"/"apartment" are single-entity.
+  function renderGroups(entityTypes: CustomFieldEntityType[]) {
+    return entityTypes.map((value) => {
+      const meta = ENTITY_TYPES.find((e) => e.value === value)!;
+      const group = defs.filter((d) => d.entity_type === value);
+      // A single-entity tab needs no sub-heading; "contacts" (2 entities)
+      // keeps the existing per-entity grouping for clarity.
+      const showHeading = entityTypes.length > 1;
+      if (group.length === 0 && !showHeading) return null;
+      return (
+        <section key={value} className="bg-white rounded-xl shadow-sm">
+          {showHeading && (
+            <h2 className="px-4 py-2 border-b border-gray-100 text-sm font-semibold">
+              {t(meta.labelKey, meta.fallback)}
+            </h2>
+          )}
+          <div className="divide-y divide-gray-100">
+            {group.map((d) => (
+              <DefRow key={d.id} def={d} onChanged={reload} />
+            ))}
+          </div>
+          {group.length === 0 && (
+            <p className="px-4 py-6 text-center text-gray-400">
+              {t("cf.none", "אין שדות מותאמים עדיין.")}
+            </p>
+          )}
+        </section>
+      );
+    });
+  }
+
   return (
     <div className="space-y-5 max-w-3xl">
-      <h1 className="text-2xl font-bold">{t("cf.title", "שדות מותאמים אישית")}</h1>
-      <p className="text-sm text-gray-500">
-        {t(
-          "cf.intro",
-          "הגדירו שדה מותאם אישית עבור אנשי קשר, פעילים, ביקורים או דירות — מכל סוג: טקסט, מספר, תיבת סימון, תאריך או רשימת בחירה.",
-        )}
-      </p>
-
-      <AddDef onAdded={reload} />
-
-      {ENTITY_TYPES.map(({ value, labelKey, fallback }) => {
-        const group = defs.filter((d) => d.entity_type === value);
-        if (group.length === 0) return null;
-        return (
-          <section key={value} className="bg-white rounded-xl shadow-sm">
-            <h2 className="px-4 py-2 border-b border-gray-100 text-sm font-semibold">
-              {t(labelKey, fallback)}
-            </h2>
-            <div className="divide-y divide-gray-100">
-              {group.map((d) => (
-                <DefRow key={d.id} def={d} onChanged={reload} />
-              ))}
-            </div>
-          </section>
-        );
-      })}
-      {defs.length === 0 && (
-        <p className="px-4 py-6 text-center text-gray-400 bg-white rounded-xl shadow-sm">
-          {t("cf.none", "אין שדות מותאמים עדיין.")}
+      <div>
+        <h1 className="text-2xl font-bold">{t("cf.title", "שדות מותאמים אישית")}</h1>
+        <p className="mt-1 text-sm text-gray-500">
+          {t(
+            "cf.intro",
+            "הגדירו שדה מותאם אישית עבור אנשי קשר, פעילים, ביקורים או דירות — מכל סוג: טקסט, מספר, תיבת סימון, תאריך או רשימת בחירה.",
+          )}
         </p>
+      </div>
+
+      {/* fixes40 §1: tab bar — identical pattern to dashboard/picklists. */}
+      <div className="flex flex-wrap gap-2 border-b border-gray-200">
+        {TABS.map((tb) => (
+          <button
+            key={tb.key}
+            type="button"
+            onClick={() => setTab(tb.key)}
+            className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+              tab === tb.key
+                ? "border-status-magenta text-status-magenta"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <span aria-hidden>{tb.icon}</span>
+            {t(tb.labelKey, tb.fallback)}
+          </button>
+        ))}
+      </div>
+
+      {tab === "contacts" && (
+        <section className="space-y-6 rounded-2xl border border-gray-200 bg-white p-5">
+          {renderGroups(["contact_mekurav", "contact_shliach"])}
+          <AddDef
+            entityOptions={ENTITY_TYPES.filter(
+              (e) => e.value === "contact_mekurav" || e.value === "contact_shliach",
+            )}
+            onAdded={reload}
+          />
+        </section>
+      )}
+
+      {tab === "visit" && (
+        <section className="space-y-6 rounded-2xl border border-gray-200 bg-white p-5">
+          {renderGroups(["visit"])}
+          <AddDef
+            entityOptions={ENTITY_TYPES.filter((e) => e.value === "visit")}
+            onAdded={reload}
+          />
+        </section>
+      )}
+
+      {tab === "apartment" && (
+        <section className="space-y-6 rounded-2xl border-2 border-status-magenta/30 bg-status-magenta/5 p-5">
+          {renderGroups(["apartment"])}
+          <AddDef
+            entityOptions={ENTITY_TYPES.filter((e) => e.value === "apartment")}
+            onAdded={reload}
+          />
+        </section>
       )}
 
       {/* fixes35 §2: visibility toggling lives entirely on Manage Fields now
@@ -230,16 +309,31 @@ function DefRow({
   );
 }
 
-function AddDef({ onAdded }: { onAdded: () => Promise<void> }) {
+function AddDef({
+  entityOptions,
+  onAdded,
+}: {
+  /** fixes40 §1: the entity choices offered within the current tab — a
+   *  single-entity tab (visit/apartment) renders a fixed, non-editable
+   *  value instead of a dropdown, matching picklists' AddPicklist. */
+  entityOptions: { value: CustomFieldEntityType; labelKey: string; fallback: string }[];
+  onAdded: () => Promise<void>;
+}) {
   const { t } = useLocalization();
   const { success } = useToast();
-  const [entityType, setEntityType] = useState<CustomFieldEntityType>("contact_mekurav");
+  const [entityType, setEntityType] = useState<CustomFieldEntityType>(entityOptions[0].value);
   const [fieldType, setFieldType] = useState<CustomFieldType>("text");
   const [fieldKey, setFieldKey] = useState("");
   const [label, setLabel] = useState("");
   const [englishLabel, setEnglishLabel] = useState("");
   const [options, setOptions] = useState<string[]>([""]);
   const [error, setError] = useState("");
+
+  // Re-anchor to this tab's own entity set when switching tabs.
+  useEffect(() => {
+    setEntityType(entityOptions[0].value);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entityOptions.map((e) => e.value).join(",")]);
 
   async function add(e: FormEvent) {
     e.preventDefault();
@@ -278,20 +372,26 @@ function AddDef({ onAdded }: { onAdded: () => Promise<void> }) {
     <form onSubmit={add} className="bg-white rounded-xl shadow-sm p-4 space-y-2">
       <h3 className="font-medium text-sm">{t("cf.add_field", "הוספת שדה")}</h3>
       <div className="flex flex-wrap gap-2">
-        <label className="flex flex-col gap-1 text-xs text-gray-500">
-          {t("cf.entity_type", "שייך ל")}
-          <select
-            className={input}
-            value={entityType}
-            onChange={(e) => setEntityType(e.target.value as CustomFieldEntityType)}
-          >
-            {ENTITY_TYPES.map(({ value, labelKey, fallback }) => (
-              <option key={value} value={value}>
-                {t(labelKey, fallback)}
-              </option>
-            ))}
-          </select>
-        </label>
+        {entityOptions.length > 1 ? (
+          <label className="flex flex-col gap-1 text-xs text-gray-500">
+            {t("cf.entity_type", "שייך ל")}
+            <select
+              className={input}
+              value={entityType}
+              onChange={(e) => setEntityType(e.target.value as CustomFieldEntityType)}
+            >
+              {entityOptions.map(({ value, labelKey, fallback }) => (
+                <option key={value} value={value}>
+                  {t(labelKey, fallback)}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <span className="self-end rounded bg-gray-100 text-gray-500 text-xs px-2 py-1.5">
+            {t(entityOptions[0].labelKey, entityOptions[0].fallback)}
+          </span>
+        )}
         <label className="flex flex-col gap-1 text-xs text-gray-500">
           {t("cf.field_type", "סוג שדה")}
           <select
