@@ -1005,8 +1005,11 @@ class PicklistFieldOut(BaseModel):
     # "significant_date" — which logical entity this picklist belongs to.
     entity_type: str = "contact_mekurav"
     # fixes40 round 2 §3: display order within the field's section (shared
-    # ordering surface with FieldSetting/CustomFieldDefinition via /api/field-settings).
-    sort_order: int = 0
+    # ordering surface with FieldSetting/CustomFieldDefinition via
+    # /api/field-settings). None = unordered — the backing column is a
+    # NOT-NULL default-0 tie-breaker predating this feature, so callers
+    # normalize a raw 0 to None (0 was never a real admin-set position).
+    sort_order: Optional[int] = None
 
 
 class PicklistDefinitionCreate(BaseModel):

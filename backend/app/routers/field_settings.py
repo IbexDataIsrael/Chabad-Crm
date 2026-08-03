@@ -118,7 +118,9 @@ def list_field_settings(
             label_key=lk,
             entity=ent,
             is_visible=saved[fk].is_visible if fk in saved else default_visible(fk),
-            sort_order=saved[fk].sort_order if fk in saved else None,
+            # `or None`: 0 means "unordered" everywhere in this feature (see
+            # the picklist/custom-field branches below for why).
+            sort_order=(saved[fk].sort_order or None) if fk in saved else None,
         )
         for fk, lk, ent in TOGGLEABLE_FIELDS
     ]
@@ -142,7 +144,12 @@ def list_field_settings(
             is_visible=saved[d.system_name].is_visible if d.system_name in saved else True,
             label=d.hebrew_display_name,
             english_label=d.english_display_name,
-            sort_order=d.sort_order,
+            # PicklistDefinition.sort_order is a NOT-NULL column that has
+            # always defaulted to 0 as an internal tie-breaker (never an
+            # admin-facing "position 1" before this feature existed) — every
+            # never-explicitly-ordered picklist would otherwise show a false
+            # "0" instead of unordered.
+            sort_order=d.sort_order or None,
         )
         for d in custom_defs
     )
@@ -161,7 +168,10 @@ def list_field_settings(
             ),
             label=d.hebrew_label,
             english_label=d.english_label,
-            sort_order=d.sort_order,
+            # Same reasoning as the picklist branch above: CustomFieldDefinition
+            # .sort_order is NOT-NULL, defaults to 0, and was never previously
+            # an admin-set "position 1" — treat 0 as unordered here too.
+            sort_order=d.sort_order or None,
         )
         for d in _custom_field_defs(db, org_id)
     )
@@ -203,10 +213,24 @@ def set_field_setting(
     # elsewhere), so it's set directly on THAT row rather than duplicated
     # onto the FieldSetting row. Only a built-in (TOGGLEABLE_KEYS) field's
     # order lives on FieldSetting itself.
-    if payload.sort_order is not None and custom_field_definition is not None:
-        custom_field_definition.sort_order = payload.sort_order
+    #
+    # `sort_order` is Optional[int], so a JSON body of `"sort_order": null`
+    # (clearing the field back to unordered) and simply omitting the key
+    # both deserialize to Python `None` — indistinguishable by value alone.
+    # `model_fields_set` tells them apart: the frontend's order-editing path
+    # always includes the key (as a number or null); the plain show/hide
+    # toggle never does. Only touch sort_order when it was actually provided.
+    sort_order_provided = "sort_order" in payload.model_fields_set
+    # 0 is never a meaningful order value here (see the GET endpoint's `or
+    # None` normalization) — treat an explicit 0 the same as clearing.
+    sort_order_value = None if payload.sort_order == 0 else payload.sort_order
+
+    if sort_order_provided and custom_field_definition is not None:
+        # NOT-NULL column: "clear" writes the internal 0 sentinel, which the
+        # GET endpoint already normalizes back to None on the way out.
+        custom_field_definition.sort_order = sort_order_value or 0
     picklist_definition = None
-    if payload.sort_order is not None and payload.field_key not in TOGGLEABLE_KEYS and custom_field_definition is None:
+    if sort_order_provided and payload.field_key not in TOGGLEABLE_KEYS and custom_field_definition is None:
         picklist_definition = (
             db.query(models.PicklistDefinition)
             .filter(
@@ -216,7 +240,7 @@ def set_field_setting(
             .first()
         )
         if picklist_definition is not None:
-            picklist_definition.sort_order = payload.sort_order
+            picklist_definition.sort_order = sort_order_value or 0
 
     row = (
         db.query(models.FieldSetting)
@@ -235,8 +259,8 @@ def set_field_setting(
         db.add(row)
     else:
         row.is_visible = payload.is_visible
-    if payload.field_key in TOGGLEABLE_KEYS and payload.sort_order is not None:
-        row.sort_order = payload.sort_order
+    if payload.field_key in TOGGLEABLE_KEYS and sort_order_provided:
+        row.sort_order = sort_order_value  # nullable column: clears cleanly
     db.commit()
 
     if payload.field_key in TOGGLEABLE_KEYS:
@@ -257,7 +281,7 @@ def set_field_setting(
             is_visible=payload.is_visible,
             label=custom_field_definition.hebrew_label,
             english_label=custom_field_definition.english_label,
-            sort_order=custom_field_definition.sort_order,
+            sort_order=custom_field_definition.sort_order or None,
         )
     # fixes33 §5.1: a dynamic custom-picklist field_key — resolve its own
     # bilingual display name the same way the GET list does.
@@ -279,5 +303,5 @@ def set_field_setting(
         is_visible=payload.is_visible,
         label=definition.hebrew_display_name if definition else None,
         english_label=definition.english_display_name if definition else None,
-        sort_order=definition.sort_order if definition else None,
+        sort_order=(definition.sort_order or None) if definition else None,
     )

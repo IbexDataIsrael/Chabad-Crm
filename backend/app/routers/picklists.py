@@ -62,7 +62,7 @@ def list_field_keys(
             english_label=d.english_display_name,
             is_system=d.is_system,
             entity_type=d.entity_type,
-            sort_order=d.sort_order,
+            sort_order=d.sort_order or None,
         )
         for d in _definitions_query(db, current_user.organization_id).all()
     ]
@@ -119,7 +119,7 @@ def create_definition(
         english_label=row.english_display_name,
         is_system=row.is_system,
         entity_type=row.entity_type,
-        sort_order=row.sort_order,
+        sort_order=row.sort_order or None,
     )
 
 
@@ -151,7 +151,7 @@ def update_definition(
         english_label=row.english_display_name,
         is_system=row.is_system,
         entity_type=row.entity_type,
-        sort_order=row.sort_order,
+        sort_order=row.sort_order or None,
     )
 
 

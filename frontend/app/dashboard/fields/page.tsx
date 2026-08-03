@@ -178,13 +178,19 @@ function FieldRow({
   onOrderChange: (key: string, visible: boolean, order: number | null) => Promise<void>;
 }) {
   const { t, lang } = useLocalization();
-  const [orderDraft, setOrderDraft] = useState(field.sort_order?.toString() ?? "");
+  // fixes40 round 2 hotfix: 0 is never a real order value (the backend
+  // already normalizes it to unordered) — treat it the same client-side so
+  // a stray 0 never lingers in the draft.
+  const savedOrder = field.sort_order || null;
+  const [orderDraft, setOrderDraft] = useState(savedOrder?.toString() ?? "");
+  const [saving, setSaving] = useState(false);
 
   // Keep the draft in sync when another tab/refresh changes the saved value
   // out from under an untouched input.
   useEffect(() => {
-    setOrderDraft(field.sort_order?.toString() ?? "");
-  }, [field.sort_order]);
+    setOrderDraft(savedOrder?.toString() ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedOrder]);
 
   // fixes33 §5.1: a dynamic custom-picklist row carries its own bilingual
   // name directly (no field_localization row exists for per-org custom text)
@@ -194,19 +200,30 @@ function FieldRow({
       ? (lang === "en" ? field.english_label || field.label : field.label)
       : t(field.label_key, field.field_key);
 
-  function commitOrder() {
+  // Parses the current draft, or null if it isn't a valid new value to save
+  // (blank/0 both mean "clear"; anything non-numeric or negative is rejected).
+  function parseDraft(): number | null | undefined {
     const trimmed = orderDraft.trim();
-    if (trimmed === "") {
-      if (field.sort_order != null) onOrderChange(field.field_key, field.is_visible, null);
-      return;
-    }
+    if (trimmed === "" || trimmed === "0") return null;
     const parsed = Number(trimmed);
-    if (!Number.isInteger(parsed) || parsed < 0) {
-      setOrderDraft(field.sort_order?.toString() ?? "");
+    if (!Number.isInteger(parsed) || parsed < 0) return undefined;
+    return parsed;
+  }
+  const parsedDraft = parseDraft();
+  const dirty = parsedDraft !== undefined && parsedDraft !== savedOrder;
+
+  async function commitOrder() {
+    if (parsedDraft === undefined) {
+      setOrderDraft(savedOrder?.toString() ?? "");
       return;
     }
-    if (parsed === field.sort_order) return;
-    onOrderChange(field.field_key, field.is_visible, parsed);
+    if (parsedDraft === savedOrder) return;
+    setSaving(true);
+    try {
+      await onOrderChange(field.field_key, field.is_visible, parsedDraft);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -214,19 +231,39 @@ function FieldRow({
       <span className={`text-sm ${field.is_visible ? "" : "text-gray-400"}`}>{label}</span>
       <div className="flex items-center gap-3">
         <div className="flex flex-col items-center gap-0.5">
-          <input
-            type="number"
-            aria-label={t("fields.order_header", "סדר תצוגה")}
-            className={`w-14 rounded-md border px-1.5 py-0.5 text-xs text-center ${
-              duplicate
-                ? "border-status-darkred text-status-darkred bg-red-50"
-                : "border-gray-300"
-            }`}
-            placeholder="—"
-            value={orderDraft}
-            onChange={(e) => setOrderDraft(e.target.value)}
-            onBlur={commitOrder}
-          />
+          <div className="flex items-center gap-1">
+            <input
+              type="number"
+              min={1}
+              aria-label={t("fields.order_header", "סדר תצוגה")}
+              className={`w-14 rounded-md border px-1.5 py-0.5 text-xs text-center ${
+                duplicate
+                  ? "border-status-darkred text-status-darkred bg-red-50"
+                  : "border-gray-300"
+              }`}
+              placeholder="—"
+              value={orderDraft}
+              onChange={(e) => setOrderDraft(e.target.value)}
+              onFocus={(e) => e.target.select()}
+              onBlur={commitOrder}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+              }}
+            />
+            {/* fixes40 round 2 hotfix: explicit save action — onBlur alone
+                wasn't a discoverable enough affordance for this field. */}
+            {dirty && (
+              <button
+                type="button"
+                title={t("action.save", "שמור")}
+                disabled={saving}
+                onClick={commitOrder}
+                className="rounded-md bg-status-magenta text-white w-5 h-5 flex items-center justify-center text-xs leading-none disabled:opacity-50"
+              >
+                {saving ? "…" : "✓"}
+              </button>
+            )}
+          </div>
           {duplicate && (
             <span className="text-[10px] text-status-darkred whitespace-nowrap">
               {t("fields.order_dup", "כפול")}

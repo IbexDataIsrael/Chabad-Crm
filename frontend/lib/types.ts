@@ -386,8 +386,8 @@ export interface PicklistField {
   // "significant_date" — which logical entity this picklist belongs to.
   entity_type: string;
   // fixes40 round 2 §3: display order (shared surface with FieldSetting via
-  // /api/field-settings).
-  sort_order: number;
+  // /api/field-settings). null = unordered.
+  sort_order: number | null;
 }
 
 export interface OrgDetails {
