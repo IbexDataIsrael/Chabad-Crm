@@ -6,7 +6,7 @@ import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { dotStyle } from "@/lib/colors";
 import { useCustomFieldDefs } from "@/lib/customFields";
-import { useFieldSettings } from "@/lib/fieldSettings";
+import { sortByFieldOrder, useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { FIXED_CONTACT_PICKLIST_KEYS, usePicklist, usePicklistsMap } from "@/lib/picklists";
 import {
@@ -54,7 +54,7 @@ export function ContactView({
   onPatch?: (partial: ContactPatch) => Promise<void>;
 }) {
   const { t, lang } = useLocalization();
-  const { isFieldVisible: vis } = useFieldSettings();
+  const { isFieldVisible: vis, orderFor } = useFieldSettings();
   // The logged-in user's role (distinct from the contact's type).
   const { isShliach: isShliachUser } = useAuth();
   const status = usePicklist("contact.pipeline_status");
@@ -569,11 +569,17 @@ export function ContactView({
       ]
     : [];
 
-  const allFields = (
-    contact.contact_type === "shliach"
+  // fixes40 round 2 §4A: sorted by each field's configured display order
+  // (dashboard/fields) — unordered fields keep their original relative
+  // position, after every explicitly-ordered one.
+  const allFields = sortByFieldOrder(
+    (contact.contact_type === "shliach"
       ? shliachFields
       : [...fields, ...coordsRow, ...mekuravAdminArea, ...mekuravFields]
-  ).filter(([key]) => key === null || vis(key));
+    ).filter(([key]) => key === null || vis(key)),
+    ([key]) => key,
+    orderFor,
+  );
 
   return (
     <div className="space-y-6">

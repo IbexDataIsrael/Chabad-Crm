@@ -13,7 +13,7 @@ import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { mapsHref } from "@/lib/contactActions";
 import { useCustomFieldDefs } from "@/lib/customFields";
-import { useFieldSettings } from "@/lib/fieldSettings";
+import { sortByFieldOrder, useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import {
   FIXED_APARTMENT_PICKLIST_KEYS,
@@ -49,7 +49,7 @@ export default function ApartmentDetailPage() {
   const router = useRouter();
   const { loading, isAdmin, isShliach } = useAuth();
   const { t, lang } = useLocalization();
-  const { isFieldVisible: vis } = useFieldSettings();
+  const { isFieldVisible: vis, orderFor } = useFieldSettings();
   const { success } = useToast();
   const params = useParams<{ id: string }>();
   const apartmentId = Number(params.id);
@@ -189,19 +189,19 @@ export default function ApartmentDetailPage() {
   // Historical versions (admin-viewable, fixes19 §3) are immutable — their
   // fields render as plain values.
   const editable = apt.is_display !== false;
+  // fixes40 round 2 §4B: every toggleable field collects into a sorted array
+  // (by its dashboard/fields order) instead of rendering inline — building
+  // and building_address stay at their fixed positions (they're structural
+  // anchors, never toggleable, so never orderable either — same boundary
+  // the label-styling round drew for "not literally every field").
+  type FieldEntry = { key: string; label: string; node: ReactNode; span2?: boolean };
   const field = (
     key: string,
     labelKey: string,
     fallback: string,
     node: ReactNode,
     span2 = false,
-  ) =>
-    vis(key) ? (
-      <div className={span2 ? "sm:col-span-2" : undefined}>
-        <dt className="text-gray-500">{t(labelKey, fallback)}</dt>
-        <dd className="font-medium">{node}</dd>
-      </div>
-    ) : null;
+  ): FieldEntry | null => (vis(key) ? { key, label: t(labelKey, fallback), node, span2 } : null);
 
   const inlineText = (
     fieldName: string,
@@ -330,198 +330,212 @@ export default function ApartmentDetailPage() {
                 )}
               </dd>
             </div>
-            {field(
-              "apartments.floor",
-              "apartments.floor",
-              "קומה",
-              <InlineEdit<string | null>
-                value={apt.floor ?? null}
-                display={apt.floor || "—"}
-                commitOnBlur={false}
-                disabled={!editable}
-                onSave={(v) => patch({ floor: v })}
-                editor={(draft, _setDraft, commit) => (
-                  <select
-                    className={inputClass}
-                    value={draft ?? ""}
-                    onChange={(e) =>
-                      commit(e.target.value === "" ? null : e.target.value)
+            {(() => {
+              // fixes40 round 2 §4B: every toggleable field/custom field/
+              // custom picklist collects into one array, sorted by its
+              // dashboard/fields order, then rendered — building (above)
+              // and building_address (below) are fixed structural anchors,
+              // never toggleable, so they render outside this sorted block.
+              const entries: FieldEntry[] = [
+                field(
+                  "apartments.floor",
+                  "apartments.floor",
+                  "קומה",
+                  <InlineEdit<string | null>
+                    value={apt.floor ?? null}
+                    display={apt.floor || "—"}
+                    commitOnBlur={false}
+                    disabled={!editable}
+                    onSave={(v) => patch({ floor: v })}
+                    editor={(draft, _setDraft, commit) => (
+                      <select
+                        className={inputClass}
+                        value={draft ?? ""}
+                        onChange={(e) =>
+                          commit(e.target.value === "" ? null : e.target.value)
+                        }
+                      >
+                        <option value="">—</option>
+                        {floors.map((f) => (
+                          <option key={f.id} value={f.name}>
+                            {f.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  />,
+                ),
+                field(
+                  "apartments.apartment_name",
+                  "apartments.apartment_name",
+                  "מספר דירה",
+                  inlineText("apartment_name", apt.apartment_name),
+                ),
+                field(
+                  "apartments.name",
+                  "apartments.name",
+                  "שם דייר",
+                  inlineText("name", apt.name),
+                ),
+                field(
+                  "apartments.phone",
+                  "apartments.phone",
+                  "טלפון",
+                  inlineText("phone", apt.phone, {
+                    dir: "ltr",
+                    validate: (v) =>
+                      v.trim() === "" || isValidPhone(v.trim())
+                        ? null
+                        : t("validation.phone_hint", PHONE_HINT),
+                  }),
+                ),
+                field(
+                  "apartments.email",
+                  "apartments.email",
+                  "אימייל",
+                  inlineText("email", apt.email, {
+                    dir: "ltr",
+                    validate: (v) =>
+                      v.trim() === "" || isValidEmail(v.trim())
+                        ? null
+                        : t("validation.email_hint", EMAIL_HINT),
+                  }),
+                ),
+                field(
+                  "apartment.Jewish_status",
+                  "picklist.apartment.Jewish_status",
+                  "יהדות",
+                  inlinePicklist(
+                    "apartment.Jewish_status",
+                    "jewish_status",
+                    apt.jewish_status,
+                    jewishLabel,
+                  ),
+                ),
+                field(
+                  "apartment.campaign_status",
+                  "picklist.apartment.campaign_status",
+                  "סטטוס קמפיין",
+                  inlinePicklist(
+                    "apartment.campaign_status",
+                    "campaign_status",
+                    apt.campaign_status,
+                    campaignLabel,
+                  ),
+                ),
+                field(
+                  "apartment.mezuzah_status",
+                  "picklist.apartment.mezuzah_status",
+                  "מזוזה",
+                  inlinePicklist(
+                    "apartment.mezuzah_status",
+                    "mezuzah_status",
+                    apt.mezuzah_status,
+                    mezuzahLabel,
+                  ),
+                ),
+                field(
+                  "apartment.language",
+                  "picklist.apartment.language",
+                  "שפה",
+                  inlinePicklist("apartment.language", "language", apt.language, languageLabel),
+                ),
+                field(
+                  "apartments.report_number_id",
+                  "apartments.report_number_id",
+                  "מספר דוח",
+                  <InlineEdit<number | null>
+                    value={apt.report_number_id ?? null}
+                    display={
+                      reportNumbers.find((rn) => rn.id === apt.report_number_id)?.name || "—"
                     }
-                  >
-                    <option value="">—</option>
-                    {floors.map((f) => (
-                      <option key={f.id} value={f.name}>
-                        {f.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              />,
-            )}
-            {field(
-              "apartments.apartment_name",
-              "apartments.apartment_name",
-              "מספר דירה",
-              inlineText("apartment_name", apt.apartment_name),
-            )}
-            {field(
-              "apartments.name",
-              "apartments.name",
-              "שם דייר",
-              inlineText("name", apt.name),
-            )}
-            {field(
-              "apartments.phone",
-              "apartments.phone",
-              "טלפון",
-              inlineText("phone", apt.phone, {
-                dir: "ltr",
-                validate: (v) =>
-                  v.trim() === "" || isValidPhone(v.trim())
-                    ? null
-                    : t("validation.phone_hint", PHONE_HINT),
-              }),
-            )}
-            {field(
-              "apartments.email",
-              "apartments.email",
-              "אימייל",
-              inlineText("email", apt.email, {
-                dir: "ltr",
-                validate: (v) =>
-                  v.trim() === "" || isValidEmail(v.trim())
-                    ? null
-                    : t("validation.email_hint", EMAIL_HINT),
-              }),
-            )}
-            {field(
-              "apartment.Jewish_status",
-              "picklist.apartment.Jewish_status",
-              "יהדות",
-              inlinePicklist(
-                "apartment.Jewish_status",
-                "jewish_status",
-                apt.jewish_status,
-                jewishLabel,
-              ),
-            )}
-            {field(
-              "apartment.campaign_status",
-              "picklist.apartment.campaign_status",
-              "סטטוס קמפיין",
-              inlinePicklist(
-                "apartment.campaign_status",
-                "campaign_status",
-                apt.campaign_status,
-                campaignLabel,
-              ),
-            )}
-            {field(
-              "apartment.mezuzah_status",
-              "picklist.apartment.mezuzah_status",
-              "מזוזה",
-              inlinePicklist(
-                "apartment.mezuzah_status",
-                "mezuzah_status",
-                apt.mezuzah_status,
-                mezuzahLabel,
-              ),
-            )}
-            {field(
-              "apartment.language",
-              "picklist.apartment.language",
-              "שפה",
-              inlinePicklist(
-                "apartment.language",
-                "language",
-                apt.language,
-                languageLabel,
-              ),
-            )}
-            {customDefs
-              .filter((d) => vis(d.field_key))
-              .map((d) => (
-                <div key={d.field_key}>
-                  <dt className="text-gray-500">
-                    {(lang === "en" ? d.english_label || d.label : d.label) ||
-                      d.field_key}
-                  </dt>
-                  <dd className="font-medium">
-                    <InlineEdit<string | null>
-                      value={apt.picklist_values?.[d.field_key] ?? null}
-                      display={customLabel(d.field_key, apt.picklist_values?.[d.field_key]) || "—"}
-                      commitOnBlur={false}
-                      disabled={!editable}
-                      onSave={(v) => patch({ picklist_values: { [d.field_key]: v } })}
-                      editor={(draft, _setDraft, commit) => (
-                        <PicklistSelect fieldKey={d.field_key} value={draft} onChange={commit} />
-                      )}
-                    />
-                  </dd>
-                </div>
-              ))}
-            {/* fixes35: any non-select apartment custom field. */}
-            {customFieldDefs
-              .filter((d) => vis(`customfield.apartment.${d.field_key}`))
-              .map((d) => (
-                <div key={d.field_key}>
-                  <dt className="text-gray-500">
-                    {(lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
-                      d.field_key}
-                  </dt>
-                  <dd className="font-medium">
-                    <InlineEdit<string | number | boolean | null>
-                      value={apt.custom_field_values?.[d.field_key] ?? null}
-                      display={
-                        <CustomFieldValueDisplay
-                          fieldType={d.field_type}
-                          value={apt.custom_field_values?.[d.field_key] ?? null}
-                        />
-                      }
-                      commitOnBlur={d.field_type === "text" || d.field_type === "number"}
-                      disabled={!editable}
-                      onSave={(v) => patch({ custom_field_values: { [d.field_key]: v } })}
-                      editor={(draft, setDraft, commit) => (
-                        <CustomFieldValueInput
-                          fieldType={d.field_type}
-                          value={draft}
-                          onChange={
-                            d.field_type === "boolean" || d.field_type === "date"
-                              ? commit
-                              : setDraft
+                    commitOnBlur={false}
+                    disabled={!editable}
+                    onSave={(v) => patch({ report_number_id: v })}
+                    editor={(draft, _setDraft, commit) => (
+                      <SearchableSelect
+                        value={draft}
+                        onChange={(id) => commit(id ?? null)}
+                        options={reportNumbers.map((rn) => ({ id: rn.id, label: rn.name }))}
+                        placeholder={t("apt.choose_report_number", "בחר מספר דוח…")}
+                      />
+                    )}
+                  />,
+                ),
+                field(
+                  "apartments.apartment_notes",
+                  "apartments.apartment_notes",
+                  "הערות",
+                  inlineText("apartment_notes", apt.apartment_notes, { multiline: true }),
+                  true,
+                ),
+                ...customDefs
+                  .filter((d) => vis(d.field_key))
+                  .map(
+                    (d): FieldEntry => ({
+                      key: d.field_key,
+                      label: (lang === "en" ? d.english_label || d.label : d.label) || d.field_key,
+                      node: (
+                        <InlineEdit<string | null>
+                          value={apt.picklist_values?.[d.field_key] ?? null}
+                          display={
+                            customLabel(d.field_key, apt.picklist_values?.[d.field_key]) || "—"
                           }
+                          commitOnBlur={false}
+                          disabled={!editable}
+                          onSave={(v) => patch({ picklist_values: { [d.field_key]: v } })}
+                          editor={(draft, _setDraft, commit) => (
+                            <PicklistSelect fieldKey={d.field_key} value={draft} onChange={commit} />
+                          )}
                         />
-                      )}
-                    />
-                  </dd>
+                      ),
+                    }),
+                  ),
+                // fixes35: any non-select apartment custom field.
+                ...customFieldDefs
+                  .filter((d) => vis(`customfield.apartment.${d.field_key}`))
+                  .map(
+                    (d): FieldEntry => ({
+                      key: `customfield.apartment.${d.field_key}`,
+                      label:
+                        (lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
+                        d.field_key,
+                      node: (
+                        <InlineEdit<string | number | boolean | null>
+                          value={apt.custom_field_values?.[d.field_key] ?? null}
+                          display={
+                            <CustomFieldValueDisplay
+                              fieldType={d.field_type}
+                              value={apt.custom_field_values?.[d.field_key] ?? null}
+                            />
+                          }
+                          commitOnBlur={d.field_type === "text" || d.field_type === "number"}
+                          disabled={!editable}
+                          onSave={(v) => patch({ custom_field_values: { [d.field_key]: v } })}
+                          editor={(draft, setDraft, commit) => (
+                            <CustomFieldValueInput
+                              fieldType={d.field_type}
+                              value={draft}
+                              onChange={
+                                d.field_type === "boolean" || d.field_type === "date"
+                                  ? commit
+                                  : setDraft
+                              }
+                            />
+                          )}
+                        />
+                      ),
+                    }),
+                  ),
+              ].filter((e): e is FieldEntry => e !== null);
+
+              return sortByFieldOrder(entries, (e) => e.key, orderFor).map((e) => (
+                <div key={e.key} className={e.span2 ? "sm:col-span-2" : undefined}>
+                  <dt className="text-gray-500">{e.label}</dt>
+                  <dd className="font-medium">{e.node}</dd>
                 </div>
-              ))}
-            {field(
-              "apartments.report_number_id",
-              "apartments.report_number_id",
-              "מספר דוח",
-              <InlineEdit<number | null>
-                value={apt.report_number_id ?? null}
-                display={
-                  reportNumbers.find((rn) => rn.id === apt.report_number_id)?.name ||
-                  "—"
-                }
-                commitOnBlur={false}
-                disabled={!editable}
-                onSave={(v) => patch({ report_number_id: v })}
-                editor={(draft, _setDraft, commit) => (
-                  <SearchableSelect
-                    value={draft}
-                    onChange={(id) => commit(id ?? null)}
-                    options={reportNumbers.map((rn) => ({
-                      id: rn.id,
-                      label: rn.name,
-                    }))}
-                    placeholder={t("apt.choose_report_number", "בחר מספר דוח…")}
-                  />
-                )}
-              />,
-            )}
+              ));
+            })()}
             {building?.building_address && (
               <div className="sm:col-span-2">
                 <dt className="text-gray-500">{t("buildings.building_address", "כתובת בניין")}</dt>
@@ -542,13 +556,6 @@ export default function ApartmentDetailPage() {
                   )}
                 </dd>
               </div>
-            )}
-            {field(
-              "apartments.apartment_notes",
-              "apartments.apartment_notes",
-              "הערות",
-              inlineText("apartment_notes", apt.apartment_notes, { multiline: true }),
-              true,
             )}
           </dl>
         </div>

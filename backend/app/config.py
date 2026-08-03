@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     # Platform superadmin (cross-tenant "system admin"). Seeded on startup into a
     # dedicated System organization when BOTH email + password are provided (set
     # them on Render). Cannot be created via public signup. Leave empty to disable.
+    superadmin_username: str = "superadmin"
     superadmin_email: str = ""
     superadmin_password: str = ""
     superadmin_name: str = "System Administrator"

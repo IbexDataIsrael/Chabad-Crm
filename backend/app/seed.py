@@ -328,6 +328,10 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("field", "fields.shown", "מוצג", "Shown"),
     ("field", "fields.hidden", "מוסתר", "Hidden"),
     ("field", "fields.manage_custom", "הוספה / מחיקה", "Add / delete"),
+    # fixes40 round 2 §3: per-field display order input on dashboard/fields.
+    ("field", "fields.order_header", "סדר תצוגה", "Display order"),
+    ("field", "fields.order_dup", "כפול", "Duplicate"),
+    ("field", "fields.order_dup_hint", "מספר סדר זה כבר בשימוש בסעיף זה", "This order number is already used in this section"),
     # --- User-facing error messages (editable in the localization page) ---
     ("error", "error.no_areas_for_shliach", "נא להוסיף לפחות אזור אחד למערכת", "Please add at least 1 area to the system"),
     # fixes14: shliach login password (set from the contact form)
@@ -1361,6 +1365,8 @@ def seed_superadmin(db: Session) -> None:
         # Keep the role/credentials in sync in case env values changed.
         if existing.role != "superadmin":
             existing.role = "superadmin"
+        if settings.superadmin_username:
+            existing.username = settings.superadmin_username
         existing.password_hash = hash_password(settings.superadmin_password)
         existing.is_active = True
         existing.email_verified = True
@@ -1385,7 +1391,7 @@ def seed_superadmin(db: Session) -> None:
     db.add(
         models.User(
             organization_id=system_org.id,
-            username="superadmin",
+            username=settings.superadmin_username,
             full_name=settings.superadmin_name,
             email=settings.superadmin_email,
             password_hash=hash_password(settings.superadmin_password),
@@ -1396,8 +1402,9 @@ def seed_superadmin(db: Session) -> None:
     )
     db.commit()
     logger.info(
-        "Superadmin CREATED: %s (username 'superadmin') in org '%s'",
+        "Superadmin CREATED: %s (username '%s') in org '%s'",
         settings.superadmin_email,
+        settings.superadmin_username,
         system_org.name,
     )
 

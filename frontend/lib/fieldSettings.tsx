@@ -23,6 +23,9 @@ export interface FieldSetting {
    * for a per-org custom picklist's name. */
   label?: string | null;
   english_label?: string | null;
+  /** fixes40 round 2 §3: display order within the field's section. null =
+   * unordered — falls after every explicitly-ordered field. */
+  sort_order?: number | null;
 }
 
 interface FieldSettingsContextValue {
@@ -30,7 +33,34 @@ interface FieldSettingsContextValue {
   settings: FieldSetting[];
   /** True unless the field has been explicitly hidden for this org. */
   isFieldVisible: (fieldKey: string) => boolean;
+  /** The configured order number for a field, or null if unordered. */
+  orderFor: (fieldKey: string) => number | null;
   refresh: () => Promise<void>;
+}
+
+/** Stable-sorts entries by their configured order (nulls last, in their
+ * original relative order) — the shared ordering rule for every entity
+ * detail page (fixes40 round 2 §4). `keyOf` extracts the field_key each
+ * entry should be looked up by. */
+export function sortByFieldOrder<T>(
+  items: T[],
+  keyOf: (item: T) => string | null | undefined,
+  orderFor: (fieldKey: string) => number | null,
+): T[] {
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => {
+      const keyA = keyOf(a.item);
+      const keyB = keyOf(b.item);
+      const orderA = keyA ? orderFor(keyA) : null;
+      const orderB = keyB ? orderFor(keyB) : null;
+      if (orderA == null && orderB == null) return a.index - b.index;
+      if (orderA == null) return 1;
+      if (orderB == null) return -1;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.index - b.index;
+    })
+    .map((x) => x.item);
 }
 
 const FieldSettingsContext = createContext<FieldSettingsContextValue | undefined>(
@@ -66,10 +96,16 @@ export function FieldSettingsProvider({ children }: { children: ReactNode }) {
     const hidden = new Set(
       settings.filter((s) => !s.is_visible).map((s) => s.field_key),
     );
+    const orderByKey = new Map(
+      settings
+        .filter((s) => s.sort_order != null)
+        .map((s) => [s.field_key, s.sort_order as number]),
+    );
     return {
       loading,
       settings,
       isFieldVisible: (key: string) => !hidden.has(key),
+      orderFor: (key: string) => orderByKey.get(key) ?? null,
       refresh,
     };
   }, [settings, loading, refresh]);

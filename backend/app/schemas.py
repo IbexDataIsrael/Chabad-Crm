@@ -1004,6 +1004,9 @@ class PicklistFieldOut(BaseModel):
     # fixes37: "contact_mekurav" | "contact_shliach" | "apartment" | "visit" |
     # "significant_date" — which logical entity this picklist belongs to.
     entity_type: str = "contact_mekurav"
+    # fixes40 round 2 §3: display order within the field's section (shared
+    # ordering surface with FieldSetting/CustomFieldDefinition via /api/field-settings).
+    sort_order: int = 0
 
 
 class PicklistDefinitionCreate(BaseModel):

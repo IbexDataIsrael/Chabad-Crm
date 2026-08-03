@@ -33,11 +33,18 @@ class FieldSettingOut(BaseModel):
     # field_localization row for per-org custom picklist names.
     label: Optional[str] = None
     english_label: Optional[str] = None
+    # fixes40 round 2 §3: display order within the field's section. None means
+    # unordered — falls after every explicitly-ordered field in this section.
+    sort_order: Optional[int] = None
 
 
 class FieldSettingUpdate(BaseModel):
     field_key: str
     is_visible: bool
+    # fixes40 round 2 §3: when provided, also sets the field's display order.
+    # Routed to whichever table the key resolves to (FieldSetting /
+    # PicklistDefinition / CustomFieldDefinition) — see set_field_setting.
+    sort_order: Optional[int] = None
 
 
 def _custom_picklist_keys(db: Session, org_id: int) -> set[str]:
@@ -100,7 +107,7 @@ def list_field_settings(
     picklist (fixes33 §5.1), so those can be hidden too."""
     org_id = current_user.organization_id
     saved = {
-        r.field_key: r.is_visible
+        r.field_key: r
         for r in db.query(models.FieldSetting)
         .filter(models.FieldSetting.organization_id == org_id)
         .all()
@@ -110,7 +117,8 @@ def list_field_settings(
             field_key=fk,
             label_key=lk,
             entity=ent,
-            is_visible=saved.get(fk, default_visible(fk)),
+            is_visible=saved[fk].is_visible if fk in saved else default_visible(fk),
+            sort_order=saved[fk].sort_order if fk in saved else None,
         )
         for fk, lk, ent in TOGGLEABLE_FIELDS
     ]
@@ -131,9 +139,10 @@ def list_field_settings(
             # entity_type column now — no prefix-sniffing needed, same as
             # the CustomFieldDefinition rows just below.
             entity=d.entity_type,
-            is_visible=saved.get(d.system_name, True),
+            is_visible=saved[d.system_name].is_visible if d.system_name in saved else True,
             label=d.hebrew_display_name,
             english_label=d.english_display_name,
+            sort_order=d.sort_order,
         )
         for d in custom_defs
     )
@@ -145,9 +154,14 @@ def list_field_settings(
             field_key=custom_field_setting_key(d.entity_type, d.field_key),
             label_key=f"custom_field.{d.entity_type}.{d.field_key}",
             entity=d.entity_type,
-            is_visible=saved.get(custom_field_setting_key(d.entity_type, d.field_key), True),
+            is_visible=(
+                saved[custom_field_setting_key(d.entity_type, d.field_key)].is_visible
+                if custom_field_setting_key(d.entity_type, d.field_key) in saved
+                else True
+            ),
             label=d.hebrew_label,
             english_label=d.english_label,
+            sort_order=d.sort_order,
         )
         for d in _custom_field_defs(db, org_id)
     )
@@ -183,6 +197,27 @@ def set_field_setting(
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, f"unknown field_key '{payload.field_key}'"
         )
+    # fixes40 round 2 §3: sort_order lives on whichever table actually
+    # carries ordering for this key's category — custom fields/picklists
+    # already have their own sort_order column (consulted by other queries
+    # elsewhere), so it's set directly on THAT row rather than duplicated
+    # onto the FieldSetting row. Only a built-in (TOGGLEABLE_KEYS) field's
+    # order lives on FieldSetting itself.
+    if payload.sort_order is not None and custom_field_definition is not None:
+        custom_field_definition.sort_order = payload.sort_order
+    picklist_definition = None
+    if payload.sort_order is not None and payload.field_key not in TOGGLEABLE_KEYS and custom_field_definition is None:
+        picklist_definition = (
+            db.query(models.PicklistDefinition)
+            .filter(
+                models.PicklistDefinition.organization_id == admin.organization_id,
+                models.PicklistDefinition.system_name == payload.field_key,
+            )
+            .first()
+        )
+        if picklist_definition is not None:
+            picklist_definition.sort_order = payload.sort_order
+
     row = (
         db.query(models.FieldSetting)
         .filter(
@@ -200,6 +235,8 @@ def set_field_setting(
         db.add(row)
     else:
         row.is_visible = payload.is_visible
+    if payload.field_key in TOGGLEABLE_KEYS and payload.sort_order is not None:
+        row.sort_order = payload.sort_order
     db.commit()
 
     if payload.field_key in TOGGLEABLE_KEYS:
@@ -209,6 +246,7 @@ def set_field_setting(
             label_key=label_key,
             entity=entity,
             is_visible=payload.is_visible,
+            sort_order=row.sort_order,
         )
     if custom_field_definition is not None:
         # fixes35 §3: a dynamic (non-select) custom-field field_key.
@@ -219,10 +257,11 @@ def set_field_setting(
             is_visible=payload.is_visible,
             label=custom_field_definition.hebrew_label,
             english_label=custom_field_definition.english_label,
+            sort_order=custom_field_definition.sort_order,
         )
     # fixes33 §5.1: a dynamic custom-picklist field_key — resolve its own
     # bilingual display name the same way the GET list does.
-    definition = (
+    definition = picklist_definition or (
         db.query(models.PicklistDefinition)
         .filter(
             models.PicklistDefinition.organization_id == admin.organization_id,
@@ -240,4 +279,5 @@ def set_field_setting(
         is_visible=payload.is_visible,
         label=definition.hebrew_display_name if definition else None,
         english_label=definition.english_display_name if definition else None,
+        sort_order=definition.sort_order if definition else None,
     )

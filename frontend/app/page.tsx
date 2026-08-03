@@ -49,9 +49,13 @@ export default function LoginPage() {
       if (orgs) {
         setGoogleCredential(null);
         setOrgOptions(orgs);
-        return;
       }
-      router.replace(loginTarget());
+      // On success (orgs === null) the "already authenticated" effect below
+      // fires from the `user` state update and performs the redirect — a
+      // second, explicit router.replace() here raced it (two concurrent
+      // navigations to the same target could cancel a *later* router.replace
+      // from a child page, e.g. superadmin's /dashboard -> /dashboard/admin
+      // hop, leaving the app stuck on the loading state).
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
         setUnverified(true);
@@ -73,9 +77,8 @@ export default function LoginPage() {
       if (orgs) {
         setGoogleCredential(credential);
         setOrgOptions(orgs);
-        return;
       }
-      router.replace(loginTarget());
+      // See onSubmit: redirect is handled solely by the effect below.
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
         setError(err.message);
@@ -92,10 +95,11 @@ export default function LoginPage() {
     setError("");
     setBusy(true);
     try {
-      const orgs = googleCredential
-        ? await signInWithGoogle(googleCredential, orgId)
-        : await signIn(username, password, orgId);
-      if (!orgs) router.replace(loginTarget());
+      // See onSubmit: redirect is handled solely by the effect below (it
+      // fires once `user` is set, whichever branch resolves it).
+      await (googleCredential
+        ? signInWithGoogle(googleCredential, orgId)
+        : signIn(username, password, orgId));
     } catch (err) {
       setError(err instanceof Error ? err.message : t("auth.login_failed"));
     } finally {

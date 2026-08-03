@@ -730,6 +730,11 @@ class FieldSetting(Base):
     )
     field_key = Column(String(100), nullable=False)  # e.g. 'contacts.area'
     is_visible = Column(Boolean, nullable=False, default=True)
+    # fixes40 §3: display order within the field's section on dashboard/fields
+    # and the entity detail pages. NULL (no row, or a row never given an
+    # order) means "unordered" — falls after every explicitly-ordered field,
+    # in its original registry position, so untouched orgs render unchanged.
+    sort_order = Column(Integer, nullable=True)
 
 
 class CustomFieldDefinition(Base):
