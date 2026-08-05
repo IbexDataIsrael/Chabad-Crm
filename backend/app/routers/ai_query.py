@@ -74,7 +74,7 @@ def query(
     except anthropic.APIError as exc:
         logger.warning("Anthropic request failed: %s", exc)
         raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY, "AI service returned an error"
+            status.HTTP_502_BAD_GATEWAY, f"AI service returned an error: {exc}"
         )
 
     # NOTE: .content[0].text — .content is a list of content blocks, not a
@@ -83,13 +83,19 @@ def query(
         text = response.content[0].text
     except (IndexError, AttributeError):
         logger.warning("Unexpected Anthropic response shape: %s", response)
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Unexpected AI response")
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            f"Unexpected AI response shape: {response!r:.200}",
+        )
 
     try:
         intent = _parse_intent(text)
     except json.JSONDecodeError:
         logger.warning("Non-JSON AI response: %s", text[:300])
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Unexpected AI response")
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            f"Unexpected AI response (not valid JSON): {text[:200]!r}",
+        )
 
     try:
         result = crm_manifest.run_query(db, current_user, intent)
