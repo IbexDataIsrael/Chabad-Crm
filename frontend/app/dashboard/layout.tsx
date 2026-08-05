@@ -79,7 +79,7 @@ function DashboardChrome({ children }: { children: ReactNode }) {
       ]);
   const moreItems = adminOnly([
     { href: "/dashboard", label: t("nav.home", "בית") },
-    { href: "/dashboard/ai", label: t("nav.ai_chat", "צ'אט AI") },
+    { href: "/dashboard/ai/query", label: t("nav.ai_query", "שאילתת AI") },
     { href: "/dashboard/picklists", label: t("nav.picklists", "רשימות בחירה"), admin: true },
     { href: "/dashboard/custom-fields", label: t("nav.custom_fields", "שדות מותאמים"), admin: true },
     { href: "/dashboard/fields", label: t("page.fields_title", "ניהול שדות"), admin: true },

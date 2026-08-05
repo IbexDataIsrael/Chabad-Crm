@@ -17,6 +17,7 @@ google-auth = "*"
 requests = "*"
 apscheduler = "*"
 psycopg2-binary = "*"  # PostgreSQL driver (production database)
+anthropic = "*"  # Claude Sonnet 5 — NL query → data grid (/api/ai/query)
 
 [dev-packages]
 pytest = "*"

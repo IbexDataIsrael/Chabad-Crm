@@ -13,8 +13,8 @@ services:
       # Google Sign-In (token verification). Set in root .env.
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
-      # OpenRouter (digital-twin AI chat). Set in root .env.
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      # Anthropic (NL query → data grid, /api/ai/query). Set in root .env.
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
     volumes:
       - ./backend:/app
       - backend_data:/app/data

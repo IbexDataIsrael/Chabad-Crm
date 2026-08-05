@@ -382,14 +382,23 @@ export interface SearchHit {
 export const globalSearch = (q: string): Promise<{ query: string; results: SearchHit[] }> =>
   apiFetch(`/api/search?q=${encodeURIComponent(q)}`);
 
-// --- Digital-twin AI chat ---------------------------------------------------
-export interface AiChatMessage {
-  role: "user" | "assistant";
-  content: string;
+// --- AI query (natural language -> data grid) --------------------------------
+export interface AiQueryColumn {
+  key: string;
+  label_he: string;
+  label_en: string;
 }
 
-export const aiChat = (messages: AiChatMessage[]): Promise<{ reply: string }> =>
-  apiFetch("/api/ai/chat", {
+export interface AiQueryResponse {
+  table_title: string;
+  columns: AiQueryColumn[];
+  rows: Record<string, unknown>[];
+  row_count: number;
+  truncated: boolean;
+}
+
+export const aiQuery = (prompt: string): Promise<AiQueryResponse> =>
+  apiFetch("/api/ai/query", {
     method: "POST",
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ prompt }),
   });

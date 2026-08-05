@@ -45,7 +45,7 @@ def _run_migrations() -> None:
 from app.routers import (
     admin,
     admin_areas,
-    ai,
+    ai_query,
     apartments,
     areas,
     auth,
@@ -130,7 +130,7 @@ app.include_router(admin.router)
 app.include_router(backups.router)
 app.include_router(preferences.router)
 app.include_router(search.router)
-app.include_router(ai.router)
+app.include_router(ai_query.router)
 
 # fixes25 §6: locally stored uploads (logo fallback when Cloudinary is
 # unavailable) are served straight from the data volume.

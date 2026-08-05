@@ -1188,15 +1188,20 @@ class SearchOut(BaseModel):
     results: list[SearchHit]
 
 
-# --- AI chat (digital twin) --------------------------------------------------
-class AiChatMessage(BaseModel):
-    role: str  # 'user' | 'assistant'
-    content: str
+# --- AI query (natural language -> data grid) --------------------------------
+class AiQueryRequest(BaseModel):
+    prompt: str
 
 
-class AiChatRequest(BaseModel):
-    messages: list[AiChatMessage]
+class AiQueryColumn(BaseModel):
+    key: str
+    label_he: str
+    label_en: str
 
 
-class AiChatResponse(BaseModel):
-    reply: str
+class AiQueryResponse(BaseModel):
+    table_title: str
+    columns: list[AiQueryColumn]
+    rows: list[dict]
+    row_count: int
+    truncated: bool

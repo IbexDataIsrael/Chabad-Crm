@@ -403,17 +403,17 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("search", "search.group.areas", "אזורים", "Areas"),
     ("search", "search.group.buildings", "בניינים", "Buildings"),
     ("search", "search.group.apartments", "דירות", "Apartments"),
-    # --- Digital-twin AI chat ---
-    ("nav", "nav.ai_chat", "צ'אט AI", "AI chat"),
-    # CRM-grounded assistant (replaces the career twin; new keys because the
-    # old rows already exist in tenant DBs and re-seeding never overwrites).
-    ("ai", "ai.crm_title", "עוזר AI", "AI assistant"),
-    ("ai", "ai.crm_intro", "שאל שאלות על נתוני הארגון — אנשי קשר, אזורים, דירות, ביקורים ותרומות.", "Ask questions about the organization's data — contacts, areas, apartments, visits and donations."),
-    ("ai", "ai.placeholder", "כתוב שאלה…", "Type a question…"),
-    ("ai", "ai.send", "שלח", "Send"),
-    ("ai", "ai.thinking", "חושב…", "Thinking…"),
-    ("ai", "ai.error", "השיחה נכשלה — נסה שוב", "The chat failed — try again"),
-    ("ai", "ai.empty", "עדיין אין הודעות. שאל שאלה כדי להתחיל.", "No messages yet. Ask a question to start."),
+    # --- AI query (natural language -> data grid) ---
+    ("nav", "nav.ai_query", "שאילתת AI", "AI query"),
+    ("ai_query", "ai_query.title", "שאילתת AI", "AI query"),
+    ("ai_query", "ai_query.intro", "כתבו בקשה בשפה חופשית וקבלו טבלה — למשל \"אנשי קשר בברוקלין עם סטטוס פייבליין X\".", "Type a request in plain language and get a table — e.g. \"contacts in Brooklyn with pipeline status X\"."),
+    ("ai_query", "ai_query.placeholder", "מה תרצה לעשות?", "What would you like to do?"),
+    ("ai_query", "ai_query.send", "שלח", "Send"),
+    ("ai_query", "ai_query.loading", "מריץ שאילתה…", "Running query…"),
+    ("ai_query", "ai_query.empty", "עדיין אין תוצאות. כתבו בקשה כדי להתחיל.", "No results yet. Type a request to start."),
+    ("ai_query", "ai_query.no_rows", "לא נמצאו תוצאות", "No results found"),
+    ("ai_query", "ai_query.error", "השאילתה נכשלה — נסה שוב", "The query failed — try again"),
+    ("ai_query", "ai_query.truncated", "מוצגות 200 התוצאות הראשונות בלבד", "Showing the first 200 results only"),
     # --- fixes7 §1: org user management ---
     ("nav", "nav.users", "משתמשים", "Users"),
     ("users", "users.title", "ניהול משתמשים", "User management"),

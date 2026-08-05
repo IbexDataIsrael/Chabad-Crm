@@ -74,11 +74,11 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     google_client_secret: str = ""
 
-    # OpenRouter (digital-twin AI chat). Key comes from the root .env via
-    # docker-compose locally, or the Render dashboard in production. When empty,
-    # POST /api/ai/chat returns 503 with a clear message.
-    openrouter_api_key: str = ""
-    openrouter_model: str = "openai/gpt-oss-120b:free"
+    # Anthropic (NL query → data grid, /api/ai/query). Key comes from the root
+    # .env via docker-compose locally, or the Render dashboard in production.
+    # When empty, POST /api/ai/query returns 503 with a clear message.
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-sonnet-5"
 
     # Reminder scheduler: how often (seconds) to scan for due significant-date reminders.
     reminder_scan_interval_seconds: int = 300
