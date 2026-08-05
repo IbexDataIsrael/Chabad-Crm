@@ -15,6 +15,7 @@ import datetime
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
+from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from app import models, picklist_utils
@@ -230,6 +231,59 @@ def _serialize_apartments(db: Session, user: models.User, rows: list) -> list[di
     ]
 
 
+# --- mivtzoim (the mitzvah checklist — tefillin, candles, etc.) -----------
+# Admin-configurable per org (CustomFieldDefinition, entity_type="visit",
+# field_type="boolean") — every org gets the same 5 defaults seeded
+# (seed.py VISIT_MIVTZOIM_CUSTOM_FIELDS) but can add more, so the valid
+# values for the visits.mivtzoim filter aren't static: they're looked up
+# live and woven into the system prompt per request (build_system_prompt).
+
+def _active_mivtzoim_definitions(db: Session, org_id: int) -> list:
+    return (
+        db.query(models.CustomFieldDefinition)
+        .filter(
+            models.CustomFieldDefinition.organization_id == org_id,
+            models.CustomFieldDefinition.entity_type == "visit",
+            models.CustomFieldDefinition.field_type == "boolean",
+            models.CustomFieldDefinition.is_active.is_(True),
+        )
+        .order_by(models.CustomFieldDefinition.sort_order, models.CustomFieldDefinition.id)
+        .all()
+    )
+
+
+def _mivtzoim_base_query(db: Session, user: models.User):
+    return (
+        db.query(models.CustomFieldDefinition)
+        .outerjoin(
+            models.CustomFieldValue,
+            and_(
+                models.CustomFieldValue.definition_id == models.CustomFieldDefinition.id,
+                models.CustomFieldValue.checked.is_(True),
+            ),
+        )
+        .filter(
+            models.CustomFieldDefinition.organization_id == user.organization_id,
+            models.CustomFieldDefinition.entity_type == "visit",
+            models.CustomFieldDefinition.field_type == "boolean",
+            models.CustomFieldDefinition.is_active.is_(True),
+        )
+        .add_columns(func.count(models.CustomFieldValue.id).label("times_checked"))
+        .group_by(models.CustomFieldDefinition.id)
+    )
+
+
+def _serialize_mivtzoim(db: Session, user: models.User, rows: list) -> list[dict]:
+    return [
+        {
+            "name_he": defn.hebrew_label,
+            "name_en": defn.english_label,
+            "times_checked": times_checked,
+        }
+        for defn, times_checked in rows
+    ]
+
+
 # --- registry ----------------------------------------------------------
 
 TABLES: dict[str, TableSpec] = {
@@ -269,6 +323,10 @@ TABLES: dict[str, TableSpec] = {
             "location": ColumnSpec("location", "מיקום", "Location", "text", models.VisitHistory.location),
             "notes": ColumnSpec("notes", "הערות", "Notes", "text", models.VisitHistory.notes),
             "contact_name": ColumnSpec("contact_name", "איש קשר", "Contact", "text", models.Contact.name),
+            "mivtzoim": ColumnSpec(
+                "mivtzoim", "מבצע", "Mivtzoh", "text",
+                expr=None, allowed_ops=frozenset({"eq"}),
+            ),
         },
         display_columns=["visit_date", "contact_name", "location", "notes"],
         base_query=_visits_base_query,
@@ -324,6 +382,24 @@ TABLES: dict[str, TableSpec] = {
         order_by=lambda q: q.order_by(models.Building.building_address, models.Apartment.apartment_name),
         serialize=_serialize_apartments,
     ),
+    "mivtzoim": TableSpec(
+        key="mivtzoim",
+        title_he="מבצעים",
+        title_en="Mivtzoim",
+        allowed_roles=_ALL_ROLES,
+        columns={
+            "name_he": ColumnSpec("name_he", "שם (עברית)", "Name (Hebrew)", "text", models.CustomFieldDefinition.hebrew_label),
+            "name_en": ColumnSpec("name_en", "שם (אנגלית)", "Name (English)", "text", models.CustomFieldDefinition.english_label),
+            "times_checked": ColumnSpec(
+                "times_checked", "כמות פעמים", "Times recorded", "number",
+                expr=None, allowed_ops=frozenset(),  # display-only — it's a per-request aggregate, not filterable
+            ),
+        },
+        display_columns=["name_he", "name_en", "times_checked"],
+        base_query=_mivtzoim_base_query,
+        order_by=lambda q: q.order_by(models.CustomFieldDefinition.sort_order, models.CustomFieldDefinition.id),
+        serialize=_serialize_mivtzoim,
+    ),
 }
 
 
@@ -355,12 +431,31 @@ def _coerce_value(kind: str, raw: Any) -> Any:
     raise ValueError(f"unknown kind {kind}")
 
 
-def _apply_filter(query, table_key: str, column: ColumnSpec, op: str, value: Any):
+def _apply_filter(
+    db: Session, user: models.User, query, table_key: str, column: ColumnSpec, op: str, value: Any
+):
     if table_key == "contacts" and column.key == "pipeline_status":
         return query.filter(
             models.Contact.id.in_(
                 picklist_utils.matching_entity_ids(
                     "contacts", "contact.pipeline_status", [value]
+                )
+            )
+        )
+    if table_key == "visits" and column.key == "mivtzoim":
+        valid_keys = {d.field_key for d in _active_mivtzoim_definitions(db, user.organization_id)}
+        if value not in valid_keys:
+            raise ManifestError(422, f"Unknown mivtzoim: {value}")
+        return query.filter(
+            models.VisitHistory.id.in_(
+                db.query(models.CustomFieldValue.visit_id)
+                .join(
+                    models.CustomFieldDefinition,
+                    models.CustomFieldDefinition.id == models.CustomFieldValue.definition_id,
+                )
+                .filter(
+                    models.CustomFieldDefinition.field_key == value,
+                    models.CustomFieldValue.checked.is_(True),
                 )
             )
         )
@@ -419,7 +514,7 @@ def run_query(db: Session, user: models.User, intent: Any) -> QueryResult:
             coerced = _coerce_value(column.kind, value)
         except (ValueError, TypeError):
             raise ManifestError(422, f"Invalid value for column '{column_key}'")
-        query = _apply_filter(query, table_key, column, op, coerced)
+        query = _apply_filter(db, user, query, table_key, column, op, coerced)
 
     query = spec.order_by(query).limit(ROW_CAP + 1)
     rows = query.all()
@@ -474,6 +569,15 @@ _FEW_SHOT_EXAMPLES: list[tuple[Optional[str], str]] = [
         '"op": "contains", "value": "הרצל"}]}',
     ),
     (
+        "mivtzoim",
+        'User: "כמה מבצעים יש לנו" → {"ok": true, "table": "mivtzoim", "title": "מבצעים", "filters": []}',
+    ),
+    (
+        "visits",
+        'User: "תראה לי ביקורים שבהם הניחו תפילין" → {"ok": true, "table": "visits", '
+        '"title": "ביקורים עם תפילין", "filters": [{"column": "mivtzoim", "op": "eq", "value": "tefillin"}]}',
+    ),
+    (
         None,
         'User: "List last week\'s birthdays" (nothing like that is available here) '
         '→ {"ok": false, "message": "No table tracks birthdays or significant dates yet."}',
@@ -481,10 +585,18 @@ _FEW_SHOT_EXAMPLES: list[tuple[Optional[str], str]] = [
 ]
 
 
-def build_system_prompt(role: str) -> str:
+def build_system_prompt(db: Session, user: models.User) -> str:
     """Only lists the tables the calling user's role may see — defense in
-    depth alongside the server-side role check in `run_query`."""
+    depth alongside the server-side role check in `run_query`. Also weaves
+    in the org's live, admin-configurable mivtzoim list (field_key + labels)
+    since those aren't a fixed set the model can be told about statically."""
+    role = user.role
     tables = [t for t in TABLES.values() if role in t.allowed_roles]
+    mivtzoim_defs = _active_mivtzoim_definitions(db, user.organization_id)
+    mivtzoim_options = ", ".join(
+        f'"{d.field_key}" ({d.hebrew_label} / {d.english_label or d.field_key})'
+        for d in mivtzoim_defs
+    )
     lines = [
         "You are the query-routing engine for a bilingual (Hebrew/English) CRM. "
         "Translate the user's natural-language request into ONE JSON object — "
@@ -507,10 +619,20 @@ def build_system_prompt(role: str) -> str:
     ]
     for t in tables:
         col_descriptions = ", ".join(
-            f"{c.key} ({c.kind}, ops: {'/'.join(sorted(c.allowed_ops or OPS_BY_KIND[c.kind]))})"
+            f"{c.key} ({c.kind}, ops: {'/'.join(sorted(c.allowed_ops or OPS_BY_KIND[c.kind]))}"
+            + (
+                f", valid values: {mivtzoim_options}"
+                if t.key == "visits" and c.key == "mivtzoim" and mivtzoim_options
+                else ""
+            )
+            + ")"
             for c in t.columns.values()
         )
         lines.append(f"- {t.key} ({t.title_he} / {t.title_en}): {col_descriptions}")
+        if t.key == "mivtzoim" and mivtzoim_options:
+            lines.append(
+                f"  (each row = one mivtzoh/campaign your org currently tracks: {mivtzoim_options})"
+            )
     visible_table_keys = {t.key for t in tables}
     lines.append("")
     lines.append("Examples:")

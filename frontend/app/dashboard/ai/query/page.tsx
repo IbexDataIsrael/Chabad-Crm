@@ -58,7 +58,10 @@ export default function AiQueryPage() {
         )}
         {!loading && result && (
           <div>
-            <h2 className="mb-2 text-lg font-semibold">{result.table_title}</h2>
+            <h2 className="text-lg font-semibold">{result.table_title}</h2>
+            <p className="mb-2 text-sm text-gray-500">
+              {result.row_count} {t("ai_query.results", "תוצאות")}
+            </p>
             <div className="overflow-x-auto rounded-xl border border-gray-100">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-right text-gray-600">

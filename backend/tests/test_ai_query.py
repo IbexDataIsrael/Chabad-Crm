@@ -7,10 +7,11 @@ import json
 
 import pytest
 
-from app import models
+from app import custom_field_utils, models
 from app.config import settings
 from app.core.security import hash_password
 from app.routers import ai_query as ai_query_router
+from app.seed import provision_org
 
 
 def _query(client, headers, prompt):
@@ -373,3 +374,87 @@ def test_query_content0_text_parsing(client, admin_headers, monkeypatch):
     _fake_anthropic(monkeypatch, _ok("buildings"))
     r = _query(client, admin_headers, "show buildings")
     assert r.status_code == 200
+
+
+# --- mivtzoim (the mitzvah checklist — tefillin, candles, etc.) -----------
+# NOTE: /api/auth/register (used by the admin_headers fixture) does NOT call
+# provision_org — only the real signup flow does — so these tests provision
+# the org's default mivtzoim custom fields explicitly, matching the pattern
+# test_fixes39.py already uses for the same reason.
+
+def test_query_mivtzoim_table_lists_active_definitions(client, admin_headers, db_session, monkeypatch):
+    """New orgs get the 5 default mivtzoim custom fields (seed.py
+    provision_org -> seed_visit_mivtzoim_custom_fields) — the mivtzoim table
+    should list them even with no visits recorded yet."""
+    org_id = _me(client, admin_headers)["organization_id"]
+    provision_org(db_session, org_id)
+
+    monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+    _fake_anthropic(monkeypatch, _ok("mivtzoim", title="מבצעים"))
+    r = _query(client, admin_headers, "כמה מבצעים יש לנו")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["row_count"] == 5
+    names_en = {row["name_en"] for row in body["rows"]}
+    assert "Tefillin" in names_en
+    tefillin_row = next(row for row in body["rows"] if row["name_en"] == "Tefillin")
+    assert tefillin_row["times_checked"] == 0
+
+
+def test_query_system_prompt_lists_mivtzoim_options(client, admin_headers, db_session, monkeypatch):
+    """Proves the *dynamic* per-org listing, not just the static few-shot
+    example (which also happens to mention "tefillin") — the rendered
+    "field_key" (hebrew_label / ...)" form only appears via the live lookup."""
+    org_id = _me(client, admin_headers)["organization_id"]
+    provision_org(db_session, org_id)
+
+    monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+    captured = {}
+    _fake_anthropic(monkeypatch, _ok("mivtzoim"), capture=captured)
+    r = _query(client, admin_headers, "מבצעים")
+    assert r.status_code == 200
+    assert '"tefillin" (תפילין' in captured["system"]
+
+
+def test_query_visits_filter_by_mivtzoim(client, admin_headers, db_session, monkeypatch):
+    org_id = _me(client, admin_headers)["organization_id"]
+    provision_org(db_session, org_id)
+
+    contact = client.post(
+        "/api/contacts", json={"name": "Mivtzoh Test", "phone": "050-7330011"}, headers=admin_headers
+    ).json()
+    v1 = client.post(
+        "/api/visits",
+        json={"contact_id": contact["id"], "visit_date": "2026-01-10T00:00:00"},
+        headers=admin_headers,
+    ).json()
+    client.post(
+        "/api/visits",
+        json={"contact_id": contact["id"], "visit_date": "2026-01-11T00:00:00"},
+        headers=admin_headers,
+    )
+    custom_field_utils.set_value(db_session, org_id, "visit", v1["id"], "tefillin", True)
+    db_session.commit()
+
+    monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+    _fake_anthropic(
+        monkeypatch, _ok("visits", [{"column": "mivtzoim", "op": "eq", "value": "tefillin"}])
+    )
+
+    r = _query(client, admin_headers, "visits with tefillin")
+    assert r.status_code == 200
+    rows = r.json()["rows"]
+    assert len(rows) == 1
+
+
+def test_query_visits_mivtzoim_rejects_unknown_value(client, admin_headers, db_session, monkeypatch):
+    org_id = _me(client, admin_headers)["organization_id"]
+    provision_org(db_session, org_id)
+
+    monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+    _fake_anthropic(
+        monkeypatch,
+        _ok("visits", [{"column": "mivtzoim", "op": "eq", "value": "not_a_real_mivtzoh"}]),
+    )
+    r = _query(client, admin_headers, "visits with something fake")
+    assert r.status_code == 422

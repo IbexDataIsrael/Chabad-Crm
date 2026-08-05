@@ -75,7 +75,7 @@ def query(
     if not prompt:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Empty prompt")
 
-    system_prompt = crm_manifest.build_system_prompt(current_user.role)
+    system_prompt = crm_manifest.build_system_prompt(db, current_user)
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     try:
         response = client.messages.create(

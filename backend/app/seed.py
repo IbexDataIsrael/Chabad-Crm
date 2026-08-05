@@ -414,6 +414,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("ai_query", "ai_query.no_rows", "לא נמצאו תוצאות", "No results found"),
     ("ai_query", "ai_query.error", "השאילתה נכשלה — נסה שוב", "The query failed — try again"),
     ("ai_query", "ai_query.truncated", "מוצגות 200 התוצאות הראשונות בלבד", "Showing the first 200 results only"),
+    ("ai_query", "ai_query.results", "תוצאות", "results"),
     # --- fixes7 §1: org user management ---
     ("nav", "nav.users", "משתמשים", "Users"),
     ("users", "users.title", "ניהול משתמשים", "User management"),
