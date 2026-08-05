@@ -47,6 +47,19 @@ def _parse_intent(text: str) -> object:
     return json.loads(match.group(0))
 
 
+def _extract_text(response) -> str:
+    """`.content` is a list of content blocks. claude-sonnet-5 runs adaptive
+    thinking by default when `thinking` is omitted, which would put a
+    ThinkingBlock (no `.text`) first — we disable thinking below since this is
+    a plain classification call, but stay defensive and scan for the actual
+    text block rather than assuming position 0."""
+    for block in response.content:
+        text = getattr(block, "text", None)
+        if isinstance(text, str):
+            return text
+    raise AttributeError("no text block in response.content")
+
+
 @router.post("/query", response_model=AiQueryResponse)
 def query(
     payload: AiQueryRequest,
@@ -68,6 +81,11 @@ def query(
         response = client.messages.create(
             model=settings.anthropic_model,
             max_tokens=MAX_TOKENS,
+            # This is a plain classification call (NL -> fixed JSON schema, no
+            # tools) — no reasoning benefit from thinking, and claude-sonnet-5
+            # runs adaptive thinking by default when this is omitted, which
+            # would put a non-text ThinkingBlock first in response.content.
+            thinking={"type": "disabled"},
             system=system_prompt,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -77,11 +95,9 @@ def query(
             status.HTTP_502_BAD_GATEWAY, f"AI service returned an error: {exc}"
         )
 
-    # NOTE: .content[0].text — .content is a list of content blocks, not a
-    # string. (.content.text raises AttributeError; don't "fix" this back.)
     try:
-        text = response.content[0].text
-    except (IndexError, AttributeError):
+        text = _extract_text(response)
+    except AttributeError:
         logger.warning("Unexpected Anthropic response shape: %s", response)
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY,
