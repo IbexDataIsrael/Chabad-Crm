@@ -321,6 +321,39 @@ def test_query_502_on_unparseable_json(client, admin_headers, monkeypatch):
     assert r.status_code == 502
 
 
+def test_query_tolerates_markdown_fenced_json(client, admin_headers, monkeypatch):
+    """Models sometimes wrap structured output in ```json ...``` despite being
+    told not to — the parser should strip that instead of 502ing."""
+    monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+    fenced = "```json\n" + _ok("buildings") + "\n```"
+    _fake_anthropic(monkeypatch, fenced)
+    r = _query(client, admin_headers, "show buildings")
+    assert r.status_code == 200
+
+
+def test_query_tolerates_leading_prose_before_json(client, admin_headers, monkeypatch):
+    prefixed = "Sure, here you go:\n" + _ok("buildings")
+    monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+    _fake_anthropic(monkeypatch, prefixed)
+    r = _query(client, admin_headers, "show buildings")
+    assert r.status_code == 200
+
+
+def test_query_unsupported_request_returns_ok_false_style_502_or_422(client, admin_headers, monkeypatch):
+    """A request with no allowlisted mapping (e.g. mivtzoim checklist status,
+    which isn't in any table's column registry) should surface as a clean
+    422 from the model's own ok:false, not a raw parsing failure — this test
+    guards the parsing side only (ok:false is covered by
+    test_query_ok_false_from_llm_surfaces_as_422)."""
+    monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+    _fake_anthropic(
+        monkeypatch,
+        json.dumps({"ok": False, "message": "No table tracks mivtzoim/checklist status."}),
+    )
+    r = _query(client, admin_headers, "all contacts with mivtzoim")
+    assert r.status_code == 422
+
+
 def test_query_ok_false_from_llm_surfaces_as_422(client, admin_headers, monkeypatch):
     monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
     _fake_anthropic(

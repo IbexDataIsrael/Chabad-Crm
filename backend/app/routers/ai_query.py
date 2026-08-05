@@ -8,6 +8,7 @@ router is plumbing only: auth, the Anthropic call, and mapping
 """
 import json
 import logging
+import re
 
 import anthropic
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -24,6 +25,26 @@ logger = logging.getLogger("app.ai_query")
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 MAX_TOKENS = 1024
+
+_CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
+_JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
+
+
+def _parse_intent(text: str) -> object:
+    """The system prompt tells the model to return bare JSON, but models
+    sometimes wrap structured output in a markdown code fence (```json ...```)
+    or add a stray leading/trailing sentence anyway — strip that before
+    parsing, then fall back to pulling out the first {...} block. Raises
+    json.JSONDecodeError (caught by the caller) if nothing usable is found."""
+    stripped = _CODE_FENCE_RE.sub("", text.strip()).strip()
+    try:
+        return json.loads(stripped)
+    except json.JSONDecodeError:
+        pass
+    match = _JSON_OBJECT_RE.search(stripped)
+    if not match:
+        raise json.JSONDecodeError("no JSON object found in AI response", stripped, 0)
+    return json.loads(match.group(0))
 
 
 @router.post("/query", response_model=AiQueryResponse)
@@ -65,7 +86,7 @@ def query(
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Unexpected AI response")
 
     try:
-        intent = json.loads(text)
+        intent = _parse_intent(text)
     except json.JSONDecodeError:
         logger.warning("Non-JSON AI response: %s", text[:300])
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Unexpected AI response")
