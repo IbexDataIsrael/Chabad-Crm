@@ -19,6 +19,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     LargeBinary,
     String,
@@ -122,9 +123,13 @@ class Contact(Base):
     """Core CRM contact. Type-specific data lives in contact_mekurav / contact_shliach."""
 
     __tablename__ = "contacts"
-    # Phone is the business key: unique within an organization.
     __table_args__ = (
+        # Phone is the business key: unique within an organization.
         UniqueConstraint("organization_id", "phone", name="uq_contact_org_phone"),
+        # Code review hardening: covers owner-scoped contact lookups
+        # (organization_id + assigned_user_id), the most common non-trivial
+        # filter combination in routers/contacts.py.
+        Index("ix_contacts_org_assigned_user", "organization_id", "assigned_user_id"),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -574,6 +579,12 @@ class VisitHistory(Base):
     """
 
     __tablename__ = "visit_history"
+    __table_args__ = (
+        # Code review hardening: visit_date had no index at all, despite
+        # being the primary date-range filter (visits_summary, the contacts
+        # date-range filter) — always combined with organization_id.
+        Index("ix_visit_history_org_visit_date", "organization_id", "visit_date"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     guid = _guid_column()

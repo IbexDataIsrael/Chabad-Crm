@@ -22,6 +22,18 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
+    # Code review hardening: previously any "*.vercel.app" origin was allowed
+    # (needed so Vercel's per-deploy preview URLs keep working without a CORS
+    # update on every deploy) — scoped down to this project's own Vercel
+    # deployments only. A rename is a config change, not a code change.
+    cors_vercel_preview_regex: str = r"https://minicrm(-[a-zA-Z0-9-]+)?-ibexdata\.vercel\.app"
+
+    # Code review hardening: the /api/_diagnostics/* routes were a "temporary
+    # Phase 1" leftover exposing schema/superadmin-existence info with no
+    # auth — off by default everywhere (including Render, unless explicitly
+    # opted into); local dev sets this true in backend/.env.
+    enable_diagnostics: bool = False
+
     # Whether to seed the demo organization + admin + sample data on startup.
     # MUST be false in production (otherwise a known default admin/admin123 and
     # fake contacts land in the live DB). Global localization labels always seed.

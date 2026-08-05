@@ -93,14 +93,16 @@ app = FastAPI(
 )
 
 # Allowed origins: explicit list from CORS_ORIGINS (localhost + any custom
-# domains) PLUS a regex that accepts every *.vercel.app deployment, so the
-# frontend keeps working across Vercel's per-deploy preview URLs without having
-# to update CORS on each deploy. Credentialed requests can't use a "*" wildcard,
-# hence the regex rather than allow_origins=["*"].
+# domains) PLUS a regex scoped to this project's own Vercel deployments, so
+# preview URLs keep working without a CORS update on every deploy. The regex
+# used to accept *any* "*.vercel.app" origin — since allow_credentials=True
+# forbids a "*" wildcard, that effectively let every Vercel-hosted site (a
+# free, self-service domain anyone can register) make credentialed requests
+# to this API; narrowed to just this project (see config.py).
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origin_regex=settings.cors_vercel_preview_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -142,38 +144,38 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/api/_diagnostics/superadmin", tags=["health"])
-def superadmin_status() -> dict:
-    """Whether a platform superadmin exists + its login-relevant flags.
+if settings.enable_diagnostics:
+    # Code review hardening: these routes are unauthenticated by design (the
+    # superadmin one exists to confirm a seed ran without reading Render
+    # logs, before you could even log in) — off by default in every
+    # environment. Only registered at all when ENABLE_DIAGNOSTICS=true.
 
-    Unauthenticated on purpose (returns no password/email) so a browser can
-    confirm the seed ran without reading Render logs. Remove once stable.
-    """
-    db = SessionLocal()
-    try:
-        user = (
-            db.query(models.User)
-            .filter(models.User.role == "superadmin")
-            .first()
-        )
-        if user is None:
-            return {"superadmin_exists": False}
-        return {
-            "superadmin_exists": True,
-            "username": user.username,
-            "is_active": user.is_active,
-            "email_verified": user.email_verified,
-            "org_active": user.organization.is_active if user.organization else None,
-        }
-    finally:
-        db.close()
+    @app.get("/api/_diagnostics/superadmin", tags=["health"])
+    def superadmin_status() -> dict:
+        """Whether a platform superadmin exists + its login-relevant flags
+        (returns no password/email)."""
+        db = SessionLocal()
+        try:
+            user = (
+                db.query(models.User)
+                .filter(models.User.role == "superadmin")
+                .first()
+            )
+            if user is None:
+                return {"superadmin_exists": False}
+            return {
+                "superadmin_exists": True,
+                "username": user.username,
+                "is_active": user.is_active,
+                "email_verified": user.email_verified,
+                "org_active": user.organization.is_active if user.organization else None,
+            }
+        finally:
+            db.close()
 
-
-@app.get("/api/_diagnostics/tables", tags=["health"])
-def list_tables() -> dict[str, list[str]]:
-    """Temporary Phase 1 diagnostic: list the tables created in the database.
-
-    Lets you visually confirm the schema exists. Removed once the CRM routers land.
-    """
-    inspector = inspect(engine)
-    return {"tables": sorted(inspector.get_table_names())}
+    @app.get("/api/_diagnostics/tables", tags=["health"])
+    def list_tables() -> dict[str, list[str]]:
+        """List the tables created in the database — lets you visually
+        confirm the schema exists."""
+        inspector = inspect(engine)
+        return {"tables": sorted(inspector.get_table_names())}
