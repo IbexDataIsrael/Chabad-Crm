@@ -105,6 +105,11 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("admin", "admin.create_org", "צור ארגון", "Create organization"),
     ("admin", "admin.org_created", "הארגון נוצר", "Organization created"),
     ("admin", "admin.admin_name", "שם המנהל", "Admin name"),
+    ("admin", "admin.clone", "שכפל", "Clone"),
+    ("admin", "admin.clone_org_title", "שכפול ארגון", "Clone organization"),
+    ("admin", "admin.clone_org_intro", "יוצר ארגון חדש עם עותק מלא של כל הנתונים — אנשי קשר, ביקורים, דירות, בניינים, רשימות בחירה ועוד. הארגון המקורי לא ישתנה.", "Creates a new organization with a full copy of all its data — contacts, visits, apartments, buildings, picklists, and more. The original organization is never changed."),
+    ("admin", "admin.clone_org_confirm", "שכפל ארגון", "Clone organization"),
+    ("admin", "admin.org_cloned", "הארגון שוכפל", "Organization cloned"),
     # --- Settings: change password ---
     ("settings", "settings.change_password", "שינוי סיסמה", "Change password"),
     ("settings", "settings.current_password", "סיסמה נוכחית", "Current password"),

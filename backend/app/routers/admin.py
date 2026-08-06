@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app import models
 from app.config import settings
 from app.core.email import send_email, send_org_approved_user
+from app.core.org_clone import clone_organization
 from app.core.security import create_access_token, hash_password
 from app.database import get_db
 from app.deps import require_superadmin
@@ -191,6 +192,44 @@ def create_organization(
     logger.info("superadmin %s created org '%s' (admin %s)", admin.email, org.name, payload.admin_email)
     db.refresh(org)
     return _org_out(db, org)
+
+
+@router.post(
+    "/organizations/{org_id}/clone",
+    response_model=AdminOrganizationOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def clone_organization_endpoint(
+    org_id: int,
+    payload: AdminOrgCreate,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_superadmin),
+):
+    """Copy an org's entire CRM data set into a brand-new organization, with
+    a fresh admin login the caller supplies — for sample/demo/sandbox copies.
+    The source org is never modified. See app.core.org_clone for exactly
+    what's copied and how references are rewired."""
+    source = _get_org(db, org_id)
+    try:
+        new_org = clone_organization(
+            db,
+            org_id,
+            payload.organization_name,
+            payload.admin_username,
+            payload.admin_full_name,
+            payload.admin_email,
+            payload.admin_password,
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    logger.info(
+        "superadmin %s cloned org '%s' (id=%s) -> '%s' (id=%s)",
+        admin.email, source.name, org_id, new_org.name, new_org.id,
+    )
+    db.refresh(new_org)
+    return _org_out(db, new_org)
 
 
 @router.get("/organizations", response_model=list[AdminOrganizationOut])

@@ -300,6 +300,19 @@ export const adminCreateOrg = (payload: AdminOrgCreate): Promise<AdminOrganizati
 export const adminListOrganizations = (): Promise<AdminOrganization[]> =>
   apiFetch("/api/admin/organizations");
 
+/** Copies an org's entire CRM data set into a brand-new organization (with a
+ * fresh admin login) — for sample/demo/sandbox copies. The source org is
+ * never modified. Same payload shape as adminCreateOrg: organization_name is
+ * the new (clone) org's name, not the source's. */
+export const adminCloneOrg = (
+  orgId: number,
+  payload: AdminOrgCreate,
+): Promise<AdminOrganization> =>
+  apiFetch(`/api/admin/organizations/${orgId}/clone`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
 export const adminListOrgUsers = (orgId: number): Promise<AdminUser[]> =>
   apiFetch(`/api/admin/organizations/${orgId}/users`);
 

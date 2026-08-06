@@ -6,6 +6,7 @@ import {
   adminActivateOrg,
   adminActivateUser,
   adminApproveOrg,
+  adminCloneOrg,
   adminCreateOrg,
   adminDeactivateOrg,
   adminDeactivateUser,
@@ -18,6 +19,7 @@ import {
   adminUserDependencies,
   adminVerifyUser,
   setToken,
+  type AdminOrgCreate,
   type AdminOrganization,
   type AdminUser,
   type AdminUserDependencies,
@@ -124,6 +126,17 @@ export default function SystemAdminPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  const [orgToClone, setOrgToClone] = useState<AdminOrganization | null>(null);
+
+  async function onCloneOrgConfirmed(org: AdminOrganization, payload: AdminOrgCreate) {
+    setOrgToClone(null);
+    await run(async () => {
+      await adminCloneOrg(org.id, payload);
+      await loadOrgs();
+      await loadAllUsers();
+    }, t("admin.org_cloned", "הארגון שוכפל"));
   }
 
   // fixes10 §1.2: deletion goes through the two-step modal, not confirm().
@@ -391,6 +404,13 @@ export default function SystemAdminPage() {
                       >
                         {t("admin.impersonate", "התחבר כארגון")}
                       </button>
+                      <button
+                        disabled={busy}
+                        onClick={() => setOrgToClone(org)}
+                        className="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        {t("admin.clone", "שכפל")}
+                      </button>
                       {org.is_active ? (
                         <button
                           disabled={busy}
@@ -523,6 +543,15 @@ export default function SystemAdminPage() {
       <EmailTemplatesCard />
       <SystemSettingsCard />
 
+      {orgToClone && (
+        <CloneOrgModal
+          org={orgToClone}
+          busy={busy}
+          onCancel={() => setOrgToClone(null)}
+          onConfirm={(payload) => onCloneOrgConfirmed(orgToClone, payload)}
+        />
+      )}
+
       {orgToDelete && (
         <DeleteOrgModal
           org={orgToDelete}
@@ -646,6 +675,107 @@ function DeleteUserModal({
             {t("action.cancel", "ביטול")}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Copies an org's entire CRM data set into a brand-new org with a fresh
+ * admin login the caller sets here. The source org is never modified. */
+function CloneOrgModal({
+  org,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  org: AdminOrganization;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: (payload: AdminOrgCreate) => void;
+}) {
+  const { t } = useLocalization();
+  const [form, setForm] = useState<AdminOrgCreate>({
+    organization_name: `${org.name} - Sample`,
+    admin_full_name: "",
+    admin_email: "",
+    admin_username: "sample_admin",
+    admin_password: "",
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md bg-white rounded-xl shadow-xl p-5 space-y-4">
+        <h2 className="text-lg font-bold">{t("admin.clone_org_title", "שכפול ארגון")}</h2>
+        <p className="text-sm text-gray-600">
+          {t(
+            "admin.clone_org_intro",
+            "יוצר ארגון חדש עם עותק מלא של כל הנתונים — אנשי קשר, ביקורים, דירות, בניינים, רשימות בחירה ועוד. הארגון המקורי לא ישתנה.",
+          )}
+        </p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onConfirm(form);
+          }}
+          className="space-y-3"
+        >
+          <input
+            required
+            value={form.organization_name}
+            onChange={(e) => setForm({ ...form, organization_name: e.target.value })}
+            placeholder={t("signup.org_name", "שם הארגון")}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+          />
+          <input
+            required
+            value={form.admin_full_name}
+            onChange={(e) => setForm({ ...form, admin_full_name: e.target.value })}
+            placeholder={t("admin.admin_name", "שם המנהל")}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+          />
+          <input
+            required
+            dir="ltr"
+            type="email"
+            value={form.admin_email}
+            onChange={(e) => setForm({ ...form, admin_email: e.target.value })}
+            placeholder={t("contacts.email", "אימייל")}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+          />
+          <input
+            required
+            dir="ltr"
+            value={form.admin_username}
+            onChange={(e) => setForm({ ...form, admin_username: e.target.value })}
+            placeholder={t("auth.username", "שם משתמש")}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+          />
+          <input
+            required
+            dir="ltr"
+            type="text"
+            value={form.admin_password}
+            onChange={(e) => setForm({ ...form, admin_password: e.target.value })}
+            placeholder={t("auth.password", "סיסמה")}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+          />
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded-md bg-status-magenta text-white px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
+            >
+              {t("admin.clone_org_confirm", "שכפל ארגון")}
+            </button>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+            >
+              {t("action.cancel", "ביטול")}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
