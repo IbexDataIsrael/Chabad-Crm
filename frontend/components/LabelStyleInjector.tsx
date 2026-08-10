@@ -28,18 +28,25 @@ export function LabelStyleInjector() {
   const org = user?.organization;
   if (!org) return null;
 
-  const rules: string[] = [];
-  if (org.label_font_size) rules.push(`font-size: ${org.label_font_size}px !important;`);
-  if (org.label_color) rules.push(`color: ${org.label_color} !important;`);
+  const labelRules: string[] = [];
+  if (org.label_font_size) labelRules.push(`font-size: ${org.label_font_size}px !important;`);
+  if (org.label_color) labelRules.push(`color: ${org.label_color} !important;`);
+
+  const blocks: string[] = [];
+  if (labelRules.length > 0) {
+    blocks.push(`label > span:first-child, dt { ${labelRules.join(" ")} }`);
+  }
+  // fixes42 §3: the font-family choice must apply system-wide, not just to
+  // field labels. `body` already reads `font-family: var(--font-sans)`
+  // (globals.css) and nothing else in the app sets its own font-family, so
+  // overriding the shared variable itself — rather than a label-scoped rule
+  // — is what actually reaches ordinary body text everywhere.
   if (org.label_font_family) {
-    // Keep the app's Hebrew-safe fallback stack so a Latin-only pick (e.g.
-    // Roboto) never breaks Hebrew glyph rendering.
-    rules.push(
-      `font-family: "${org.label_font_family}", var(--font-sans) !important;`,
+    blocks.push(
+      `:root { --font-sans: "${org.label_font_family}", system-ui, "Segoe UI", "Arial Hebrew", "David", sans-serif; }`,
     );
   }
-  if (rules.length === 0) return null;
+  if (blocks.length === 0) return null;
 
-  const css = `label > span:first-child, dt { ${rules.join(" ")} }`;
-  return <style id="label-style-override">{css}</style>;
+  return <style id="label-style-override">{blocks.join(" ")}</style>;
 }

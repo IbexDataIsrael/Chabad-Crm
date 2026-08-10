@@ -42,7 +42,7 @@ function DashboardChrome({ children }: { children: ReactNode }) {
     ...(isShliach
       ? []
       : [{ href: "/dashboard/admin-areas", label: t("nav.admin_areas", "אזור מנהל") }]),
-    { href: "/dashboard/shluchim", label: t("nav.shluchim", "פעילים"), admin: true },
+    // fixes42 §4A: the Shluchim nav entry merged into Users.
     { href: "/dashboard/users", label: t("nav.users", "משתמשים"), admin: true },
     // fixes25 §4: the Visits menu entry is retired (visit logging happens from
     // the contact page); /dashboard/visits still serves by direct URL.

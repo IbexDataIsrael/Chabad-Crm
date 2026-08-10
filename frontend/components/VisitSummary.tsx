@@ -123,6 +123,17 @@ export function VisitSummary({ contactId }: { contactId?: number }) {
               placeholder={t("filter.all_users", "כל המשתמשים")}
               emptyLabel={t("filter.all_users", "כל המשתמשים")}
             />
+            {/* fixes42 §1: a standing, one-click way back to the unfiltered
+                list — not just the hidden "clear" row inside the combobox. */}
+            {assignedFilter && (
+              <button
+                type="button"
+                onClick={() => setAssignedFilter("")}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
+              >
+                {t("filter.show_all_records", "הצג את כל הרשומות")}
+              </button>
+            )}
           </span>
         )}
         {/* fixes38 §1.2.4: admin-only toggle to view org-wide visits instead

@@ -837,6 +837,12 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("loc", "loc.entity.verify", "אימות", "Verification"),
     ("loc", "loc.entity.signup", "הרשמה", "Signup"),
     ("loc", "loc.entity.interaction_category", "קטגוריות אינטראקציה", "Interaction categories"),
+    # --- fixes42: visit-summary "Show All Records", merged Users/Shluchim ---
+    ("filter", "filter.show_all_records", "הצג את כל הרשומות", "Show All Records"),
+    ("filter", "filter.all_roles", "כל התפקידים", "All roles"),
+    ("users", "users.show_inactive", "הצג משתמשים לא פעילים", "Show inactive users"),
+    ("users", "users.role_updated", "התפקיד עודכן", "Role updated"),
+    ("users", "users.login_missing", "אין כניסה למערכת", "No system login"),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)

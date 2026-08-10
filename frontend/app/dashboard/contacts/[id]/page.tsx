@@ -72,7 +72,7 @@ export default function ContactDetailPage() {
     // fixes15 §3.1: return to the page that manages this record — deleting a
     // shliach (a login user) used to incorrectly dump the admin in Contacts.
     router.push(
-      contact?.contact_type === "shliach" ? "/dashboard/shluchim" : "/dashboard/contacts",
+      contact?.contact_type === "shliach" ? "/dashboard/users" : "/dashboard/contacts",
     );
   }
 
@@ -187,7 +187,7 @@ export default function ContactDetailPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         {contact.contact_type === "shliach" ? (
-          <Link href="/dashboard/shluchim" className="text-sm text-gray-500 hover:underline">
+          <Link href="/dashboard/users" className="text-sm text-gray-500 hover:underline">
             {t("page.back_to_shluchim", "← חזרה לפעילים")}
           </Link>
         ) : (

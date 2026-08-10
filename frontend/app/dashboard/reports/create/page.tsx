@@ -637,7 +637,11 @@ function CreateReportsInner() {
           selection/reorder panel is now the exact chip pattern the
           Apartments page's own "Customize Fields" panel uses (fixes39 §3's
           SortableJS + ▲/▼ fallback), over the same expanded column set. */}
-      <div className="bg-white rounded-xl shadow-sm p-5 space-y-3">
+      {/* fixes42 §2: Row 2 — this card is mostly explanatory/helper text
+          (reorder hint, width total, over-100% validation) wrapped around
+          the controls, so it gets a light grey background to visually set
+          it apart from the other cards on the page. */}
+      <div className="bg-gray-100 rounded-xl shadow-sm p-5 space-y-3">
         <h2 className="text-sm font-semibold">
           {t("reports.column_config_title", "עמודות הדוח")}
         </h2>
