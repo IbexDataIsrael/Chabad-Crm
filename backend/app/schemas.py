@@ -443,6 +443,16 @@ class ReportNumberOut(BaseModel):
     created_at: Optional[datetime] = None
 
 
+class ShliachSummary(BaseModel):
+    """fixes43 §4.2/4.3: a shliach contact already covering an area/report
+    number — powers the reassignment conflict warning on the shliach edit
+    form (frontend formats name+last_name via contactFullName)."""
+
+    id: int
+    name: str
+    last_name: Optional[str] = None
+
+
 # --- Areas / Buildings / Apartments ----------------------------------------
 class AreaBase(BaseModel):
     area_name: str
@@ -945,6 +955,62 @@ class ContactPageOut(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class ContactBulkUpdate(BaseModel):
+    """fixes43 §1: reassign "Assigned To" on every contact matching the page's
+    current filters. The filter block mirrors GET /api/contacts/list, so "all
+    contacts currently matching the active filters" resolves to the exact
+    same rows the user sees. `set_assigned_user_id` disambiguates "leave
+    unchanged" from "clear to unassigned" (same pattern as ApartmentBulkUpdate)."""
+
+    # Filters (same semantics as GET /api/contacts/list).
+    pipeline_status: Optional[str] = None
+    contact_type: Optional[str] = None
+    assigned_user_id: Optional[str] = None
+    q: Optional[str] = None
+    area_ids: Optional[list[int]] = None
+    building_ids: Optional[list[int]] = None
+    has_mitzvot: bool = False
+    tzedaka_potential: Optional[str] = None
+    admin_area_ids: Optional[list[int]] = None
+    visit_from: Optional[datetime] = None
+    visit_to: Optional[datetime] = None
+    torah_thought: Optional[list[str]] = None
+    connection_to_rebbe: Optional[str] = None
+    custom_fields: Optional[list[str]] = None
+    picklist: Optional[list[str]] = None
+    # New value — only applied because this endpoint only ever sets one field.
+    new_assigned_user_id: Optional[str] = None
+
+
+class ContactBulkUpdateResult(BaseModel):
+    updated: int
+
+
+class ShliachClearAreasIn(BaseModel):
+    """fixes43 §3.4: "ניקוי שיבוצים" — clear the area assignment from every
+    shliach contact in the given id set (the Users page's current filtered
+    view)."""
+
+    contact_ids: list[int]
+
+
+class ShliachClearAreasResult(BaseModel):
+    updated: int
+
+
+class ContactShliachHistoryOut(BaseModel):
+    """fixes43 §3.1: one field-level change on a shliach's coverage data."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    field: str
+    old_value: Optional[str] = None
+    new_value: Optional[str] = None
+    editor_name: Optional[str] = None
+    changed_at: Optional[datetime] = None
 
 
 # fixes25: the standalone Interaction schemas are gone — interactions are a

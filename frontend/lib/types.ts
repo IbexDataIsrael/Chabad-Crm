@@ -256,6 +256,11 @@ export interface ApartmentBulkUpdateResult {
   updated: number;
 }
 
+/** fixes43 §1: outcome of a bulk contact "Assigned To" update. */
+export interface ContactBulkUpdateResult {
+  updated: number;
+}
+
 /** The "[number] [street]" segment of a formatted address (first comma part). */
 export function streetPart(address: string | null | undefined): string | null {
   if (!address) return null;
@@ -431,6 +436,24 @@ export interface UserSummary {
 /** Composed display name: "<last> <first>" (falls back to whichever exists). */
 export function contactFullName(c: { name: string; last_name?: string | null }): string {
   return [c.last_name, c.name].filter(Boolean).join(" ");
+}
+
+/** fixes43 §4.2/4.3: a shliach already covering an area/report number —
+ *  feeds the reassignment conflict warning on the shliach edit form. */
+export interface ShliachSummary {
+  id: number;
+  name: string;
+  last_name: string | null;
+}
+
+/** fixes43 §3.1: one field-level change on a shliach's coverage data. */
+export interface ContactShliachHistory {
+  id: number;
+  field: string;
+  old_value: string | null;
+  new_value: string | null;
+  editor_name: string | null;
+  changed_at: string | null;
 }
 
 /**

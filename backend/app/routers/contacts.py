@@ -10,6 +10,7 @@ fixes25: the community checklist (Mivtzoim), interactions and custom-field
 values moved to the visit level — the related sub-resources live on visits.
 """
 import datetime
+import json
 import logging
 from typing import Literal, Optional
 
@@ -23,16 +24,21 @@ from app.core.email import send_shliach_welcome
 from app.core.geocode import geocode_address
 from app.core.security import hash_password
 from app.database import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, require_admin
 from app.picklist_utils import validate_picklist_value
 from app.schemas import (
+    ContactBulkUpdate,
+    ContactBulkUpdateResult,
     ContactCreate,
     ContactDetailOut,
     ContactOut,
     ContactPageOut,
+    ContactShliachHistoryOut,
     ContactUpdate,
     MekuravOut,
     ReminderOut,
+    ShliachClearAreasIn,
+    ShliachClearAreasResult,
     ShliachOut,
     SignificantDateCreate,
     SignificantDateOut,
@@ -467,6 +473,34 @@ def _validate_area(area_id: int, org_id: int, db: Session) -> None:
     )
     if not ok:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "area_id does not exist")
+
+
+def _log_shliach_change(
+    db: Session,
+    org_id: int,
+    shliach: models.ContactShliach,
+    field: str,
+    old_value,
+    new_value,
+    editor_id: int,
+) -> None:
+    """fixes43 §3.1: record a field-level shliach coverage change (skips
+    no-ops). List values (area_ids/report_number_ids) are stored as sorted
+    JSON so unordered-but-equal selections don't log a spurious change."""
+    old_s = json.dumps(sorted(old_value)) if isinstance(old_value, list) else old_value
+    new_s = json.dumps(sorted(new_value)) if isinstance(new_value, list) else new_value
+    if old_s == new_s:
+        return
+    db.add(
+        models.ContactShliachEditHistory(
+            organization_id=org_id,
+            contact_shliach_id=shliach.id,
+            field=field,
+            old_value=old_s,
+            new_value=new_s,
+            editor_id=editor_id,
+        )
+    )
 
 
 def _set_shliach_areas(
@@ -1064,6 +1098,77 @@ def list_tzedaka_values(
     return sorted({r[0].strip() for r in rows if r[0] and r[0].strip()})
 
 
+@router.post("/bulk-update", response_model=ContactBulkUpdateResult)
+def bulk_update_contacts(
+    payload: ContactBulkUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """fixes43 §1: reassign "Assigned To" on every contact matching the page's
+    current filters — mirrors the apartments bulk-update pattern (fixes23 §3):
+    the filter block is identical to GET /api/contacts/list, so "everything
+    currently on screen" is exactly what this touches. A shliach cannot
+    reassign ownership (same guard as the single-record PATCH)."""
+    if current_user.role == "shliach":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "shliach users cannot reassign contacts"
+        )
+    if payload.new_assigned_user_id is not None:
+        _validate_fks(
+            {"assigned_user_id": payload.new_assigned_user_id},
+            current_user.organization_id,
+            db,
+        )
+    query = _contacts_query(
+        db, current_user, payload.pipeline_status, payload.contact_type,
+        payload.assigned_user_id,
+        q=payload.q, area_ids=payload.area_ids, building_ids=payload.building_ids,
+        has_mitzvot=payload.has_mitzvot,
+        tzedaka_potential=payload.tzedaka_potential,
+        admin_area_ids=payload.admin_area_ids,
+        visit_from=payload.visit_from, visit_to=payload.visit_to,
+        torah_thought=payload.torah_thought,
+        connection_to_rebbe=payload.connection_to_rebbe,
+        custom_fields=payload.custom_fields, picklist=payload.picklist,
+    )
+    contacts = query.all()
+    for c in contacts:
+        c.assigned_user_id = payload.new_assigned_user_id
+    db.commit()
+    return ContactBulkUpdateResult(updated=len(contacts))
+
+
+@router.post("/shliach/clear-areas", response_model=ShliachClearAreasResult)
+def clear_shliach_areas(
+    payload: ShliachClearAreasIn,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    """fixes43 §3.4: "ניקוי שיבוצים" — clear the area assignment from every
+    shliach contact in `contact_ids` (the Users page's current filtered
+    view). Admin-only, irreversible (the frontend confirms before calling)."""
+    shluchim = (
+        db.query(models.ContactShliach)
+        .join(models.Contact, models.Contact.id == models.ContactShliach.contact_id)
+        .filter(
+            models.Contact.organization_id == admin.organization_id,
+            models.ContactShliach.contact_id.in_(payload.contact_ids),
+        )
+        .all()
+    )
+    updated = 0
+    for shliach in shluchim:
+        deleted = (
+            db.query(models.ContactShliachArea)
+            .filter(models.ContactShliachArea.contact_shliach_id == shliach.id)
+            .delete(synchronize_session=False)
+        )
+        if deleted:
+            updated += 1
+    db.commit()
+    return ShliachClearAreasResult(updated=updated)
+
+
 @router.post("", response_model=ContactDetailOut, status_code=status.HTTP_201_CREATED)
 def create_contact(
     payload: ContactCreate,
@@ -1183,6 +1288,49 @@ def get_contact(
     return _build_detail(contact, db)
 
 
+@router.get(
+    "/{contact_id}/shliach-history", response_model=list[ContactShliachHistoryOut]
+)
+def shliach_edit_history(
+    contact_id: int,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    """fixes43 §3.1: field-level edit history for a shliach's coverage data
+    (notes/area_ids/report_number_ids), newest first. Admin-only, same as the
+    Apartments module's history view."""
+    contact = (
+        db.query(models.Contact)
+        .filter(
+            models.Contact.id == contact_id,
+            models.Contact.organization_id == admin.organization_id,
+            models.Contact.contact_type == "shliach",
+        )
+        .first()
+    )
+    if not contact or not contact.shliach:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Shliach contact not found")
+    rows = (
+        db.query(models.ContactShliachEditHistory)
+        .filter(
+            models.ContactShliachEditHistory.contact_shliach_id == contact.shliach.id
+        )
+        .order_by(models.ContactShliachEditHistory.changed_at.desc())
+        .all()
+    )
+    return [
+        ContactShliachHistoryOut(
+            id=r.id,
+            field=r.field,
+            old_value=r.old_value,
+            new_value=r.new_value,
+            editor_name=r.editor.full_name if r.editor else None,
+            changed_at=r.changed_at,
+        )
+        for r in rows
+    ]
+
+
 # PATCH is an alias (fixes26 §2): the handler is already partial via
 # exclude_unset, and the inline-editing autosave sends one field at a time.
 @router.put("/{contact_id}", response_model=ContactDetailOut)
@@ -1253,7 +1401,12 @@ def update_contact(
             )
             db.flush()
         if "notes" in sh_sent:
+            old_notes = contact.shliach.notes
             contact.shliach.notes = sh_data.notes
+            _log_shliach_change(
+                db, org_id, contact.shliach, "notes",
+                old_notes, sh_data.notes, current_user.id,
+            )
         if contact.shliach.user_id is None:
             user = _provision_shliach_user(
                 db, org_id, contact, password=sh_data.password
@@ -1267,11 +1420,21 @@ def update_contact(
             if login_user:
                 login_user.password_hash = hash_password(sh_data.password)
         if "report_number_ids" in sh_sent:
+            old_rn_ids = [rn.report_number_id for rn in contact.shliach.report_numbers]
             _set_shliach_report_numbers(
                 db, contact.shliach, sh_data.report_number_ids, org_id
             )
+            _log_shliach_change(
+                db, org_id, contact.shliach, "report_number_ids",
+                old_rn_ids, sh_data.report_number_ids, current_user.id,
+            )
         if "area_ids" in sh_sent:
+            old_area_ids = [a.area_id for a in contact.shliach.areas]
             _set_shliach_areas(db, contact.shliach, sh_data.area_ids, org_id)
+            _log_shliach_change(
+                db, org_id, contact.shliach, "area_ids",
+                old_area_ids, sh_data.area_ids, current_user.id,
+            )
 
     # Keep the shliach's *login user* in sync with the contact. The user's
     # full_name (shown in their own session) is a separate field from the

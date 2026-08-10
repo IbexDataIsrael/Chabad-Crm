@@ -116,6 +116,9 @@ export default function UsersPage() {
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<OrgUser | null>(null);
+  // fixes43 §3.3: the linked contact id for whichever row is being edited —
+  // powers the "view contact" link inside the merged open/edit form.
+  const [editingContactId, setEditingContactId] = useState<number | null>(null);
   const [busy, setBusy] = useState(true);
   const [recreatingKey, setRecreatingKey] = useState<string | null>(null);
 
@@ -175,7 +178,7 @@ export default function UsersPage() {
 
   const roleLabel = (role: string) =>
     role === "admin"
-      ? t("users.role_admin", "מנהל")
+      ? t("users.role_admin", "מנהל מערכת")
       : role === "shliach"
         ? t("users.role_shliach", "פעיל")
         : t("users.role_staff", "משתמש מוגבל");
@@ -335,6 +338,42 @@ export default function UsersPage() {
     }
   }
 
+  // fixes43 §3.4: "ניקוי שיבוצים" — clear the area assignment from every
+  // shliach row in the current filtered view (role/area/building/inactive
+  // filters), not just the current pagination slice — same "everything
+  // currently matching the filters" scope as the bulk-edit endpoints.
+  async function clearAssignments() {
+    const ok = await confirmDialog({
+      message: t(
+        "users.clear_assignments_confirm",
+        "אתה בטוח שברצונך למחוק את כל השיבוצים של הפעילים? פעולה זו בלתי הפיכה",
+      ),
+    });
+    if (!ok) return;
+    const contactIds = sorted
+      .filter((r) => r.role === "shliach" && r.contactId != null)
+      .map((r) => r.contactId as number);
+    if (contactIds.length === 0) {
+      toastError(t("users.no_assignments_to_clear", "אין שיבוצים לניקוי בתצוגה הנוכחית"));
+      return;
+    }
+    try {
+      const res = await apiFetch<{ updated: number }>(
+        "/api/contacts/shliach/clear-areas",
+        { method: "POST", body: JSON.stringify({ contact_ids: contactIds }) },
+      );
+      await reload();
+      success(
+        t("users.assignments_cleared", "השיבוצים נוקו עבור {n} פעילים").replace(
+          "{n}",
+          String(res.updated),
+        ),
+      );
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+    }
+  }
+
   const buildingOptions = buildings
     .filter((b) => areaIds.length === 0 || (b.area_id != null && areaIds.includes(b.area_id)))
     .map((b) => ({
@@ -344,7 +383,7 @@ export default function UsersPage() {
     }));
 
   const roleOptions: { id: Role; label: string }[] = [
-    { id: "admin", label: t("users.role_admin", "מנהל") },
+    { id: "admin", label: t("users.role_admin", "מנהל מערכת") },
     { id: "staff", label: t("users.role_staff", "משתמש מוגבל") },
     { id: "shliach", label: t("users.role_shliach", "פעיל") },
   ];
@@ -368,6 +407,14 @@ export default function UsersPage() {
             className="rounded-md border border-gray-300 text-gray-600 px-4 py-2 text-sm font-medium hover:bg-gray-50"
           >
             ⚙ {t("columns.configure", "התאמת עמודות")}
+          </button>
+          {/* fixes43 §3.4: bulk-clear area assignments from the filtered view. */}
+          <button
+            type="button"
+            onClick={clearAssignments}
+            className="rounded-md border border-status-darkred text-status-darkred px-4 py-2 text-sm font-medium hover:bg-status-darkred/10"
+          >
+            {t("users.clear_assignments", "ניקוי שיבוצים")}
           </button>
           <Link
             href="/dashboard/contacts/new-shliach"
@@ -403,9 +450,14 @@ export default function UsersPage() {
       {editing && (
         <UserForm
           user={editing}
-          onClose={() => setEditing(null)}
+          contactId={editingContactId}
+          onClose={() => {
+            setEditing(null);
+            setEditingContactId(null);
+          }}
           onSaved={async () => {
             setEditing(null);
+            setEditingContactId(null);
             await reload();
             success(t("users.updated", "המשתמש עודכן"));
           }}
@@ -646,7 +698,7 @@ export default function UsersPage() {
                         onChange={(e) => changeRole(r, e.target.value as "admin" | "staff")}
                       >
                         <option value="staff">{t("users.role_staff", "משתמש מוגבל")}</option>
-                        <option value="admin">{t("users.role_admin", "מנהל")}</option>
+                        <option value="admin">{t("users.role_admin", "מנהל מערכת")}</option>
                       </select>
                     )}
                   </td>
@@ -656,34 +708,39 @@ export default function UsersPage() {
                     </td>
                   ))}
                   <td className="px-4 py-2 text-end whitespace-nowrap">
-                    {r.contactId != null && (
-                      <Link
-                        href={`/dashboard/contacts/${r.contactId}`}
+                    {/* fixes43 §3.3: one unified "open/edit" action — a real
+                        user row opens the inline form (role/email/password),
+                        which itself carries a link to the linked contact when
+                        one exists; a contact-only row (no login) still just
+                        links straight to the contact page. */}
+                    {r.kind === "user" ? (
+                      <button
+                        onClick={() => {
+                          setEditing(r.raw);
+                          setEditingContactId(r.contactId);
+                          setAdding(false);
+                        }}
                         className="text-sm text-status-magenta hover:underline me-3"
                       >
                         {t("action.open_edit", "פתח / עריכה ›")}
-                      </Link>
-                    )}
-                    {r.kind === "user" && (
-                      <>
-                        <button
-                          onClick={() => {
-                            setEditing(r.raw);
-                            setAdding(false);
-                          }}
+                      </button>
+                    ) : (
+                      r.contactId != null && (
+                        <Link
+                          href={`/dashboard/contacts/${r.contactId}`}
                           className="text-sm text-status-magenta hover:underline me-3"
                         >
-                          {t("action.edit", "ערוך")}
-                        </button>
-                        {me?.id !== r.id && (
-                          <button
-                            onClick={() => remove(r)}
-                            className="text-sm text-status-darkred hover:underline"
-                          >
-                            {t("action.delete", "מחק")}
-                          </button>
-                        )}
-                      </>
+                          {t("action.open_edit", "פתח / עריכה ›")}
+                        </Link>
+                      )
+                    )}
+                    {r.kind === "user" && me?.id !== r.id && (
+                      <button
+                        onClick={() => remove(r)}
+                        className="text-sm text-status-darkred hover:underline"
+                      >
+                        {t("action.delete", "מחק")}
+                      </button>
                     )}
                   </td>
                 </tr>
@@ -718,13 +775,19 @@ export default function UsersPage() {
   );
 }
 
-/** Create (no `user`) or edit (with `user`) an org user, role included. */
+/** Create (no `user`) or edit (with `user`) an org user, role included.
+ *  fixes43 §3.3: `contactId`, when the edited user has a linked contact
+ *  (shliach), surfaces a "view contact" link — this form is now the single
+ *  "open/edit" action for a Users row, merging what used to be two separate
+ *  actions (edit user vs. open contact). */
 function UserForm({
   user,
+  contactId,
   onClose,
   onSaved,
 }: {
   user?: OrgUser;
+  contactId?: number | null;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
@@ -784,9 +847,19 @@ function UserForm({
 
   return (
     <form onSubmit={save} className="bg-white rounded-xl shadow-sm p-4 space-y-3">
-      <h3 className="font-medium">
-        {user ? `${t("action.edit", "ערוך")} — ${user.full_name}` : t("users.add_user", "משתמש חדש")}
-      </h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="font-medium">
+          {user ? `${t("action.edit", "ערוך")} — ${user.full_name}` : t("users.add_user", "משתמש חדש")}
+        </h3>
+        {contactId != null && (
+          <Link
+            href={`/dashboard/contacts/${contactId}`}
+            className="text-sm text-status-magenta hover:underline whitespace-nowrap"
+          >
+            {t("users.view_contact", "צפייה באיש הקשר ›")}
+          </Link>
+        )}
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block space-y-1">
           <span className="block text-sm font-medium">{t("users.full_name", "שם מלא")}</span>
@@ -818,7 +891,7 @@ function UserForm({
               disabled={isSelf}
             >
               <option value="staff">{t("users.role_staff", "משתמש מוגבל")}</option>
-              <option value="admin">{t("users.role_admin", "מנהל")}</option>
+              <option value="admin">{t("users.role_admin", "מנהל מערכת")}</option>
             </select>
           )}
           {isSelf && (

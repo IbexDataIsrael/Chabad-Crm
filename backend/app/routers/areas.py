@@ -13,7 +13,15 @@ from app.core.geo import point_in_polygon, polygon_ring
 from app.core.shliach import resolve_shliach
 from app.database import get_db
 from app.deps import get_current_user, require_admin
-from app.schemas import AreaCreate, AreaOut, AreaShliachAdd, AreaUpdate, BuildingOut, ContactOut
+from app.schemas import (
+    AreaCreate,
+    AreaOut,
+    AreaShliachAdd,
+    AreaUpdate,
+    BuildingOut,
+    ContactOut,
+    ShliachSummary,
+)
 
 router = APIRouter(prefix="/api/areas", tags=["areas"])
 
@@ -58,6 +66,37 @@ def list_areas(
             return []
         query = query.filter(models.Area.id.in_(area_ids))
     return query.order_by(models.Area.area_name).all()
+
+
+@router.get("/shliach-assignments", response_model=dict[int, list[ShliachSummary]])
+def area_shliach_assignments(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """fixes43 §4.2: every area's currently-covering shliach(im), keyed by
+    area_id — powers the reassignment conflict warning on the shliach edit
+    form (a single query instead of one round trip per area)."""
+    rows = (
+        db.query(
+            models.ContactShliachArea.area_id,
+            models.Contact.id,
+            models.Contact.name,
+            models.Contact.last_name,
+        )
+        .join(
+            models.ContactShliach,
+            models.ContactShliach.id == models.ContactShliachArea.contact_shliach_id,
+        )
+        .join(models.Contact, models.Contact.id == models.ContactShliach.contact_id)
+        .filter(models.Contact.organization_id == current_user.organization_id)
+        .all()
+    )
+    result: dict[int, list[ShliachSummary]] = {}
+    for area_id, contact_id, name, last_name in rows:
+        result.setdefault(area_id, []).append(
+            ShliachSummary(id=contact_id, name=name, last_name=last_name)
+        )
+    return result
 
 
 @router.post("", response_model=AreaOut, status_code=status.HTTP_201_CREATED)

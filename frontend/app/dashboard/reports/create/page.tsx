@@ -521,6 +521,10 @@ function CreateReportsInner() {
               textColor: 255,
               halign: "right",
             },
+            // fixes43 §2: every 2nd body row (Row 2, Row 4, …) gets a light
+            // grey background so it reads distinctly from Row 1 — jspdf-
+            // autotable's built-in zebra-stripe mechanism.
+            alternateRowStyles: { fillColor: [245, 245, 245] },
             columnStyles,
           });
           y =

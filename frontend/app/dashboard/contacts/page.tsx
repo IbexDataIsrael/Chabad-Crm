@@ -35,6 +35,7 @@ import {
   type Area,
   type Building,
   type Contact,
+  type ContactBulkUpdateResult,
   type ContactPage,
   type CustomFieldDefinition,
   type PicklistField,
@@ -69,7 +70,8 @@ const DEFAULT_COLUMNS: ColumnKey[] = ["phone", "owner", "created"];
 
 // fixes34 §1.1: which optional columns render an inline editor — their cells
 // must stop the row's navigate-onClick from swallowing the edit click.
-const EDITABLE_COLUMN_KEYS = new Set<ColumnKey>(["phone", "status", "priority", "address"]);
+// fixes43 §1: "owner" (Assigned To) joins the set.
+const EDITABLE_COLUMN_KEYS = new Set<ColumnKey>(["phone", "status", "priority", "address", "owner"]);
 
 /** The mitzvah checkbox filters (fixes17 §2.2); fixes25: the flags live on
  * visits — a contact matches through any of its visits. fixes27 §1: the org's
@@ -87,6 +89,8 @@ export default function ContactsPage() {
   const { success, error: toastError } = useToast();
   // fixes30 §2a: which contact the quick add-visit modal is open for.
   const [visitFor, setVisitFor] = useState<Contact | null>(null);
+  // fixes43 §1: bulk "Assigned To" edit modal.
+  const [bulkOpen, setBulkOpen] = useState(false);
   const { isFieldVisible: vis, loading: fieldsLoading } = useFieldSettings();
   // The color has no column of its own (fixes7 §8A) — it tints the whole row.
   const showColor = vis("contacts.color_tag");
@@ -598,6 +602,32 @@ export default function ContactsPage() {
     />
   );
 
+  // fixes43 §1: inline "Assigned To" edit from the list row — same shape as
+  // ContactView's detail-page assignedNode; ownership stays read-only for a
+  // shliach viewer (server-side PATCH silently drops it for them too).
+  const inlineOwnerCell = (c: Contact) => (
+    <InlineEdit<string | null>
+      value={c.assigned_user_id}
+      display={ownerName(c.assigned_user_id)}
+      commitOnBlur={false}
+      onSave={(v) => saveField(c, { assigned_user_id: v })}
+      editor={(draft, _setDraft, commit) => (
+        <select
+          className={inputClass}
+          value={draft ?? ""}
+          onChange={(e) => commit(e.target.value === "" ? null : e.target.value)}
+        >
+          <option value="">—</option>
+          {users.map((u) => (
+            <option key={u.guid} value={u.guid}>
+              {u.full_name}
+            </option>
+          ))}
+        </select>
+      )}
+    />
+  );
+
   const inlineStatusCell = (c: Contact) => (
     <InlineEdit<string | null>
       value={c.pipeline_status ?? null}
@@ -661,7 +691,7 @@ export default function ContactsPage() {
               : t("validation.phone_hint", PHONE_HINT),
         });
       case "owner":
-        return ownerName(c.assigned_user_id);
+        return isShliach ? ownerName(c.assigned_user_id) : inlineOwnerCell(c);
       case "admin_area":
         return c.admin_area_name ?? "—";
       case "building":
@@ -747,6 +777,18 @@ export default function ContactsPage() {
           >
             ✉ {t("action.bulk_email", "מייל לכל התוצאות")}
           </button>
+          {/* fixes43 §1: bulk "Assigned To" edit — a shliach can't reassign
+              ownership, same guard as the inline per-row edit. */}
+          {!isShliach && (
+            <button
+              type="button"
+              onClick={() => setBulkOpen(true)}
+              disabled={total === 0}
+              className="rounded-md border border-status-magenta text-status-magenta px-4 py-2 text-sm font-medium hover:bg-status-magenta/10 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              ✎ {t("bulkedit.open", "עריכה מרובה")}
+            </button>
+          )}
           {/* fixes10 §3.3: shliach users create (their own) contacts too. */}
           <Link
             href="/dashboard/contacts/new"
@@ -1182,6 +1224,46 @@ export default function ContactsPage() {
         </div>
       )}
 
+      {/* fixes43 §1: bulk "Assigned To" edit — filters snapshot mirrors
+          listParams() exactly, so "everything currently on screen" is what
+          this touches, same guarantee as the apartments bulk editor. */}
+      {bulkOpen && (
+        <ContactBulkEditModal
+          total={total}
+          users={users}
+          filters={{
+            contact_type: "mekurav",
+            pipeline_status: effectiveStatus || undefined,
+            assigned_user_id: assignedFilter || undefined,
+            q: debouncedQ.trim() || undefined,
+            area_ids: areaIds,
+            building_ids: buildingIds,
+            admin_area_ids: effectiveAdminAreaIds,
+            custom_fields: effectiveMitzvot.map((m) => m.slice(CF_PREFIX.length)),
+            tzedaka_potential: tzedaka.trim() || undefined,
+            torah_thought: effectiveTorah,
+            connection_to_rebbe: effectiveRebbe.trim() || undefined,
+            visit_from: visitFrom || undefined,
+            visit_to: visitTo || undefined,
+            picklist: Object.entries(effectiveCustomPicklistFilters).flatMap(
+              ([fieldKey, values]) => values.map((v) => `${fieldKey}:${v}`),
+            ),
+          }}
+          onClose={() => setBulkOpen(false)}
+          onDone={async () => {
+            setBulkOpen(false);
+            const params = listParams();
+            params.set("sort", sort);
+            params.set("dir", dir);
+            params.set("page", String(page));
+            params.set("page_size", String(pageSize));
+            const res = await apiFetch<ContactPage>(`/api/contacts/list?${params}`);
+            setContacts(res.items);
+            setTotal(res.total);
+          }}
+        />
+      )}
+
       <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           {/* Data columns are content-width (w-px + nowrap); the empty trailing
@@ -1475,5 +1557,135 @@ function ContactNameCell({
         ✎
       </button>
     </span>
+  );
+}
+
+/** The active-filter snapshot passed to the bulk editor — mirrors the JSON
+ *  body fields ContactBulkUpdate accepts (fixes43 §1), which in turn mirror
+ *  GET /api/contacts/list's query params. */
+type ContactBulkFilters = {
+  contact_type?: string;
+  pipeline_status?: string;
+  assigned_user_id?: string;
+  q?: string;
+  area_ids?: number[];
+  building_ids?: number[];
+  admin_area_ids?: number[];
+  custom_fields?: string[];
+  tzedaka_potential?: string;
+  torah_thought?: string[];
+  connection_to_rebbe?: string;
+  visit_from?: string;
+  visit_to?: string;
+  picklist?: string[];
+};
+
+/** Bulk contact editor (fixes43 §1): reassign "Assigned To" on every contact
+ *  matching the page's current filters, in one request — same shape as the
+ *  apartments BulkEditModal, but a single field so there's no per-field
+ *  "update this field" toggle. */
+function ContactBulkEditModal({
+  total,
+  users,
+  filters,
+  onClose,
+  onDone,
+}: {
+  total: number;
+  users: UserSummary[];
+  filters: ContactBulkFilters;
+  onClose: () => void;
+  onDone: () => Promise<void>;
+}) {
+  const { t } = useLocalization();
+  const { success, error: toastError } = useToast();
+  const [assignedUserId, setAssignedUserId] = useState(""); // "" = unassign
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function apply() {
+    setError("");
+    setBusy(true);
+    try {
+      const res = await apiFetch<ContactBulkUpdateResult>(
+        "/api/contacts/bulk-update",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            ...filters,
+            new_assigned_user_id: assignedUserId || null,
+          }),
+        },
+      );
+      success(
+        t("bulkedit.contacts_result", "{n} אנשי קשר עודכנו").replace(
+          "{n}",
+          String(res.updated),
+        ),
+      );
+      await onDone();
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה");
+      setError(msg);
+      toastError(msg);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-lg bg-white rounded-xl shadow-xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div>
+          <h2 className="text-lg font-bold">
+            {t("bulkedit.contacts_title", "עריכה מרובה של אנשי קשר")}
+          </h2>
+          <p className="text-sm text-gray-500">
+            {t(
+              "bulkedit.contacts_intro",
+              "השינויים יחולו על כל {total} אנשי הקשר התואמים לסינון הנוכחי.",
+            ).replace("{total}", String(total))}
+          </p>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-sm font-medium">
+            {t("contacts.assigned_user_id", "משויך ל")}
+          </label>
+          <select
+            className={`${inputClass} w-full`}
+            value={assignedUserId}
+            onChange={(e) => setAssignedUserId(e.target.value)}
+          >
+            <option value="">—</option>
+            {users.map((u) => (
+              <option key={u.guid} value={u.guid}>
+                {u.full_name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {error && <p className="text-sm text-status-darkred">{error}</p>}
+        <div className="flex items-center gap-2 pt-1">
+          <button
+            type="button"
+            onClick={apply}
+            disabled={busy || total === 0}
+            className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
+          >
+            {busy ? t("action.saving", "שומר…") : t("bulkedit.apply", "החל שינויים")}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+          >
+            {t("action.cancel", "ביטול")}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

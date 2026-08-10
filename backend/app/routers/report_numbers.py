@@ -11,7 +11,12 @@ from sqlalchemy.orm import Session
 from app import models
 from app.database import get_db
 from app.deps import get_current_user, require_admin
-from app.schemas import ReportNumberCreate, ReportNumberOut, ReportNumberUpdate
+from app.schemas import (
+    ReportNumberCreate,
+    ReportNumberOut,
+    ReportNumberUpdate,
+    ShliachSummary,
+)
 
 router = APIRouter(prefix="/api/report-numbers", tags=["report-numbers"])
 
@@ -41,6 +46,39 @@ def list_report_numbers(
         .order_by(models.ReportNumber.name)
         .all()
     )
+
+
+@router.get("/shliach-assignments", response_model=dict[int, list[ShliachSummary]])
+def report_number_shliach_assignments(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """fixes43 §4.3: every report number's currently-covering shliach(im),
+    keyed by report_number_id — powers the reassignment conflict warning on
+    the shliach edit form (a single query instead of one round trip per
+    report number)."""
+    rows = (
+        db.query(
+            models.ReportNumberContactShliach.report_number_id,
+            models.Contact.id,
+            models.Contact.name,
+            models.Contact.last_name,
+        )
+        .join(
+            models.ContactShliach,
+            models.ContactShliach.id
+            == models.ReportNumberContactShliach.contact_shliach_id,
+        )
+        .join(models.Contact, models.Contact.id == models.ContactShliach.contact_id)
+        .filter(models.Contact.organization_id == current_user.organization_id)
+        .all()
+    )
+    result: dict[int, list[ShliachSummary]] = {}
+    for report_number_id, contact_id, name, last_name in rows:
+        result.setdefault(report_number_id, []).append(
+            ShliachSummary(id=contact_id, name=name, last_name=last_name)
+        )
+    return result
 
 
 @router.post("", response_model=ReportNumberOut, status_code=status.HTTP_201_CREATED)

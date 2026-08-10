@@ -425,7 +425,9 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("users", "users.title", "ניהול משתמשים", "User management"),
     ("users", "users.intro", "הוסף וערוך משתמשים בארגון. מנהל מקבל הרשאות מלאות; משתמש מוגבל רואה אנשי קשר בלבד.", "Add and edit the organization's users. An admin gets full privileges; a restricted user only sees contacts."),
     ("users", "users.add_user", "משתמש חדש", "New user"),
-    ("users", "users.role_admin", "מנהל", "Admin"),
+    # fixes43 §5.2: "admin" is more precisely "system admin" — see the
+    # LOCALIZATION_RENAMES entry below for existing DB rows.
+    ("users", "users.role_admin", "מנהל מערכת", "System admin"),
     ("users", "users.role_staff", "משתמש מוגבל", "Restricted user"),
     ("users", "users.role_shliach", "פעיל", "Activist"),
     ("users", "users.role_label", "תפקיד", "Role"),
@@ -439,6 +441,13 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("users", "users.self_guard", "לא ניתן לשנות או למחוק את עצמך", "You cannot change or delete yourself"),
     ("users", "users.status_disabled", "מושבת", "Disabled"),
     ("users", "users.you", "אני", "me"),
+    # --- fixes43 §3.4: bulk-clear area assignments ---
+    ("users", "users.clear_assignments", "ניקוי שיבוצים", "Clear assignments"),
+    ("users", "users.clear_assignments_confirm", "אתה בטוח שברצונך למחוק את כל השיבוצים של הפעילים? פעולה זו בלתי הפיכה", "Are you sure you want to delete all active placements? This action is irreversible."),
+    ("users", "users.no_assignments_to_clear", "אין שיבוצים לניקוי בתצוגה הנוכחית", "No assignments to clear in the current view"),
+    ("users", "users.assignments_cleared", "השיבוצים נוקו עבור {n} פעילים", "Assignments cleared for {n} activists"),
+    # --- fixes43 §3.3: merged Users row action (open/edit) ---
+    ("users", "users.view_contact", "צפייה באיש הקשר ›", "View contact ›"),
     # --- fixes7 §2/§3: buildings, floors ---
     ("buildings", "buildings.floors", "קומות", "Floors"),
     ("buildings", "buildings.num_floors", "מספר קומות", "Number of floors"),
@@ -678,6 +687,15 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("filter", "filter.select_all_shown", "בחר את המוצגים", "Select shown"),
     ("filter", "filter.search_buildings", "חיפוש בניין…", "Search building…"),
     ("filter", "filter.search_report_numbers", "חיפוש מספר דוח…", "Search report number…"),
+    # --- fixes43 §4.1: searchable area/report-number pickers on the shliach form ---
+    ("filter", "filter.search_areas", "חיפוש אזור…", "Search area…"),
+    ("contact_shliach", "contact_shliach.no_areas_selected", "לא נבחרו אזורים", "No areas selected"),
+    ("contact_shliach", "contact_shliach.no_report_numbers_selected", "לא נבחרו מספרי דוח", "No report numbers selected"),
+    # --- fixes43 §4.2/4.3: area/report-number reassignment conflict warnings ---
+    ("contact_shliach", "contact_shliach.area_conflict_warning", "האזור הזה משוייך לפעיל אחר, האם ברצונך לשייך כאן פעיל נוסף?", "This area is assigned to another operator. Do you want to assign another operator here?"),
+    ("contact_shliach", "contact_shliach.report_number_conflict_warning", "מספר דוח הזה משוייך לפעיל אחר, האם ברצונך לשייך כאן פעיל נוסף?", "This report number is assigned to another operator. Do you want to assign another operator here?"),
+    # --- fixes43 §3.1: shliach coverage edit-history ---
+    ("contact_shliach", "contact_shliach.history", "היסטוריית שינויים", "Edit history"),
     # --- fixes23 §3: apartments bulk editing ---
     ("bulkedit", "bulkedit.open", "עריכה מרובה", "Bulk edit"),
     ("bulkedit", "bulkedit.open_hint", "עריכה מרובה של כל הדירות המסוננות", "Bulk-edit all filtered apartments"),
@@ -690,6 +708,10 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("bulkedit", "bulkedit.pick_field", "יש לבחור לפחות שדה אחד לעדכון", "Select at least one field to update"),
     ("bulkedit", "bulkedit.apply", "החל שינויים", "Apply changes"),
     ("bulkedit", "bulkedit.result", "{n} דירות עודכנו", "{n} apartments updated"),
+    # --- fixes43 §1: contacts bulk "Assigned To" editing ---
+    ("bulkedit", "bulkedit.contacts_title", "עריכה מרובה של אנשי קשר", "Bulk edit contacts"),
+    ("bulkedit", "bulkedit.contacts_intro", "השינויים יחולו על כל {total} אנשי הקשר התואמים לסינון הנוכחי.", "Changes apply to all {total} contacts matching the current filters."),
+    ("bulkedit", "bulkedit.contacts_result", "{n} אנשי קשר עודכנו", "{n} contacts updated"),
     # --- fixes24: reports menu + create-reports page (PDF) ---
     ("reports", "reports.menu_title", "דוחות", "Reports"),
     ("reports", "reports.create_reports", "יצירת דוחות", "Create Reports"),
@@ -1003,6 +1025,10 @@ LOCALIZATION_RENAMES: dict[str, tuple[set, str, set, str]] = {
         "הגדירו שדה מותאם אישית עבור אנשי קשר, פעילים, ביקורים או דירות — מכל סוג: טקסט, מספר, תיבת סימון, תאריך או רשימת בחירה.",
         {"Each field is a checkbox + note logged on each visit. e.g. Hanukkah party."},
         "Define a custom field for contacts, activists, visits or apartments — any type: text, number, checkbox, date or select.",
+    ),
+    # fixes43 §5.2: "admin" is more precisely "system admin".
+    "users.role_admin": (
+        {"מנהל"}, "מנהל מערכת", {"Admin"}, "System admin",
     ),
 }
 
@@ -1351,6 +1377,27 @@ def _seed_sample_data(db: Session, org: models.Organization, admin: models.User)
     db.commit()
 
 
+_ROLES = [
+    ("admin", 1),
+    ("staff", 2),
+    ("shliach", 3),
+    ("superadmin", 4),
+]
+
+
+def seed_roles(db: Session) -> None:
+    """fixes43 §5.1: the fixed platform role set backing `users.role`'s FK.
+    Must run before any user is created/updated. Idempotent."""
+    existing = {r.name for r in db.query(models.Role).all()}
+    dirty = False
+    for name, sort_order in _ROLES:
+        if name not in existing:
+            db.add(models.Role(name=name, sort_order=sort_order))
+            dirty = True
+    if dirty:
+        db.commit()
+
+
 def seed_superadmin(db: Session) -> None:
     """Seed the platform superadmin into a dedicated System organization.
 
@@ -1451,6 +1498,7 @@ def seed_all(db: Session) -> None:
     data) when SEED_DEMO_DATA is enabled. In production the demo block is skipped
     so no default admin/admin123 or sample contacts reach the live database.
     """
+    seed_roles(db)
     seed_localization(db)
     seed_superadmin(db)
     seed_email_templates(db)

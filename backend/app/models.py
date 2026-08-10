@@ -44,6 +44,21 @@ def _guid_column() -> Column:
     )
 
 
+class Role(Base):
+    """fixes43 §5.1: the fixed set of platform role identifiers, extracted into
+    its own table so `User.role` carries a real FK instead of an unconstrained
+    string. `name` is the stable, English, storage-layer identifier (never
+    shown to users) — display labels stay in `field_localization`
+    (`users.role_admin` etc.), keeping data storage and UI presentation
+    separate per the project's localization architecture. Global (not
+    org-scoped): every org shares the same small role set."""
+
+    __tablename__ = "roles"
+
+    name = Column(String(20), primary_key=True)  # 'admin' | 'staff' | 'shliach' | 'superadmin'
+    sort_order = Column(Integer, nullable=False, default=0)
+
+
 class Organization(Base):
     __tablename__ = "organizations"
 
@@ -105,13 +120,17 @@ class User(Base):
     password_hash = Column(String(255), nullable=True)
     # Non-unique: the same Google identity may be bound to one user per org.
     google_sub = Column(String(255), nullable=True, index=True)
-    role = Column(String(20), nullable=False, default="staff")  # 'admin' | 'staff' | 'shliach'
+    # fixes43 §5.1: FK to `roles.name` (was a flat, unconstrained string) — the
+    # stored value and every existing `.role == "admin"` comparison across the
+    # app are unchanged, only now DB-validated against the roles table.
+    role = Column(String(20), ForeignKey("roles.name"), nullable=False, default="staff")
     is_active = Column(Boolean, nullable=False, default=True)
     email_verified = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     # Relationships
     organization = relationship("Organization", back_populates="users")
+    role_ref = relationship("Role")
     contacts = relationship(
         "Contact",
         back_populates="assigned_user",
@@ -261,6 +280,35 @@ class ContactShliach(Base):
         back_populates="shliach",
         cascade="all, delete-orphan",
     )
+
+
+class ContactShliachEditHistory(Base):
+    """fixes43 §3.1: field-level edit-history audit trail for shliach
+    coverage data (notes/area_ids/report_number_ids) — same "who changed
+    what, when" intent as the Apartments module's history, but a field-level
+    log rather than full-row versioning: `contact_shliach.contact_id` is
+    unique (1:1 with its contact) and referenced across the app, so retiring
+    rows the way Apartments does isn't safe here."""
+
+    __tablename__ = "contact_shliach_edit_history"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    contact_shliach_id = Column(
+        Integer,
+        ForeignKey("contact_shliach.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    field = Column(String(50), nullable=False)  # 'notes' | 'area_ids' | 'report_number_ids'
+    old_value = Column(Text, nullable=True)
+    new_value = Column(Text, nullable=True)
+    editor_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    changed_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    editor = relationship("User")
 
 
 class ReportNumber(Base):
