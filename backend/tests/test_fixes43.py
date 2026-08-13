@@ -253,10 +253,11 @@ class TestRolesTable:
 
 
 class TestShliachEditHistory:
-    """fixes43 §3.1: field-level edit-history audit trail for shliach
-    coverage data (notes/area_ids/report_number_ids)."""
+    """fixes45: full-row shliach version history (same "one edit, one
+    version" contract as the Apartments module — replaces fixes43's
+    field-level diff log)."""
 
-    def test_logs_notes_and_area_changes(self, client, admin_headers):
+    def test_versions_notes_and_area_changes(self, client, admin_headers):
         area = _mk_area(client, admin_headers, "אזור-hist")
         sh = _mk_shliach(client, admin_headers, "hist1_43@example.com")
 
@@ -274,34 +275,31 @@ class TestShliachEditHistory:
             headers=admin_headers,
         )
         assert r.status_code == 200, r.text
+        assert r.json()["shliach"]["notes"] == "note B"
+        assert r.json()["shliach"]["area_ids"] == [area["id"]]
 
         hist = client.get(
             f"/api/contacts/{sh['id']}/shliach-history", headers=admin_headers
         ).json()
-        fields = [h["field"] for h in hist]
-        assert fields.count("notes") == 2
-        assert fields.count("area_ids") == 1
+        # Newest first: the version retired by the second edit, then the one
+        # retired by the first (the lineage's root, created with the contact).
+        assert len(hist) == 2
+        assert hist[0]["notes"] == "note A"
+        assert hist[0]["area_ids"] == []
+        assert hist[0]["editor_name"]  # admin's full_name
+        assert hist[1]["notes"] is None
+        assert hist[1]["area_ids"] == []
 
-        notes_changes = [h for h in hist if h["field"] == "notes"]
-        # Newest first.
-        assert notes_changes[0]["new_value"] == "note B"
-        assert notes_changes[0]["old_value"] == "note A"
-        assert notes_changes[1]["new_value"] == "note A"
-        assert notes_changes[1]["old_value"] is None
-
-        area_change = next(h for h in hist if h["field"] == "area_ids")
-        assert area_change["new_value"] == f'[{area["id"]}]'
-        assert area_change["old_value"] == "[]"
-        assert area_change["editor_name"]  # admin's full_name
-
-    def test_no_op_edit_not_logged(self, client, admin_headers):
+    def test_repeated_identical_edit_still_versions(self, client, admin_headers):
+        """Matches Apartments: versioning doesn't diff old vs. new — every
+        edit that touches a tracked field produces a new version, even one
+        that resubmits the same value."""
         sh = _mk_shliach(client, admin_headers, "hist2_43@example.com")
         client.patch(
             f"/api/contacts/{sh['id']}",
             json={"shliach": {"notes": "same"}},
             headers=admin_headers,
         )
-        # Re-sending the identical value must not add a second history row.
         client.patch(
             f"/api/contacts/{sh['id']}",
             json={"shliach": {"notes": "same"}},
@@ -310,7 +308,7 @@ class TestShliachEditHistory:
         hist = client.get(
             f"/api/contacts/{sh['id']}/shliach-history", headers=admin_headers
         ).json()
-        assert len(hist) == 1
+        assert len(hist) == 2
 
     def test_non_admin_forbidden(self, client, admin_headers, auth_headers):
         sh = _mk_shliach(client, admin_headers, "hist3_43@example.com")

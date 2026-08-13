@@ -10,7 +10,6 @@ fixes25: the community checklist (Mivtzoim), interactions and custom-field
 values moved to the visit level — the related sub-resources live on visits.
 """
 import datetime
-import json
 import logging
 from typing import Literal, Optional
 
@@ -23,6 +22,7 @@ from app.core.display import building_display_name
 from app.core.email import send_shliach_welcome
 from app.core.geocode import geocode_address
 from app.core.security import hash_password
+from app.core.shliach import apply_shliach_versioned_update, copy_shliach_children
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.picklist_utils import validate_picklist_value
@@ -33,13 +33,13 @@ from app.schemas import (
     ContactDetailOut,
     ContactOut,
     ContactPageOut,
-    ContactShliachHistoryOut,
     ContactUpdate,
     MekuravOut,
     ReminderOut,
     ShliachClearAreasIn,
     ShliachClearAreasResult,
     ShliachOut,
+    ShliachVersionOut,
     SignificantDateCreate,
     SignificantDateOut,
     SignificantDateUpdate,
@@ -286,6 +286,9 @@ def _build_detail(contact: models.Contact, db: Session) -> ContactDetailOut:
             contact_id=contact.shliach.contact_id,
             user_id=contact.shliach.user_id,
             notes=contact.shliach.notes,
+            full_name=contact.shliach.full_name,
+            email=contact.shliach.email,
+            phone=contact.shliach.phone,
             report_number_ids=[
                 r.report_number_id for r in contact.shliach.report_numbers
             ],
@@ -400,6 +403,7 @@ def _provision_shliach_user(
             .filter(
                 models.ContactShliach.user_id == existing.id,
                 models.ContactShliach.contact_id != contact.id,
+                models.ContactShliach.is_display.is_(True),
             )
             .first()
         )
@@ -473,34 +477,6 @@ def _validate_area(area_id: int, org_id: int, db: Session) -> None:
     )
     if not ok:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "area_id does not exist")
-
-
-def _log_shliach_change(
-    db: Session,
-    org_id: int,
-    shliach: models.ContactShliach,
-    field: str,
-    old_value,
-    new_value,
-    editor_id: int,
-) -> None:
-    """fixes43 §3.1: record a field-level shliach coverage change (skips
-    no-ops). List values (area_ids/report_number_ids) are stored as sorted
-    JSON so unordered-but-equal selections don't log a spurious change."""
-    old_s = json.dumps(sorted(old_value)) if isinstance(old_value, list) else old_value
-    new_s = json.dumps(sorted(new_value)) if isinstance(new_value, list) else new_value
-    if old_s == new_s:
-        return
-    db.add(
-        models.ContactShliachEditHistory(
-            organization_id=org_id,
-            contact_shliach_id=shliach.id,
-            field=field,
-            old_value=old_s,
-            new_value=new_s,
-            editor_id=editor_id,
-        )
-    )
 
 
 def _set_shliach_areas(
@@ -585,6 +561,9 @@ def _contacts_query(
     # Geographic filters via IN-subqueries — the shliach-role scoping below
     # already outer-joins ContactShliach, so joining again would duplicate rows.
     if contact_type == "shliach":
+        # fixes45: ContactShliach is versioned now — every scoping subquery
+        # below is scoped to the active row, or a retired version's
+        # copied-forward links would resurrect a since-changed assignment.
         if area_ids:
             query = query.filter(
                 models.Contact.id.in_(
@@ -594,7 +573,10 @@ def _contacts_query(
                         models.ContactShliachArea.contact_shliach_id
                         == models.ContactShliach.id,
                     )
-                    .where(models.ContactShliachArea.area_id.in_(area_ids))
+                    .where(
+                        models.ContactShliachArea.area_id.in_(area_ids),
+                        models.ContactShliach.is_display.is_(True),
+                    )
                 )
             )
         if building_ids:
@@ -613,7 +595,10 @@ def _contacts_query(
                         models.Building,
                         models.Building.area_id == models.ContactShliachArea.area_id,
                     )
-                    .where(models.Building.id.in_(building_ids))
+                    .where(
+                        models.Building.id.in_(building_ids),
+                        models.ContactShliach.is_display.is_(True),
+                    )
                 )
             )
         # fixes28 §2: the shluchim page must not show rows backed by a
@@ -630,10 +615,12 @@ def _contacts_query(
             models.User.email.isnot(None),
         )
         linked_to_staff = select(models.ContactShliach.contact_id).where(
-            models.ContactShliach.user_id.in_(staff_ids)
+            models.ContactShliach.user_id.in_(staff_ids),
+            models.ContactShliach.is_display.is_(True),
         )
         linked_to_any = select(models.ContactShliach.contact_id).where(
-            models.ContactShliach.user_id.isnot(None)
+            models.ContactShliach.user_id.isnot(None),
+            models.ContactShliach.is_display.is_(True),
         )
         query = query.filter(
             ~models.Contact.id.in_(linked_to_staff),
@@ -851,9 +838,13 @@ def _contacts_query(
     if current_user.role == "shliach":
         # fixes10 §3.5: ownership isolation — only contacts assigned to this
         # shliach (they created them), plus their own shliach contact record.
+        # fixes45: the join condition (not a WHERE filter — this is a LEFT
+        # OUTER JOIN) is scoped to the active version, or a contact with N
+        # retired versions would fan out into N+1 duplicate result rows.
         query = query.outerjoin(
             models.ContactShliach,
-            models.ContactShliach.contact_id == models.Contact.id,
+            (models.ContactShliach.contact_id == models.Contact.id)
+            & (models.ContactShliach.is_display.is_(True)),
         ).filter(
             (models.Contact.assigned_user_id == current_user.guid)
             | (models.ContactShliach.user_id == current_user.id)
@@ -1146,26 +1137,27 @@ def clear_shliach_areas(
 ):
     """fixes43 §3.4: "ניקוי שיבוצים" — clear the area assignment from every
     shliach contact in `contact_ids` (the Users page's current filtered
-    view). Admin-only, irreversible (the frontend confirms before calling)."""
+    view). Admin-only, irreversible (the frontend confirms before calling).
+    fixes45: applied as a versioned edit per shliach, same as any other
+    coverage change, only touching the active row of each lineage."""
     shluchim = (
         db.query(models.ContactShliach)
         .join(models.Contact, models.Contact.id == models.ContactShliach.contact_id)
         .filter(
             models.Contact.organization_id == admin.organization_id,
             models.ContactShliach.contact_id.in_(payload.contact_ids),
+            models.ContactShliach.is_display.is_(True),
         )
         .all()
     )
     updated = 0
     for shliach in shluchim:
-        deleted = (
-            db.query(models.ContactShliachArea)
-            .filter(models.ContactShliachArea.contact_shliach_id == shliach.id)
-            .delete(synchronize_session=False)
-        )
-        if deleted:
-            updated += 1
-    db.commit()
+        if not shliach.areas:
+            continue
+        new = apply_shliach_versioned_update(db, shliach, {}, admin)
+        _set_shliach_areas(db, new, [], org_id=admin.organization_id)
+        db.commit()
+        updated += 1
     return ShliachClearAreasResult(updated=updated)
 
 
@@ -1213,13 +1205,19 @@ def create_contact(
 
     if contact.contact_type == "shliach":
         sh = payload.shliach
+        user = _provision_shliach_user(
+            db, org_id, contact, password=sh.password if sh else None
+        )
+        # fixes45: the first version of the lineage — seed the identity
+        # snapshot from the just-(re)provisioned login user, falling back to
+        # the contact itself when no login could be created (no email yet).
         shliach = models.ContactShliach(
             organization_id=org_id,
             contact_id=contact.id,
             notes=sh.notes if sh else None,
-        )
-        user = _provision_shliach_user(
-            db, org_id, contact, password=sh.password if sh else None
+            full_name=user.full_name if user else contact.name,
+            email=user.email if user else contact.email,
+            phone=user.phone if user else contact.phone,
         )
         if user:
             shliach.user_id = user.id
@@ -1289,16 +1287,15 @@ def get_contact(
 
 
 @router.get(
-    "/{contact_id}/shliach-history", response_model=list[ContactShliachHistoryOut]
+    "/{contact_id}/shliach-history", response_model=list[ShliachVersionOut]
 )
 def shliach_edit_history(
     contact_id: int,
     db: Session = Depends(get_db),
     admin: models.User = Depends(require_admin),
 ):
-    """fixes43 §3.1: field-level edit history for a shliach's coverage data
-    (notes/area_ids/report_number_ids), newest first. Admin-only, same as the
-    Apartments module's history view."""
+    """fixes45: previous versions of this shliach's lineage, newest first —
+    same full-row-snapshot history view as the Apartments module's."""
     contact = (
         db.query(models.Contact)
         .filter(
@@ -1310,24 +1307,38 @@ def shliach_edit_history(
     )
     if not contact or not contact.shliach:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Shliach contact not found")
-    rows = (
-        db.query(models.ContactShliachEditHistory)
+    root_id = contact.shliach.root_id or contact.shliach.id
+    versions = (
+        db.query(models.ContactShliach)
         .filter(
-            models.ContactShliachEditHistory.contact_shliach_id == contact.shliach.id
+            models.ContactShliach.organization_id == admin.organization_id,
+            models.ContactShliach.is_display.is_(False),
+            or_(
+                models.ContactShliach.root_id == root_id,
+                models.ContactShliach.id == root_id,
+            ),
         )
-        .order_by(models.ContactShliachEditHistory.changed_at.desc())
+        .order_by(
+            models.ContactShliach.last_edit.desc().nullslast(),
+            models.ContactShliach.id.desc(),
+        )
         .all()
     )
     return [
-        ContactShliachHistoryOut(
-            id=r.id,
-            field=r.field,
-            old_value=r.old_value,
-            new_value=r.new_value,
-            editor_name=r.editor.full_name if r.editor else None,
-            changed_at=r.changed_at,
+        ShliachVersionOut(
+            id=v.id,
+            contact_id=v.contact_id,
+            user_id=v.user_id,
+            notes=v.notes,
+            full_name=v.full_name,
+            email=v.email,
+            phone=v.phone,
+            report_number_ids=[rn.report_number_id for rn in v.report_numbers],
+            area_ids=[a.area_id for a in v.areas],
+            last_edit=v.last_edit,
+            editor_name=v.editor.full_name if v.editor else None,
         )
-        for r in rows
+        for v in versions
     ]
 
 
@@ -1389,52 +1400,82 @@ def update_contact(
                 "contact.potential_next_step", potential_next_step,
             )
 
-    if payload.shliach is not None and contact.contact_type == "shliach":
+    if contact.contact_type == "shliach":
+        # fixes45: every shliach edit — whether it came in as a `shliach`
+        # sub-payload (notes/report numbers/areas/password) or as a plain
+        # contact-field edit (name/last_name/phone/email) — collapses into
+        # at most one new ContactShliach version, mirroring apartments'
+        # "one edit, one version" contract instead of the old field-level
+        # diff log.
         sh_data = payload.shliach
         # fixes26 §2: only touch what the client actually sent — a per-field
         # autosave patching {shliach: {notes}} must not wipe the report-number
         # and area links (their schema defaults are empty lists).
-        sh_sent = payload.shliach.model_dump(exclude_unset=True)
-        if contact.shliach is None:
-            contact.shliach = models.ContactShliach(
-                organization_id=org_id, contact_id=contact.id
-            )
-            db.flush()
-        if "notes" in sh_sent:
-            old_notes = contact.shliach.notes
-            contact.shliach.notes = sh_data.notes
-            _log_shliach_change(
-                db, org_id, contact.shliach, "notes",
-                old_notes, sh_data.notes, current_user.id,
-            )
-        if contact.shliach.user_id is None:
+        sh_sent = sh_data.model_dump(exclude_unset=True) if sh_data is not None else {}
+        active = contact.shliach
+
+        if active is None:
+            # No prior row to retire — this is the lineage's first version.
             user = _provision_shliach_user(
-                db, org_id, contact, password=sh_data.password
+                db, org_id, contact,
+                password=sh_data.password if sh_data else None,
             )
-            if user:
-                contact.shliach.user_id = user.id
-        elif sh_data.password:
-            # fixes14: let the admin (re)set the shliach's login password —
-            # without one the account is Google-only and may be locked out.
-            login_user = db.get(models.User, contact.shliach.user_id)
-            if login_user:
-                login_user.password_hash = hash_password(sh_data.password)
-        if "report_number_ids" in sh_sent:
-            old_rn_ids = [rn.report_number_id for rn in contact.shliach.report_numbers]
-            _set_shliach_report_numbers(
-                db, contact.shliach, sh_data.report_number_ids, org_id
+            active = models.ContactShliach(
+                organization_id=org_id,
+                contact_id=contact.id,
+                notes=sh_data.notes if sh_data else None,
+                full_name=user.full_name if user else contact.name,
+                email=user.email if user else contact.email,
+                phone=user.phone if user else contact.phone,
+                user_id=user.id if user else None,
             )
-            _log_shliach_change(
-                db, org_id, contact.shliach, "report_number_ids",
-                old_rn_ids, sh_data.report_number_ids, current_user.id,
-            )
-        if "area_ids" in sh_sent:
-            old_area_ids = [a.area_id for a in contact.shliach.areas]
-            _set_shliach_areas(db, contact.shliach, sh_data.area_ids, org_id)
-            _log_shliach_change(
-                db, org_id, contact.shliach, "area_ids",
-                old_area_ids, sh_data.area_ids, current_user.id,
-            )
+            db.add(active)
+            db.flush()
+            if "report_number_ids" in sh_sent:
+                _set_shliach_report_numbers(
+                    db, active, sh_data.report_number_ids, org_id
+                )
+            if "area_ids" in sh_sent:
+                _set_shliach_areas(db, active, sh_data.area_ids, org_id)
+            contact.shliach = active
+        else:
+            changes: dict = {}
+            if "notes" in sh_sent:
+                changes["notes"] = sh_data.notes
+            # Contact-level identity edits (from the Contacts page) feed the
+            # same versioned snapshot as a shliach sub-payload edit.
+            if {"name", "last_name"} & data.keys():
+                changes["full_name"] = (
+                    " ".join(filter(None, [contact.last_name, contact.name]))
+                    or contact.name
+                )
+            if "phone" in data:
+                changes["phone"] = contact.phone
+            if "email" in data:
+                changes["email"] = contact.email
+            if active.user_id is None:
+                user = _provision_shliach_user(
+                    db, org_id, contact,
+                    password=sh_data.password if sh_data else None,
+                )
+                if user:
+                    changes["user_id"] = user.id
+            elif sh_data and sh_data.password:
+                # fixes14: let the admin (re)set the shliach's login password
+                # — without one the account is Google-only and may be locked
+                # out. A password reset alone doesn't warrant a new version.
+                login_user = db.get(models.User, active.user_id)
+                if login_user:
+                    login_user.password_hash = hash_password(sh_data.password)
+
+            if changes or "report_number_ids" in sh_sent or "area_ids" in sh_sent:
+                new = apply_shliach_versioned_update(db, active, changes, current_user)
+                if "report_number_ids" in sh_sent:
+                    _set_shliach_report_numbers(db, new, sh_data.report_number_ids, org_id)
+                if "area_ids" in sh_sent:
+                    _set_shliach_areas(db, new, sh_data.area_ids, org_id)
+                db.commit()
+                contact.shliach = new
 
     # Keep the shliach's *login user* in sync with the contact. The user's
     # full_name (shown in their own session) is a separate field from the

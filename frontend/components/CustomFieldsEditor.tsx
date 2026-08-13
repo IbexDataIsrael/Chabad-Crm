@@ -1,7 +1,13 @@
 "use client";
 
+import { COLOR_HEX } from "@/lib/colors";
 import { useLocalization } from "@/lib/localization";
 import type { ContactCustomField } from "@/lib/types";
+
+// fixes44 §3: Mivtzoim items cycle through the app's 5 status colors (no
+// per-item color is stored anywhere — these are CustomFieldDefinition rows,
+// not picklist values) so each label reads as its own colored tag/badge.
+const BADGE_COLOR_KEYS = ["magenta", "green", "yellow", "darkred", "orange"] as const;
 
 /** Controlled editor for the org's custom checklist fields (boolean + note each). */
 export function CustomFieldsEditor({
@@ -20,31 +26,40 @@ export function CustomFieldsEditor({
 
   return (
     <div className="space-y-3">
-      {items.map((it, i) => (
-        <div
-          key={it.definition_id}
-          className="flex flex-col sm:flex-row sm:items-center gap-2"
-        >
-          <button
-            type="button"
-            onClick={() => update(i, { checked: !it.checked })}
-            className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm sm:w-48 ${
-              it.checked
-                ? "border-status-green bg-status-green/10 text-status-green"
-                : "border-gray-200 text-gray-600 hover:bg-gray-50"
-            }`}
+      {items.map((it, i) => {
+        const hex = COLOR_HEX[BADGE_COLOR_KEYS[i % BADGE_COLOR_KEYS.length]];
+        return (
+          <div
+            key={it.definition_id}
+            className="flex flex-col sm:flex-row sm:items-center gap-2"
           >
-            <span>{it.hebrew_label}</span>
-            <span>{it.checked ? "✓" : ""}</span>
-          </button>
-          <input
-            className="flex-1 rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
-            placeholder={t("field.note_placeholder", "הערה…")}
-            value={it.note ?? ""}
-            onChange={(e) => update(i, { note: e.target.value || null })}
-          />
-        </div>
-      ))}
+            {/* fixes44 §3: an explicit checkbox (was a whole-button name
+                click) with the label styled as a colored tag/badge. */}
+            <label
+              className="flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm sm:w-48 cursor-pointer"
+              style={{
+                borderColor: hex,
+                backgroundColor: it.checked ? `${hex}26` : `${hex}0d`,
+                color: hex,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={it.checked}
+                onChange={(e) => update(i, { checked: e.target.checked })}
+                style={{ accentColor: hex }}
+              />
+              <span className="truncate font-medium">{it.hebrew_label}</span>
+            </label>
+            <input
+              className="flex-1 rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+              placeholder={t("field.note_placeholder", "הערה…")}
+              value={it.note ?? ""}
+              onChange={(e) => update(i, { note: e.target.value || null })}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }

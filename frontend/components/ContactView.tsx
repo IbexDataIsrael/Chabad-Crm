@@ -18,9 +18,9 @@ import {
   type Apartment,
   type Area,
   type Contact,
-  type ContactShliachHistory,
   type PicklistField,
   type ReportNumber,
+  type ShliachVersion,
   type UserSummary,
 } from "@/lib/types";
 import { isValidEmail, isValidPhone, EMAIL_HINT, PHONE_HINT } from "@/lib/validation";
@@ -97,12 +97,12 @@ export function ContactView({
   }, []);
   const customPicklists = usePicklistsMap(customDefs.map((d) => d.field_key));
 
-  // fixes43 §3.1: shliach coverage edit-history (admin-only), fetched once
-  // the contact is known to be a shliach with an id.
-  const [shliachHistory, setShliachHistory] = useState<ContactShliachHistory[]>([]);
+  // fixes45: shliach version history (admin-only), fetched once the contact
+  // is known to be a shliach with an id.
+  const [shliachHistory, setShliachHistory] = useState<ShliachVersion[]>([]);
   useEffect(() => {
     if (!isAdmin || contact.contact_type !== "shliach") return;
-    apiFetch<ContactShliachHistory[]>(`/api/contacts/${contact.id}/shliach-history`)
+    apiFetch<ShliachVersion[]>(`/api/contacts/${contact.id}/shliach-history`)
       .then(setShliachHistory)
       .catch(() => setShliachHistory([]));
   }, [isAdmin, contact.contact_type, contact.id]);
@@ -701,27 +701,40 @@ export function ContactView({
         )}
       </dl>
 
-      {/* fixes43 §3.1: shliach coverage edit-history (admin-only) — same
-          "who changed what, when" intent as the Apartments module's history,
-          field-level rather than full-row versions (see model docstring). */}
+      {/* fixes45: shliach version history (admin-only) — same full-row
+          snapshot history view as the Apartments module's (see model
+          docstring): each entry is a complete past version, not a diff. */}
       {isAdmin && contact.contact_type === "shliach" && shliachHistory.length > 0 && (
         <div className="rounded-lg border border-gray-200 p-4 space-y-2">
           <h3 className="text-xs font-semibold text-gray-500">
             {t("contact_shliach.history", "היסטוריית שינויים")}
           </h3>
           <ul className="text-sm space-y-1.5">
-            {shliachHistory.map((h) => (
-              <li key={h.id} className="text-gray-600">
+            {shliachHistory.map((v) => (
+              <li key={v.id} className="text-gray-600">
                 <span className="text-xs text-gray-400">
-                  {(h.editor_name || t("apt.history_unknown_editor", "עורך לא ידוע")) +
+                  {(v.editor_name || t("apt.history_unknown_editor", "עורך לא ידוע")) +
                     " — " +
-                    (h.changed_at ? new Date(h.changed_at).toLocaleString("he-IL") : "")}
+                    (v.last_edit ? new Date(v.last_edit).toLocaleString("he-IL") : "")}
                 </span>
                 <br />
-                {shliachHistoryFieldLabel(h.field, t)}:{" "}
-                <ShliachHistoryValue field={h.field} value={h.old_value} />
-                {" → "}
-                <ShliachHistoryValue field={h.field} value={h.new_value} />
+                {v.full_name || "—"}
+                {v.email && <span dir="ltr"> · {v.email}</span>}
+                {v.phone && <span dir="ltr"> · {v.phone}</span>}
+                <br />
+                <span className="text-xs">
+                  {t("contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל")}:{" "}
+                  <ReportNumbersLabel ids={v.report_number_ids} />
+                  {" · "}
+                  {t("contact_shliach.areas", "אזורים באחריות הפעיל")}:{" "}
+                  <AreaNames ids={v.area_ids} />
+                  {v.notes && (
+                    <>
+                      {" · "}
+                      {t("contact_shliach.notes", "הערות")}: {v.notes}
+                    </>
+                  )}
+                </span>
               </li>
             ))}
           </ul>
@@ -789,34 +802,6 @@ function AdminAreaLabel({ id }: { id: number | null }) {
 }
 
 /** Resolves the shliach's report-number ids to their names (fixes19). */
-/** fixes43 §3.1: field label for a history row's `field` key. */
-function shliachHistoryFieldLabel(
-  field: string,
-  t: (key: string, fallback: string) => string,
-): string {
-  if (field === "area_ids") return t("contact_shliach.areas", "אזורים באחריות הפעיל");
-  if (field === "report_number_ids")
-    return t("contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל");
-  return t("contact_shliach.notes", "הערות");
-}
-
-/** fixes43 §3.1: renders one history row's old/new value — area_ids and
- *  report_number_ids are stored as JSON id arrays, resolved to names via the
- *  same lookups the live fields use; notes render as plain text. */
-function ShliachHistoryValue({ field, value }: { field: string; value: string | null }) {
-  if (value == null) return <>—</>;
-  if (field === "area_ids" || field === "report_number_ids") {
-    let ids: number[] = [];
-    try {
-      ids = JSON.parse(value);
-    } catch {
-      return <>{value}</>;
-    }
-    return field === "area_ids" ? <AreaNames ids={ids} /> : <ReportNumbersLabel ids={ids} />;
-  }
-  return <>{value || "—"}</>;
-}
-
 function ReportNumbersLabel({ ids }: { ids: number[] }) {
   const [names, setNames] = useState<string[] | null>(null);
 

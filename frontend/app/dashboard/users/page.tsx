@@ -6,6 +6,7 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { EmailInput } from "@/components/EmailInput";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
+import { InlineEdit } from "@/components/ui/InlineEdit";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useConfirm } from "@/lib/confirm";
@@ -21,6 +22,7 @@ import {
   type Contact,
   type ContactPage,
 } from "@/lib/types";
+import { EMAIL_HINT, PHONE_HINT, isValidEmail, isValidPhone } from "@/lib/validation";
 
 interface OrgUser {
   id: number;
@@ -28,6 +30,9 @@ interface OrgUser {
   username: string;
   full_name: string;
   email: string | null;
+  // fixes44 §1: was already a synced User column, just never returned by
+  // the API — see schemas.UserOut.
+  phone: string | null;
   role: string;
   is_active: boolean;
   created_at: string;
@@ -174,6 +179,17 @@ export default function UsersPage() {
     apiFetch<Building[]>("/api/buildings").then(setBuildings).catch(() => {});
   }, [loading, isAdmin]);
 
+  // fixes44 §1: one-field inline save straight from the list row — same
+  // shape as the contacts page's saveField, merging the response back into
+  // the row in place so scroll/filters/page stay put.
+  async function saveUserField(row: UserRow, body: Record<string, unknown>) {
+    const saved = await apiFetch<OrgUser>(`/api/users/${row.id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+    setOrgUsers((prev) => prev.map((u) => (u.id === row.id ? saved : u)));
+  }
+
   if (loading || !isAdmin) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
 
   const roleLabel = (role: string) =>
@@ -198,7 +214,10 @@ export default function UsersPage() {
       id: u.id,
       full_name: u.full_name,
       email: u.email,
-      phone: matched?.phone ?? null,
+      // fixes44 §1: the User row is authoritative (kept in sync with a
+      // linked contact by the PUT handler) — fall back to the matched
+      // contact only for pre-sync legacy rows.
+      phone: u.phone ?? matched?.phone ?? null,
       role,
       is_active: u.is_active,
       created_at: u.created_at,
@@ -283,12 +302,69 @@ export default function UsersPage() {
     });
   }
 
+  // fixes44 §1: inline editing matching the contacts page's InlineEdit
+  // pattern — full_name/email are native User fields, always editable for a
+  // real login row. Phone is only meaningfully synced when the row has a
+  // linked contact (`contactId`); a row with no associated contact record
+  // shows "-" and is left non-editable (InlineEdit's `disabled`), per the
+  // unlinked/missing-data handling this section calls for.
+  const inlineNameCell = (r: UserRow) => (
+    <InlineEdit<string>
+      value={r.full_name}
+      display={<span>{r.full_name}</span>}
+      validate={(v) => (v.trim() ? null : t("validation.name_required", "יש להזין שם פרטי"))}
+      onSave={(v) => saveUserField(r, { full_name: v.trim() })}
+      editor={(draft, setDraft) => (
+        <input className={inputClass} value={draft} onChange={(e) => setDraft(e.target.value)} />
+      )}
+    />
+  );
+
+  const inlineEmailCell = (r: UserRow) => (
+    <InlineEdit<string>
+      value={r.email ?? ""}
+      display={r.email ? <span dir="ltr">{r.email}</span> : "—"}
+      validate={(v) => (isValidEmail(v.trim()) ? null : t("validation.email_hint", EMAIL_HINT))}
+      onSave={(v) => saveUserField(r, { email: v.trim() })}
+      editor={(draft, setDraft) => (
+        <input
+          className={inputClass}
+          dir="ltr"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+        />
+      )}
+    />
+  );
+
+  const inlinePhoneCell = (r: UserRow) => (
+    <InlineEdit<string>
+      value={r.phone ?? ""}
+      display={r.phone ? <span dir="ltr">{r.phone}</span> : "—"}
+      disabled={r.contactId == null}
+      validate={(v) =>
+        v.trim() === "" || isValidPhone(v.trim())
+          ? null
+          : t("validation.phone_hint", PHONE_HINT)
+      }
+      onSave={(v) => saveUserField(r, { phone: v.trim() || null })}
+      editor={(draft, setDraft) => (
+        <input
+          className={inputClass}
+          dir="ltr"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+        />
+      )}
+    />
+  );
+
   function cell(r: UnifiedRow, k: ColumnKey) {
     switch (k) {
       case "email":
-        return r.email ? <span dir="ltr">{r.email}</span> : "—";
+        return r.kind === "user" ? inlineEmailCell(r) : r.email ? <span dir="ltr">{r.email}</span> : "—";
       case "phone":
-        return r.phone ? <span dir="ltr">{r.phone}</span> : "—";
+        return r.kind === "user" ? inlinePhoneCell(r) : r.phone ? <span dir="ltr">{r.phone}</span> : "—";
       case "created":
         return <span dir="ltr">{new Date(r.created_at).toLocaleDateString("he-IL")}</span>;
     }
@@ -628,38 +704,42 @@ export default function UsersPage() {
         </span>
       </div>
 
+      {/* fixes44 §1: layout/table structure aligned to the contacts page —
+          same header/cell padding, alignment, and a trailing full-width
+          column so data columns condense to the start. */}
       <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-600 text-start">
+          <thead className="bg-gray-50 text-gray-600 text-right">
             <tr>
-              <th className="px-4 py-2 text-start font-medium">{t("common.name", "שם")}</th>
-              <th className="px-4 py-2 text-start font-medium">{t("users.role_label", "תפקיד")}</th>
+              <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap">{t("common.name", "שם")}</th>
+              <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap">{t("users.role_label", "תפקיד")}</th>
               {activeColumns.map((k) => (
-                <th key={k} className="px-4 py-2 text-start font-medium">
+                <th key={k} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
                   {columnLabels[k]}
                 </th>
               ))}
-              <th className="px-4 py-2" />
+              <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap" />
+              <th className="w-full" />
             </tr>
           </thead>
           <tbody>
             {busy ? (
               <tr>
-                <td colSpan={3 + activeColumns.length} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={4 + activeColumns.length} className="px-4 py-6 text-center text-gray-400">
                   {t("action.loading", "טוען…")}
                 </td>
               </tr>
             ) : sorted.length === 0 ? (
               <tr>
-                <td colSpan={3 + activeColumns.length} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={4 + activeColumns.length} className="px-4 py-6 text-center text-gray-400">
                   {t("users.none", "אין משתמשים.")}
                 </td>
               </tr>
             ) : (
               visible.map((r) => (
                 <tr key={r.key} className="border-t border-gray-100">
-                  <td className="px-4 py-2 font-medium">
-                    {r.full_name}
+                  <td className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
+                    {r.kind === "user" ? inlineNameCell(r) : r.full_name}
                     {r.kind === "user" && me?.id === r.id && (
                       <span className="ms-2 text-xs text-gray-400">({t("users.you", "אני")})</span>
                     )}
@@ -685,7 +765,7 @@ export default function UsersPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-2">
+                  <td className="px-3 py-1.5 w-px whitespace-nowrap">
                     {r.role !== "admin" && r.role !== "staff" ? (
                       <span className="rounded px-2 py-0.5 text-xs bg-gray-100 text-gray-600">
                         {roleLabel(r.role)}
@@ -703,11 +783,11 @@ export default function UsersPage() {
                     )}
                   </td>
                   {activeColumns.map((k) => (
-                    <td key={k} className="px-4 py-2">
+                    <td key={k} className="px-3 py-1.5 w-px whitespace-nowrap">
                       {cell(r, k)}
                     </td>
                   ))}
-                  <td className="px-4 py-2 text-end whitespace-nowrap">
+                  <td className="px-3 py-1.5 w-px whitespace-nowrap">
                     {/* fixes43 §3.3: one unified "open/edit" action — a real
                         user row opens the inline form (role/email/password),
                         which itself carries a link to the linked contact when
@@ -743,6 +823,7 @@ export default function UsersPage() {
                       </button>
                     )}
                   </td>
+                  <td />
                 </tr>
               ))
             )}

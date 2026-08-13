@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { apiFetch } from "@/lib/api";
@@ -8,7 +9,7 @@ import { useConfirm } from "@/lib/confirm";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
-import type { PicklistField, PicklistValue } from "@/lib/types";
+import type { CustomFieldDefinition, PicklistField, PicklistValue } from "@/lib/types";
 
 // fixes33 §4 / fixes37: which of the 3 admin tabs a picklist is managed
 // from. Driven by the real entity_type column now, not a prefix guess.
@@ -26,12 +27,21 @@ export default function PicklistsPage() {
   const { t, lang } = useLocalization();
   const [fields, setFields] = useState<PicklistField[]>([]);
   const [optionsByKey, setOptionsByKey] = useState<Record<string, PicklistValue[]>>({});
+  // fixes44 §4: non-select CustomFieldDefinition rows (e.g. the Mivtzoim
+  // booleans + "קשר לרבי") — a data model the picklist tables never touch.
+  // Surfaced here (read+write against /api/custom-fields) so this page is
+  // the one central place admins land in for every dynamic value, instead
+  // of the two admin pages silently covering different data.
+  const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDefinition[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = usePersistentState<PicklistTab>("crm.picklists.tab", "contacts");
 
   // Load every list + all its options, so the page shows all picklists at once.
   async function loadAll() {
-    const list = await apiFetch<PicklistField[]>("/api/picklists");
+    const [list, cfDefs] = await Promise.all([
+      apiFetch<PicklistField[]>("/api/picklists"),
+      apiFetch<CustomFieldDefinition[]>("/api/custom-fields?include_inactive=true"),
+    ]);
     const entries = await Promise.all(
       list.map(
         async (f) =>
@@ -45,6 +55,7 @@ export default function PicklistsPage() {
     );
     setFields(list);
     setOptionsByKey(Object.fromEntries(entries));
+    setCustomFieldDefs(cfDefs);
   }
 
   useEffect(() => {
@@ -119,6 +130,47 @@ export default function PicklistsPage() {
   const visitDefs = fields.filter((f) => tabFor(f.entity_type) === "visit");
   const apartmentDefs = fields.filter((f) => tabFor(f.entity_type) === "apartment");
 
+  // fixes44 §4: a select-type custom field already has a matching row in
+  // `fields` above (routers/custom_fields.py auto-provisions a
+  // PicklistDefinition for it) — only non-select ones (checkbox/text/number/
+  // date) have no picklist counterpart and need their own section here.
+  const nonSelectCustomFieldDefs = customFieldDefs.filter((d) => d.field_type !== "select");
+
+  // fixes44 §4: one subsection per tab listing that tab's non-select custom
+  // fields (e.g. the 5 Mivtzoim checkboxes + "קשר לרבי" under "visit") —
+  // read+write straight against /api/custom-fields, same data the Custom
+  // Fields admin page manages, so nothing that drives a dynamic value on a
+  // form is invisible from this page.
+  function renderCustomFieldsSection(t2: PicklistTab) {
+    const defs = nonSelectCustomFieldDefs.filter((d) => tabFor(d.entity_type) === t2);
+    return (
+      <section className="space-y-2 border-t border-gray-200 pt-5">
+        <h3 className="text-lg font-semibold">
+          {t("pl.custom_fields_section", "שדות (לא רשימת בחירה)")}
+        </h3>
+        <p className="text-xs text-gray-500">
+          {t(
+            "pl.custom_fields_hint",
+            "שדות אלו (תיבת סימון, טקסט, מספר או תאריך — למשל \"קשר לרבי\") אינם רשימת ערכים אלא שדה בודד; מוצגים כאן לניהול מרוכז. הוספת שדה חדש מתבצעת בדף שדות מותאמים אישית.",
+          )}
+        </p>
+        {defs.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
+            {defs.map((d) => (
+              <CustomFieldRow key={d.id} def={d} onSaved={loadAll} />
+            ))}
+          </div>
+        )}
+        <Link
+          href="/dashboard/custom-fields"
+          className="inline-block text-sm text-status-magenta hover:underline"
+        >
+          {t("pl.go_to_custom_fields", "מעבר לדף שדות מותאמים אישית ←")}
+        </Link>
+      </section>
+    );
+  }
+
   const TABS: { key: PicklistTab; icon: string; labelKey: string; fallback: string }[] = [
     { key: "contacts", icon: "👤", labelKey: "pl.tab_contacts", fallback: "אנשי קשר" },
     { key: "visit", icon: "📋", labelKey: "pl.tab_visit", fallback: "ביקורים" },
@@ -162,6 +214,7 @@ export default function PicklistsPage() {
             entityType="contact_mekurav"
             onAdded={loadAll}
           />
+          {renderCustomFieldsSection("contacts")}
         </section>
       )}
 
@@ -174,6 +227,7 @@ export default function PicklistsPage() {
             entityType="visit"
             onAdded={loadAll}
           />
+          {renderCustomFieldsSection("visit")}
         </section>
       )}
 
@@ -186,6 +240,7 @@ export default function PicklistsPage() {
             entityType="apartment"
             onAdded={loadAll}
           />
+          {renderCustomFieldsSection("apartment")}
         </section>
       )}
     </div>
@@ -598,5 +653,131 @@ function AddOption({
       </div>
       {error && <p className="text-sm text-status-darkred">{error}</p>}
     </form>
+  );
+}
+
+// fixes44 §4: field_type has no options to edit (unlike a picklist definition)
+// — just a bilingual label + activate/deactivate/hard-delete, same actions
+// the Custom Fields admin page's own DefRow offers, kept in sync with it.
+const CF_TYPE_LABELS: Record<string, { labelKey: string; fallback: string }> = {
+  text: { labelKey: "cf.type.text", fallback: "טקסט" },
+  number: { labelKey: "cf.type.number", fallback: "מספר" },
+  boolean: { labelKey: "cf.type.boolean", fallback: "תיבת סימון" },
+  date: { labelKey: "cf.type.date", fallback: "תאריך" },
+};
+
+function CustomFieldRow({
+  def,
+  onSaved,
+}: {
+  def: CustomFieldDefinition;
+  onSaved: () => Promise<void>;
+}) {
+  const { t } = useLocalization();
+  const confirmDialog = useConfirm();
+  const { error: toastError } = useToast();
+  const [label, setLabel] = useState(def.hebrew_label);
+  const [english, setEnglish] = useState(def.english_label ?? "");
+
+  async function save() {
+    await apiFetch(`/api/custom-fields/${def.id}`, {
+      method: "PUT",
+      body: JSON.stringify({ hebrew_label: label, english_label: english || null }),
+    });
+    await onSaved();
+  }
+
+  async function deactivate() {
+    await apiFetch(`/api/custom-fields/${def.id}`, { method: "DELETE" });
+    await onSaved();
+  }
+
+  async function reactivate() {
+    await apiFetch(`/api/custom-fields/${def.id}`, {
+      method: "PUT",
+      body: JSON.stringify({ is_active: true }),
+    });
+    await onSaved();
+  }
+
+  async function hardDelete() {
+    if (!(await confirmDialog({ message: t("cf.hard_delete_confirm", "למחוק לצמיתות את כל הערכים?"), detail: def.field_key })))
+      return;
+    try {
+      await apiFetch(`/api/custom-fields/${def.id}?hard=true`, { method: "DELETE" });
+      await onSaved();
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+    }
+  }
+
+  const input = "rounded-md border border-gray-300 px-2 py-1 text-sm";
+  const typeMeta = CF_TYPE_LABELS[def.field_type];
+
+  return (
+    <div
+      className={`px-4 py-2 flex flex-wrap items-center gap-2 ${
+        def.is_active ? "" : "opacity-60"
+      }`}
+    >
+      <code className="text-xs text-gray-400 w-28 shrink-0" dir="ltr">
+        {def.field_key}
+      </code>
+      {typeMeta && (
+        <span className="rounded bg-gray-100 text-gray-500 text-xs px-2 py-0.5 shrink-0">
+          {t(typeMeta.labelKey, typeMeta.fallback)}
+        </span>
+      )}
+      <input
+        className={`${input} flex-1 min-w-[7rem]`}
+        placeholder={t("cf.label_placeholder", "תווית בעברית")}
+        dir="rtl"
+        value={label}
+        onChange={(e) => setLabel(e.target.value)}
+      />
+      <input
+        className={`${input} flex-1 min-w-[7rem]`}
+        placeholder="English"
+        dir="ltr"
+        value={english}
+        onChange={(e) => setEnglish(e.target.value)}
+      />
+      {!def.is_active && (
+        <span className="rounded bg-gray-200 text-gray-600 text-xs px-2 py-0.5">
+          {t("cf.disabled", "מושבת")}
+        </span>
+      )}
+      <div className="flex items-center gap-1 ms-auto">
+        <button
+          onClick={save}
+          className="rounded-md bg-gray-800 text-white px-3 py-1 text-xs hover:opacity-90"
+        >
+          {t("action.save", "שמור")}
+        </button>
+        {def.is_active ? (
+          <button
+            onClick={deactivate}
+            className="rounded-md border border-status-darkred/40 text-status-darkred px-2 py-1 text-xs hover:bg-red-50"
+          >
+            {t("action.delete", "מחק")}
+          </button>
+        ) : (
+          <>
+            <button
+              onClick={reactivate}
+              className="rounded-md border border-status-green/40 text-status-green px-2 py-1 text-xs hover:bg-green-50"
+            >
+              {t("cf.activate", "הפעל")}
+            </button>
+            <button
+              onClick={hardDelete}
+              className="text-xs text-status-darkred hover:underline"
+            >
+              {t("cf.hard_delete", "מחק לצמיתות")}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
   );
 }

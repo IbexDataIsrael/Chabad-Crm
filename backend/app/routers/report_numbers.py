@@ -70,7 +70,12 @@ def report_number_shliach_assignments(
             == models.ReportNumberContactShliach.contact_shliach_id,
         )
         .join(models.Contact, models.Contact.id == models.ContactShliach.contact_id)
-        .filter(models.Contact.organization_id == current_user.organization_id)
+        .filter(
+            models.Contact.organization_id == current_user.organization_id,
+            # fixes45: a retired version's copied-forward report-number link
+            # must not resurrect a since-removed coverage assignment.
+            models.ContactShliach.is_display.is_(True),
+        )
         .all()
     )
     result: dict[int, list[ShliachSummary]] = {}

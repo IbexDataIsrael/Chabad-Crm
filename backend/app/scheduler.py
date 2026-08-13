@@ -78,6 +78,10 @@ def _recipients(db: Session, sd: models.SignificantDate) -> list[str]:
                 .filter(
                     models.Apartment.id == apartment_id,
                     models.User.email.isnot(None),
+                    # fixes45: a retired shliach version's copied-forward
+                    # area link must not resurrect a since-removed coverage
+                    # assignment.
+                    models.ContactShliach.is_display.is_(True),
                 )
                 .all()
             )

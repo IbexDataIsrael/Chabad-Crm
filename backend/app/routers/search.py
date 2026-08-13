@@ -53,7 +53,8 @@ def global_search(
         # fixes10 §3.5: ownership isolation — only contacts assigned to this
         # shliach (plus their own shliach contact record).
         own = db.query(models.ContactShliach.contact_id).filter(
-            models.ContactShliach.user_id == current_user.id
+            models.ContactShliach.user_id == current_user.id,
+            models.ContactShliach.is_display.is_(True),
         )
         contacts = contacts.filter(
             (models.Contact.assigned_user_id == current_user.guid)

@@ -368,7 +368,10 @@ def user_dependencies(
     out = AdminUserDependenciesOut(assigned_contacts=assigned)
     shliach = (
         db.query(models.ContactShliach)
-        .filter(models.ContactShliach.user_id == user_id)
+        .filter(
+            models.ContactShliach.user_id == user_id,
+            models.ContactShliach.is_display.is_(True),
+        )
         .first()
     )
     if shliach:
@@ -394,6 +397,9 @@ def delete_user(
     db.query(models.Contact).filter(
         models.Contact.assigned_user_id == user.guid
     ).update({models.Contact.assigned_user_id: None}, synchronize_session=False)
+    # fixes45: deliberately unfiltered by is_display — every historical
+    # version carries this user_id forward too, and all of them must be
+    # nulled or the FK blocks the delete below.
     db.query(models.ContactShliach).filter(
         models.ContactShliach.user_id == user_id
     ).update({models.ContactShliach.user_id: None}, synchronize_session=False)

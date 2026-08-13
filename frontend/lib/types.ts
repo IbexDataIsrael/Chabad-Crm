@@ -68,6 +68,11 @@ export interface Shliach {
    *  'active' | 'disabled' | 'missing'. */
   login_status?: "active" | "disabled" | "missing" | null;
   notes: string | null;
+  /** fixes45: the active version's identity snapshot (mirrors the linked
+   *  User/Contact). */
+  full_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
   /** fixes19: report numbers replace the apartment coverage links. */
   report_number_ids: number[];
   area_ids: number[];
@@ -446,14 +451,20 @@ export interface ShliachSummary {
   last_name: string | null;
 }
 
-/** fixes43 §3.1: one field-level change on a shliach's coverage data. */
-export interface ContactShliachHistory {
+/** fixes45: one historical shliach version — the full snapshot plus who
+ *  retired it and when (same shape as the Apartments history view). */
+export interface ShliachVersion {
   id: number;
-  field: string;
-  old_value: string | null;
-  new_value: string | null;
+  contact_id: number;
+  user_id: number | null;
+  notes: string | null;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  report_number_ids: number[];
+  area_ids: number[];
+  last_edit: string | null;
   editor_name: string | null;
-  changed_at: string | null;
 }
 
 /**

@@ -191,11 +191,18 @@ class Contact(Base):
         uselist=False,
         cascade="all, delete-orphan",
     )
+    # fixes45: ContactShliach is versioned now (contact_id is no longer
+    # unique) — scope this relationship to the active version so every
+    # existing `contact.shliach.x` read/write site keeps working unchanged.
+    # No ORM cascade: `ContactShliach.contact_id` cascades at the DB level
+    # (ondelete="CASCADE"), which cleans up every version, not just the one
+    # this relationship can see.
     shliach = relationship(
         "ContactShliach",
         back_populates="contact",
         uselist=False,
-        cascade="all, delete-orphan",
+        primaryjoin="and_(Contact.id==ContactShliach.contact_id, "
+        "ContactShliach.is_display==True)",
     )
     # Contact-specific records: removed with the contact (FKs are enforced under
     # PostgreSQL, so these must be cascaded or the delete fails).
@@ -250,7 +257,19 @@ class ContactMekurav(Base):
 
 
 class ContactShliach(Base):
-    """Shliach-specific data for a contact of type 'shliach' (1:1 with a contact).
+    """Shliach-specific data for a contact of type 'shliach'. Versioned
+    (fixes45, same pattern as `Apartment`): an update retires the current row
+    (`is_display=False`, stamped with `last_edit`/`editor_id`) and inserts a
+    new active row; `root_id` chains every version to the lineage's first row
+    (NULL = the row is its own root). `contact_id` is therefore NOT unique —
+    it identifies the lineage, not a single row; exactly one row per lineage
+    has `is_display=True`. `full_name`/`email`/`phone` are a versioned
+    snapshot mirroring the linked login `User`/`Contact` at the time of the
+    edit (whichever surface — the Users page or the contact's shliach form —
+    made it), so both feed the same history. `report_numbers`/`areas` (the
+    M2M coverage links) are copied forward onto each new version, exactly
+    like Apartment's picklist_links — a retired row's own links are left
+    untouched as a frozen snapshot, so no separate diff log is needed.
 
     A shliach also gets a login `User` (role 'shliach'), linked via `user_id`.
     """
@@ -263,13 +282,39 @@ class ContactShliach(Base):
         Integer, ForeignKey("organizations.id"), nullable=False, index=True
     )
     contact_id = Column(
-        Integer, ForeignKey("contacts.id"), nullable=False, unique=True, index=True
+        Integer,
+        ForeignKey("contacts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     notes = Column(Text, nullable=True)  # הערות
+    # fixes45: versioned snapshot of the shliach's identity (mirrors the
+    # linked User/Contact) — see class docstring.
+    full_name = Column(String(100), nullable=True)
+    email = Column(String(255), nullable=True)
+    phone = Column(String(50), nullable=True)
+    # fixes45 — versioning columns (same shape as Apartment's, fixes19 §3).
+    # Both FKs SET NULL at the DB level: editor_id must never block a user
+    # delete, and root_id is self-referential — bulk/cascade deletes would
+    # otherwise trip over row ordering.
+    is_display = Column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+    last_edit = Column(DateTime, nullable=True)  # when this version was retired
+    editor_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )  # who retired it
+    root_id = Column(
+        Integer,
+        ForeignKey("contact_shliach.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     contact = relationship("Contact", back_populates="shliach")
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])
+    editor = relationship("User", foreign_keys=[editor_id])
     report_numbers = relationship(
         "ReportNumberContactShliach",
         back_populates="shliach",
@@ -280,35 +325,6 @@ class ContactShliach(Base):
         back_populates="shliach",
         cascade="all, delete-orphan",
     )
-
-
-class ContactShliachEditHistory(Base):
-    """fixes43 §3.1: field-level edit-history audit trail for shliach
-    coverage data (notes/area_ids/report_number_ids) — same "who changed
-    what, when" intent as the Apartments module's history, but a field-level
-    log rather than full-row versioning: `contact_shliach.contact_id` is
-    unique (1:1 with its contact) and referenced across the app, so retiring
-    rows the way Apartments does isn't safe here."""
-
-    __tablename__ = "contact_shliach_edit_history"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    organization_id = Column(
-        Integer, ForeignKey("organizations.id"), nullable=False, index=True
-    )
-    contact_shliach_id = Column(
-        Integer,
-        ForeignKey("contact_shliach.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    field = Column(String(50), nullable=False)  # 'notes' | 'area_ids' | 'report_number_ids'
-    old_value = Column(Text, nullable=True)
-    new_value = Column(Text, nullable=True)
-    editor_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    changed_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-    editor = relationship("User")
 
 
 class ReportNumber(Base):

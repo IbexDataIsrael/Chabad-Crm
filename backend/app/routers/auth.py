@@ -411,7 +411,10 @@ def _resolve_display_name(db: Session, user: models.User) -> Optional[str]:
     the user's email. None when the user has no contact record (e.g. staff)."""
     link = (
         db.query(models.ContactShliach)
-        .filter(models.ContactShliach.user_id == user.id)
+        .filter(
+            models.ContactShliach.user_id == user.id,
+            models.ContactShliach.is_display.is_(True),
+        )
         .first()
     )
     contact = link.contact if link else None

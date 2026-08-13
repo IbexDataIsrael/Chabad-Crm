@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app import models
 from app.core.email import send_shliach_welcome
 from app.core.security import hash_password
+from app.core.shliach import apply_shliach_versioned_update
 from app.database import get_db
 from app.deps import require_admin, require_staff_or_admin
 from app.schemas import OrgUserCreate, OrgUserUpdate, UserOut, UserRecreateIn
@@ -130,6 +131,11 @@ def update_user(
 ):
     user = _get_or_404(user_id, admin.organization_id, db)
     data = payload.model_dump(exclude_unset=True)
+    # fixes45: editing a shliach's login identity here is editing the same
+    # versioned shliach entity the contacts-page edit path feeds — capture
+    # which identity fields were actually sent before email/phone get popped
+    # off `data` below.
+    identity_sent = bool({"full_name", "email", "phone"} & data.keys())
     # Lockout guard: an admin can't demote or deactivate themselves.
     if user.id == admin.id and (
         data.get("role") == "staff" or data.get("is_active") is False
@@ -149,7 +155,10 @@ def update_user(
     # shliach contact so the two records never drift apart.
     linked = (
         db.query(models.ContactShliach)
-        .filter(models.ContactShliach.user_id == user.id)
+        .filter(
+            models.ContactShliach.user_id == user.id,
+            models.ContactShliach.is_display.is_(True),
+        )
         .first()
     )
     email = data.pop("email", None)
@@ -189,6 +198,22 @@ def update_user(
 
     for field, value in data.items():
         setattr(user, field, value)
+
+    # fixes45: a shliach's login-identity edit also produces a new
+    # ContactShliach version — "editing the user is editing the shliach"
+    # holds from this page too, not just the contact's own shliach form.
+    if linked and identity_sent:
+        apply_shliach_versioned_update(
+            db,
+            linked,
+            {
+                "full_name": user.full_name,
+                "email": user.email,
+                "phone": user.phone,
+            },
+            admin,
+        )
+
     db.commit()
     db.refresh(user)
     return user
@@ -243,6 +268,7 @@ def recreate_user(
             .filter(
                 models.ContactShliach.user_id == user.id,
                 models.ContactShliach.contact_id != contact.id,
+                models.ContactShliach.is_display.is_(True),
             )
             .first()
         )
@@ -271,11 +297,30 @@ def recreate_user(
         db.add(user)
         db.flush()
 
+    # fixes45: re-linking (or first-linking) the login user is a shliach
+    # identity change like any other — version it, except when bootstrapping
+    # the lineage's very first row (nothing to retire yet).
     if contact.shliach is None:
         contact.shliach = models.ContactShliach(
-            organization_id=org_id, contact_id=contact.id
+            organization_id=org_id,
+            contact_id=contact.id,
+            user_id=user.id,
+            full_name=user.full_name,
+            email=user.email,
+            phone=user.phone,
         )
-    contact.shliach.user_id = user.id
+    else:
+        contact.shliach = apply_shliach_versioned_update(
+            db,
+            contact.shliach,
+            {
+                "user_id": user.id,
+                "full_name": user.full_name,
+                "email": user.email,
+                "phone": user.phone,
+            },
+            admin,
+        )
     db.commit()
     db.refresh(user)
     return user
@@ -294,6 +339,9 @@ def delete_user(
     db.query(models.Contact).filter(
         models.Contact.assigned_user_id == user.guid
     ).update({models.Contact.assigned_user_id: None}, synchronize_session=False)
+    # fixes45: deliberately unfiltered by is_display — every historical
+    # version carries this user_id forward too, and all of them must be
+    # nulled or the FK blocks the delete below.
     db.query(models.ContactShliach).filter(
         models.ContactShliach.user_id == user.id
     ).update({models.ContactShliach.user_id: None}, synchronize_session=False)

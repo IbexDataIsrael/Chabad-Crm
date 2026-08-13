@@ -732,7 +732,9 @@ export default function ContactsPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">{t("contacts", "אנשי קשר")}</h1>
-        <div className="flex items-center gap-2">
+        {/* fixes44 §2: flex-wrap so the button row folds onto extra lines on
+            narrow viewports instead of overflowing horizontally. */}
+        <div className="flex flex-wrap items-center gap-2">
           {/* Always reachable while any filter narrows the list — a saved
               filter must never require hunting through the controls to undo
               (the empty-state button below only covers the zero-results case). */}

@@ -865,6 +865,16 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("users", "users.show_inactive", "הצג משתמשים לא פעילים", "Show inactive users"),
     ("users", "users.role_updated", "התפקיד עודכן", "Role updated"),
     ("users", "users.login_missing", "אין כניסה למערכת", "No system login"),
+    # --- fixes44 §4: picklists page surfaces non-select custom fields (e.g.
+    # the Mivtzoim booleans + "קשר לרבי") centrally, alongside real picklists. ---
+    ("pl", "pl.custom_fields_section", "שדות (לא רשימת בחירה)", "Fields (non-list)"),
+    (
+        "pl",
+        "pl.custom_fields_hint",
+        "שדות אלו (תיבת סימון, טקסט, מספר או תאריך — למשל \"קשר לרבי\") אינם רשימת ערכים אלא שדה בודד; מוצגים כאן לניהול מרוכז. הוספת שדה חדש מתבצעת בדף שדות מותאמים אישית.",
+        "These fields (checkbox, text, number, or date — e.g. \"Connection to the Rebbe\") aren't option lists but single fields; shown here for central management. Add a new one from the Custom Fields page.",
+    ),
+    ("pl", "pl.go_to_custom_fields", "מעבר לדף שדות מותאמים אישית ←", "Go to the Custom Fields page →"),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)

@@ -88,7 +88,12 @@ def area_shliach_assignments(
             models.ContactShliach.id == models.ContactShliachArea.contact_shliach_id,
         )
         .join(models.Contact, models.Contact.id == models.ContactShliach.contact_id)
-        .filter(models.Contact.organization_id == current_user.organization_id)
+        .filter(
+            models.Contact.organization_id == current_user.organization_id,
+            # fixes45: a retired version's copied-forward area link must not
+            # resurrect a since-removed coverage assignment.
+            models.ContactShliach.is_display.is_(True),
+        )
         .all()
     )
     result: dict[int, list[ShliachSummary]] = {}
@@ -206,7 +211,13 @@ def area_shluchim(
             models.ContactShliachArea,
             models.ContactShliachArea.contact_shliach_id == models.ContactShliach.id,
         )
-        .filter(models.ContactShliachArea.area_id == area_id)
+        .filter(
+            models.ContactShliachArea.area_id == area_id,
+            # fixes45: ContactShliach is versioned now — a retired version's
+            # copied-forward area link must not resurrect a since-removed
+            # coverage assignment.
+            models.ContactShliach.is_display.is_(True),
+        )
     )
     contact_ids = {row[0] for row in via_area.all()}
     if not contact_ids:

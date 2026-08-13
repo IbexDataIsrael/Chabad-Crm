@@ -98,6 +98,10 @@ class UserOut(BaseModel):
     # (set on /api/auth/me only; None elsewhere).
     display_name: Optional[str] = None
     email: Optional[str] = None
+    # fixes44 §1: was already a User column (kept in sync with a linked
+    # shliach contact by PUT /api/users/{id}) but never exposed on reads —
+    # the Users page derived it by re-matching contacts by email instead.
+    phone: Optional[str] = None
     role: str
     is_active: bool = True
     created_at: datetime
@@ -845,6 +849,11 @@ class ShliachOut(BaseModel):
     contact_id: int
     user_id: Optional[int] = None
     notes: Optional[str] = None
+    # fixes45: the active version's identity snapshot (mirrors the linked
+    # User/Contact) — see models.ContactShliach docstring.
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
     report_number_ids: list[int] = []
     area_ids: list[int] = []
     # fixes26 §4: state of the linked login account, resolved like
@@ -1000,17 +1009,24 @@ class ShliachClearAreasResult(BaseModel):
     updated: int
 
 
-class ContactShliachHistoryOut(BaseModel):
-    """fixes43 §3.1: one field-level change on a shliach's coverage data."""
+class ShliachVersionOut(BaseModel):
+    """fixes45: one historical shliach version (admin history view) — the
+    full snapshot plus who retired it and when. Same shape as
+    ApartmentVersionOut."""
 
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    field: str
-    old_value: Optional[str] = None
-    new_value: Optional[str] = None
+    contact_id: int
+    user_id: Optional[int] = None
+    notes: Optional[str] = None
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    report_number_ids: list[int] = []
+    area_ids: list[int] = []
+    last_edit: Optional[datetime] = None
     editor_name: Optional[str] = None
-    changed_at: Optional[datetime] = None
 
 
 # fixes25: the standalone Interaction schemas are gone — interactions are a
