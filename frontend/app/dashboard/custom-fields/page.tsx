@@ -5,11 +5,12 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useConfirm } from "@/lib/confirm";
+import { confirmHardDelete } from "@/lib/dependentDelete";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 import type { CustomFieldDefinition, CustomFieldEntityType, CustomFieldType } from "@/lib/types";
-import { useConfirm } from "@/lib/confirm";
 
 // fixes35 §2: every entity a custom field can attach to, matching
 // dashboard/fields's own ENTITY_GROUPS labels for consistency.
@@ -227,8 +228,19 @@ function DefRow({
   }
 
   async function hardDelete() {
-    if (!(await confirmDialog({ message: t("cf.hard_delete_confirm", "למחוק לצמיתות את כל הערכים?"), detail: def.field_key })))
-      return;
+    const ok = await confirmHardDelete(
+      confirmDialog,
+      `/api/custom-fields/${def.id}/usage`,
+      def.field_key,
+      {
+        withData: t(
+          "cf.dependent_data_confirm",
+          "יש נתונים הקשורים לשדה זה האם למחוק בכל זאת?",
+        ),
+        plain: t("cf.hard_delete_confirm", "למחוק לצמיתות את כל הערכים?"),
+      },
+    );
+    if (!ok) return;
     try {
       await apiFetch(`/api/custom-fields/${def.id}?hard=true`, { method: "DELETE" });
       await onChanged();

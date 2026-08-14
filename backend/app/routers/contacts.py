@@ -43,8 +43,8 @@ from app.schemas import (
     ContactUpdate,
     MekuravOut,
     ReminderOut,
-    ShliachClearAreasIn,
-    ShliachClearAreasResult,
+    ShliachClearReportNumbersIn,
+    ShliachClearReportNumbersResult,
     ShliachOut,
     ShliachVersionOut,
     SignificantDateCreate,
@@ -277,6 +277,7 @@ def _build_detail(contact: models.Contact, db: Session) -> ContactDetailOut:
     detail.custom_field_values = custom_field_utils.get_values(
         db, org_id, _custom_field_entity_type(contact.contact_type), contact.id
     )
+    _apply_mekurav_geo(detail, contact)
     if contact.mekurav:
         detail.mekurav = MekuravOut.model_validate(contact.mekurav)
         detail.mekurav.potential_next_step = picklist_utils.get_values(
@@ -836,6 +837,25 @@ def _custom_field_map_bulk(db: Session, org_id: int, contact_ids: list[int]) -> 
     }
 
 
+def _apply_mekurav_geo(out: ContactOut, contact: models.Contact) -> None:
+    """Populate the building/area/admin-area display names (fixes15 §5.1,
+    fixes18 §3.4) plus the raw apartment_id/admin_area_id an inline editor
+    needs as its current value (fixes48 §2) — shared by the list rows and the
+    single-contact detail response, so a PATCH result merged straight into a
+    grid row carries fresh names, not stale/missing ones."""
+    if not contact.mekurav:
+        return
+    out.apartment_id = contact.mekurav.apartment_id
+    out.admin_area_id = contact.mekurav.admin_area_id
+    apartment = contact.mekurav.apartment
+    if apartment and apartment.building:
+        out.building_name = building_display_name(apartment.building)
+        if apartment.building.area:
+            out.area_name = apartment.building.area.area_name
+    if contact.mekurav.admin_area:
+        out.admin_area_name = contact.mekurav.admin_area.name
+
+
 def _list_item(
     contact: models.Contact,
     picklist_map: dict[str, Optional[str]],
@@ -846,14 +866,7 @@ def _list_item(
     out = ContactOut.model_validate(contact)
     _apply_contact_picklist_fields(out, picklist_map)
     out.custom_field_values = custom_field_map or {}
-    apartment = contact.mekurav.apartment if contact.mekurav else None
-    if apartment and apartment.building:
-        out.building_name = building_display_name(apartment.building)
-        if apartment.building.area:
-            out.area_name = apartment.building.area.area_name
-    # fixes18 §3.4: the admin-area link feeds the optional grid column.
-    if contact.mekurav and contact.mekurav.admin_area:
-        out.admin_area_name = contact.mekurav.admin_area.name
+    _apply_mekurav_geo(out, contact)
     return out
 
 
@@ -1073,17 +1086,19 @@ def bulk_update_contacts(
     return ContactBulkUpdateResult(updated=len(contacts))
 
 
-@router.post("/shliach/clear-areas", response_model=ShliachClearAreasResult)
-def clear_shliach_areas(
-    payload: ShliachClearAreasIn,
+@router.post("/shliach/clear-report-numbers", response_model=ShliachClearReportNumbersResult)
+def clear_shliach_report_numbers(
+    payload: ShliachClearReportNumbersIn,
     db: Session = Depends(get_db),
     admin: models.User = Depends(require_admin),
 ):
-    """fixes43 §3.4: "ניקוי שיבוצים" — clear the area assignment from every
-    shliach contact in `contact_ids` (the Users page's current filtered
-    view). Admin-only, irreversible (the frontend confirms before calling).
-    fixes45: applied as a versioned edit per shliach, same as any other
-    coverage change, only touching the active row of each lineage."""
+    """fixes43 §3.4 / fixes48 §3: "ניקוי שיבוצים" — clear the report-number
+    assignment from every shliach contact in `contact_ids` (the Users page's
+    current filtered view). Admin-only, irreversible (the frontend confirms
+    before calling). fixes45: applied as a versioned edit per shliach, same as
+    any other coverage change, only touching the active row of each lineage.
+    fixes48: this originally cleared `areas` instead — area assignment must
+    be left untouched, only report_numbers is in scope for this action."""
     shluchim = (
         db.query(models.ContactShliach)
         .join(models.Contact, models.Contact.id == models.ContactShliach.contact_id)
@@ -1096,13 +1111,13 @@ def clear_shliach_areas(
     )
     updated = 0
     for shliach in shluchim:
-        if not shliach.areas:
+        if not shliach.report_numbers:
             continue
         new = apply_shliach_versioned_update(db, shliach, {}, admin)
-        set_shliach_areas(db, new, [], org_id=admin.organization_id)
+        set_shliach_report_numbers(db, new, [], org_id=admin.organization_id)
         db.commit()
         updated += 1
-    return ShliachClearAreasResult(updated=updated)
+    return ShliachClearReportNumbersResult(updated=updated)
 
 
 @router.post("", response_model=ContactDetailOut, status_code=status.HTTP_201_CREATED)

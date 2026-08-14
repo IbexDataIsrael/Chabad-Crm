@@ -950,6 +950,12 @@ class ContactOut(ContactBase):
     building_name: Optional[str] = None
     area_name: Optional[str] = None
     admin_area_name: Optional[str] = None
+    # fixes48 §2: the raw ids behind building_name/admin_area_name — a grid
+    # inline editor needs these as its current value (the display names alone
+    # aren't enough to pre-populate a select/picker). None when the contact
+    # has no mekurav record or the field is unset.
+    apartment_id: Optional[int] = None
+    admin_area_id: Optional[int] = None
     # fixes27 §3: /list enrichment for shliach rows — the login account's state
     # ('active' | 'disabled' | 'missing'), driving the row-level suspended
     # notice. None for mekurav rows and outside /list.
@@ -1009,16 +1015,25 @@ class ContactBulkUpdateResult(BaseModel):
     updated: int
 
 
-class ShliachClearAreasIn(BaseModel):
-    """fixes43 §3.4: "ניקוי שיבוצים" — clear the area assignment from every
-    shliach contact in the given id set (the Users page's current filtered
-    view)."""
+class ShliachClearReportNumbersIn(BaseModel):
+    """fixes43 §3.4 / fixes48 §3: "ניקוי שיבוצים" — clear the report-number
+    assignment from every shliach contact in the given id set (the Users
+    page's current filtered view). fixes48: this used to clear `areas`
+    instead — the area assignment must be left untouched."""
 
     contact_ids: list[int]
 
 
-class ShliachClearAreasResult(BaseModel):
+class ShliachClearReportNumbersResult(BaseModel):
     updated: int
+
+
+class ShliachRestoreField(BaseModel):
+    """fixes48 §4: restore one field of the active shliach back to the value
+    it held in a previous version — mirrors ApartmentRestoreField."""
+
+    version_id: int  # the historical ContactShliach row to read the value from
+    field: str  # which restorable field to roll back
 
 
 class ShliachVersionOut(BaseModel):
@@ -1083,6 +1098,14 @@ class PicklistValueOut(BaseModel):
 
 class PicklistReorder(BaseModel):
     ordered_ids: list[int]
+
+
+class UsageOut(BaseModel):
+    """fixes48 §1: dependent-record count for a definition/value about to be
+    hard-deleted — the frontend confirms with a data-loss warning when
+    count > 0, then purges on confirm."""
+
+    count: int
 
 
 class PicklistFieldOut(BaseModel):

@@ -13,7 +13,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app import models
@@ -26,7 +26,14 @@ from app.core.shliach import (
 )
 from app.database import get_db
 from app.deps import require_admin, require_staff_or_admin
-from app.schemas import OrgUserCreate, OrgUserUpdate, ShliachOut, UserOut, UserRecreateIn
+from app.schemas import (
+    OrgUserCreate,
+    OrgUserUpdate,
+    ShliachOut,
+    ShliachRestoreField,
+    UserOut,
+    UserRecreateIn,
+)
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -293,6 +300,72 @@ def update_user(
     if linked:
         db.refresh(linked)
         out.shliach = _shliach_out(linked)
+    return out
+
+
+# fixes48 §4: fields an admin may roll back on a shliach's linked contact —
+# mirrors apartments._RESTORABLE_FIELDS. "areas"/"report_numbers" are the
+# coverage link tables (not plain columns), handled specially below, same as
+# apartments' picklist fields.
+_SHLIACH_RESTORABLE_FIELDS = (
+    "full_name", "email", "phone", "notes", "areas", "report_numbers",
+)
+
+
+@router.post("/{user_id}/shliach/restore-field", response_model=UserOut)
+def restore_shliach_field(
+    user_id: int,
+    payload: ShliachRestoreField,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    """fixes48 §4: roll one field of the linked shliach back to the value it
+    held in a previous version — same "new active version carrying just the
+    restored field" contract as apartments.restore_apartment_field. Admin
+    only; mirrors the history dashboard/users/{id} now shows."""
+    user = _get_or_404(user_id, admin.organization_id, db)
+    linked = _linked_shliach(db, user.id)
+    if not linked:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No linked shliach contact")
+    if payload.field not in _SHLIACH_RESTORABLE_FIELDS:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, f"field '{payload.field}' cannot be restored"
+        )
+    root_id = linked.root_id or linked.id
+    version = (
+        db.query(models.ContactShliach)
+        .filter(
+            models.ContactShliach.id == payload.version_id,
+            models.ContactShliach.organization_id == admin.organization_id,
+            or_(
+                models.ContactShliach.root_id == root_id,
+                models.ContactShliach.id == root_id,
+            ),
+        )
+        .first()
+    )
+    if not version:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "version not found in this shliach's history"
+        )
+
+    changes: dict = {}
+    if payload.field in ("full_name", "email", "phone", "notes"):
+        changes[payload.field] = getattr(version, payload.field)
+    new = apply_shliach_versioned_update(db, linked, changes, admin)
+    if payload.field == "areas":
+        set_shliach_areas(
+            db, new, [a.area_id for a in version.areas], admin.organization_id
+        )
+    elif payload.field == "report_numbers":
+        set_shliach_report_numbers(
+            db, new, [r.report_number_id for r in version.report_numbers], admin.organization_id
+        )
+    db.commit()
+    db.refresh(user)
+    db.refresh(new)
+    out = UserOut.model_validate(user)
+    out.shliach = _shliach_out(new)
     return out
 
 

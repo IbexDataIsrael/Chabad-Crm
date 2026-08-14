@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { ApartmentPicker } from "@/components/ApartmentPicker";
 import { CustomFieldValueDisplay, CustomFieldValueInput } from "@/components/CustomFieldValueInput";
 import { DatePicker } from "@/components/DatePicker";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
@@ -71,7 +72,21 @@ const DEFAULT_COLUMNS: ColumnKey[] = ["phone", "owner", "created"];
 // fixes34 §1.1: which optional columns render an inline editor — their cells
 // must stop the row's navigate-onClick from swallowing the edit click.
 // fixes43 §1: "owner" (Assigned To) joins the set.
-const EDITABLE_COLUMN_KEYS = new Set<ColumnKey>(["phone", "status", "priority", "address", "owner"]);
+// fixes48 §2: "admin_area"/"building" join the set now that they're inline-editable.
+const EDITABLE_COLUMN_KEYS = new Set<ColumnKey>([
+  "phone", "status", "priority", "address", "owner", "admin_area", "building",
+]);
+
+// fixes48 §2: one grid column, whichever of the 3 kinds it is — feeds the
+// unified drag-reorder list (Customize Columns panel + the table itself).
+type GridColumn =
+  | { kind: "col"; key: ColumnKey }
+  | { kind: "pl"; key: string; def: PicklistField }
+  | { kind: "cfield"; key: string; def: CustomFieldDefinition };
+
+function gridColumnSortKey(entry: GridColumn): string {
+  return `${entry.kind}:${entry.key}`;
+}
 
 /** The mitzvah checkbox filters (fixes17 §2.2); fixes25: the flags live on
  * visits — a contact matches through any of its visits. fixes27 §1: the org's
@@ -165,9 +180,6 @@ export default function ContactsPage() {
   const customPicklists = usePicklistsMap(
     orgVisibleCustomPicklistDefs.map((d) => d.field_key),
   );
-  const visibleCustomPicklistDefs = orgVisibleCustomPicklistDefs.filter(
-    (d) => visibleCustomPicklistKeys == null || visibleCustomPicklistKeys.includes(d.field_key),
-  );
   // fixes35 §3: any non-select mekurav custom field — same column-selector
   // treatment as the picklist ones above, in its own preference so existing
   // "contacts.customFields" selections (picklist-only) are untouched.
@@ -179,9 +191,6 @@ export default function ContactsPage() {
   );
   const [visibleCustomFieldKeys, setVisibleCustomFieldKeys] = useDbPreference<string[] | null>(
     "contacts.customFieldFields", null,
-  );
-  const visibleCustomFieldDefs = orgVisibleCustomFieldDefs.filter(
-    (d) => visibleCustomFieldKeys == null || visibleCustomFieldKeys.includes(d.field_key),
   );
   function toggleCustomFieldColumn(fieldKey: string) {
     setVisibleCustomFieldKeys((prev) => {
@@ -217,6 +226,14 @@ export default function ContactsPage() {
   // across browsers/devices (localStorage is only the boot cache).
   const [columns, setColumns] = useDbPreference<ColumnKey[]>(
     "contacts.columns", DEFAULT_COLUMNS,
+  );
+  // fixes48 §2: one relative order spanning fixed AND custom (picklist +
+  // field) columns — a permutation of gridColumnSortKey values. Empty until
+  // a user actually drags/reorders; anything not yet in it keeps its natural
+  // (fixed-then-picklist-then-field) position, so existing saved layouts are
+  // unaffected until someone opts in.
+  const [columnOrder, setColumnOrder] = useDbPreference<string[]>(
+    "contacts.columnOrder", [],
   );
   const [columnsOpen, setColumnsOpen] = useState(false);
   // fixes39: SortableJS-backed reorder, mobile-first (native HTML5
@@ -499,37 +516,80 @@ export default function ContactsPage() {
     priority: t("contacts.priority_score", "ציון עדיפות"),
     address: t("contacts.address", "כתובת"),
   };
-  // fixes38 §1.1: iterate `columns` (the ordered preference), not the fixed
-  // COLUMN_KEYS array — otherwise a user's chosen order is stored but never
-  // rendered, which reads as "drag-and-drop reordering doesn't work".
-  const activeColumns = columns.filter(
-    (k): k is ColumnKey => (COLUMN_KEYS as readonly string[]).includes(k) && availability[k],
-  );
-  // name + actions + quick actions + the trailing filler column.
-  const colCount =
-    4 + activeColumns.length + visibleCustomPicklistDefs.length + visibleCustomFieldDefs.length;
-
+  function gridColumnLabel(entry: GridColumn): string {
+    if (entry.kind === "col") return columnLabels[entry.key];
+    if (entry.kind === "pl") {
+      const d = entry.def;
+      return (lang === "en" ? d.english_label || d.label : d.label) || d.field_key;
+    }
+    const d = entry.def;
+    return (lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) || d.field_key;
+  }
   function toggleColumn(k: ColumnKey) {
     setColumns((prev) =>
       prev.includes(k) ? prev.filter((c) => c !== k) : [...prev, k],
     );
   }
 
-  // fixes39 §3: SortableJS's container holds every chip (active + inactive
-  // — an inactive one can't be dragged, per useSortableList's `filter`, but
-  // a dragged active chip can still land next to/among them), so rather
-  // than translate a single from/to index pair against two different lists,
-  // just recompute the active order from the container's resulting DOM
-  // order directly: keep whichever of `orderedKeys` are currently "on", in
-  // their new relative order.
-  function reorderColumns(orderedKeys: string[]) {
-    setColumns((prev) => {
-      const activeSet = new Set(
-        prev.filter((k): k is ColumnKey => (COLUMN_KEYS as readonly string[]).includes(k)),
+  // fixes48 §2: fixed + custom-picklist + custom-field columns unified into
+  // one draggable/orderable list — previously only the fixed COLUMN_KEYS
+  // were reorderable; custom columns were pinned in a fixed tail position
+  // with no relative ordering of their own, active or not.
+  const allGridColumns: GridColumn[] = [
+    ...COLUMN_KEYS.filter((k) => availability[k]).map(
+      (key): GridColumn => ({ kind: "col", key }),
+    ),
+    ...orgVisibleCustomPicklistDefs.map(
+      (def): GridColumn => ({ kind: "pl", key: def.field_key, def }),
+    ),
+    ...orgVisibleCustomFieldDefs.map(
+      (def): GridColumn => ({ kind: "cfield", key: def.field_key, def }),
+    ),
+  ];
+
+  function isGridColumnActive(entry: GridColumn): boolean {
+    if (entry.kind === "col") return columns.includes(entry.key);
+    if (entry.kind === "pl") {
+      return (
+        visibleCustomPicklistKeys == null || visibleCustomPicklistKeys.includes(entry.key)
       );
-      const reordered = orderedKeys.filter((k): k is ColumnKey => activeSet.has(k as ColumnKey));
-      return reordered.length > 0 ? reordered : prev;
-    });
+    }
+    return visibleCustomFieldKeys == null || visibleCustomFieldKeys.includes(entry.key);
+  }
+
+  function toggleGridColumn(entry: GridColumn) {
+    if (entry.kind === "col") return toggleColumn(entry.key);
+    if (entry.kind === "pl") {
+      setVisibleCustomPicklistKeys((prev) => {
+        const current = prev ?? orgVisibleCustomPicklistDefs.map((d) => d.field_key);
+        return current.includes(entry.key)
+          ? current.filter((k) => k !== entry.key)
+          : [...current, entry.key];
+      });
+      return;
+    }
+    toggleCustomFieldColumn(entry.key);
+  }
+
+  // A saved order (`columnOrder`) is a permutation of gridColumnSortKey
+  // values; anything not yet in it (a new custom field, or before a user
+  // ever reorders at all) keeps its natural fixed→picklist→field position —
+  // a stable sort preserves allGridColumns' own order for ties.
+  const columnOrderIndex = new Map(columnOrder.map((k, i) => [k, i]));
+  const sortedGridColumns = [...allGridColumns].sort((a, b) => {
+    const ai = columnOrderIndex.get(gridColumnSortKey(a)) ?? Number.MAX_SAFE_INTEGER;
+    const bi = columnOrderIndex.get(gridColumnSortKey(b)) ?? Number.MAX_SAFE_INTEGER;
+    return ai - bi;
+  });
+  const orderedActiveColumns = sortedGridColumns.filter(isGridColumnActive);
+  // name + actions + quick actions + the trailing filler column.
+  const colCount = 4 + orderedActiveColumns.length;
+
+  // fixes39 §3 / fixes48 §2: SortableJS's container holds every chip — fixed
+  // and custom, active and inactive — so a drag persists the full resulting
+  // order directly (each child's data-sort-key = gridColumnSortKey).
+  function reorderColumns(orderedKeys: string[]) {
+    if (orderedKeys.length > 0) setColumnOrder(orderedKeys);
   }
 
   // fixes38: guaranteed-reliable fallback for the pointer/drag reorder above
@@ -538,18 +598,17 @@ export default function ContactsPage() {
   // 100% of the time. These buttons swap adjacent active columns directly,
   // the same one-step arrow-button pattern the contact page's own Display
   // Order settings already use (moveSegment) — no gesture involved at all.
-  function moveActiveColumn(key: ColumnKey, delta: -1 | 1) {
-    setColumns((prev) => {
-      const known = prev.filter((k): k is ColumnKey =>
-        (COLUMN_KEYS as readonly string[]).includes(k),
-      );
-      const idx = known.indexOf(key);
-      const to = idx + delta;
-      if (idx === -1 || to < 0 || to >= known.length) return prev;
-      const next = [...known];
-      [next[idx], next[to]] = [next[to], next[idx]];
-      return next;
-    });
+  function moveActiveColumn(entry: GridColumn, delta: -1 | 1) {
+    const idx = orderedActiveColumns.findIndex(
+      (e) => gridColumnSortKey(e) === gridColumnSortKey(entry),
+    );
+    const to = idx + delta;
+    if (idx === -1 || to < 0 || to >= orderedActiveColumns.length) return;
+    const fullKeys = sortedGridColumns.map(gridColumnSortKey);
+    const ia = fullKeys.indexOf(gridColumnSortKey(orderedActiveColumns[idx]));
+    const ib = fullKeys.indexOf(gridColumnSortKey(orderedActiveColumns[to]));
+    [fullKeys[ia], fullKeys[ib]] = [fullKeys[ib], fullKeys[ia]];
+    setColumnOrder(fullKeys);
   }
 
   // fixes34 §1.1: one-field inline save straight from the list row — contacts
@@ -628,6 +687,44 @@ export default function ContactsPage() {
     />
   );
 
+  // fixes48 §2: inline "Admin Area" / "Buildings" edit from the list row —
+  // same patterns ContactView.tsx already uses successfully on the contact's
+  // own detail page (admin_area: plain <select>, commit on change; building:
+  // the existing ApartmentPicker, default blur-commit).
+  const inlineAdminAreaCell = (c: Contact) => (
+    <InlineEdit<number | null>
+      value={c.admin_area_id ?? null}
+      display={c.admin_area_name ?? "—"}
+      commitOnBlur={false}
+      onSave={(v) => saveField(c, { mekurav: { admin_area_id: v } })}
+      editor={(draft, _setDraft, commit) => (
+        <select
+          className={inputClass}
+          value={draft ?? ""}
+          onChange={(e) => commit(e.target.value === "" ? null : Number(e.target.value))}
+        >
+          <option value="">—</option>
+          {adminAreas.map((aa) => (
+            <option key={aa.id} value={aa.id}>
+              {aa.name}
+            </option>
+          ))}
+        </select>
+      )}
+    />
+  );
+
+  const inlineBuildingCell = (c: Contact) => (
+    <InlineEdit<number | null>
+      value={c.apartment_id ?? null}
+      display={c.building_name ?? "—"}
+      onSave={(v) => saveField(c, { mekurav: { apartment_id: v } })}
+      editor={(draft, setDraft) => (
+        <ApartmentPicker value={draft} onChange={setDraft} />
+      )}
+    />
+  );
+
   const inlineStatusCell = (c: Contact) => (
     <InlineEdit<string | null>
       value={c.pipeline_status ?? null}
@@ -693,9 +790,9 @@ export default function ContactsPage() {
       case "owner":
         return isShliach ? ownerName(c.assigned_user_id) : inlineOwnerCell(c);
       case "admin_area":
-        return c.admin_area_name ?? "—";
+        return isShliach ? (c.admin_area_name ?? "—") : inlineAdminAreaCell(c);
       case "building":
-        return c.building_name ?? "—";
+        return isShliach ? (c.building_name ?? "—") : inlineBuildingCell(c);
       case "created":
         return (
           <span dir="ltr">{new Date(c.created_at).toLocaleDateString("he-IL")}</span>
@@ -825,26 +922,27 @@ export default function ContactsPage() {
           <p className="text-xs text-gray-400">
             {t("columns.reorder_hint", "גרור עמודה פעילה כדי לשנות את סדר ההצגה.")}
           </p>
-          {/* fixes39 §3: one real SortableJS-managed container for every
-              chip, active or not (mobile-first — see useSortableList's doc
-              comment). An inactive chip is marked `data-sortable-disabled`
-              so it can't itself be dragged (its plain toggle-on click still
-              works — `preventOnFilter: false`), but still occupies a normal
-              slot so active ones keep flowing in the same row. Active chips
-              render FIRST, in their actual current (reordered) order, so a
+          {/* fixes39 §3 / fixes48 §2: one real SortableJS-managed container
+              for every chip — fixed AND custom, active or not (mobile-first
+              — see useSortableList's doc comment). An inactive chip is
+              marked `data-sortable-disabled` so it can't itself be dragged
+              (its plain toggle-on click still works —
+              `preventOnFilter: false`), but still occupies a normal slot so
+              active ones keep flowing in the same row. Active chips render
+              FIRST, in their actual current (reordered) order, so a
               successful drag is immediately visible here, not just in the
               table. */}
           <div ref={columnsSortableRef} className="flex flex-wrap gap-2">
-            {activeColumns.filter((k) => availability[k]).map((k) => {
-              const activeIdx = activeColumns.indexOf(k);
+            {orderedActiveColumns.map((entry, activeIdx) => {
+              const key = gridColumnSortKey(entry);
               return (
-                <span key={k} data-sort-key={k} className="inline-flex items-center gap-0.5">
+                <span key={key} data-sort-key={key} className="inline-flex items-center gap-0.5">
                   <button
                     type="button"
-                    onClick={withClickGuard(() => toggleColumn(k))}
+                    onClick={withClickGuard(() => toggleGridColumn(entry))}
                     className="rounded-md border px-3 py-1.5 text-sm border-status-magenta bg-status-magenta/10 text-status-magenta cursor-grab active:cursor-grabbing"
                   >
-                    ⠿ {columnLabels[k]}
+                    ⠿ {gridColumnLabel(entry)}
                   </button>
                   {/* fixes38: guaranteed-reliable fallback for dragging —
                       a click always works, unlike a drag gesture on some
@@ -853,7 +951,7 @@ export default function ContactsPage() {
                     <button
                       type="button"
                       disabled={activeIdx === 0}
-                      onClick={() => moveActiveColumn(k, -1)}
+                      onClick={() => moveActiveColumn(entry, -1)}
                       title={t("action.move_up", "העלה")}
                       className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
                     >
@@ -861,8 +959,8 @@ export default function ContactsPage() {
                     </button>
                     <button
                       type="button"
-                      disabled={activeIdx === activeColumns.length - 1}
-                      onClick={() => moveActiveColumn(k, 1)}
+                      disabled={activeIdx === orderedActiveColumns.length - 1}
+                      onClick={() => moveActiveColumn(entry, 1)}
                       title={t("action.move_down", "הורד")}
                       className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
                     >
@@ -872,71 +970,18 @@ export default function ContactsPage() {
                 </span>
               );
             })}
-            {COLUMN_KEYS.filter((k) => !activeColumns.includes(k) && availability[k]).map(
-              (k) => (
+            {sortedGridColumns.filter((entry) => !isGridColumnActive(entry)).map((entry) => {
+              const key = gridColumnSortKey(entry);
+              return (
                 <button
-                  key={k}
+                  key={key}
                   type="button"
-                  data-sort-key={k}
+                  data-sort-key={key}
                   data-sortable-disabled=""
-                  onClick={() => toggleColumn(k)}
+                  onClick={() => toggleGridColumn(entry)}
                   className="rounded-md border px-3 py-1.5 text-sm border-gray-200 text-gray-600 hover:bg-gray-50"
                 >
-                  {columnLabels[k]}
-                </button>
-              ),
-            )}
-            {/* fixes34 §1.1: one toggle chip per admin-added contact
-                picklist — same "contacts.customFields" preference the
-                filter/column rendering below consults. */}
-            {orgVisibleCustomPicklistDefs.map((d) => {
-              const on =
-                visibleCustomPicklistKeys == null ||
-                visibleCustomPicklistKeys.includes(d.field_key);
-              return (
-                <button
-                  key={d.field_key}
-                  type="button"
-                  data-sortable-disabled=""
-                  onClick={() =>
-                    setVisibleCustomPicklistKeys((prev) => {
-                      const current =
-                        prev ?? orgVisibleCustomPicklistDefs.map((cd) => cd.field_key);
-                      return current.includes(d.field_key)
-                        ? current.filter((k) => k !== d.field_key)
-                        : [...current, d.field_key];
-                    })
-                  }
-                  className={`rounded-md border px-3 py-1.5 text-sm ${
-                    on
-                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
-                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  {on ? "✓ " : ""}
-                  {(lang === "en" ? d.english_label || d.label : d.label) || d.field_key}
-                </button>
-              );
-            })}
-            {/* fixes35 §3: one toggle chip per non-select mekurav custom field. */}
-            {orgVisibleCustomFieldDefs.map((d) => {
-              const on =
-                visibleCustomFieldKeys == null || visibleCustomFieldKeys.includes(d.field_key);
-              return (
-                <button
-                  key={d.field_key}
-                  type="button"
-                  data-sortable-disabled=""
-                  onClick={() => toggleCustomFieldColumn(d.field_key)}
-                  className={`rounded-md border px-3 py-1.5 text-sm ${
-                    on
-                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
-                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  {on ? "✓ " : ""}
-                  {(lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
-                    d.field_key}
+                  {gridColumnLabel(entry)}
                 </button>
               );
             })}
@@ -1275,24 +1320,14 @@ export default function ContactsPage() {
               <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
                 {t("common.name", "שם")}
               </th>
-              {activeColumns.map((k) => (
-                <th key={k} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
-                  {columnLabels[k]}
-                </th>
-              ))}
-              {/* fixes34 §1.1: one column per admin-added contact picklist
-                  the column-selector panel has left switched on. */}
-              {visibleCustomPicklistDefs.map((d) => (
-                <th key={d.field_key} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
-                  {(lang === "en" ? d.english_label || d.label : d.label) || d.field_key}
-                </th>
-              ))}
-              {/* fixes35 §3: one column per non-select mekurav custom field
-                  the column-selector panel has left switched on. */}
-              {visibleCustomFieldDefs.map((d) => (
-                <th key={d.field_key} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
-                  {(lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
-                    d.field_key}
+              {/* fixes48 §2: fixed + custom picklist + custom field columns,
+                  in the user's unified (draggable) order. */}
+              {orderedActiveColumns.map((entry) => (
+                <th
+                  key={gridColumnSortKey(entry)}
+                  className="px-3 py-1.5 font-medium w-px whitespace-nowrap"
+                >
+                  {gridColumnLabel(entry)}
                 </th>
               ))}
               <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap"></th>
@@ -1349,39 +1384,32 @@ export default function ContactsPage() {
                       onSave={(v) => saveField(c, { name: v })}
                     />
                   </td>
-                  {activeColumns.map((k) => (
+                  {/* fixes48 §2: fixed + custom picklist + custom field
+                      columns, in the user's unified (draggable) order.
+                      fixes48 §2: max-w+break-words keeps a long free-text
+                      value (address, notes, a custom text field…) from
+                      blowing the row out — wrapping rather than `truncate`
+                      (overflow:hidden) deliberately, since several inline
+                      editors here render a floating dropdown that must
+                      overflow its own <td> to stay visible (fixes47). Only
+                      the inline-editable columns need to stop the row's
+                      navigate-onClick — custom ones are always
+                      inline-editable. */}
+                  {orderedActiveColumns.map((entry) => (
                     <td
-                      key={k}
-                      className="px-3 py-1.5 w-px whitespace-nowrap"
-                      // fixes34 §1.1: only the inline-editable columns need to
-                      // stop the row's navigate-onClick — read-only columns
-                      // (owner/building/created/admin_area) keep the existing
-                      // "click anywhere in the row to open" behavior.
+                      key={gridColumnSortKey(entry)}
+                      className="px-3 py-1.5 max-w-[14rem] break-words"
                       onClick={
-                        EDITABLE_COLUMN_KEYS.has(k) ? (e) => e.stopPropagation() : undefined
+                        entry.kind === "col" && !EDITABLE_COLUMN_KEYS.has(entry.key)
+                          ? undefined
+                          : (e) => e.stopPropagation()
                       }
                     >
-                      {cell(c, k)}
-                    </td>
-                  ))}
-                  {/* fixes34 §1.1: custom picklist columns. */}
-                  {visibleCustomPicklistDefs.map((d) => (
-                    <td
-                      key={d.field_key}
-                      className="px-3 py-1.5 w-px whitespace-nowrap"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {inlineCustomPicklistCell(c, d)}
-                    </td>
-                  ))}
-                  {/* fixes35 §3: non-select custom field columns. */}
-                  {visibleCustomFieldDefs.map((d) => (
-                    <td
-                      key={d.field_key}
-                      className="px-3 py-1.5 w-px whitespace-nowrap"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {inlineCustomFieldCell(c, d)}
+                      {entry.kind === "col"
+                        ? cell(c, entry.key)
+                        : entry.kind === "pl"
+                          ? inlineCustomPicklistCell(c, entry.def)
+                          : inlineCustomFieldCell(c, entry.def)}
                     </td>
                   ))}
                   {/* fixes15 §5.2: single-click call / WhatsApp / email.

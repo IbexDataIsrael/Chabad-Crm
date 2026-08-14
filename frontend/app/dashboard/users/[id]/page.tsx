@@ -39,6 +39,9 @@ export default function UserDetailPage() {
   const [areas, setAreas] = useState<Area[]>([]);
   const [reportNumbers, setReportNumbers] = useState<ReportNumber[]>([]);
   const [history, setHistory] = useState<ShliachVersion[]>([]);
+  // fixes48 §4: pick a previous version to preview a read-only snapshot,
+  // Apartments-style (dashboard/apartments/{id}'s own history section).
+  const [snapshot, setSnapshot] = useState<ShliachVersion | null>(null);
   const [password, setPassword] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
 
@@ -55,14 +58,20 @@ export default function UserDetailPage() {
 
   const contactId = user?.shliach?.contact_id ?? null;
 
-  useEffect(() => {
-    if (!isAdmin || contactId == null) {
+  function reloadHistory() {
+    if (contactId == null) {
       setHistory([]);
       return;
     }
     apiFetch<ShliachVersion[]>(`/api/contacts/${contactId}/shliach-history`)
       .then(setHistory)
       .catch(() => setHistory([]));
+  }
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    reloadHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin, contactId]);
 
   async function patchUser(body: Record<string, unknown>) {
@@ -71,6 +80,22 @@ export default function UserDetailPage() {
       body: JSON.stringify(body),
     });
     setUser(saved);
+  }
+
+  // fixes48 §4: roll one field of the linked shliach back to the value it
+  // held in `snapshot` — mirrors apartments' restoreField (dashboard/
+  // apartments/{id}/page.tsx): the restore is itself a new active version,
+  // so refresh the history list too.
+  async function restoreField(field: string) {
+    if (!snapshot) return;
+    const saved = await apiFetch<OrgUser>(
+      `/api/users/${userId}/shliach/restore-field`,
+      { method: "POST", body: JSON.stringify({ version_id: snapshot.id, field }) },
+    );
+    setUser(saved);
+    setSnapshot(null);
+    reloadHistory();
+    success(t("contact_shliach.field_restored", "השדה שוחזר"));
   }
 
   async function remove() {
@@ -341,40 +366,149 @@ export default function UserDetailPage() {
 
       {/* fixes47: audit/edit history — reachable from a real page now,
           instead of only from the contact's own page (fixes45's original
-          gap). Same full-row-snapshot view as ContactView.tsx's. */}
-      {history.length > 0 && (
-        <section className="bg-white rounded-xl shadow-sm p-6 space-y-2">
-          <h2 className="font-semibold">{t("contact_shliach.history", "היסטוריית שינויים")}</h2>
-          <ul className="text-sm space-y-1.5">
-            {history.map((v) => (
-              <li key={v.id} className="text-gray-600">
-                <span className="text-xs text-gray-400">
-                  {(v.editor_name || t("apt.history_unknown_editor", "עורך לא ידוע")) +
+          gap). fixes48 §4: aligned with the Apartments module's own history
+          section — pick a previous version to preview a read-only snapshot,
+          then restore individual fields back to it, instead of just a flat
+          read-only list. */}
+      <section className="bg-white rounded-xl shadow-sm p-6 space-y-3">
+        <h2 className="font-semibold">{t("contact_shliach.history", "היסטוריית שינויים")}</h2>
+        {history.length === 0 ? (
+          <p className="text-sm text-gray-400">{t("apt.history_none", "אין גרסאות קודמות.")}</p>
+        ) : (
+          <>
+            <select
+              className="w-full sm:w-auto rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+              value={snapshot?.id ?? ""}
+              onChange={(e) => {
+                const id = Number(e.target.value);
+                setSnapshot(history.find((h) => h.id === id) ?? null);
+              }}
+            >
+              <option value="">{t("apt.history_pick", "בחר גרסה קודמת…")}</option>
+              {history.map((h) => (
+                <option key={h.id} value={h.id}>
+                  {(h.editor_name || t("apt.history_unknown_editor", "עורך לא ידוע")) +
                     " — " +
-                    (v.last_edit ? new Date(v.last_edit).toLocaleString("he-IL") : "")}
-                </span>
-                <br />
-                {v.full_name || "—"}
-                {v.email && <span dir="ltr"> · {v.email}</span>}
-                {v.phone && <span dir="ltr"> · {v.phone}</span>}
-                <br />
-                <span className="text-xs">
-                  {t("contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל")}:{" "}
-                  {reportNumberNamesText(v.report_number_ids)}
-                  {" · "}
-                  {t("contact_shliach.areas", "אזורים באחריות הפעיל")}: {areaNamesText(v.area_ids)}
-                  {v.notes && (
-                    <>
-                      {" · "}
-                      {t("contact_shliach.notes", "הערות")}: {v.notes}
-                    </>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+                    (h.last_edit ? new Date(h.last_edit).toLocaleString("he-IL") : "")}
+                </option>
+              ))}
+            </select>
+            {snapshot && (
+              <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-gray-500">
+                    {t("apt.history_snapshot", "תצוגת גרסה היסטורית (לקריאה בלבד)")}
+                  </p>
+                  <button
+                    onClick={() => setSnapshot(null)}
+                    className="text-xs text-status-magenta hover:underline"
+                  >
+                    {t("apt.history_back_current", "חזרה לגרסה הנוכחית")}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400">
+                  {t("apt.restore_hint", "לחץ \"שחזר\" ליד שדה כדי להחזיר את ערכו לגרסה זו.")}
+                </p>
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <SnapRow
+                    label={t("users.full_name", "שם מלא")}
+                    value={snapshot.full_name}
+                    field="full_name"
+                    onRestore={restoreField}
+                    t={t}
+                  />
+                  <SnapRow
+                    label={t("contacts.email", "אימייל")}
+                    value={snapshot.email}
+                    dir="ltr"
+                    field="email"
+                    onRestore={restoreField}
+                    t={t}
+                  />
+                  <SnapRow
+                    label={t("contacts.phone", "טלפון")}
+                    value={snapshot.phone}
+                    dir="ltr"
+                    field="phone"
+                    onRestore={restoreField}
+                    t={t}
+                  />
+                  <SnapRow
+                    label={t("contact_shliach.areas", "אזורים באחריות הפעיל")}
+                    value={areaNamesText(snapshot.area_ids)}
+                    field="areas"
+                    onRestore={restoreField}
+                    t={t}
+                  />
+                  <SnapRow
+                    label={t("contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל")}
+                    value={reportNumberNamesText(snapshot.report_number_ids)}
+                    field="report_numbers"
+                    onRestore={restoreField}
+                    t={t}
+                  />
+                  <div className="sm:col-span-2">
+                    <SnapRow
+                      label={t("contact_shliach.notes", "הערות")}
+                      value={snapshot.notes}
+                      field="notes"
+                      onRestore={restoreField}
+                      t={t}
+                    />
+                  </div>
+                </dl>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
+
+/** One label/value row of a read-only historical snapshot, with a per-field
+ *  Restore action — same shape as the Apartments detail page's own SnapRow
+ *  (dashboard/apartments/[id]/page.tsx). */
+function SnapRow({
+  label,
+  value,
+  dir,
+  field,
+  onRestore,
+  t,
+}: {
+  label: string;
+  value: string | null | undefined;
+  dir?: "ltr";
+  field: string;
+  onRestore: (field: string) => Promise<void>;
+  t: (key: string, fallback?: string) => string;
+}) {
+  const [busy, setBusy] = useState(false);
+  async function restore() {
+    setBusy(true);
+    try {
+      await onRestore(field);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div>
+      <dt className="text-gray-500 flex items-center justify-between gap-2">
+        <span>{label}</span>
+        <button
+          type="button"
+          onClick={restore}
+          disabled={busy}
+          className="text-[11px] text-status-magenta hover:underline disabled:opacity-50"
+        >
+          {busy ? "…" : t("apt.restore", "שחזר")}
+        </button>
+      </dt>
+      <dd className="font-medium" dir={dir}>
+        {value || "—"}
+      </dd>
     </div>
   );
 }

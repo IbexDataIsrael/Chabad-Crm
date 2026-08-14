@@ -3,16 +3,19 @@ field_type — originally visit-only boolean+note, generalized in place).
 
 Reads for any member; create/edit/delete for admins.
 """
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app import custom_field_utils, models
+from app import custom_field_utils, models, picklist_utils
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.schemas import (
     CustomFieldDefinitionCreate,
     CustomFieldDefinitionOut,
     CustomFieldDefinitionUpdate,
+    UsageOut,
 )
 
 router = APIRouter(prefix="/api/custom-fields", tags=["custom-fields"])
@@ -155,6 +158,42 @@ def update_definition(
     return row
 
 
+def _select_picklist_def(
+    row: models.CustomFieldDefinition, org_id: int, db: Session
+) -> Optional[models.PicklistDefinition]:
+    """The auto-provisioned PicklistDefinition backing a select-type custom
+    field (see create_definition) — None if it was never created."""
+    if row.field_type != "select":
+        return None
+    system_name = custom_field_utils.select_system_name(row.entity_type, row.field_key)
+    return (
+        db.query(models.PicklistDefinition)
+        .filter(
+            models.PicklistDefinition.organization_id == org_id,
+            models.PicklistDefinition.system_name == system_name,
+        )
+        .first()
+    )
+
+
+@router.get("/{def_id}/usage", response_model=UsageOut)
+def definition_usage(
+    def_id: int,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    """fixes48 §1: how many records currently hold a value for this
+    definition — drives the "dependent data" confirmation before a hard
+    delete purges it."""
+    row = _get_or_404(def_id, admin.organization_id, db)
+    picklist_def = _select_picklist_def(row, admin.organization_id, db)
+    if picklist_def:
+        count = picklist_utils.count_definition_usage(db, picklist_def.id)
+    else:
+        count = custom_field_utils.count_values(db, row.id)
+    return UsageOut(count=count)
+
+
 @router.delete("/{def_id}", response_model=CustomFieldDefinitionOut)
 def delete_definition(
     def_id: int,
@@ -162,9 +201,25 @@ def delete_definition(
     admin: models.User = Depends(require_admin),
     hard: bool = False,
 ):
-    """Soft-delete (is_active=false) by default; `hard=true` removes it and its values."""
+    """Soft-delete (is_active=false) by default; `hard=true` permanently
+    removes it AND purges every dependent value (fixes48 §1 — previously left
+    orphaned CustomFieldValue rows, or for a select-type field, an orphaned
+    PicklistDefinition/Value/Link trio entirely untouched)."""
     row = _get_or_404(def_id, admin.organization_id, db)
     if hard:
+        picklist_def = _select_picklist_def(row, admin.organization_id, db)
+        if picklist_def:
+            db.query(models.PicklistLink).filter(
+                models.PicklistLink.organization_id == admin.organization_id,
+                models.PicklistLink.picklist_definition_id == picklist_def.id,
+            ).delete(synchronize_session=False)
+            db.query(models.PicklistValue).filter(
+                models.PicklistValue.organization_id == admin.organization_id,
+                models.PicklistValue.field_key == picklist_def.system_name,
+            ).delete(synchronize_session=False)
+            db.delete(picklist_def)
+        else:
+            custom_field_utils.delete_values_by_definition(db, row.id)
         db.delete(row)
         db.commit()
         return row

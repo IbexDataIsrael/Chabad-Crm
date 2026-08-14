@@ -365,6 +365,9 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("cf", "cf.activate", "הפעל", "Activate"),
     ("cf", "cf.hard_delete", "מחק לצמיתות", "Delete permanently"),
     ("cf", "cf.hard_delete_confirm", "למחוק לצמיתות את כל הערכים?", "Permanently delete this and all its values?"),
+    # fixes48 §1: shown instead of the generic hard-delete confirm above when
+    # a usage check finds dependent records — confirming purges that data too.
+    ("cf", "cf.dependent_data_confirm", "יש נתונים הקשורים לשדה זה האם למחוק בכל זאת?", "This field has related data. Delete it anyway?"),
     ("cf", "cf.add_failed", "הוספה נכשלה", "Failed to add"),
     ("cf", "cf.add_field", "הוספת שדה", "Add field"),
     ("cf", "cf.key_placeholder", "מפתח (אנגלית) — hanuka_party", "Key (English) — hanuka_party"),
@@ -446,7 +449,9 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("users", "users.you", "אני", "me"),
     # --- fixes43 §3.4: bulk-clear area assignments ---
     ("users", "users.clear_assignments", "ניקוי שיבוצים", "Clear assignments"),
-    ("users", "users.clear_assignments_confirm", "אתה בטוח שברצונך למחוק את כל השיבוצים של הפעילים? פעולה זו בלתי הפיכה", "Are you sure you want to delete all active placements? This action is irreversible."),
+    # fixes48 §3: reworded — this action clears report numbers only, not
+    # areas (see the LOCALIZATION_RENAMES entry below for existing DB rows).
+    ("users", "users.clear_assignments_confirm", "אתה בטוח שברצונך למחוק את כל מספרי הדוח המשויכים לפעילים? פעולה זו בלתי הפיכה", "Are you sure you want to clear all report numbers assigned to activists? This action is irreversible."),
     ("users", "users.no_assignments_to_clear", "אין שיבוצים לניקוי בתצוגה הנוכחית", "No assignments to clear in the current view"),
     ("users", "users.assignments_cleared", "השיבוצים נוקו עבור {n} פעילים", "Assignments cleared for {n} activists"),
     # --- fixes43 §3.3: merged Users row action (open/edit) ---
@@ -702,6 +707,8 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     # --- fixes47: Users-page area/report-number save confirmation toasts ---
     ("contact_shliach", "contact_shliach.areas_saved", "האזורים נשמרו", "Areas saved"),
     ("contact_shliach", "contact_shliach.report_numbers_saved", "מספרי הדוח נשמרו", "Report numbers saved"),
+    # --- fixes48 §4: per-field restore (mirrors apt.field_restored) ---
+    ("contact_shliach", "contact_shliach.field_restored", "השדה שוחזר", "Field restored"),
     # --- fixes23 §3: apartments bulk editing ---
     ("bulkedit", "bulkedit.open", "עריכה מרובה", "Bulk edit"),
     ("bulkedit", "bulkedit.open_hint", "עריכה מרובה של כל הדירות המסוננות", "Bulk-edit all filtered apartments"),
@@ -780,6 +787,9 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("picklist_def", "picklist_def.apartment.language", "שפה", "Language"),
     ("common", "common.hebrew_label", "עברית", "Hebrew"),
     ("common", "common.english_label", "English", "English"),
+    # fixes48 §3: boolean custom-field column filter (Users page).
+    ("common", "common.yes", "כן", "Yes"),
+    ("common", "common.no", "לא", "No"),
     # --- fixes26: inline editing, visit view mode, shliach login recovery ---
     ("action", "action.view", "הצג", "View"),
     ("inline", "inline.click_to_edit", "לחץ לעריכה", "Click to edit"),
@@ -1010,6 +1020,14 @@ LOCALIZATION_RENAMES: dict[str, tuple[set, str, set, str]] = {
     # filter.all_mitzvot is still live and keeps its rename entry.
     "filter.all_mitzvot": (
         {"מצוות קהילה"}, "מבצעים", {"Community mitzvot"}, "Mivtzoim",
+    ),
+    # fixes48 §3: "Clear Assignments" was found to clear areas, not report
+    # numbers — the confirm text is corrected to match the fixed behavior.
+    "users.clear_assignments_confirm": (
+        {"אתה בטוח שברצונך למחוק את כל השיבוצים של הפעילים? פעולה זו בלתי הפיכה"},
+        "אתה בטוח שברצונך למחוק את כל מספרי הדוח המשויכים לפעילים? פעולה זו בלתי הפיכה",
+        {"Are you sure you want to delete all active placements? This action is irreversible."},
+        "Are you sure you want to clear all report numbers assigned to activists? This action is irreversible.",
     ),
     # fixes29 §3: clearer email validation hint (both languages).
     "validation.email_hint": (

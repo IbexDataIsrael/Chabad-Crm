@@ -98,6 +98,18 @@ const COLUMN_KEYS = ["email", "phone", "notes", "areas", "report_numbers", "crea
 type ColumnKey = (typeof COLUMN_KEYS)[number];
 const DEFAULT_COLUMNS: ColumnKey[] = ["email", "phone", "created"];
 
+// fixes48 §2/§3: one grid column, whichever of the 3 kinds it is — feeds the
+// unified drag-reorder list (Customize Columns panel + the table itself),
+// same mechanism as the Contacts page.
+type GridColumn =
+  | { kind: "col"; key: ColumnKey }
+  | { kind: "pl"; key: string; def: PicklistField }
+  | { kind: "cfield"; key: string; def: CustomFieldDefinition };
+
+function gridColumnSortKey(entry: GridColumn): string {
+  return `${entry.kind}:${entry.key}`;
+}
+
 const inputClass =
   "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 const toolbarSelectClass =
@@ -152,12 +164,6 @@ export default function UsersPage() {
   const [visibleShliachFieldKeys, setVisibleShliachFieldKeys] = useDbPreference<
     string[] | null
   >("users.shliachCustomFields", null);
-  const visibleShliachPicklistDefs = shliachPicklistDefs.filter(
-    (d) => visibleShliachPicklistKeys == null || visibleShliachPicklistKeys.includes(d.field_key),
-  );
-  const visibleShliachFieldDefs = shliachCustomFieldDefs.filter(
-    (d) => visibleShliachFieldKeys == null || visibleShliachFieldKeys.includes(d.field_key),
-  );
   function toggleShliachPicklistColumn(fieldKey: string) {
     setVisibleShliachPicklistKeys((prev) => {
       const current = prev ?? shliachPicklistDefs.map((d) => d.field_key);
@@ -188,11 +194,28 @@ export default function UsersPage() {
   const [showInactive, setShowInactive] = usePersistentState(
     "crm.users.showInactive", false,
   );
+  // fixes48 §3: column filtering across the report_numbers column and every
+  // dynamic contact_shliach picklist/custom field — same "shliach-only,
+  // admin/staff rows unaffected" scope as the geo filters above.
+  const [reportNumberIds, setReportNumberIds] = usePersistentState<number[]>(
+    "crm.users.reportNumberIds", [],
+  );
+  const [shliachPicklistFilters, setShliachPicklistFilters] = usePersistentState<
+    Record<string, string[]>
+  >("crm.users.shliachPicklistFilters", {});
+  // Boolean fields store "true"/"false"; text/number/date fields store a
+  // free-text "contains" query. "" (unset) means no filter for that field.
+  const [shliachFieldFilters, setShliachFieldFilters] = usePersistentState<
+    Record<string, string>
+  >("crm.users.shliachFieldFilters", {});
   const [sort, setSort] = usePersistentState<SortKey>("crm.users.sort", "name");
   const [dir, setDir] = usePersistentState<"asc" | "desc">("crm.users.dir", "asc");
   const [page, setPage] = usePersistentState("crm.users.page", 1);
   const [pageSize, setPageSize] = usePersistentState("crm.users.pageSize", 20);
   const [columns, setColumns] = useDbPreference<ColumnKey[]>("users.columns", DEFAULT_COLUMNS);
+  // fixes48 §3: one relative order spanning fixed AND custom (picklist +
+  // field) columns — see the Contacts page's identical mechanism.
+  const [columnOrder, setColumnOrder] = useDbPreference<string[]>("users.columnOrder", []);
   const [columnsOpen, setColumnsOpen] = useState(false);
   const { containerRef: columnsSortableRef, withClickGuard } =
     useSortableList<HTMLDivElement>(reorderColumns);
@@ -332,12 +355,52 @@ export default function UsersPage() {
     }
     return true;
   }
+  // fixes48 §3: report_numbers / custom picklist / custom field values all
+  // live on the linked Contact record (same source shliachContactsById
+  // already resolves for the notes/areas/report_numbers columns).
+  function contactFor(r: UnifiedRow): Contact | undefined {
+    return r.contactId != null ? shliachContactsById.get(r.contactId) : undefined;
+  }
+  const reportNumberFilterActive = reportNumberIds.length > 0;
+  // Only the currently-existing defs' filters apply — a stale filter for a
+  // field that was since deleted/hidden must not keep silently filtering.
+  const effectiveShliachPicklistFilters = Object.fromEntries(
+    Object.entries(shliachPicklistFilters).filter(([k, v]) =>
+      v.length > 0 && shliachPicklistDefs.some((d) => d.field_key === k),
+    ),
+  );
+  const effectiveShliachFieldFilters = Object.fromEntries(
+    Object.entries(shliachFieldFilters).filter(([k, v]) =>
+      v !== "" && shliachCustomFieldDefs.some((d) => d.field_key === k),
+    ),
+  );
   const allRows: UnifiedRow[] = [...userRows, ...missingRows].filter((r) => {
     if (roleFilter.length > 0 && !roleFilter.includes(r.role)) return false;
     if (!showInactive && !r.is_active) return false;
     if (geoFilterActive && r.role === "shliach" && r.kind === "user") {
       if (!shliachMatchesGeo(r.raw.shliach)) return false;
     }
+    if (r.role === "shliach") {
+      if (reportNumberFilterActive) {
+        const ids = contactFor(r)?.shliach?.report_number_ids ?? [];
+        if (!ids.some((id) => reportNumberIds.includes(id))) return false;
+      }
+      for (const [key, values] of Object.entries(effectiveShliachPicklistFilters)) {
+        const val = contactFor(r)?.picklist_values?.[key] ?? null;
+        if (val == null || !values.includes(val)) return false;
+      }
+      for (const [key, query] of Object.entries(effectiveShliachFieldFilters)) {
+        const def = shliachCustomFieldDefs.find((d) => d.field_key === key);
+        const val = contactFor(r)?.custom_field_values?.[key];
+        if (def?.field_type === "boolean") {
+          if (Boolean(val) !== (query === "true")) return false;
+        } else if (!String(val ?? "").toLowerCase().includes(query.toLowerCase())) {
+          return false;
+        }
+      }
+    }
+    // Admin/staff rows have no shliach data at all — same "unaffected by
+    // shliach-only filters" convention the geo filters already follow.
     return true;
   });
 
@@ -364,31 +427,66 @@ export default function UsersPage() {
     report_numbers: t("contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל"),
     created: t("contacts.created_at", "נוצר בתאריך"),
   };
-  const activeColumns = columns.filter((k): k is ColumnKey =>
-    (COLUMN_KEYS as readonly string[]).includes(k),
-  );
-  const colCount =
-    4 + activeColumns.length + visibleShliachPicklistDefs.length + visibleShliachFieldDefs.length;
-
   function toggleColumn(k: ColumnKey) {
     setColumns((prev) => (prev.includes(k) ? prev.filter((c) => c !== k) : [...prev, k]));
   }
-  function reorderColumns(orderedKeys: string[]) {
-    setColumns((prev) => {
-      const activeSet = new Set(prev);
-      const reordered = orderedKeys.filter((k): k is ColumnKey => activeSet.has(k as ColumnKey));
-      return reordered.length > 0 ? reordered : prev;
-    });
+  function gridColumnLabel(entry: GridColumn): string {
+    if (entry.kind === "col") return columnLabels[entry.key];
+    if (entry.kind === "pl") return entry.def.label || entry.def.field_key;
+    return entry.def.hebrew_label || entry.def.field_key;
   }
-  function moveActiveColumn(key: ColumnKey, delta: -1 | 1) {
-    setColumns((prev) => {
-      const idx = prev.indexOf(key);
-      const to = idx + delta;
-      if (idx === -1 || to < 0 || to >= prev.length) return prev;
-      const next = [...prev];
-      [next[idx], next[to]] = [next[to], next[idx]];
-      return next;
-    });
+
+  // fixes48 §3: fixed + custom-picklist + custom-field columns unified into
+  // one draggable/orderable list — mirrors the Contacts page's identical
+  // mechanism (see its comments for the full rationale).
+  const allGridColumns: GridColumn[] = [
+    ...COLUMN_KEYS.map((key): GridColumn => ({ kind: "col", key })),
+    ...shliachPicklistDefs.map(
+      (def): GridColumn => ({ kind: "pl", key: def.field_key, def }),
+    ),
+    ...shliachCustomFieldDefs.map(
+      (def): GridColumn => ({ kind: "cfield", key: def.field_key, def }),
+    ),
+  ];
+
+  function isGridColumnActive(entry: GridColumn): boolean {
+    if (entry.kind === "col") return columns.includes(entry.key);
+    if (entry.kind === "pl") {
+      return visibleShliachPicklistKeys == null || visibleShliachPicklistKeys.includes(entry.key);
+    }
+    return visibleShliachFieldKeys == null || visibleShliachFieldKeys.includes(entry.key);
+  }
+
+  function toggleGridColumn(entry: GridColumn) {
+    if (entry.kind === "col") return toggleColumn(entry.key);
+    if (entry.kind === "pl") return toggleShliachPicklistColumn(entry.key);
+    toggleShliachFieldColumn(entry.key);
+  }
+
+  const columnOrderIndex = new Map(columnOrder.map((k, i) => [k, i]));
+  const sortedGridColumns = [...allGridColumns].sort((a, b) => {
+    const ai = columnOrderIndex.get(gridColumnSortKey(a)) ?? Number.MAX_SAFE_INTEGER;
+    const bi = columnOrderIndex.get(gridColumnSortKey(b)) ?? Number.MAX_SAFE_INTEGER;
+    return ai - bi;
+  });
+  const orderedActiveColumns = sortedGridColumns.filter(isGridColumnActive);
+  const colCount = 4 + orderedActiveColumns.length;
+
+  function reorderColumns(orderedKeys: string[]) {
+    if (orderedKeys.length > 0) setColumnOrder(orderedKeys);
+  }
+
+  function moveActiveColumn(entry: GridColumn, delta: -1 | 1) {
+    const idx = orderedActiveColumns.findIndex(
+      (e) => gridColumnSortKey(e) === gridColumnSortKey(entry),
+    );
+    const to = idx + delta;
+    if (idx === -1 || to < 0 || to >= orderedActiveColumns.length) return;
+    const fullKeys = sortedGridColumns.map(gridColumnSortKey);
+    const ia = fullKeys.indexOf(gridColumnSortKey(orderedActiveColumns[idx]));
+    const ib = fullKeys.indexOf(gridColumnSortKey(orderedActiveColumns[to]));
+    [fullKeys[ia], fullKeys[ib]] = [fullKeys[ib], fullKeys[ia]];
+    setColumnOrder(fullKeys);
   }
 
   // fixes44 §1: inline editing matching the contacts page's InlineEdit
@@ -652,15 +750,17 @@ export default function UsersPage() {
     }
   }
 
-  // fixes43 §3.4: "ניקוי שיבוצים" — clear the area assignment from every
-  // shliach row in the current filtered view (role/area/building/inactive
-  // filters), not just the current pagination slice — same "everything
-  // currently matching the filters" scope as the bulk-edit endpoints.
+  // fixes43 §3.4 / fixes48 §3: "ניקוי שיבוצים" — clear the report-number
+  // assignment (NOT the area) from every shliach row in the current filtered
+  // view (role/area/building/inactive filters), not just the current
+  // pagination slice — same "everything currently matching the filters"
+  // scope as the bulk-edit endpoints. fixes48: this originally called
+  // /clear-areas and wiped the area assignment instead — area must survive.
   async function clearAssignments() {
     const ok = await confirmDialog({
       message: t(
         "users.clear_assignments_confirm",
-        "אתה בטוח שברצונך למחוק את כל השיבוצים של הפעילים? פעולה זו בלתי הפיכה",
+        "אתה בטוח שברצונך למחוק את כל מספרי הדוח המשויכים לפעילים? פעולה זו בלתי הפיכה",
       ),
     });
     if (!ok) return;
@@ -673,7 +773,7 @@ export default function UsersPage() {
     }
     try {
       const res = await apiFetch<{ updated: number }>(
-        "/api/contacts/shliach/clear-areas",
+        "/api/contacts/shliach/clear-report-numbers",
         { method: "POST", body: JSON.stringify({ contact_ids: contactIds }) },
       );
       await reload();
@@ -778,23 +878,27 @@ export default function UsersPage() {
           <p className="text-xs text-gray-400">
             {t("columns.reorder_hint", "גרור עמודה פעילה כדי לשנות את סדר ההצגה.")}
           </p>
+          {/* fixes48 §3: one unified SortableJS-managed container for every
+              chip — fixed AND custom, active or not — same mechanism as the
+              Contacts page (previously custom columns were pinned after the
+              fixed ones with no relative ordering of their own). */}
           <div ref={columnsSortableRef} className="flex flex-wrap gap-2">
-            {activeColumns.map((k) => {
-              const activeIdx = activeColumns.indexOf(k);
+            {orderedActiveColumns.map((entry, activeIdx) => {
+              const key = gridColumnSortKey(entry);
               return (
-                <span key={k} data-sort-key={k} className="inline-flex items-center gap-0.5">
+                <span key={key} data-sort-key={key} className="inline-flex items-center gap-0.5">
                   <button
                     type="button"
-                    onClick={withClickGuard(() => toggleColumn(k))}
+                    onClick={withClickGuard(() => toggleGridColumn(entry))}
                     className="rounded-md border px-3 py-1.5 text-sm border-status-magenta bg-status-magenta/10 text-status-magenta cursor-grab active:cursor-grabbing"
                   >
-                    ⠿ {columnLabels[k]}
+                    ⠿ {gridColumnLabel(entry)}
                   </button>
                   <span className="flex flex-col gap-0.5">
                     <button
                       type="button"
                       disabled={activeIdx === 0}
-                      onClick={() => moveActiveColumn(k, -1)}
+                      onClick={() => moveActiveColumn(entry, -1)}
                       title={t("action.move_up", "העלה")}
                       className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
                     >
@@ -802,8 +906,8 @@ export default function UsersPage() {
                     </button>
                     <button
                       type="button"
-                      disabled={activeIdx === activeColumns.length - 1}
-                      onClick={() => moveActiveColumn(k, 1)}
+                      disabled={activeIdx === orderedActiveColumns.length - 1}
+                      onClick={() => moveActiveColumn(entry, 1)}
                       title={t("action.move_down", "הורד")}
                       className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
                     >
@@ -813,59 +917,18 @@ export default function UsersPage() {
                 </span>
               );
             })}
-            {COLUMN_KEYS.filter((k) => !activeColumns.includes(k)).map((k) => (
-              <button
-                key={k}
-                type="button"
-                data-sort-key={k}
-                data-sortable-disabled=""
-                onClick={() => toggleColumn(k)}
-                className="rounded-md border px-3 py-1.5 text-sm border-gray-200 text-gray-600 hover:bg-gray-50"
-              >
-                {columnLabels[k]}
-              </button>
-            ))}
-            {/* fixes46: any admin-added contact_shliach picklist/custom field —
-                same toggle-chip treatment the Contacts page gives its own
-                dynamic columns (not draggable — they always render last). */}
-            {shliachPicklistDefs.map((d) => {
-              const on =
-                visibleShliachPicklistKeys == null ||
-                visibleShliachPicklistKeys.includes(d.field_key);
+            {sortedGridColumns.filter((entry) => !isGridColumnActive(entry)).map((entry) => {
+              const key = gridColumnSortKey(entry);
               return (
                 <button
-                  key={`pl-${d.field_key}`}
+                  key={key}
                   type="button"
+                  data-sort-key={key}
                   data-sortable-disabled=""
-                  onClick={() => toggleShliachPicklistColumn(d.field_key)}
-                  className={`rounded-md border px-3 py-1.5 text-sm ${
-                    on
-                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
-                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                  }`}
+                  onClick={() => toggleGridColumn(entry)}
+                  className="rounded-md border px-3 py-1.5 text-sm border-gray-200 text-gray-600 hover:bg-gray-50"
                 >
-                  {on ? "✓ " : ""}
-                  {d.label || d.field_key}
-                </button>
-              );
-            })}
-            {shliachCustomFieldDefs.map((d) => {
-              const on =
-                visibleShliachFieldKeys == null || visibleShliachFieldKeys.includes(d.field_key);
-              return (
-                <button
-                  key={`cf-${d.field_key}`}
-                  type="button"
-                  data-sortable-disabled=""
-                  onClick={() => toggleShliachFieldColumn(d.field_key)}
-                  className={`rounded-md border px-3 py-1.5 text-sm ${
-                    on
-                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
-                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                  }`}
-                >
-                  {on ? "✓ " : ""}
-                  {d.hebrew_label || d.field_key}
+                  {gridColumnLabel(entry)}
                 </button>
               );
             })}
@@ -913,6 +976,61 @@ export default function UsersPage() {
             setPage(1);
           }}
         />
+        {/* fixes48 §3: column filtering — report_numbers, then one control
+            per active contact_shliach picklist/custom field. Shliach-only,
+            same as the geo filters above; admin/staff rows are unaffected. */}
+        <MultiSelectFilter
+          allLabel={t("contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל")}
+          options={reportNumbers.map((rn) => ({ id: rn.id, label: rn.name }))}
+          value={reportNumberIds}
+          onChange={(ids) => {
+            setReportNumberIds(ids);
+            setPage(1);
+          }}
+        />
+        {shliachPicklistDefs.map((d) => {
+          const opts = shliachPicklists.map[d.field_key] ?? [];
+          return (
+            <MultiSelectFilter
+              key={`plf-${d.field_key}`}
+              allLabel={d.label || d.field_key}
+              options={opts.map((o) => ({ id: o.value, label: shliachPicklists.display(o) }))}
+              value={shliachPicklistFilters[d.field_key] ?? []}
+              onChange={(vals) => {
+                setShliachPicklistFilters((prev) => ({ ...prev, [d.field_key]: vals }));
+                setPage(1);
+              }}
+            />
+          );
+        })}
+        {shliachCustomFieldDefs.map((d) =>
+          d.field_type === "boolean" ? (
+            <select
+              key={`cff-${d.field_key}`}
+              className={toolbarSelectClass}
+              value={shliachFieldFilters[d.field_key] ?? ""}
+              onChange={(e) => {
+                setShliachFieldFilters((prev) => ({ ...prev, [d.field_key]: e.target.value }));
+                setPage(1);
+              }}
+            >
+              <option value="">{d.hebrew_label || d.field_key}</option>
+              <option value="true">{t("common.yes", "כן")}</option>
+              <option value="false">{t("common.no", "לא")}</option>
+            </select>
+          ) : (
+            <input
+              key={`cff-${d.field_key}`}
+              className={toolbarSelectClass}
+              placeholder={d.hebrew_label || d.field_key}
+              value={shliachFieldFilters[d.field_key] ?? ""}
+              onChange={(e) => {
+                setShliachFieldFilters((prev) => ({ ...prev, [d.field_key]: e.target.value }));
+                setPage(1);
+              }}
+            />
+          ),
+        )}
         <label className="inline-flex items-center gap-1.5 cursor-pointer text-gray-500">
           <input
             type="checkbox"
@@ -978,21 +1096,14 @@ export default function UsersPage() {
             <tr>
               <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap">{t("common.name", "שם")}</th>
               <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap">{t("users.role_label", "תפקיד")}</th>
-              {activeColumns.map((k) => (
-                <th key={k} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
-                  {columnLabels[k]}
-                </th>
-              ))}
-              {/* fixes46: one column per admin-added contact_shliach
-                  picklist/custom field the column-selector has left on. */}
-              {visibleShliachPicklistDefs.map((d) => (
-                <th key={`pl-${d.field_key}`} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
-                  {d.label || d.field_key}
-                </th>
-              ))}
-              {visibleShliachFieldDefs.map((d) => (
-                <th key={`cf-${d.field_key}`} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
-                  {d.hebrew_label || d.field_key}
+              {/* fixes48 §3: fixed + custom picklist + custom field columns,
+                  in the user's unified (draggable) order. */}
+              {orderedActiveColumns.map((entry) => (
+                <th
+                  key={gridColumnSortKey(entry)}
+                  className="px-3 py-1.5 font-medium w-px whitespace-nowrap"
+                >
+                  {gridColumnLabel(entry)}
                 </th>
               ))}
               <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap" />
@@ -1059,20 +1170,21 @@ export default function UsersPage() {
                       </select>
                     )}
                   </td>
-                  {activeColumns.map((k) => (
-                    <td key={k} className="px-3 py-1.5 w-px whitespace-nowrap">
-                      {cell(r, k)}
-                    </td>
-                  ))}
-                  {/* fixes46: contact_shliach picklist/custom field columns. */}
-                  {visibleShliachPicklistDefs.map((d) => (
-                    <td key={`pl-${d.field_key}`} className="px-3 py-1.5 w-px whitespace-nowrap">
-                      {inlineShliachPicklistCell(r, d)}
-                    </td>
-                  ))}
-                  {visibleShliachFieldDefs.map((d) => (
-                    <td key={`cf-${d.field_key}`} className="px-3 py-1.5 w-px whitespace-nowrap">
-                      {inlineShliachCustomFieldCell(r, d)}
+                  {/* fixes48 §3: fixed + custom picklist + custom field
+                      columns, in the user's unified (draggable) order.
+                      max-w+break-words (not truncate) keeps a long value
+                      from blowing the row out without clipping any inline
+                      editor's floating dropdown (fixes47). */}
+                  {orderedActiveColumns.map((entry) => (
+                    <td
+                      key={gridColumnSortKey(entry)}
+                      className="px-3 py-1.5 max-w-[14rem] break-words"
+                    >
+                      {entry.kind === "col"
+                        ? cell(r, entry.key)
+                        : entry.kind === "pl"
+                          ? inlineShliachPicklistCell(r, entry.def)
+                          : inlineShliachCustomFieldCell(r, entry.def)}
                     </td>
                   ))}
                   <td className="px-3 py-1.5 w-px whitespace-nowrap">

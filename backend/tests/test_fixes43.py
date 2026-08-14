@@ -139,24 +139,28 @@ def _mk_area(client, headers, name="אזור 43"):
     return r.json()
 
 
-class TestClearShliachAreas:
-    def test_clears_area_links_for_given_contacts(self, client, admin_headers):
-        area = _mk_area(client, admin_headers)
+class TestClearShliachReportNumbers:
+    """fixes48 §3: renamed from TestClearShliachAreas — the action (and its
+    endpoint) was found to clear the wrong field. See test_fixes48.py for the
+    full "areas must stay untouched" regression coverage."""
+
+    def test_clears_report_number_links_for_given_contacts(self, client, admin_headers):
+        rn = _mk_report_number(client, admin_headers, "RN-clear-43")
         sh1 = _mk_shliach(client, admin_headers, "clear1_43@example.com")
         sh2 = _mk_shliach(client, admin_headers, "clear2_43@example.com")
         client.patch(
             f"/api/contacts/{sh1['id']}",
-            json={"shliach": {"area_ids": [area["id"]]}},
+            json={"shliach": {"report_number_ids": [rn["id"]]}},
             headers=admin_headers,
         )
         client.patch(
             f"/api/contacts/{sh2['id']}",
-            json={"shliach": {"area_ids": [area["id"]]}},
+            json={"shliach": {"report_number_ids": [rn["id"]]}},
             headers=admin_headers,
         )
 
         res = client.post(
-            "/api/contacts/shliach/clear-areas",
+            "/api/contacts/shliach/clear-report-numbers",
             json={"contact_ids": [sh1["id"]]},
             headers=admin_headers,
         )
@@ -165,12 +169,12 @@ class TestClearShliachAreas:
 
         got1 = client.get(f"/api/contacts/{sh1['id']}", headers=admin_headers).json()
         got2 = client.get(f"/api/contacts/{sh2['id']}", headers=admin_headers).json()
-        assert got1["shliach"]["area_ids"] == []
-        assert got2["shliach"]["area_ids"] == [area["id"]]  # untouched
+        assert got1["shliach"]["report_number_ids"] == []
+        assert got2["shliach"]["report_number_ids"] == [rn["id"]]  # untouched
 
     def test_non_admin_forbidden(self, client, auth_headers):
         res = client.post(
-            "/api/contacts/shliach/clear-areas",
+            "/api/contacts/shliach/clear-report-numbers",
             json={"contact_ids": [1]},
             headers=auth_headers,
         )

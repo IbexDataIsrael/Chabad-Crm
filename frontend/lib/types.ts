@@ -135,6 +135,10 @@ export interface Contact {
   building_name?: string | null;
   area_name?: string | null;
   admin_area_name?: string | null;
+  /** fixes48 §2: raw ids behind building_name/admin_area_name — needed to
+   *  pre-populate the Contacts grid's inline admin-area/building editors. */
+  apartment_id?: number | null;
+  admin_area_id?: number | null;
   /** fixes27 §3: /list enrichment for shliach rows — the login account's
    *  state, driving the row-level suspended notice. */
   login_status?: "active" | "disabled" | "missing" | null;

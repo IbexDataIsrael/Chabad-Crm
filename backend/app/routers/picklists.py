@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app import models
 from app.database import get_db
 from app.deps import get_current_user, require_admin
-from app.picklist_utils import count_usage
+from app.picklist_utils import count_definition_usage, count_usage
 from app.schemas import (
     PicklistDefinitionCreate,
     PicklistDefinitionUpdate,
@@ -17,6 +17,7 @@ from app.schemas import (
     PicklistValueCreate,
     PicklistValueOut,
     PicklistValueUpdate,
+    UsageOut,
 )
 
 router = APIRouter(prefix="/api/picklists", tags=["picklists"])
@@ -155,22 +156,42 @@ def update_definition(
     )
 
 
+def _get_definition_or_404(
+    def_id: int, org_id: int, db: Session
+) -> models.PicklistDefinition:
+    row = (
+        db.query(models.PicklistDefinition)
+        .filter(
+            models.PicklistDefinition.id == def_id,
+            models.PicklistDefinition.organization_id == org_id,
+        )
+        .first()
+    )
+    if not row:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Picklist definition not found")
+    return row
+
+
+@router.get("/definition/{def_id}/usage", response_model=UsageOut)
+def definition_usage(
+    def_id: int,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    """fixes48 §1: how many records currently hold any value under this
+    whole list — drives the "dependent data" confirmation before a delete
+    purges it."""
+    row = _get_definition_or_404(def_id, admin.organization_id, db)
+    return UsageOut(count=count_definition_usage(db, row.id))
+
+
 @router.delete("/definition/{def_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_definition(
     def_id: int,
     db: Session = Depends(get_db),
     admin: models.User = Depends(require_admin),
 ):
-    row = (
-        db.query(models.PicklistDefinition)
-        .filter(
-            models.PicklistDefinition.id == def_id,
-            models.PicklistDefinition.organization_id == admin.organization_id,
-        )
-        .first()
-    )
-    if not row:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Picklist definition not found")
+    row = _get_definition_or_404(def_id, admin.organization_id, db)
     if row.is_system:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, "System picklists cannot be deleted"
@@ -277,6 +298,19 @@ def update_option(
     return row
 
 
+@router.get("/{picklist_id}/usage", response_model=UsageOut)
+def value_usage(
+    picklist_id: int,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    """fixes48 §1: how many records currently hold this value — drives the
+    "dependent data" confirmation before a hard delete purges it."""
+    org_id = admin.organization_id
+    row = _get_or_404(picklist_id, org_id, db)
+    return UsageOut(count=count_usage(db, org_id, row.field_key, row.value))
+
+
 @router.delete("/{picklist_id}", response_model=PicklistValueOut)
 def delete_option(
     picklist_id: int,
@@ -284,15 +318,17 @@ def delete_option(
     admin: models.User = Depends(require_admin),
     hard: bool = False,
 ):
+    """Soft-delete (is_active=false) by default; `hard=true` permanently
+    removes it AND purges every record that currently points at it (fixes48
+    §1 — previously blocked with a 409 instead of asking, so a hard delete
+    never actually purged in-use data)."""
     org_id = admin.organization_id
     row = _get_or_404(picklist_id, org_id, db)
     if hard:
-        used = count_usage(db, org_id, row.field_key, row.value)
-        if used:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                f"value '{row.value}' is in use by {used} record(s); cannot hard-delete",
-            )
+        db.query(models.PicklistLink).filter(
+            models.PicklistLink.organization_id == org_id,
+            models.PicklistLink.picklist_value_id == row.id,
+        ).delete(synchronize_session=False)
         db.delete(row)
         db.commit()
         return row

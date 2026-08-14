@@ -104,7 +104,12 @@ def test_reorder(client, admin_headers):
     assert [o["id"] for o in r.json()] == reversed_ids
 
 
-def test_hard_delete_blocked_when_in_use(client, admin_headers, db_session):
+def test_hard_delete_in_use_purges_dependent_links(client, admin_headers, db_session):
+    """fixes48 §1: a hard delete used to 409-block when the value was in use,
+    forcing a silent fallback to soft-delete. It now purges the dependent
+    link(s) and deletes the value for real — the frontend gates this behind
+    a "dependent data" confirmation instead of the backend refusing outright.
+    See /usage for the count that confirmation is based on."""
     seed_picklists(db_session, _org_id(client, admin_headers))
     # Create a contact using the 'new' pipeline status
     cid = client.post(
@@ -118,13 +123,17 @@ def test_hard_delete_blocked_when_in_use(client, admin_headers, db_session):
     opts = client.get(f"/api/picklists/{FK}", headers=admin_headers).json()
     new_id = next(o["id"] for o in opts if o["value"] == "new")
 
-    # Hard delete blocked (in use)
-    blocked = client.delete(
-        f"/api/picklists/{new_id}?hard=true", headers=admin_headers
-    )
-    assert blocked.status_code == 409
+    usage = client.get(f"/api/picklists/{new_id}/usage", headers=admin_headers)
+    assert usage.status_code == 200
+    assert usage.json()["count"] == 1
 
-    # An unused option can be hard-deleted
+    purged = client.delete(f"/api/picklists/{new_id}?hard=true", headers=admin_headers)
+    assert purged.status_code == 200
+    # The contact's own value is cleared along with the deleted option.
+    got = client.get(f"/api/contacts/{cid}", headers=admin_headers).json()
+    assert got["pipeline_status"] is None
+
+    # An unused option can still be hard-deleted with nothing to purge.
     unused_id = next(o["id"] for o in opts if o["value"] == "completed")
     ok = client.delete(f"/api/picklists/{unused_id}?hard=true", headers=admin_headers)
     assert ok.status_code == 200

@@ -6,6 +6,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useConfirm } from "@/lib/confirm";
+import { confirmHardDelete } from "@/lib/dependentDelete";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
@@ -277,7 +278,19 @@ function DefinitionEditor({
   }
 
   async function remove() {
-    if (!(await confirmDialog({ message: t("pl.delete_list_confirm", "למחוק רשימה זו וכל הערכים שלה?") }))) return;
+    const ok = await confirmHardDelete(
+      confirmDialog,
+      `/api/picklists/definition/${def.id}/usage`,
+      def.field_key,
+      {
+        withData: t(
+          "cf.dependent_data_confirm",
+          "יש נתונים הקשורים לשדה זה האם למחוק בכל זאת?",
+        ),
+        plain: t("pl.delete_list_confirm", "למחוק רשימה זו וכל הערכים שלה?"),
+      },
+    );
+    if (!ok) return;
     await apiFetch(`/api/picklists/definition/${def.id}`, { method: "DELETE" });
     await onDeleted();
   }
@@ -464,21 +477,28 @@ function OptionRow({
     await onSaved();
   }
 
-  // Permanent delete: only allowed when the value is unused (backend returns 409 otherwise).
+  // fixes48 §1: a hard delete used to 409 when the value was in use, and
+  // silently fall back to soft-delete instead. It now purges every record
+  // pointing at this value along with it — gated by the usage-based confirm.
   async function hardDelete() {
-    if (!(await confirmDialog({ message: t("pl.hard_delete_confirm", "למחוק לצמיתות?"), detail: option.value }))) return;
+    const ok = await confirmHardDelete(
+      confirmDialog,
+      `/api/picklists/${option.id}/usage`,
+      option.value,
+      {
+        withData: t(
+          "cf.dependent_data_confirm",
+          "יש נתונים הקשורים לשדה זה האם למחוק בכל זאת?",
+        ),
+        plain: t("pl.hard_delete_confirm", "למחוק לצמיתות?"),
+      },
+    );
+    if (!ok) return;
     try {
       await apiFetch(`/api/picklists/${option.id}?hard=true`, { method: "DELETE" });
       await onSaved();
-    } catch {
-      // fixes17 §1.2: toast instead of the native alert().
-      toastError(
-        t(
-          "pl.hard_delete_in_use",
-          "לא ניתן למחוק לצמיתות — הערך בשימוש על ידי רשומות קיימות. הוא הושבת במקום.",
-        ),
-      );
-      await deactivate();
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
     }
   }
 
@@ -701,8 +721,19 @@ function CustomFieldRow({
   }
 
   async function hardDelete() {
-    if (!(await confirmDialog({ message: t("cf.hard_delete_confirm", "למחוק לצמיתות את כל הערכים?"), detail: def.field_key })))
-      return;
+    const ok = await confirmHardDelete(
+      confirmDialog,
+      `/api/custom-fields/${def.id}/usage`,
+      def.field_key,
+      {
+        withData: t(
+          "cf.dependent_data_confirm",
+          "יש נתונים הקשורים לשדה זה האם למחוק בכל זאת?",
+        ),
+        plain: t("cf.hard_delete_confirm", "למחוק לצמיתות את כל הערכים?"),
+      },
+    );
+    if (!ok) return;
     try {
       await apiFetch(`/api/custom-fields/${def.id}?hard=true`, { method: "DELETE" });
       await onSaved();

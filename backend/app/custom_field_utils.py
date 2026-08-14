@@ -261,3 +261,22 @@ def delete_values_many(db: Session, entity_table: str, entity_ids: list[int]) ->
         models.CustomFieldValue.entity_table == entity_table,
         models.CustomFieldValue.entity_id.in_(entity_ids),
     ).delete(synchronize_session=False)
+
+
+def count_values(db: Session, definition_id: int) -> int:
+    """How many records currently hold a value for this (non-select)
+    definition — fixes48 §1 dependent-data check before a hard delete."""
+    return (
+        db.query(models.CustomFieldValue)
+        .filter(models.CustomFieldValue.definition_id == definition_id)
+        .count()
+    )
+
+
+def delete_values_by_definition(db: Session, definition_id: int) -> None:
+    """Purge every value ever recorded for this definition, across every
+    entity — fixes48 §1: a hard-deleted definition must not leave orphaned
+    CustomFieldValue rows behind."""
+    db.query(models.CustomFieldValue).filter(
+        models.CustomFieldValue.definition_id == definition_id
+    ).delete(synchronize_session=False)

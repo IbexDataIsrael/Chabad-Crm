@@ -93,6 +93,18 @@ def count_usage(db: Session, organization_id: int, field_key: str, value: str) -
     )
 
 
+def count_definition_usage(db: Session, picklist_definition_id: int) -> int:
+    """How many records currently hold ANY value under this whole picklist
+    definition — fixes48 §1 dependent-data check before a hard delete of the
+    definition itself (also reused for a select-type custom field's derived
+    picklist, see routers/custom_fields.py)."""
+    return (
+        db.query(models.PicklistLink)
+        .filter(models.PicklistLink.picklist_definition_id == picklist_definition_id)
+        .count()
+    )
+
+
 def get_values(
     db: Session,
     organization_id: int,
