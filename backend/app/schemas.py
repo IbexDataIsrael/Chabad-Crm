@@ -87,6 +87,38 @@ class OrganizationUpdate(BaseModel):
     label_font_family: Optional[str] = None
 
 
+class ShliachData(BaseModel):
+    notes: Optional[str] = None
+    # fixes19: shluchim are associated with report numbers (the apartment
+    # coverage bridge was dropped).
+    report_number_ids: list[int] = []
+    area_ids: list[int] = []
+    # fixes14: optional password for the shliach's login user. Without one the
+    # account is Google-only — which locks the shliach out entirely when
+    # Google sign-in isn't available. Never returned (input only).
+    password: Optional[str] = None
+
+
+class ShliachOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    contact_id: int
+    user_id: Optional[int] = None
+    notes: Optional[str] = None
+    # fixes45: the active version's identity snapshot (mirrors the linked
+    # User/Contact) — see models.ContactShliach docstring.
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    report_number_ids: list[int] = []
+    area_ids: list[int] = []
+    # fixes26 §4: state of the linked login account, resolved like
+    # core/shliach.py (user_id link, else same-org email match) —
+    # 'active' | 'disabled' | 'missing'.
+    login_status: Optional[str] = None
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -107,6 +139,10 @@ class UserOut(BaseModel):
     created_at: datetime
     organization_id: int
     organization: Optional[OrganizationOut] = None
+    # fixes46: the linked ContactShliach (role='shliach' only), resolved by
+    # the real user_id FK — replaces the frontend's old email-matching hack.
+    # None for admin/staff, or a shliach login not yet linked to a contact.
+    shliach: Optional[ShliachOut] = None
 
 
 # --- Org user management (fixes7 §1: admins provision admins/staff) ---------
@@ -134,6 +170,14 @@ class OrgUserUpdate(BaseModel):
     role: Optional[OrgRole] = None
     is_active: Optional[bool] = None
     password: Optional[str] = None
+    # fixes46: notes/areas/report_numbers on the linked ContactShliach —
+    # editing them here versions the same lineage as the contact's own
+    # shliach form (see routers/users.py::update_user). `password` on this
+    # sub-model is unused here (the top-level `password` above is the one
+    # that applies — this page always edits an existing login user, unlike
+    # the contact-page flow ShliachData also serves, which may still need to
+    # provision one).
+    shliach: Optional[ShliachData] = None
 
     _email_lower = field_validator("email")(_normalize_email)
 
@@ -828,38 +872,6 @@ class MekuravOut(MekuravData):
 
     id: int
     contact_id: int
-
-
-class ShliachData(BaseModel):
-    notes: Optional[str] = None
-    # fixes19: shluchim are associated with report numbers (the apartment
-    # coverage bridge was dropped).
-    report_number_ids: list[int] = []
-    area_ids: list[int] = []
-    # fixes14: optional password for the shliach's login user. Without one the
-    # account is Google-only — which locks the shliach out entirely when
-    # Google sign-in isn't available. Never returned (input only).
-    password: Optional[str] = None
-
-
-class ShliachOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    contact_id: int
-    user_id: Optional[int] = None
-    notes: Optional[str] = None
-    # fixes45: the active version's identity snapshot (mirrors the linked
-    # User/Contact) — see models.ContactShliach docstring.
-    full_name: Optional[str] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    report_number_ids: list[int] = []
-    area_ids: list[int] = []
-    # fixes26 §4: state of the linked login account, resolved like
-    # core/shliach.py (user_id link, else same-org email match) —
-    # 'active' | 'disabled' | 'missing'.
-    login_status: Optional[str] = None
 
 
 # --- Contacts --------------------------------------------------------------

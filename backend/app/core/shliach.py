@@ -16,6 +16,7 @@ import datetime
 
 from typing import Optional
 
+from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -132,3 +133,69 @@ def apply_shliach_versioned_update(
     db.commit()
     db.refresh(new)
     return new
+
+
+# fixes46: shared by both edit surfaces (the contact's own shliach form and
+# the Users page) — moved out of routers/contacts.py so routers/users.py can
+# reuse them without a router-to-router import.
+def validate_area(area_id: int, org_id: int, db: Session) -> None:
+    ok = (
+        db.query(models.Area)
+        .filter(models.Area.id == area_id, models.Area.organization_id == org_id)
+        .first()
+    )
+    if not ok:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "area_id does not exist")
+
+
+def set_shliach_areas(
+    db: Session, shliach: models.ContactShliach, area_ids: list[int], org_id: int
+) -> None:
+    for a in shliach.areas:
+        db.delete(a)
+    db.flush()
+    for area_id in dict.fromkeys(area_ids):  # de-dupe, keep order
+        validate_area(area_id, org_id, db)
+        db.add(
+            models.ContactShliachArea(
+                organization_id=org_id,
+                contact_shliach_id=shliach.id,
+                area_id=area_id,
+            )
+        )
+
+
+def validate_report_number(report_number_id: int, org_id: int, db: Session) -> None:
+    ok = (
+        db.query(models.ReportNumber)
+        .filter(
+            models.ReportNumber.id == report_number_id,
+            models.ReportNumber.organization_id == org_id,
+        )
+        .first()
+    )
+    if not ok:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "report_number_id does not exist"
+        )
+
+
+def set_shliach_report_numbers(
+    db: Session,
+    shliach: models.ContactShliach,
+    report_number_ids: list[int],
+    org_id: int,
+) -> None:
+    """fixes19: replace-all semantics, like the shliach area links."""
+    for link in shliach.report_numbers:
+        db.delete(link)
+    db.flush()
+    for rn_id in dict.fromkeys(report_number_ids):  # de-dupe, keep order
+        validate_report_number(rn_id, org_id, db)
+        db.add(
+            models.ReportNumberContactShliach(
+                organization_id=org_id,
+                contact_shliach_id=shliach.id,
+                report_number_id=rn_id,
+            )
+        )

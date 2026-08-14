@@ -4,13 +4,19 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 
+import { AreaMultiSelect } from "@/components/AreaMultiSelect";
+import { CustomFieldValueDisplay, CustomFieldValueInput } from "@/components/CustomFieldValueInput";
 import { EmailInput } from "@/components/EmailInput";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
+import { PicklistSelect } from "@/components/PicklistSelect";
+import { ReportNumberMultiSelect } from "@/components/ReportNumberMultiSelect";
 import { InlineEdit } from "@/components/ui/InlineEdit";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useConfirm } from "@/lib/confirm";
+import { useCustomFieldDefs } from "@/lib/customFields";
 import { useLocalization } from "@/lib/localization";
+import { usePicklistsMap } from "@/lib/picklists";
 import { usePersistentState } from "@/lib/persist";
 import { useDbPreference } from "@/lib/preferences";
 import { useToast } from "@/lib/toast";
@@ -21,6 +27,11 @@ import {
   type Building,
   type Contact,
   type ContactPage,
+  type CustomFieldDefinition,
+  type PicklistField,
+  type ReportNumber,
+  type Shliach,
+  type ShliachVersion,
 } from "@/lib/types";
 import { EMAIL_HINT, PHONE_HINT, isValidEmail, isValidPhone } from "@/lib/validation";
 
@@ -36,6 +47,9 @@ interface OrgUser {
   role: string;
   is_active: boolean;
   created_at: string;
+  // fixes46: the linked ContactShliach (role='shliach' only), resolved
+  // server-side by the real user_id FK — see schemas.UserOut.shliach.
+  shliach: Shliach | null;
 }
 
 type Role = "admin" | "staff" | "shliach";
@@ -77,7 +91,10 @@ interface MissingLoginRow {
 }
 type UnifiedRow = UserRow | MissingLoginRow;
 
-const COLUMN_KEYS = ["email", "phone", "created"] as const;
+// fixes46: notes/areas/report_numbers are the rest of ContactShliach's real
+// columns (full_name/email/phone already had cells) — opt-in like the
+// existing optional ones, so an existing user's default view is unchanged.
+const COLUMN_KEYS = ["email", "phone", "notes", "areas", "report_numbers", "created"] as const;
 type ColumnKey = (typeof COLUMN_KEYS)[number];
 const DEFAULT_COLUMNS: ColumnKey[] = ["email", "phone", "created"];
 
@@ -119,6 +136,44 @@ export default function UsersPage() {
   const [shliachContacts, setShliachContacts] = useState<Contact[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
+  // fixes46: display names for the areas/report_numbers columns.
+  const [reportNumbers, setReportNumbers] = useState<ReportNumber[]>([]);
+  // fixes46: any admin-added contact_shliach custom picklist / non-select
+  // custom field — same "dynamic column" treatment the Contacts page gives
+  // contact_mekurav's (see useCustomFieldDefs + the /api/picklists filter).
+  const [shliachPicklistDefs, setShliachPicklistDefs] = useState<PicklistField[]>([]);
+  const shliachCustomFieldDefs = useCustomFieldDefs("contact_shliach").filter(
+    (d) => d.field_type !== "select",
+  );
+  const shliachPicklists = usePicklistsMap(shliachPicklistDefs.map((d) => d.field_key));
+  const [visibleShliachPicklistKeys, setVisibleShliachPicklistKeys] = useDbPreference<
+    string[] | null
+  >("users.shliachPicklists", null);
+  const [visibleShliachFieldKeys, setVisibleShliachFieldKeys] = useDbPreference<
+    string[] | null
+  >("users.shliachCustomFields", null);
+  const visibleShliachPicklistDefs = shliachPicklistDefs.filter(
+    (d) => visibleShliachPicklistKeys == null || visibleShliachPicklistKeys.includes(d.field_key),
+  );
+  const visibleShliachFieldDefs = shliachCustomFieldDefs.filter(
+    (d) => visibleShliachFieldKeys == null || visibleShliachFieldKeys.includes(d.field_key),
+  );
+  function toggleShliachPicklistColumn(fieldKey: string) {
+    setVisibleShliachPicklistKeys((prev) => {
+      const current = prev ?? shliachPicklistDefs.map((d) => d.field_key);
+      return current.includes(fieldKey)
+        ? current.filter((k) => k !== fieldKey)
+        : [...current, fieldKey];
+    });
+  }
+  function toggleShliachFieldColumn(fieldKey: string) {
+    setVisibleShliachFieldKeys((prev) => {
+      const current = prev ?? shliachCustomFieldDefs.map((d) => d.field_key);
+      return current.includes(fieldKey)
+        ? current.filter((k) => k !== fieldKey)
+        : [...current, fieldKey];
+    });
+  }
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<OrgUser | null>(null);
   // fixes43 §3.3: the linked contact id for whichever row is being edited —
@@ -177,6 +232,12 @@ export default function UsersPage() {
     if (loading || !isAdmin) return;
     apiFetch<Area[]>("/api/areas").then(setAreas).catch(() => {});
     apiFetch<Building[]>("/api/buildings").then(setBuildings).catch(() => {});
+    apiFetch<ReportNumber[]>("/api/report-numbers").then(setReportNumbers).catch(() => {});
+    // fixes46: any admin-added contact_shliach picklist (entity_type is real
+    // data, mirrors the contacts/apartments pages' own customDefs fetch).
+    apiFetch<PicklistField[]>("/api/picklists")
+      .then((defs) => setShliachPicklistDefs(defs.filter((d) => d.entity_type === "contact_shliach")))
+      .catch(() => setShliachPicklistDefs([]));
   }, [loading, isAdmin]);
 
   // fixes44 §1: one-field inline save straight from the list row — same
@@ -190,6 +251,18 @@ export default function UsersPage() {
     setOrgUsers((prev) => prev.map((u) => (u.id === row.id ? saved : u)));
   }
 
+  // fixes46: contact_shliach custom fields/picklists live on the linked
+  // Contact record (picklist_values/custom_field_values), not on the User —
+  // saved via the contacts API and merged back into `shliachContacts` (the
+  // source `cell()` reads them from), same pattern as saveUserField above.
+  async function saveShliachContactField(contactId: number, body: Record<string, unknown>) {
+    const saved = await apiFetch<Contact>(`/api/contacts/${contactId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+    setShliachContacts((prev) => prev.map((c) => (c.id === contactId ? saved : c)));
+  }
+
   if (loading || !isAdmin) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
 
   const roleLabel = (role: string) =>
@@ -199,30 +272,32 @@ export default function UsersPage() {
         ? t("users.role_shliach", "פעיל")
         : t("users.role_staff", "משתמש מוגבל");
 
+  // fixes46: contact_shliach custom-field/picklist values live on the linked
+  // Contact record, fetched in bulk by fetchAllShliachContacts (ContactOut
+  // already carries picklist_values/custom_field_values on /list) — looked
+  // up by the *real* contact_id from u.shliach, not by an email guess.
+  const shliachContactsById = new Map(shliachContacts.map((c) => [c.id, c]));
+
   // fixes42 §4: build the unified row set — every /api/users account, plus a
   // synthetic row per shliach contact with no login at all.
-  const contactsByEmail = new Map(
-    shliachContacts.filter((c) => c.email).map((c) => [c.email!.toLowerCase(), c]),
-  );
+  // fixes46: contactId/phone/coverage now come straight from the backend's
+  // real ContactShliach.user_id link (UserOut.shliach) instead of matching
+  // contacts by email — the old heuristic silently broke when a shliach's
+  // login email differed from their contact record's email.
   const userRows: UserRow[] = orgUsers.map((u) => {
     const role: Role = u.role === "admin" || u.role === "shliach" ? u.role : "staff";
-    const matched =
-      role === "shliach" && u.email ? contactsByEmail.get(u.email.toLowerCase()) ?? null : null;
     return {
       kind: "user",
       key: `u${u.id}`,
       id: u.id,
       full_name: u.full_name,
       email: u.email,
-      // fixes44 §1: the User row is authoritative (kept in sync with a
-      // linked contact by the PUT handler) — fall back to the matched
-      // contact only for pre-sync legacy rows.
-      phone: u.phone ?? matched?.phone ?? null,
+      phone: u.phone ?? u.shliach?.phone ?? null,
       role,
       is_active: u.is_active,
       created_at: u.created_at,
       login_status: u.is_active ? "active" : "disabled",
-      contactId: matched?.id ?? null,
+      contactId: u.shliach?.contact_id ?? null,
       raw: u,
     };
   });
@@ -243,16 +318,29 @@ export default function UsersPage() {
       raw: null,
     }));
 
-  // Geo filters only constrain shliach rows (their coverage areas/buildings)
-  // — admin/staff rows have no geography and are always shown. `shliachContacts`
-  // was itself fetched with the same area/building params, so a shliach USER
-  // row whose email doesn't resolve to an entry there fell outside the filter.
+  // Geo filters only constrain shliach rows (their coverage areas/buildings,
+  // i.e. ContactShliach.area_ids) — admin/staff rows have no geography and
+  // are always shown. Mirrors the backend's own contact_type=shliach
+  // area_ids/building_ids resolution (routers/contacts.py:_contacts_query):
+  // a building matches when it sits in one of the shliach's covered areas.
   const geoFilterActive = areaIds.length > 0 || buildingIds.length > 0;
+  function shliachMatchesGeo(sh: Shliach | null | undefined): boolean {
+    if (!sh) return false;
+    if (areaIds.length > 0 && !sh.area_ids.some((id) => areaIds.includes(id))) return false;
+    if (buildingIds.length > 0) {
+      const covered = new Set(sh.area_ids);
+      const inCoveredArea = buildings.some(
+        (b) => buildingIds.includes(b.id) && b.area_id != null && covered.has(b.area_id),
+      );
+      if (!inCoveredArea) return false;
+    }
+    return true;
+  }
   const allRows: UnifiedRow[] = [...userRows, ...missingRows].filter((r) => {
     if (roleFilter.length > 0 && !roleFilter.includes(r.role)) return false;
     if (!showInactive && !r.is_active) return false;
     if (geoFilterActive && r.role === "shliach" && r.kind === "user") {
-      if (!r.email || !contactsByEmail.has(r.email.toLowerCase())) return false;
+      if (!shliachMatchesGeo(r.raw.shliach)) return false;
     }
     return true;
   });
@@ -275,11 +363,16 @@ export default function UsersPage() {
   const columnLabels: Record<ColumnKey, string> = {
     email: t("contacts.email", "אימייל"),
     phone: t("contacts.phone", "טלפון"),
+    notes: t("contact_shliach.notes", "הערות"),
+    areas: t("contact_shliach.areas", "אזורים באחריות הפעיל"),
+    report_numbers: t("contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל"),
     created: t("contacts.created_at", "נוצר בתאריך"),
   };
   const activeColumns = columns.filter((k): k is ColumnKey =>
     (COLUMN_KEYS as readonly string[]).includes(k),
   );
+  const colCount =
+    4 + activeColumns.length + visibleShliachPicklistDefs.length + visibleShliachFieldDefs.length;
 
   function toggleColumn(k: ColumnKey) {
     setColumns((prev) => (prev.includes(k) ? prev.filter((c) => c !== k) : [...prev, k]));
@@ -359,12 +452,145 @@ export default function UsersPage() {
     />
   );
 
+  // fixes46: notes/areas/report_numbers are the rest of ContactShliach's
+  // columns — same "unlinked ⇒ dash + disabled" contract as phone. A
+  // `missing_login` row has no `raw` User but still has its own shliach data
+  // (read straight off the Contact fetched via `/list`), so it renders the
+  // same values read-only (no PUT /api/users endpoint backs a contact-only
+  // row from this page).
+  function areaNamesText(ids: number[]): string {
+    if (ids.length === 0) return "—";
+    const byId = new Map(areas.map((a) => [a.id, a.area_name]));
+    return ids.map((id) => byId.get(id) ?? `#${id}`).join(", ");
+  }
+  function reportNumberNamesText(ids: number[]): string {
+    if (ids.length === 0) return "—";
+    const byId = new Map(reportNumbers.map((rn) => [rn.id, rn.name]));
+    return ids.map((id) => byId.get(id) ?? `#${id}`).join(", ");
+  }
+
+  const inlineNotesCell = (r: UserRow) => (
+    <InlineEdit<string>
+      value={r.raw.shliach?.notes ?? ""}
+      display={
+        r.raw.shliach?.notes ? (
+          <span className="whitespace-pre-wrap">{r.raw.shliach.notes}</span>
+        ) : (
+          "—"
+        )
+      }
+      disabled={r.contactId == null}
+      onSave={(v) => saveUserField(r, { shliach: { notes: v.trim() || null } })}
+      editor={(draft, setDraft) => (
+        <textarea
+          className={inputClass}
+          rows={2}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+        />
+      )}
+    />
+  );
+
+  const inlineAreasCell = (r: UserRow) => (
+    <InlineEdit<number[]>
+      value={r.raw.shliach?.area_ids ?? []}
+      display={areaNamesText(r.raw.shliach?.area_ids ?? [])}
+      disabled={r.contactId == null}
+      onSave={(ids) => saveUserField(r, { shliach: { area_ids: ids } })}
+      editor={(draft, setDraft) => (
+        <AreaMultiSelect
+          value={draft}
+          onChange={setDraft}
+          excludeContactId={r.contactId ?? undefined}
+        />
+      )}
+    />
+  );
+
+  const inlineReportNumbersCell = (r: UserRow) => (
+    <InlineEdit<number[]>
+      value={r.raw.shliach?.report_number_ids ?? []}
+      display={reportNumberNamesText(r.raw.shliach?.report_number_ids ?? [])}
+      disabled={r.contactId == null}
+      onSave={(ids) => saveUserField(r, { shliach: { report_number_ids: ids } })}
+      editor={(draft, setDraft) => (
+        <ReportNumberMultiSelect
+          value={draft}
+          onChange={setDraft}
+          excludeContactId={r.contactId ?? undefined}
+        />
+      )}
+    />
+  );
+
+  // fixes46: any admin-added contact_shliach picklist/custom field — reads
+  // and writes the linked Contact directly (these values live there, not on
+  // the User). Unlinked rows (`contactId == null`) just show "—", same as
+  // every other shliach-only column.
+  const inlineShliachPicklistCell = (r: UnifiedRow, d: PicklistField) => {
+    const c = r.contactId != null ? shliachContactsById.get(r.contactId) : undefined;
+    const value = c?.picklist_values?.[d.field_key] ?? null;
+    const display = shliachPicklists.labelFor(d.field_key, value) || "—";
+    if (r.contactId == null) return display;
+    return (
+      <InlineEdit<string | null>
+        value={value}
+        display={display}
+        commitOnBlur={false}
+        onSave={(v) =>
+          saveShliachContactField(r.contactId as number, { picklist_values: { [d.field_key]: v } })
+        }
+        editor={(draft, _setDraft, commit) => (
+          <PicklistSelect fieldKey={d.field_key} value={draft} onChange={commit} />
+        )}
+      />
+    );
+  };
+
+  const inlineShliachCustomFieldCell = (r: UnifiedRow, d: CustomFieldDefinition) => {
+    const c = r.contactId != null ? shliachContactsById.get(r.contactId) : undefined;
+    const value = c?.custom_field_values?.[d.field_key] ?? null;
+    if (r.contactId == null) return <CustomFieldValueDisplay fieldType={d.field_type} value={value} />;
+    return (
+      <InlineEdit<string | number | boolean | null>
+        value={value}
+        display={<CustomFieldValueDisplay fieldType={d.field_type} value={value} />}
+        commitOnBlur={d.field_type === "text" || d.field_type === "number"}
+        onSave={(v) =>
+          saveShliachContactField(r.contactId as number, { custom_field_values: { [d.field_key]: v } })
+        }
+        editor={(draft, setDraft, commit) => (
+          <CustomFieldValueInput
+            fieldType={d.field_type}
+            value={draft}
+            onChange={d.field_type === "boolean" || d.field_type === "date" ? commit : setDraft}
+          />
+        )}
+      />
+    );
+  };
+
   function cell(r: UnifiedRow, k: ColumnKey) {
     switch (k) {
       case "email":
         return r.kind === "user" ? inlineEmailCell(r) : r.email ? <span dir="ltr">{r.email}</span> : "—";
       case "phone":
         return r.kind === "user" ? inlinePhoneCell(r) : r.phone ? <span dir="ltr">{r.phone}</span> : "—";
+      case "notes":
+        return r.kind === "user"
+          ? inlineNotesCell(r)
+          : shliachContactsById.get(r.contactId)?.shliach?.notes ?? "—";
+      case "areas":
+        return r.kind === "user"
+          ? inlineAreasCell(r)
+          : areaNamesText(shliachContactsById.get(r.contactId)?.shliach?.area_ids ?? []);
+      case "report_numbers":
+        return r.kind === "user"
+          ? inlineReportNumbersCell(r)
+          : reportNumberNamesText(
+              shliachContactsById.get(r.contactId)?.shliach?.report_number_ids ?? [],
+            );
       case "created":
         return <span dir="ltr">{new Date(r.created_at).toLocaleDateString("he-IL")}</span>;
     }
@@ -527,6 +753,8 @@ export default function UsersPage() {
         <UserForm
           user={editing}
           contactId={editingContactId}
+          areas={areas}
+          reportNumbers={reportNumbers}
           onClose={() => {
             setEditing(null);
             setEditingContactId(null);
@@ -604,6 +832,50 @@ export default function UsersPage() {
                 {columnLabels[k]}
               </button>
             ))}
+            {/* fixes46: any admin-added contact_shliach picklist/custom field —
+                same toggle-chip treatment the Contacts page gives its own
+                dynamic columns (not draggable — they always render last). */}
+            {shliachPicklistDefs.map((d) => {
+              const on =
+                visibleShliachPicklistKeys == null ||
+                visibleShliachPicklistKeys.includes(d.field_key);
+              return (
+                <button
+                  key={`pl-${d.field_key}`}
+                  type="button"
+                  data-sortable-disabled=""
+                  onClick={() => toggleShliachPicklistColumn(d.field_key)}
+                  className={`rounded-md border px-3 py-1.5 text-sm ${
+                    on
+                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
+                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {on ? "✓ " : ""}
+                  {d.label || d.field_key}
+                </button>
+              );
+            })}
+            {shliachCustomFieldDefs.map((d) => {
+              const on =
+                visibleShliachFieldKeys == null || visibleShliachFieldKeys.includes(d.field_key);
+              return (
+                <button
+                  key={`cf-${d.field_key}`}
+                  type="button"
+                  data-sortable-disabled=""
+                  onClick={() => toggleShliachFieldColumn(d.field_key)}
+                  className={`rounded-md border px-3 py-1.5 text-sm ${
+                    on
+                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
+                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {on ? "✓ " : ""}
+                  {d.hebrew_label || d.field_key}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -718,6 +990,18 @@ export default function UsersPage() {
                   {columnLabels[k]}
                 </th>
               ))}
+              {/* fixes46: one column per admin-added contact_shliach
+                  picklist/custom field the column-selector has left on. */}
+              {visibleShliachPicklistDefs.map((d) => (
+                <th key={`pl-${d.field_key}`} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
+                  {d.label || d.field_key}
+                </th>
+              ))}
+              {visibleShliachFieldDefs.map((d) => (
+                <th key={`cf-${d.field_key}`} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
+                  {d.hebrew_label || d.field_key}
+                </th>
+              ))}
               <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap" />
               <th className="w-full" />
             </tr>
@@ -725,13 +1009,13 @@ export default function UsersPage() {
           <tbody>
             {busy ? (
               <tr>
-                <td colSpan={4 + activeColumns.length} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={colCount} className="px-4 py-6 text-center text-gray-400">
                   {t("action.loading", "טוען…")}
                 </td>
               </tr>
             ) : sorted.length === 0 ? (
               <tr>
-                <td colSpan={4 + activeColumns.length} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={colCount} className="px-4 py-6 text-center text-gray-400">
                   {t("users.none", "אין משתמשים.")}
                 </td>
               </tr>
@@ -785,6 +1069,17 @@ export default function UsersPage() {
                   {activeColumns.map((k) => (
                     <td key={k} className="px-3 py-1.5 w-px whitespace-nowrap">
                       {cell(r, k)}
+                    </td>
+                  ))}
+                  {/* fixes46: contact_shliach picklist/custom field columns. */}
+                  {visibleShliachPicklistDefs.map((d) => (
+                    <td key={`pl-${d.field_key}`} className="px-3 py-1.5 w-px whitespace-nowrap">
+                      {inlineShliachPicklistCell(r, d)}
+                    </td>
+                  ))}
+                  {visibleShliachFieldDefs.map((d) => (
+                    <td key={`cf-${d.field_key}`} className="px-3 py-1.5 w-px whitespace-nowrap">
+                      {inlineShliachCustomFieldCell(r, d)}
                     </td>
                   ))}
                   <td className="px-3 py-1.5 w-px whitespace-nowrap">
@@ -864,11 +1159,15 @@ export default function UsersPage() {
 function UserForm({
   user,
   contactId,
+  areas = [],
+  reportNumbers = [],
   onClose,
   onSaved,
 }: {
   user?: OrgUser;
   contactId?: number | null;
+  areas?: Area[];
+  reportNumbers?: ReportNumber[];
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
@@ -886,6 +1185,23 @@ function UserForm({
   // fixes14: a shliach's role is managed by its contact link — never send a
   // role for them (it silently demoted the account to staff).
   const isShliachAccount = user?.role === "shliach";
+
+  // fixes46: audit/edit history, reachable straight from the Users page (was
+  // only reachable via the contact's own page before) — same full-snapshot
+  // version list as the Apartments module / ContactView's own shliach
+  // history section. Only a shliach row has a versioned ContactShliach
+  // lineage to show; admin/staff logins aren't versioned (fixes45 — would
+  // break the JWT-identified session).
+  const [history, setHistory] = useState<ShliachVersion[]>([]);
+  useEffect(() => {
+    if (!isShliachAccount || contactId == null) {
+      setHistory([]);
+      return;
+    }
+    apiFetch<ShliachVersion[]>(`/api/contacts/${contactId}/shliach-history`)
+      .then(setHistory)
+      .catch(() => setHistory([]));
+  }, [isShliachAccount, contactId]);
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -927,6 +1243,7 @@ function UserForm({
   }
 
   return (
+    <div className="space-y-4">
     <form onSubmit={save} className="bg-white rounded-xl shadow-sm p-4 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-medium">
@@ -1018,5 +1335,54 @@ function UserForm({
         </button>
       </div>
     </form>
+
+      {/* fixes46: audit/edit history — same full-row-snapshot view as
+          ContactView.tsx's shliach history section (see model docstring on
+          ContactShliach): each entry is a complete past version, not a diff. */}
+      {history.length > 0 && (
+        <div className="rounded-lg border border-gray-200 p-4 space-y-2">
+          <h3 className="text-xs font-semibold text-gray-500">
+            {t("contact_shliach.history", "היסטוריית שינויים")}
+          </h3>
+          <ul className="text-sm space-y-1.5">
+            {history.map((v) => (
+              <li key={v.id} className="text-gray-600">
+                <span className="text-xs text-gray-400">
+                  {(v.editor_name || t("apt.history_unknown_editor", "עורך לא ידוע")) +
+                    " — " +
+                    (v.last_edit ? new Date(v.last_edit).toLocaleString("he-IL") : "")}
+                </span>
+                <br />
+                {v.full_name || "—"}
+                {v.email && <span dir="ltr"> · {v.email}</span>}
+                {v.phone && <span dir="ltr"> · {v.phone}</span>}
+                <br />
+                <span className="text-xs">
+                  {t("contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל")}:{" "}
+                  {v.report_number_ids.length === 0
+                    ? "—"
+                    : v.report_number_ids
+                        .map((id) => reportNumbers.find((rn) => rn.id === id)?.name ?? `#${id}`)
+                        .join(", ")}
+                  {" · "}
+                  {t("contact_shliach.areas", "אזורים באחריות הפעיל")}:{" "}
+                  {v.area_ids.length === 0
+                    ? "—"
+                    : v.area_ids
+                        .map((id) => areas.find((a) => a.id === id)?.area_name ?? `#${id}`)
+                        .join(", ")}
+                  {v.notes && (
+                    <>
+                      {" · "}
+                      {t("contact_shliach.notes", "הערות")}: {v.notes}
+                    </>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }

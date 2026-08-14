@@ -10,6 +10,7 @@ existing /api/auth/google flow links by email). New users get the same
 welcome email template as new shliach accounts.
 """
 import logging
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
@@ -18,10 +19,14 @@ from sqlalchemy.orm import Session
 from app import models
 from app.core.email import send_shliach_welcome
 from app.core.security import hash_password
-from app.core.shliach import apply_shliach_versioned_update
+from app.core.shliach import (
+    apply_shliach_versioned_update,
+    set_shliach_areas,
+    set_shliach_report_numbers,
+)
 from app.database import get_db
 from app.deps import require_admin, require_staff_or_admin
-from app.schemas import OrgUserCreate, OrgUserUpdate, UserOut, UserRecreateIn
+from app.schemas import OrgUserCreate, OrgUserUpdate, ShliachOut, UserOut, UserRecreateIn
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -39,17 +44,62 @@ def _get_or_404(user_id: int, org_id: int, db: Session) -> models.User:
     return user
 
 
+def _shliach_out(sh: models.ContactShliach) -> ShliachOut:
+    """fixes46: same shape _build_detail (routers/contacts.py) builds — kept
+    local since it's UserOut's nested field here, not ContactDetailOut's."""
+    return ShliachOut(
+        id=sh.id,
+        contact_id=sh.contact_id,
+        user_id=sh.user_id,
+        notes=sh.notes,
+        full_name=sh.full_name,
+        email=sh.email,
+        phone=sh.phone,
+        report_number_ids=[r.report_number_id for r in sh.report_numbers],
+        area_ids=[a.area_id for a in sh.areas],
+    )
+
+
+def _linked_shliach(db: Session, user_id: int) -> Optional[models.ContactShliach]:
+    return (
+        db.query(models.ContactShliach)
+        .filter(
+            models.ContactShliach.user_id == user_id,
+            models.ContactShliach.is_display.is_(True),
+        )
+        .first()
+    )
+
+
 @router.get("", response_model=list[UserOut])
 def list_users(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_staff_or_admin),
 ):
-    return (
+    users = (
         db.query(models.User)
         .filter(models.User.organization_id == current_user.organization_id)
         .order_by(models.User.full_name)
         .all()
     )
+    # fixes46: resolve every shliach link (User.id -> ContactShliach.user_id)
+    # in one query instead of the old email-matching the frontend used to do.
+    shliach_by_user = {
+        sh.user_id: sh
+        for sh in db.query(models.ContactShliach).filter(
+            models.ContactShliach.organization_id == current_user.organization_id,
+            models.ContactShliach.is_display.is_(True),
+            models.ContactShliach.user_id.isnot(None),
+        )
+    }
+    out = []
+    for u in users:
+        item = UserOut.model_validate(u)
+        sh = shliach_by_user.get(u.id)
+        if sh:
+            item.shliach = _shliach_out(sh)
+        out.append(item)
+    return out
 
 
 @router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -130,7 +180,12 @@ def update_user(
     admin: models.User = Depends(require_admin),
 ):
     user = _get_or_404(user_id, admin.organization_id, db)
-    data = payload.model_dump(exclude_unset=True)
+    # fixes46: `shliach` (notes/area_ids/report_number_ids) is handled on its
+    # own below, alongside the identity fields — together they still collapse
+    # into at most one new ContactShliach version per request.
+    data = payload.model_dump(exclude_unset=True, exclude={"shliach"})
+    sh_data = payload.shliach
+    sh_sent = sh_data.model_dump(exclude_unset=True) if sh_data is not None else {}
     # fixes45: editing a shliach's login identity here is editing the same
     # versioned shliach entity the contacts-page edit path feeds — capture
     # which identity fields were actually sent before email/phone get popped
@@ -153,14 +208,7 @@ def update_user(
 
     # fixes14 (user → contact sync): email/phone edits propagate to the linked
     # shliach contact so the two records never drift apart.
-    linked = (
-        db.query(models.ContactShliach)
-        .filter(
-            models.ContactShliach.user_id == user.id,
-            models.ContactShliach.is_display.is_(True),
-        )
-        .first()
-    )
+    linked = _linked_shliach(db, user.id)
     email = data.pop("email", None)
     if email and email != user.email:
         dup = (
@@ -199,24 +247,31 @@ def update_user(
     for field, value in data.items():
         setattr(user, field, value)
 
-    # fixes45: a shliach's login-identity edit also produces a new
-    # ContactShliach version — "editing the user is editing the shliach"
-    # holds from this page too, not just the contact's own shliach form.
-    if linked and identity_sent:
-        apply_shliach_versioned_update(
-            db,
-            linked,
-            {
-                "full_name": user.full_name,
-                "email": user.email,
-                "phone": user.phone,
-            },
-            admin,
-        )
+    # fixes45/fixes46: a shliach's login-identity edit — or a notes/area/
+    # report-number edit from this page's own columns — produces a new
+    # ContactShliach version, exactly like an edit from the contact's own
+    # shliach form. One request still yields at most one new version.
+    if linked and (identity_sent or sh_sent):
+        changes: dict = {}
+        if identity_sent:
+            changes.update(full_name=user.full_name, email=user.email, phone=user.phone)
+        if "notes" in sh_sent:
+            changes["notes"] = sh_data.notes
+        new = apply_shliach_versioned_update(db, linked, changes, admin)
+        if "report_number_ids" in sh_sent:
+            set_shliach_report_numbers(db, new, sh_data.report_number_ids, admin.organization_id)
+        if "area_ids" in sh_sent:
+            set_shliach_areas(db, new, sh_data.area_ids, admin.organization_id)
+        db.commit()
+        linked = new
 
     db.commit()
     db.refresh(user)
-    return user
+    out = UserOut.model_validate(user)
+    if linked:
+        db.refresh(linked)
+        out.shliach = _shliach_out(linked)
+    return out
 
 
 @router.post("/recreate", response_model=UserOut)

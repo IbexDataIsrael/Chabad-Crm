@@ -22,7 +22,14 @@ from app.core.display import building_display_name
 from app.core.email import send_shliach_welcome
 from app.core.geocode import geocode_address
 from app.core.security import hash_password
-from app.core.shliach import apply_shliach_versioned_update, copy_shliach_children
+from app.core.shliach import (
+    apply_shliach_versioned_update,
+    copy_shliach_children,
+    set_shliach_areas,
+    set_shliach_report_numbers,
+    validate_area,
+    validate_report_number,
+)
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.picklist_utils import validate_picklist_value
@@ -431,69 +438,6 @@ def _provision_shliach_user(
     db.add(user)
     db.flush()
     return user
-
-
-def _validate_report_number(report_number_id: int, org_id: int, db: Session) -> None:
-    ok = (
-        db.query(models.ReportNumber)
-        .filter(
-            models.ReportNumber.id == report_number_id,
-            models.ReportNumber.organization_id == org_id,
-        )
-        .first()
-    )
-    if not ok:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "report_number_id does not exist"
-        )
-
-
-def _set_shliach_report_numbers(
-    db: Session,
-    shliach: models.ContactShliach,
-    report_number_ids: list[int],
-    org_id: int,
-) -> None:
-    """fixes19: replace-all semantics, like the shliach area links."""
-    for link in shliach.report_numbers:
-        db.delete(link)
-    db.flush()
-    for rn_id in dict.fromkeys(report_number_ids):  # de-dupe, keep order
-        _validate_report_number(rn_id, org_id, db)
-        db.add(
-            models.ReportNumberContactShliach(
-                organization_id=org_id,
-                contact_shliach_id=shliach.id,
-                report_number_id=rn_id,
-            )
-        )
-
-
-def _validate_area(area_id: int, org_id: int, db: Session) -> None:
-    ok = (
-        db.query(models.Area)
-        .filter(models.Area.id == area_id, models.Area.organization_id == org_id)
-        .first()
-    )
-    if not ok:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "area_id does not exist")
-
-
-def _set_shliach_areas(
-    db: Session, shliach: models.ContactShliach, area_ids: list[int], org_id: int
-) -> None:
-    for a in shliach.areas:
-        db.delete(a)
-    db.flush()
-    for area_id in dict.fromkeys(area_ids):  # de-dupe, keep order
-        _validate_area(area_id, org_id, db)
-        db.add(
-            models.ContactShliachArea(
-                organization_id=org_id,
-                contact_shliach_id=shliach.id,
-                area_id=area_id,
-            )
-        )
 
 
 # --- CRUD -------------------------------------------------------------------
@@ -1155,7 +1099,7 @@ def clear_shliach_areas(
         if not shliach.areas:
             continue
         new = apply_shliach_versioned_update(db, shliach, {}, admin)
-        _set_shliach_areas(db, new, [], org_id=admin.organization_id)
+        set_shliach_areas(db, new, [], org_id=admin.organization_id)
         db.commit()
         updated += 1
     return ShliachClearAreasResult(updated=updated)
@@ -1224,9 +1168,9 @@ def create_contact(
         db.add(shliach)
         db.flush()
         if sh and sh.report_number_ids:
-            _set_shliach_report_numbers(db, shliach, sh.report_number_ids, org_id)
+            set_shliach_report_numbers(db, shliach, sh.report_number_ids, org_id)
         if sh and sh.area_ids:
-            _set_shliach_areas(db, shliach, sh.area_ids, org_id)
+            set_shliach_areas(db, shliach, sh.area_ids, org_id)
         # Email the new shliach their access link (admin-triggered).
         if contact.email:
             org_name = (
@@ -1432,11 +1376,11 @@ def update_contact(
             db.add(active)
             db.flush()
             if "report_number_ids" in sh_sent:
-                _set_shliach_report_numbers(
+                set_shliach_report_numbers(
                     db, active, sh_data.report_number_ids, org_id
                 )
             if "area_ids" in sh_sent:
-                _set_shliach_areas(db, active, sh_data.area_ids, org_id)
+                set_shliach_areas(db, active, sh_data.area_ids, org_id)
             contact.shliach = active
         else:
             changes: dict = {}
@@ -1471,9 +1415,9 @@ def update_contact(
             if changes or "report_number_ids" in sh_sent or "area_ids" in sh_sent:
                 new = apply_shliach_versioned_update(db, active, changes, current_user)
                 if "report_number_ids" in sh_sent:
-                    _set_shliach_report_numbers(db, new, sh_data.report_number_ids, org_id)
+                    set_shliach_report_numbers(db, new, sh_data.report_number_ids, org_id)
                 if "area_ids" in sh_sent:
-                    _set_shliach_areas(db, new, sh_data.area_ids, org_id)
+                    set_shliach_areas(db, new, sh_data.area_ids, org_id)
                 db.commit()
                 contact.shliach = new
 
