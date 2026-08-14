@@ -10,6 +10,7 @@ import { SearchableSelect } from "@/components/SearchableSelect";
 import { CustomFieldValueDisplay, CustomFieldValueInput } from "@/components/CustomFieldValueInput";
 import { InlineEdit } from "@/components/ui/InlineEdit";
 import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter";
+import { TruncatedText } from "@/components/ui/TruncatedText";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { mapsHref } from "@/lib/contactActions";
@@ -469,7 +470,7 @@ export default function ApartmentsPage() {
   ) => (
     <InlineEdit<string | null>
       value={a[field] ?? null}
-      display={label || "—"}
+      display={<TruncatedText text={label || "—"} />}
       commitOnBlur={false}
       onSave={(v) => saveListField(a, { [field]: v })}
       editor={(draft, _setDraft, commit) => (
@@ -487,7 +488,13 @@ export default function ApartmentsPage() {
     <InlineEdit<string>
       value={(a[field] as string | null) ?? ""}
       display={
-        a[field] ? <span dir={opts.dir} className="whitespace-pre-wrap">{a[field]}</span> : "—"
+        a[field] ? (
+          <span dir={opts.dir}>
+            <TruncatedText text={a[field] as string} />
+          </span>
+        ) : (
+          "—"
+        )
       }
       validate={opts.validate}
       enterCommits={!opts.multiline}
@@ -511,6 +518,12 @@ export default function ApartmentsPage() {
       }
     />
   );
+
+  // fixes49 §1: per-column min-width so short values (dates, badges) don't
+  // get squeezed in the RTL grid — free-text-prone columns get the wider floor.
+  const WIDE_FIELD_KEYS = new Set<FieldKey>(["resident", "building", "area", "notes"]);
+  const fieldMinWidth = (k: FieldKey) =>
+    WIDE_FIELD_KEYS.has(k) ? "min-w-[150px]" : "min-w-[120px]";
 
   const fieldLabels: Record<FieldKey, string> = {
     resident: t("apartments.name", "שם דייר"),
@@ -576,7 +589,7 @@ export default function ApartmentsPage() {
   function cell(a: ApartmentListItem, k: FieldKey) {
     switch (k) {
       case "resident":
-        return a.name ?? "—";
+        return <TruncatedText text={a.name ?? "—"} />;
       case "building": {
         const name = buildingDisplayName({
           id: a.building_id,
@@ -593,16 +606,16 @@ export default function ApartmentsPage() {
               title={t("apt.navigate", "ניווט בגוגל מפות")}
               className="text-status-magenta hover:underline"
             >
-              📍 {name}
+              📍 <TruncatedText text={name} />
             </a>
           );
         }
-        return name;
+        return <TruncatedText text={name} />;
       }
       case "area":
-        return a.area_name ?? "—";
+        return <TruncatedText text={a.area_name ?? "—"} />;
       case "report_number":
-        return a.report_number_name ?? "—";
+        return <TruncatedText text={a.report_number_name ?? "—"} />;
       // fixes32 §6: notes/email/phone edit in place, straight from the list row.
       case "notes":
         return inlineTextCell(a, "apartment_notes", { multiline: true });
@@ -1101,25 +1114,38 @@ export default function ApartmentsPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-600 text-right">
             <tr>
-              <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
+              <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap min-w-[150px]">
                 {t("apartments.apartment_name", "מספר דירה")}
               </th>
+              {/* fixes49 §1: each column carries a data-type-dependent
+                  min-width floor so RTL headers don't squeeze. */}
               {renderedFields.map((k) => (
-                <th key={k} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
+                <th
+                  key={k}
+                  className={`px-3 py-1.5 font-medium w-px whitespace-nowrap ${fieldMinWidth(k)}`}
+                >
                   {fieldLabels[k]}
                 </th>
               ))}
               {/* fixes32 §6 / fixes33 §3.1: one column per admin-added
                   apartment.* picklist the column-selector panel has left on. */}
               {visibleCustomDefs.map((d) => (
-                <th key={d.field_key} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
+                <th
+                  key={d.field_key}
+                  className="px-3 py-1.5 font-medium w-px whitespace-nowrap min-w-[120px]"
+                >
                   {customDefLabel(d)}
                 </th>
               ))}
               {/* fixes35 §3: one column per non-select apartment custom field
                   the column-selector panel has left on. */}
               {visibleCustomFieldDefs.map((d) => (
-                <th key={d.field_key} className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
+                <th
+                  key={d.field_key}
+                  className={`px-3 py-1.5 font-medium w-px whitespace-nowrap ${
+                    d.field_type === "text" ? "min-w-[150px]" : "min-w-[120px]"
+                  }`}
+                >
                   {(lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
                     d.field_key}
                 </th>
@@ -1173,14 +1199,23 @@ export default function ApartmentsPage() {
                       </tr>
                     )}
                   <tr className="border-t border-gray-100">
-                    <td className="px-3 py-2 w-px whitespace-nowrap">
+                    <td className="px-3 py-2 w-px whitespace-nowrap min-w-[150px]">
                       <ApartmentNameCell
                         a={a}
                         onSave={(v) => saveListField(a, { apartment_name: v })}
                       />
                     </td>
+                    {/* fixes49 §1: break-words (not truncate/overflow-hidden) —
+                        several of these cells hold a PicklistSelect/date-picker
+                        editor that must render its floating dropdown past its
+                        own <td> to stay visible, same reasoning as fixes47 on
+                        the Contacts page. The cell text itself is already
+                        pre-truncated via TruncatedText. */}
                     {renderedFields.map((k) => (
-                      <td key={k} className="px-3 py-2 w-px whitespace-nowrap max-w-[14rem] truncate">
+                      <td
+                        key={k}
+                        className={`px-3 py-2 max-w-[14rem] break-words ${fieldMinWidth(k)}`}
+                      >
                         {cell(a, k)}
                       </td>
                     ))}
@@ -1191,11 +1226,13 @@ export default function ApartmentsPage() {
                       return (
                         <td
                           key={d.field_key}
-                          className="px-3 py-2 w-px whitespace-nowrap max-w-[14rem] truncate"
+                          className="px-3 py-2 max-w-[14rem] break-words min-w-[120px]"
                         >
                           <InlineEdit<string | null>
                             value={value}
-                            display={customPicklists.labelFor(d.field_key, value) || "—"}
+                            display={
+                              <TruncatedText text={customPicklists.labelFor(d.field_key, value) || "—"} />
+                            }
                             commitOnBlur={false}
                             onSave={(v) =>
                               saveListField(a, { picklist_values: { [d.field_key]: v } })
@@ -1217,11 +1254,19 @@ export default function ApartmentsPage() {
                       return (
                         <td
                           key={d.field_key}
-                          className="px-3 py-2 w-px whitespace-nowrap max-w-[14rem] truncate"
+                          className={`px-3 py-2 max-w-[14rem] break-words ${
+                            d.field_type === "text" ? "min-w-[150px]" : "min-w-[120px]"
+                          }`}
                         >
                           <InlineEdit<string | number | boolean | null>
                             value={value}
-                            display={<CustomFieldValueDisplay fieldType={d.field_type} value={value} />}
+                            display={
+                              d.field_type === "text" && typeof value === "string" ? (
+                                <TruncatedText text={value} />
+                              ) : (
+                                <CustomFieldValueDisplay fieldType={d.field_type} value={value} />
+                              )
+                            }
                             commitOnBlur={d.field_type === "text" || d.field_type === "number"}
                             onSave={(v) =>
                               saveListField(a, { custom_field_values: { [d.field_key]: v } })

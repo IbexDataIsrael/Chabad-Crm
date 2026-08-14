@@ -12,6 +12,7 @@ import { PicklistSelect } from "@/components/PicklistSelect";
 import { ReportNumberMultiSelect } from "@/components/ReportNumberMultiSelect";
 import { InlineEdit } from "@/components/ui/InlineEdit";
 import { MultiSelectEditor } from "@/components/ui/MultiSelectEditor";
+import { TruncatedText } from "@/components/ui/TruncatedText";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useConfirm } from "@/lib/confirm";
@@ -108,6 +109,17 @@ type GridColumn =
 
 function gridColumnSortKey(entry: GridColumn): string {
   return `${entry.kind}:${entry.key}`;
+}
+
+// fixes49 §1: per-column min-width so short values (dates, badges) don't get
+// squeezed in the RTL grid — free-text-prone columns get the wider floor.
+const WIDE_GRID_COLUMN_KEYS = new Set<ColumnKey>(["email", "notes", "areas", "report_numbers"]);
+function gridColumnMinWidth(entry: GridColumn): string {
+  if (entry.kind === "cfield") {
+    return entry.def.field_type === "text" ? "min-w-[150px]" : "min-w-[120px]";
+  }
+  if (entry.kind === "col" && WIDE_GRID_COLUMN_KEYS.has(entry.key)) return "min-w-[150px]";
+  return "min-w-[120px]";
 }
 
 const inputClass =
@@ -498,7 +510,7 @@ export default function UsersPage() {
   const inlineNameCell = (r: UserRow) => (
     <InlineEdit<string>
       value={r.full_name}
-      display={<span>{r.full_name}</span>}
+      display={<TruncatedText text={r.full_name} />}
       validate={(v) => (v.trim() ? null : t("validation.name_required", "יש להזין שם פרטי"))}
       onSave={(v) => saveUserField(r, { full_name: v.trim() })}
       editor={(draft, setDraft) => (
@@ -510,7 +522,15 @@ export default function UsersPage() {
   const inlineEmailCell = (r: UserRow) => (
     <InlineEdit<string>
       value={r.email ?? ""}
-      display={r.email ? <span dir="ltr">{r.email}</span> : "—"}
+      display={
+        r.email ? (
+          <span dir="ltr">
+            <TruncatedText text={r.email} />
+          </span>
+        ) : (
+          "—"
+        )
+      }
       validate={(v) => (isValidEmail(v.trim()) ? null : t("validation.email_hint", EMAIL_HINT))}
       onSave={(v) => saveUserField(r, { email: v.trim() })}
       editor={(draft, setDraft) => (
@@ -567,11 +587,7 @@ export default function UsersPage() {
     <InlineEdit<string>
       value={r.raw.shliach?.notes ?? ""}
       display={
-        r.raw.shliach?.notes ? (
-          <span className="whitespace-pre-wrap">{r.raw.shliach.notes}</span>
-        ) : (
-          "—"
-        )
+        r.raw.shliach?.notes ? <TruncatedText text={r.raw.shliach.notes} /> : "—"
       }
       disabled={r.contactId == null}
       onSave={(v) => saveUserField(r, { shliach: { notes: v.trim() || null } })}
@@ -593,7 +609,7 @@ export default function UsersPage() {
   const inlineAreasCell = (r: UserRow) => (
     <InlineEdit<number[]>
       value={r.raw.shliach?.area_ids ?? []}
-      display={areaNamesText(r.raw.shliach?.area_ids ?? [])}
+      display={<TruncatedText text={areaNamesText(r.raw.shliach?.area_ids ?? [])} />}
       disabled={r.contactId == null}
       commitOnBlur={false}
       onSave={async (ids) => {
@@ -615,7 +631,9 @@ export default function UsersPage() {
   const inlineReportNumbersCell = (r: UserRow) => (
     <InlineEdit<number[]>
       value={r.raw.shliach?.report_number_ids ?? []}
-      display={reportNumberNamesText(r.raw.shliach?.report_number_ids ?? [])}
+      display={
+        <TruncatedText text={reportNumberNamesText(r.raw.shliach?.report_number_ids ?? [])} />
+      }
       disabled={r.contactId == null}
       commitOnBlur={false}
       onSave={async (ids) => {
@@ -641,7 +659,7 @@ export default function UsersPage() {
   const inlineShliachPicklistCell = (r: UnifiedRow, d: PicklistField) => {
     const c = r.contactId != null ? shliachContactsById.get(r.contactId) : undefined;
     const value = c?.picklist_values?.[d.field_key] ?? null;
-    const display = shliachPicklists.labelFor(d.field_key, value) || "—";
+    const display = <TruncatedText text={shliachPicklists.labelFor(d.field_key, value) || "—"} />;
     if (r.contactId == null) return display;
     return (
       <InlineEdit<string | null>
@@ -661,11 +679,17 @@ export default function UsersPage() {
   const inlineShliachCustomFieldCell = (r: UnifiedRow, d: CustomFieldDefinition) => {
     const c = r.contactId != null ? shliachContactsById.get(r.contactId) : undefined;
     const value = c?.custom_field_values?.[d.field_key] ?? null;
-    if (r.contactId == null) return <CustomFieldValueDisplay fieldType={d.field_type} value={value} />;
+    const display =
+      d.field_type === "text" && typeof value === "string" ? (
+        <TruncatedText text={value} />
+      ) : (
+        <CustomFieldValueDisplay fieldType={d.field_type} value={value} />
+      );
+    if (r.contactId == null) return display;
     return (
       <InlineEdit<string | number | boolean | null>
         value={value}
-        display={<CustomFieldValueDisplay fieldType={d.field_type} value={value} />}
+        display={display}
         commitOnBlur={d.field_type === "text" || d.field_type === "number"}
         onSave={(v) =>
           saveShliachContactField(r.contactId as number, { custom_field_values: { [d.field_key]: v } })
@@ -684,23 +708,41 @@ export default function UsersPage() {
   function cell(r: UnifiedRow, k: ColumnKey) {
     switch (k) {
       case "email":
-        return r.kind === "user" ? inlineEmailCell(r) : r.email ? <span dir="ltr">{r.email}</span> : "—";
+        return r.kind === "user" ? (
+          inlineEmailCell(r)
+        ) : r.email ? (
+          <span dir="ltr">
+            <TruncatedText text={r.email} />
+          </span>
+        ) : (
+          "—"
+        );
       case "phone":
         return r.kind === "user" ? inlinePhoneCell(r) : r.phone ? <span dir="ltr">{r.phone}</span> : "—";
       case "notes":
-        return r.kind === "user"
-          ? inlineNotesCell(r)
-          : shliachContactsById.get(r.contactId)?.shliach?.notes ?? "—";
+        return r.kind === "user" ? (
+          inlineNotesCell(r)
+        ) : (
+          <TruncatedText text={shliachContactsById.get(r.contactId)?.shliach?.notes ?? "—"} />
+        );
       case "areas":
-        return r.kind === "user"
-          ? inlineAreasCell(r)
-          : areaNamesText(shliachContactsById.get(r.contactId)?.shliach?.area_ids ?? []);
+        return r.kind === "user" ? (
+          inlineAreasCell(r)
+        ) : (
+          <TruncatedText
+            text={areaNamesText(shliachContactsById.get(r.contactId)?.shliach?.area_ids ?? [])}
+          />
+        );
       case "report_numbers":
-        return r.kind === "user"
-          ? inlineReportNumbersCell(r)
-          : reportNumberNamesText(
+        return r.kind === "user" ? (
+          inlineReportNumbersCell(r)
+        ) : (
+          <TruncatedText
+            text={reportNumberNamesText(
               shliachContactsById.get(r.contactId)?.shliach?.report_number_ids ?? [],
-            );
+            )}
+          />
+        );
       case "created":
         return <span dir="ltr">{new Date(r.created_at).toLocaleDateString("he-IL")}</span>;
     }
@@ -1094,14 +1136,20 @@ export default function UsersPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-600 text-right">
             <tr>
-              <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap">{t("common.name", "שם")}</th>
-              <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap">{t("users.role_label", "תפקיד")}</th>
+              <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap min-w-[150px]">
+                {t("common.name", "שם")}
+              </th>
+              <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap min-w-[120px]">
+                {t("users.role_label", "תפקיד")}
+              </th>
               {/* fixes48 §3: fixed + custom picklist + custom field columns,
-                  in the user's unified (draggable) order. */}
+                  in the user's unified (draggable) order. fixes49 §1: each
+                  column carries a data-type-dependent min-width floor so RTL
+                  headers don't squeeze. */}
               {orderedActiveColumns.map((entry) => (
                 <th
                   key={gridColumnSortKey(entry)}
-                  className="px-3 py-1.5 font-medium w-px whitespace-nowrap"
+                  className={`px-3 py-1.5 font-medium w-px whitespace-nowrap ${gridColumnMinWidth(entry)}`}
                 >
                   {gridColumnLabel(entry)}
                 </th>
@@ -1126,8 +1174,12 @@ export default function UsersPage() {
             ) : (
               visible.map((r) => (
                 <tr key={r.key} className="border-t border-gray-100">
-                  <td className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
-                    {r.kind === "user" ? inlineNameCell(r) : r.full_name}
+                  <td className="px-3 py-1.5 font-medium w-px whitespace-nowrap min-w-[150px]">
+                    {r.kind === "user" ? (
+                      inlineNameCell(r)
+                    ) : (
+                      <TruncatedText text={r.full_name} />
+                    )}
                     {r.kind === "user" && me?.id === r.id && (
                       <span className="ms-2 text-xs text-gray-400">({t("users.you", "אני")})</span>
                     )}
@@ -1178,7 +1230,7 @@ export default function UsersPage() {
                   {orderedActiveColumns.map((entry) => (
                     <td
                       key={gridColumnSortKey(entry)}
-                      className="px-3 py-1.5 max-w-[14rem] break-words"
+                      className={`px-3 py-1.5 max-w-[14rem] break-words ${gridColumnMinWidth(entry)}`}
                     >
                       {entry.kind === "col"
                         ? cell(r, entry.key)

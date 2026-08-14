@@ -11,6 +11,7 @@ import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { PicklistSelect } from "@/components/PicklistSelect";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { InlineEdit } from "@/components/ui/InlineEdit";
+import { TruncatedText } from "@/components/ui/TruncatedText";
 import { VisitForm } from "@/components/VisitForm";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -86,6 +87,17 @@ type GridColumn =
 
 function gridColumnSortKey(entry: GridColumn): string {
   return `${entry.kind}:${entry.key}`;
+}
+
+// fixes49 §1: per-column min-width so short values (dates, badges) don't get
+// squeezed in the RTL grid — free-text-prone columns get the wider floor.
+const WIDE_GRID_COLUMN_KEYS = new Set<ColumnKey>(["address", "owner", "building"]);
+function gridColumnMinWidth(entry: GridColumn): string {
+  if (entry.kind === "cfield") {
+    return entry.def.field_type === "text" ? "min-w-[150px]" : "min-w-[120px]";
+  }
+  if (entry.kind === "col" && WIDE_GRID_COLUMN_KEYS.has(entry.key)) return "min-w-[150px]";
+  return "min-w-[120px]";
 }
 
 /** The mitzvah checkbox filters (fixes17 §2.2); fixes25: the flags live on
@@ -629,7 +641,15 @@ export default function ContactsPage() {
   ) => (
     <InlineEdit<string>
       value={(c[field] as string | null) ?? ""}
-      display={c[field] ? <span dir={opts.dir}>{c[field] as string}</span> : "—"}
+      display={
+        c[field] ? (
+          <span dir={opts.dir}>
+            <TruncatedText text={c[field] as string} />
+          </span>
+        ) : (
+          "—"
+        )
+      }
       validate={opts.validate}
       onSave={(v) => saveField(c, { [field]: v.trim() || null })}
       editor={(draft, setDraft) => (
@@ -667,7 +687,7 @@ export default function ContactsPage() {
   const inlineOwnerCell = (c: Contact) => (
     <InlineEdit<string | null>
       value={c.assigned_user_id}
-      display={ownerName(c.assigned_user_id)}
+      display={<TruncatedText text={ownerName(c.assigned_user_id)} />}
       commitOnBlur={false}
       onSave={(v) => saveField(c, { assigned_user_id: v })}
       editor={(draft, _setDraft, commit) => (
@@ -694,7 +714,7 @@ export default function ContactsPage() {
   const inlineAdminAreaCell = (c: Contact) => (
     <InlineEdit<number | null>
       value={c.admin_area_id ?? null}
-      display={c.admin_area_name ?? "—"}
+      display={<TruncatedText text={c.admin_area_name ?? "—"} />}
       commitOnBlur={false}
       onSave={(v) => saveField(c, { mekurav: { admin_area_id: v } })}
       editor={(draft, _setDraft, commit) => (
@@ -717,7 +737,7 @@ export default function ContactsPage() {
   const inlineBuildingCell = (c: Contact) => (
     <InlineEdit<number | null>
       value={c.apartment_id ?? null}
-      display={c.building_name ?? "—"}
+      display={<TruncatedText text={c.building_name ?? "—"} />}
       onSave={(v) => saveField(c, { mekurav: { apartment_id: v } })}
       editor={(draft, setDraft) => (
         <ApartmentPicker value={draft} onChange={setDraft} />
@@ -746,7 +766,11 @@ export default function ContactsPage() {
   const inlineCustomPicklistCell = (c: Contact, d: PicklistField) => (
     <InlineEdit<string | null>
       value={c.picklist_values?.[d.field_key] ?? null}
-      display={customPicklists.labelFor(d.field_key, c.picklist_values?.[d.field_key]) || "—"}
+      display={
+        <TruncatedText
+          text={customPicklists.labelFor(d.field_key, c.picklist_values?.[d.field_key]) || "—"}
+        />
+      }
       commitOnBlur={false}
       onSave={(v) => saveField(c, { picklist_values: { [d.field_key]: v } })}
       editor={(draft, _setDraft, commit) => (
@@ -761,7 +785,13 @@ export default function ContactsPage() {
     return (
       <InlineEdit<string | number | boolean | null>
         value={value}
-        display={<CustomFieldValueDisplay fieldType={d.field_type} value={value} />}
+        display={
+          d.field_type === "text" && typeof value === "string" ? (
+            <TruncatedText text={value} />
+          ) : (
+            <CustomFieldValueDisplay fieldType={d.field_type} value={value} />
+          )
+        }
         commitOnBlur={d.field_type === "text" || d.field_type === "number"}
         onSave={(v) => saveField(c, { custom_field_values: { [d.field_key]: v } })}
         editor={(draft, setDraft, commit) => (
@@ -788,11 +818,23 @@ export default function ContactsPage() {
               : t("validation.phone_hint", PHONE_HINT),
         });
       case "owner":
-        return isShliach ? ownerName(c.assigned_user_id) : inlineOwnerCell(c);
+        return isShliach ? (
+          <TruncatedText text={ownerName(c.assigned_user_id)} />
+        ) : (
+          inlineOwnerCell(c)
+        );
       case "admin_area":
-        return isShliach ? (c.admin_area_name ?? "—") : inlineAdminAreaCell(c);
+        return isShliach ? (
+          <TruncatedText text={c.admin_area_name ?? "—"} />
+        ) : (
+          inlineAdminAreaCell(c)
+        );
       case "building":
-        return isShliach ? (c.building_name ?? "—") : inlineBuildingCell(c);
+        return isShliach ? (
+          <TruncatedText text={c.building_name ?? "—"} />
+        ) : (
+          inlineBuildingCell(c)
+        );
       case "created":
         return (
           <span dir="ltr">{new Date(c.created_at).toLocaleDateString("he-IL")}</span>
@@ -1317,15 +1359,17 @@ export default function ContactsPage() {
               column absorbs the slack so everything condenses to the start. */}
           <thead className="bg-gray-50 text-gray-600 text-right">
             <tr>
-              <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
+              <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap min-w-[150px]">
                 {t("common.name", "שם")}
               </th>
               {/* fixes48 §2: fixed + custom picklist + custom field columns,
-                  in the user's unified (draggable) order. */}
+                  in the user's unified (draggable) order. fixes49 §1: each
+                  column carries a data-type-dependent min-width floor so RTL
+                  headers don't squeeze. */}
               {orderedActiveColumns.map((entry) => (
                 <th
                   key={gridColumnSortKey(entry)}
-                  className="px-3 py-1.5 font-medium w-px whitespace-nowrap"
+                  className={`px-3 py-1.5 font-medium w-px whitespace-nowrap ${gridColumnMinWidth(entry)}`}
                 >
                   {gridColumnLabel(entry)}
                 </th>
@@ -1375,7 +1419,7 @@ export default function ContactsPage() {
                   className="border-t border-gray-100 cursor-pointer hover:bg-gray-50/80"
                 >
                   <td
-                    className="px-3 py-1.5 font-medium max-w-[11rem] truncate"
+                    className="px-3 py-1.5 font-medium min-w-[150px] max-w-[11rem] truncate"
                     title={contactFullName(c)}
                     onClick={(e) => e.stopPropagation()}
                   >
@@ -1398,7 +1442,7 @@ export default function ContactsPage() {
                   {orderedActiveColumns.map((entry) => (
                     <td
                       key={gridColumnSortKey(entry)}
-                      className="px-3 py-1.5 max-w-[14rem] break-words"
+                      className={`px-3 py-1.5 max-w-[14rem] break-words ${gridColumnMinWidth(entry)}`}
                       onClick={
                         entry.kind === "col" && !EDITABLE_COLUMN_KEYS.has(entry.key)
                           ? undefined
