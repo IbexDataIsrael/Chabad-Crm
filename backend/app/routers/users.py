@@ -71,6 +71,16 @@ def _linked_shliach(db: Session, user_id: int) -> Optional[models.ContactShliach
     )
 
 
+def _user_out(db: Session, user: models.User) -> UserOut:
+    """fixes47: single-user version of list_users' bulk enrichment below —
+    used by GET /api/users/{id} and the PUT response."""
+    item = UserOut.model_validate(user)
+    sh = _linked_shliach(db, user.id)
+    if sh:
+        item.shliach = _shliach_out(sh)
+    return item
+
+
 @router.get("", response_model=list[UserOut])
 def list_users(
     db: Session = Depends(get_db),
@@ -100,6 +110,18 @@ def list_users(
             item.shliach = _shliach_out(sh)
         out.append(item)
     return out
+
+
+@router.get("/{user_id}", response_model=UserOut)
+def get_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_staff_or_admin),
+):
+    """fixes47: backs the dedicated dashboard/users/{id} detail page — same
+    single-record-fetch role list_contacts's GET /{id} plays for Contacts."""
+    user = _get_or_404(user_id, current_user.organization_id, db)
+    return _user_out(db, user)
 
 
 @router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED)

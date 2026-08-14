@@ -11,6 +11,7 @@ import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { PicklistSelect } from "@/components/PicklistSelect";
 import { ReportNumberMultiSelect } from "@/components/ReportNumberMultiSelect";
 import { InlineEdit } from "@/components/ui/InlineEdit";
+import { MultiSelectEditor } from "@/components/ui/MultiSelectEditor";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useConfirm } from "@/lib/confirm";
@@ -31,11 +32,10 @@ import {
   type PicklistField,
   type ReportNumber,
   type Shliach,
-  type ShliachVersion,
 } from "@/lib/types";
 import { EMAIL_HINT, PHONE_HINT, isValidEmail, isValidPhone } from "@/lib/validation";
 
-interface OrgUser {
+export interface OrgUser {
   id: number;
   guid: string;
   username: string;
@@ -175,10 +175,6 @@ export default function UsersPage() {
     });
   }
   const [adding, setAdding] = useState(false);
-  const [editing, setEditing] = useState<OrgUser | null>(null);
-  // fixes43 §3.3: the linked contact id for whichever row is being edited —
-  // powers the "view contact" link inside the merged open/edit form.
-  const [editingContactId, setEditingContactId] = useState<number | null>(null);
   const [busy, setBusy] = useState(true);
   const [recreatingKey, setRecreatingKey] = useState<string | null>(null);
 
@@ -492,18 +488,28 @@ export default function UsersPage() {
     />
   );
 
+  // fixes47: area/report-number pickers can't rely on InlineEdit's default
+  // commit-on-blur (see MultiSelectEditor's doc comment for why — clicking
+  // away silently never saved) — commitOnBlur is off, an explicit apply
+  // button drives the save instead, and a toast confirms it landed.
   const inlineAreasCell = (r: UserRow) => (
     <InlineEdit<number[]>
       value={r.raw.shliach?.area_ids ?? []}
       display={areaNamesText(r.raw.shliach?.area_ids ?? [])}
       disabled={r.contactId == null}
-      onSave={(ids) => saveUserField(r, { shliach: { area_ids: ids } })}
-      editor={(draft, setDraft) => (
-        <AreaMultiSelect
-          value={draft}
-          onChange={setDraft}
-          excludeContactId={r.contactId ?? undefined}
-        />
+      commitOnBlur={false}
+      onSave={async (ids) => {
+        await saveUserField(r, { shliach: { area_ids: ids } });
+        success(t("contact_shliach.areas_saved", "האזורים נשמרו"));
+      }}
+      editor={(draft, setDraft, commit) => (
+        <MultiSelectEditor onApply={() => commit(draft)}>
+          <AreaMultiSelect
+            value={draft}
+            onChange={setDraft}
+            excludeContactId={r.contactId ?? undefined}
+          />
+        </MultiSelectEditor>
       )}
     />
   );
@@ -513,13 +519,19 @@ export default function UsersPage() {
       value={r.raw.shliach?.report_number_ids ?? []}
       display={reportNumberNamesText(r.raw.shliach?.report_number_ids ?? [])}
       disabled={r.contactId == null}
-      onSave={(ids) => saveUserField(r, { shliach: { report_number_ids: ids } })}
-      editor={(draft, setDraft) => (
-        <ReportNumberMultiSelect
-          value={draft}
-          onChange={setDraft}
-          excludeContactId={r.contactId ?? undefined}
-        />
+      commitOnBlur={false}
+      onSave={async (ids) => {
+        await saveUserField(r, { shliach: { report_number_ids: ids } });
+        success(t("contact_shliach.report_numbers_saved", "מספרי הדוח נשמרו"));
+      }}
+      editor={(draft, setDraft, commit) => (
+        <MultiSelectEditor onApply={() => commit(draft)}>
+          <ReportNumberMultiSelect
+            value={draft}
+            onChange={setDraft}
+            excludeContactId={r.contactId ?? undefined}
+          />
+        </MultiSelectEditor>
       )}
     />
   );
@@ -691,7 +703,7 @@ export default function UsersPage() {
   ];
 
   return (
-    <div className="space-y-4 max-w-5xl">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold">{t("users.title", "ניהול משתמשים")}</h1>
@@ -702,7 +714,10 @@ export default function UsersPage() {
             )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        {/* fixes47: flex-wrap so the button row folds onto extra lines on
+            narrow viewports instead of overflowing horizontally — same
+            treatment fixes44 §2 gave the Contacts page's own button row. */}
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setColumnsOpen((v) => !v)}
@@ -726,10 +741,7 @@ export default function UsersPage() {
           </Link>
           {!adding && (
             <button
-              onClick={() => {
-                setAdding(true);
-                setEditing(null);
-              }}
+              onClick={() => setAdding(true)}
               className="rounded-md bg-status-magenta text-white px-4 py-2 text-sm font-medium hover:opacity-90"
             >
               + {t("users.add_user", "משתמש חדש")}
@@ -745,25 +757,6 @@ export default function UsersPage() {
             setAdding(false);
             await reload();
             success(t("users.created", "המשתמש נוצר ונשלח אליו מייל קבלת פנים"));
-          }}
-        />
-      )}
-
-      {editing && (
-        <UserForm
-          user={editing}
-          contactId={editingContactId}
-          areas={areas}
-          reportNumbers={reportNumbers}
-          onClose={() => {
-            setEditing(null);
-            setEditingContactId(null);
-          }}
-          onSaved={async () => {
-            setEditing(null);
-            setEditingContactId(null);
-            await reload();
-            success(t("users.updated", "המשתמש עודכן"));
           }}
         />
       )}
@@ -1089,16 +1082,14 @@ export default function UsersPage() {
                         one exists; a contact-only row (no login) still just
                         links straight to the contact page. */}
                     {r.kind === "user" ? (
-                      <button
-                        onClick={() => {
-                          setEditing(r.raw);
-                          setEditingContactId(r.contactId);
-                          setAdding(false);
-                        }}
+                      // fixes47: a dedicated per-user page (was an inline
+                      // popup form with no addressable URL and no history).
+                      <Link
+                        href={`/dashboard/users/${r.id}`}
                         className="text-sm text-status-magenta hover:underline me-3"
                       >
                         {t("action.open_edit", "פתח / עריכה ›")}
-                      </button>
+                      </Link>
                     ) : (
                       r.contactId != null && (
                         <Link
@@ -1151,57 +1142,25 @@ export default function UsersPage() {
   );
 }
 
-/** Create (no `user`) or edit (with `user`) an org user, role included.
- *  fixes43 §3.3: `contactId`, when the edited user has a linked contact
- *  (shliach), surfaces a "view contact" link — this form is now the single
- *  "open/edit" action for a Users row, merging what used to be two separate
- *  actions (edit user vs. open contact). */
+/** fixes47: create-only now — editing an existing user (identity, role,
+ *  password, coverage, history) happens on its own dedicated page
+ *  (dashboard/users/{id}), the same split Contacts has between its list
+ *  page and dashboard/contacts/{id}. */
 function UserForm({
-  user,
-  contactId,
-  areas = [],
-  reportNumbers = [],
   onClose,
   onSaved,
 }: {
-  user?: OrgUser;
-  contactId?: number | null;
-  areas?: Area[];
-  reportNumbers?: ReportNumber[];
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
-  const { user: me } = useAuth();
   const { t } = useLocalization();
-  const [fullName, setFullName] = useState(user?.full_name ?? "");
-  const [email, setEmail] = useState(user?.email ?? "");
-  const [role, setRole] = useState(user?.role === "admin" ? "admin" : "staff");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("staff");
   const [password, setPassword] = useState("");
-  const [emailValid, setEmailValid] = useState(!!user);
+  const [emailValid, setEmailValid] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-
-  const isSelf = user != null && me?.id === user.id;
-  // fixes14: a shliach's role is managed by its contact link — never send a
-  // role for them (it silently demoted the account to staff).
-  const isShliachAccount = user?.role === "shliach";
-
-  // fixes46: audit/edit history, reachable straight from the Users page (was
-  // only reachable via the contact's own page before) — same full-snapshot
-  // version list as the Apartments module / ContactView's own shliach
-  // history section. Only a shliach row has a versioned ContactShliach
-  // lineage to show; admin/staff logins aren't versioned (fixes45 — would
-  // break the JWT-identified session).
-  const [history, setHistory] = useState<ShliachVersion[]>([]);
-  useEffect(() => {
-    if (!isShliachAccount || contactId == null) {
-      setHistory([]);
-      return;
-    }
-    apiFetch<ShliachVersion[]>(`/api/contacts/${contactId}/shliach-history`)
-      .then(setHistory)
-      .catch(() => setHistory([]));
-  }, [isShliachAccount, contactId]);
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -1212,28 +1171,15 @@ function UserForm({
     }
     setBusy(true);
     try {
-      if (user) {
-        await apiFetch(`/api/users/${user.id}`, {
-          method: "PUT",
-          body: JSON.stringify({
-            full_name: fullName,
-            // fixes14: email is editable and syncs to a linked shliach contact.
-            ...(email && email !== (user.email ?? "") ? { email } : {}),
-            ...(isSelf || isShliachAccount ? {} : { role }),
-            ...(password ? { password } : {}),
-          }),
-        });
-      } else {
-        await apiFetch("/api/users", {
-          method: "POST",
-          body: JSON.stringify({
-            full_name: fullName,
-            email,
-            role,
-            password: password || null,
-          }),
-        });
-      }
+      await apiFetch("/api/users", {
+        method: "POST",
+        body: JSON.stringify({
+          full_name: fullName,
+          email,
+          role,
+          password: password || null,
+        }),
+      });
       await onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
@@ -1243,21 +1189,8 @@ function UserForm({
   }
 
   return (
-    <div className="space-y-4">
     <form onSubmit={save} className="bg-white rounded-xl shadow-sm p-4 space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="font-medium">
-          {user ? `${t("action.edit", "ערוך")} — ${user.full_name}` : t("users.add_user", "משתמש חדש")}
-        </h3>
-        {contactId != null && (
-          <Link
-            href={`/dashboard/contacts/${contactId}`}
-            className="text-sm text-status-magenta hover:underline whitespace-nowrap"
-          >
-            {t("users.view_contact", "צפייה באיש הקשר ›")}
-          </Link>
-        )}
-      </div>
+      <h3 className="font-medium">{t("users.add_user", "משתמש חדש")}</h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block space-y-1">
           <span className="block text-sm font-medium">{t("users.full_name", "שם מלא")}</span>
@@ -1274,29 +1207,14 @@ function UserForm({
         </label>
         <label className="block space-y-1">
           <span className="block text-sm font-medium">{t("users.role_label", "תפקיד")}</span>
-          {isShliachAccount ? (
-            // fixes14: the shliach role is fixed (managed by the contact link).
-            <input
-              className={inputClass}
-              value={t("users.role_shliach", "פעיל")}
-              disabled
-            />
-          ) : (
-            <select
-              className={inputClass}
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              disabled={isSelf}
-            >
-              <option value="staff">{t("users.role_staff", "משתמש מוגבל")}</option>
-              <option value="admin">{t("users.role_admin", "מנהל מערכת")}</option>
-            </select>
-          )}
-          {isSelf && (
-            <span className="block text-xs text-gray-400">
-              {t("users.self_guard", "לא ניתן לשנות או למחוק את עצמך")}
-            </span>
-          )}
+          <select
+            className={inputClass}
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+          >
+            <option value="staff">{t("users.role_staff", "משתמש מוגבל")}</option>
+            <option value="admin">{t("users.role_admin", "מנהל מערכת")}</option>
+          </select>
         </label>
         <label className="block space-y-1">
           <span className="block text-sm font-medium">
@@ -1335,54 +1253,5 @@ function UserForm({
         </button>
       </div>
     </form>
-
-      {/* fixes46: audit/edit history — same full-row-snapshot view as
-          ContactView.tsx's shliach history section (see model docstring on
-          ContactShliach): each entry is a complete past version, not a diff. */}
-      {history.length > 0 && (
-        <div className="rounded-lg border border-gray-200 p-4 space-y-2">
-          <h3 className="text-xs font-semibold text-gray-500">
-            {t("contact_shliach.history", "היסטוריית שינויים")}
-          </h3>
-          <ul className="text-sm space-y-1.5">
-            {history.map((v) => (
-              <li key={v.id} className="text-gray-600">
-                <span className="text-xs text-gray-400">
-                  {(v.editor_name || t("apt.history_unknown_editor", "עורך לא ידוע")) +
-                    " — " +
-                    (v.last_edit ? new Date(v.last_edit).toLocaleString("he-IL") : "")}
-                </span>
-                <br />
-                {v.full_name || "—"}
-                {v.email && <span dir="ltr"> · {v.email}</span>}
-                {v.phone && <span dir="ltr"> · {v.phone}</span>}
-                <br />
-                <span className="text-xs">
-                  {t("contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל")}:{" "}
-                  {v.report_number_ids.length === 0
-                    ? "—"
-                    : v.report_number_ids
-                        .map((id) => reportNumbers.find((rn) => rn.id === id)?.name ?? `#${id}`)
-                        .join(", ")}
-                  {" · "}
-                  {t("contact_shliach.areas", "אזורים באחריות הפעיל")}:{" "}
-                  {v.area_ids.length === 0
-                    ? "—"
-                    : v.area_ids
-                        .map((id) => areas.find((a) => a.id === id)?.area_name ?? `#${id}`)
-                        .join(", ")}
-                  {v.notes && (
-                    <>
-                      {" · "}
-                      {t("contact_shliach.notes", "הערות")}: {v.notes}
-                    </>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
   );
 }

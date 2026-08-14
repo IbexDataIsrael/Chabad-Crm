@@ -33,6 +33,7 @@ import { DatePicker } from "./DatePicker";
 import { PicklistSelect } from "./PicklistSelect";
 import { ReportNumberMultiSelect } from "./ReportNumberMultiSelect";
 import { InlineEdit } from "./ui/InlineEdit";
+import { MultiSelectEditor } from "./ui/MultiSelectEditor";
 
 const inputClass =
   "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
@@ -608,16 +609,22 @@ export function ContactView({
                 <dt className="text-xs text-gray-500">{t("contact_shliach.areas", "אזורים באחריות הפעיל")}</dt>
                 <dd className="text-sm">
                   {onPatch ? (
+                    // fixes47: commitOnBlur is off here — see MultiSelectEditor's
+                    // doc comment for why blur-to-save silently never fires for
+                    // this picker; an explicit apply button replaces it.
                     <InlineEdit<number[]>
                       value={contact.shliach.area_ids}
                       display={<AreaNames ids={contact.shliach.area_ids} />}
+                      commitOnBlur={false}
                       onSave={(ids) => onPatch({ shliach: { area_ids: ids } })}
-                      editor={(draft, setDraft) => (
-                        <AreaMultiSelect
-                          value={draft}
-                          onChange={setDraft}
-                          excludeContactId={contact.id}
-                        />
+                      editor={(draft, setDraft, commit) => (
+                        <MultiSelectEditor onApply={() => commit(draft)}>
+                          <AreaMultiSelect
+                            value={draft}
+                            onChange={setDraft}
+                            excludeContactId={contact.id}
+                          />
+                        </MultiSelectEditor>
                       )}
                     />
                   ) : (
@@ -638,13 +645,16 @@ export function ContactView({
                     <InlineEdit<number[]>
                       value={contact.shliach.report_number_ids}
                       display={<ReportNumbersLabel ids={contact.shliach.report_number_ids} />}
+                      commitOnBlur={false}
                       onSave={(ids) => onPatch({ shliach: { report_number_ids: ids } })}
-                      editor={(draft, setDraft) => (
-                        <ReportNumberMultiSelect
-                          value={draft}
-                          onChange={setDraft}
-                          excludeContactId={contact.id}
-                        />
+                      editor={(draft, setDraft, commit) => (
+                        <MultiSelectEditor onApply={() => commit(draft)}>
+                          <ReportNumberMultiSelect
+                            value={draft}
+                            onChange={setDraft}
+                            excludeContactId={contact.id}
+                          />
+                        </MultiSelectEditor>
                       )}
                     />
                   ) : (

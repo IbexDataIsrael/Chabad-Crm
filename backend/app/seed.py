@@ -437,6 +437,9 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("users", "users.created", "המשתמש נוצר ונשלח אליו מייל קבלת פנים", "User created — a welcome email was sent"),
     ("users", "users.updated", "המשתמש עודכן", "User updated"),
     ("users", "users.deleted", "המשתמש נמחק", "User deleted"),
+    # --- fixes47: dashboard/users/{id} detail page ---
+    ("users", "users.not_found", "המשתמש לא נמצא.", "User not found."),
+    ("users", "users.password_updated", "הסיסמה עודכנה", "Password updated"),
     ("users", "users.delete_confirm", "למחוק את המשתמש?", "Delete this user?"),
     ("users", "users.self_guard", "לא ניתן לשנות או למחוק את עצמך", "You cannot change or delete yourself"),
     ("users", "users.status_disabled", "מושבת", "Disabled"),
@@ -696,6 +699,9 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("contact_shliach", "contact_shliach.report_number_conflict_warning", "מספר דוח הזה משוייך לפעיל אחר, האם ברצונך לשייך כאן פעיל נוסף?", "This report number is assigned to another operator. Do you want to assign another operator here?"),
     # --- fixes43 §3.1: shliach coverage edit-history ---
     ("contact_shliach", "contact_shliach.history", "היסטוריית שינויים", "Edit history"),
+    # --- fixes47: Users-page area/report-number save confirmation toasts ---
+    ("contact_shliach", "contact_shliach.areas_saved", "האזורים נשמרו", "Areas saved"),
+    ("contact_shliach", "contact_shliach.report_numbers_saved", "מספרי הדוח נשמרו", "Report numbers saved"),
     # --- fixes23 §3: apartments bulk editing ---
     ("bulkedit", "bulkedit.open", "עריכה מרובה", "Bulk edit"),
     ("bulkedit", "bulkedit.open_hint", "עריכה מרובה של כל הדירות המסוננות", "Bulk-edit all filtered apartments"),
