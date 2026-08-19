@@ -170,27 +170,30 @@ export default function UsersPage() {
     (d) => d.field_type !== "select",
   );
   const shliachPicklists = usePicklistsMap(shliachPicklistDefs.map((d) => d.field_key));
-  const [visibleShliachPicklistKeys, setVisibleShliachPicklistKeys] = useDbPreference<
-    string[] | null
-  >("users.shliachPicklists", null);
-  const [visibleShliachFieldKeys, setVisibleShliachFieldKeys] = useDbPreference<
-    string[] | null
-  >("users.shliachCustomFields", null);
+  // fixes50 §4.1: this used to store which columns were VISIBLE — so the
+  // moment an admin hid even one column, the array became explicit, and any
+  // custom field/picklist created afterward (never a member of that array)
+  // silently defaulted to hidden instead of showing up like a brand-new
+  // built-in column would. Storing which columns are HIDDEN instead makes a
+  // field absent from the list mean "never hidden" — i.e. visible by
+  // default, matching every other column on this page. Renamed the
+  // preference keys so a stale "visible" list from before this fix is never
+  // misread as a "hidden" list.
+  const [hiddenShliachPicklistKeys, setHiddenShliachPicklistKeys] = useDbPreference<
+    string[]
+  >("users.shliachPicklistsHidden", []);
+  const [hiddenShliachFieldKeys, setHiddenShliachFieldKeys] = useDbPreference<
+    string[]
+  >("users.shliachCustomFieldsHidden", []);
   function toggleShliachPicklistColumn(fieldKey: string) {
-    setVisibleShliachPicklistKeys((prev) => {
-      const current = prev ?? shliachPicklistDefs.map((d) => d.field_key);
-      return current.includes(fieldKey)
-        ? current.filter((k) => k !== fieldKey)
-        : [...current, fieldKey];
-    });
+    setHiddenShliachPicklistKeys((prev) =>
+      prev.includes(fieldKey) ? prev.filter((k) => k !== fieldKey) : [...prev, fieldKey],
+    );
   }
   function toggleShliachFieldColumn(fieldKey: string) {
-    setVisibleShliachFieldKeys((prev) => {
-      const current = prev ?? shliachCustomFieldDefs.map((d) => d.field_key);
-      return current.includes(fieldKey)
-        ? current.filter((k) => k !== fieldKey)
-        : [...current, fieldKey];
-    });
+    setHiddenShliachFieldKeys((prev) =>
+      prev.includes(fieldKey) ? prev.filter((k) => k !== fieldKey) : [...prev, fieldKey],
+    );
   }
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(true);
@@ -463,10 +466,8 @@ export default function UsersPage() {
 
   function isGridColumnActive(entry: GridColumn): boolean {
     if (entry.kind === "col") return columns.includes(entry.key);
-    if (entry.kind === "pl") {
-      return visibleShliachPicklistKeys == null || visibleShliachPicklistKeys.includes(entry.key);
-    }
-    return visibleShliachFieldKeys == null || visibleShliachFieldKeys.includes(entry.key);
+    if (entry.kind === "pl") return !hiddenShliachPicklistKeys.includes(entry.key);
+    return !hiddenShliachFieldKeys.includes(entry.key);
   }
 
   function toggleGridColumn(entry: GridColumn) {

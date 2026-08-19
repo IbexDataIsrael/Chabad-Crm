@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
+import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
 import type { Visit } from "@/lib/types";
@@ -17,17 +18,23 @@ import { VisitForm } from "./VisitForm";
 export function VisitHistoryEditor({ contactId }: { contactId: number }) {
   const { t } = useLocalization();
   const confirmDialog = useConfirm();
+  const { isFieldVisible: vis } = useFieldSettings();
   const { labelFor } = usePicklist("visit.type");
   const [visits, setVisits] = useState<Visit[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  // fixes50 §2.2: only the 7 most recent visits render by default (the API
+  // already returns them newest-first) — "show more" reveals the rest in
+  // the same 7-at-a-time batches, no extra endpoint/pagination needed.
+  const [visibleCount, setVisibleCount] = useState(7);
 
   async function reload() {
     setVisits(await apiFetch<Visit[]>(`/api/contacts/${contactId}/visits`));
   }
 
   useEffect(() => {
+    setVisibleCount(7);
     reload()
       .catch(() => setVisits([]))
       .finally(() => setLoading(false));
@@ -42,9 +49,11 @@ export function VisitHistoryEditor({ contactId }: { contactId: number }) {
 
   if (loading) return <p className="text-sm text-gray-400">{t("action.loading", "טוען…")}</p>;
 
+  const visibleVisits = visits.slice(0, visibleCount);
+
   return (
     <div className="space-y-3">
-      {visits.map((v) =>
+      {visibleVisits.map((v) =>
         expandedId === v.id ? (
           <VisitDetails
             key={v.id}
@@ -68,12 +77,14 @@ export function VisitHistoryEditor({ contactId }: { contactId: number }) {
             <span className="font-medium text-status-magenta" dir="ltr">
               {new Date(v.visit_date).toLocaleDateString("he-IL")}
             </span>
-            {v.visit_type && (
+            {v.visit_type && vis("visits.visit_type") && (
               <span className="rounded bg-gray-100 text-gray-600 text-xs px-2 py-0.5">
                 {labelFor(v.visit_type)}
               </span>
             )}
-            {v.location && <span className="text-sm text-gray-500">📍 {v.location}</span>}
+            {v.location && vis("visits.location") && (
+              <span className="text-sm text-gray-500">📍 {v.location}</span>
+            )}
             {v.notes && <span className="text-sm text-gray-600">— {v.notes}</span>}
             <div className="flex items-center gap-2 ms-auto">
               <button
@@ -91,6 +102,15 @@ export function VisitHistoryEditor({ contactId }: { contactId: number }) {
       )}
       {visits.length === 0 && !adding && (
         <p className="text-sm text-gray-400">{t("visit.none", "אין ביקורים עדיין.")}</p>
+      )}
+      {visits.length > visibleVisits.length && (
+        <button
+          type="button"
+          onClick={() => setVisibleCount((n) => n + 7)}
+          className="text-sm text-status-magenta hover:underline"
+        >
+          {t("visit.show_more", "הצג עוד ביקורים")}
+        </button>
       )}
 
       {adding ? (

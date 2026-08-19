@@ -285,10 +285,14 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("visitsummary", "visitsummary.scope_all", "הצג את כל הביקורים בארגון", "Show all visits org-wide"),
     ("visitsummary", "visitsummary.none", "אין ביקורים בטווח שנבחר.", "No visits in the selected range."),
     ("visitsummary", "visitsummary.category_empty", "אין רשומות", "No records"),
+    # fixes50 §3.1: standing action to view every visitor regardless of date.
+    ("visitsummary", "visitsummary.all_dates", "הצג את כל התאריכים", "Show all dates"),
     # --- Visit history ---
     ("visit", "visit.history", "היסטורית ביקורים", "Visit history"),
     # fixes28 §1: the visit row expands to inline editing on click.
     ("visit", "visit.click_to_edit", "לחצו לפתיחה ולעריכה", "Click to open and edit"),
+    # fixes50 §2.2: reveal-more control below the default 7-visit list.
+    ("visit", "visit.show_more", "הצג עוד ביקורים", "Show more visits"),
     # --- Donations ---
     ("donation", "donation.history", "היסטורית תרומות", "Donation history"),
     ("donation", "donation.add", "הוסף תרומה", "Add donation"),
@@ -768,6 +772,9 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("visits", "visits.date_range", "טווח תאריכי ביקור", "Visit date range"),
     ("visits", "visits.date_from", "מתאריך", "From"),
     ("visits", "visits.date_to", "עד תאריך", "To"),
+    # fixes50 §1.1: field_registry.py label_key rows for the Fields page.
+    ("visits", "visits.location", "מיקום", "Location"),
+    ("visits", "visits.visit_type", "סוג ביקור", "Visit type"),
     # --- fixes25 §5: bilingual names for the system picklists (the backend
     # registry labels are Hebrew-only, so English mode showed Hebrew) ---
     ("picklist_def", "picklist_def.contact.contact_type", "סוג איש קשר", "Contact type"),

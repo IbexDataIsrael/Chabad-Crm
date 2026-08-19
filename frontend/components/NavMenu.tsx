@@ -42,9 +42,19 @@ export function NavMenu({ label, items }: { label: string; items: NavMenuItem[] 
 
   if (items.length === 0) return null;
 
-  const groupActive = items.some(
-    (it) => pathname === it.href || pathname.startsWith(it.href + "/"),
-  );
+  // fixes50 §3.3: a naive prefix match makes a sibling item's own href (e.g.
+  // "/dashboard/contacts/visit-summary") also match a shorter item's prefix
+  // rule (e.g. "/dashboard/contacts" + "/"), lighting up both at once. Only
+  // the longest ("most specific") matching href in the menu counts as
+  // active — this still lets a shorter href match its own detail routes
+  // (e.g. "/dashboard/contacts/123") when nothing more specific exists.
+  function matchLength(href: string): number {
+    if (pathname === href) return href.length;
+    if (pathname.startsWith(href + "/")) return href.length;
+    return -1;
+  }
+  const bestMatch = Math.max(-1, ...items.map((it) => matchLength(it.href)));
+  const groupActive = bestMatch >= 0;
 
   return (
     <div ref={ref} className="relative">
@@ -80,7 +90,7 @@ export function NavMenu({ label, items }: { label: string; items: NavMenuItem[] 
           className="absolute top-full start-0 z-50 mt-1 min-w-44 rounded-lg border border-gray-200 bg-white p-1 shadow-lg shadow-gray-900/5 focus:outline-none"
         >
           {items.map((it) => {
-            const active = pathname === it.href || pathname.startsWith(it.href + "/");
+            const active = bestMatch >= 0 && matchLength(it.href) === bestMatch;
             return (
               <li key={it.href} role="none">
                 <Link

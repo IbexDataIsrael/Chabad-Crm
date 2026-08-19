@@ -38,10 +38,13 @@ const dateInputClass =
  *  the admin "view all" toggle (irrelevant once a specific contact is picked). */
 export function VisitSummary({ contactId }: { contactId?: number }) {
   const { t, lang } = useLocalization();
-  const { user, isAdmin, isShliach } = useAuth();
+  const { user, isShliach } = useAuth();
   const [[defaultFrom, defaultTo]] = useState(() => currentWeekRange(lang));
   const [dateFrom, setDateFrom] = useState<string | null>(defaultFrom);
   const [dateTo, setDateTo] = useState<string | null>(defaultTo);
+  // fixes50 §3.1: a standing "every date" toggle — the date pickers keep
+  // their last value underneath so switching back off restores them.
+  const [allDates, setAllDates] = useState(false);
   const [scopeAll, setScopeAll] = useState(false);
   const [data, setData] = useState<VisitSummaryOut | null>(null);
   // fixes40 §3: "Filter by contact owner" — same permission/search logic as
@@ -67,11 +70,20 @@ export function VisitSummary({ contactId }: { contactId?: number }) {
   }, [ownerOptions, assignedFilter]);
 
   useEffect(() => {
-    if (!dateFrom || !dateTo) return;
-    const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
+    // fixes50 §3.1: "all dates" skips the range entirely; otherwise both
+    // ends are required (unchanged from before this round).
+    if (!allDates && (!dateFrom || !dateTo)) return;
+    const params = new URLSearchParams();
+    if (!allDates && dateFrom && dateTo) {
+      params.set("date_from", dateFrom);
+      params.set("date_to", dateTo);
+    }
     if (contactId != null) params.set("contact_id", String(contactId));
     else if (assignedFilter) params.set("assigned_user_id", assignedFilter);
-    else if (isAdmin && scopeAll) params.set("scope_all", "true");
+    // fixes50 §3.2: scope_all is no longer admin-only — see the matching
+    // backend change (routers/visits.py) for why (staff already had the
+    // narrower assigned_user_id widening; this closes the "all at once" gap).
+    else if (!isShliach && scopeAll) params.set("scope_all", "true");
     let active = true;
     setData(null);
     apiFetch<VisitSummaryOut>(`/api/visits/summary?${params}`)
@@ -84,7 +96,7 @@ export function VisitSummary({ contactId }: { contactId?: number }) {
     return () => {
       active = false;
     };
-  }, [dateFrom, dateTo, contactId, assignedFilter, scopeAll, isAdmin]);
+  }, [dateFrom, dateTo, allDates, contactId, assignedFilter, scopeAll, isShliach]);
 
   // fixes39: the breakdown is dynamic (any active entity_type="visit"
   // boolean custom field) — the server only ever returns active
@@ -101,13 +113,29 @@ export function VisitSummary({ contactId }: { contactId?: number }) {
           onChange={setDateFrom}
           className={dateInputClass}
           placeholder={t("visits.date_from", "מתאריך")}
+          disabled={allDates}
         />
         <DatePicker
           value={dateTo}
           onChange={setDateTo}
           className={dateInputClass}
           placeholder={t("visits.date_to", "עד תאריך")}
+          disabled={allDates}
         />
+        {/* fixes50 §3.1: prominent standing action to view every visitor
+            regardless of the date range — the pickers above stay disabled
+            (but keep their value) while it's on. */}
+        <button
+          type="button"
+          onClick={() => setAllDates((v) => !v)}
+          className={`rounded-md border px-3 py-1.5 text-sm font-medium ${
+            allDates
+              ? "border-status-magenta bg-status-magenta text-white"
+              : "border-gray-300 hover:bg-gray-50"
+          }`}
+        >
+          {t("visitsummary.all_dates", "הצג את כל התאריכים")}
+        </button>
         {/* fixes40 §3: "Filter by contact owner" — same permission/search
             logic as the Contacts page (fixes40 §2). Picking a specific
             owner supersedes the org-wide toggle below (same priority the
@@ -136,10 +164,14 @@ export function VisitSummary({ contactId }: { contactId?: number }) {
             )}
           </span>
         )}
-        {/* fixes38 §1.2.4: admin-only toggle to view org-wide visits instead
-            of just the ones assigned to this admin. Irrelevant (and hidden)
-            once scoped to a single contact. */}
-        {contactId == null && isAdmin && (
+        {/* fixes38 §1.2.4: toggle to view org-wide visits instead of just
+            the ones assigned to the caller. Irrelevant (and hidden) once
+            scoped to a single contact. fixes50 §3.2: no longer admin-only —
+            staff already had the narrower assigned_user_id widening
+            (fixes40 §3), so the "everyone at once" toggle now matches that
+            same non-shliach guard instead of stopping staff from ever
+            reaching an aggregate view. */}
+        {contactId == null && !isShliach && (
           <label
             className={`inline-flex items-center gap-1.5 text-sm ${
               assignedFilter ? "text-gray-400" : "cursor-pointer"

@@ -106,6 +106,10 @@ TOGGLEABLE_FIELDS: list[tuple[str, str, str]] = [
     # custom field's is (CustomFieldDefinition.is_active, via the
     # custom-fields admin UI), not this field_settings mechanism.
     ("visits.torah_thought", "visits.torah_thought", "visit"),
+    # fixes50 §1.1: location (plain column) + visit type (picklist-backed,
+    # visit.type) join torah_thought as hideable visit fields.
+    ("visits.location", "visits.location", "visit"),
+    ("visits.visit_type", "visits.visit_type", "visit"),
 ]
 
 # Fields concealed by default (an explicit field_settings row overrides this).

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { useFieldSettings, type FieldSetting } from "@/lib/fieldSettings";
+import { sortByFieldOrder, useFieldSettings, type FieldSetting } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
@@ -38,7 +38,7 @@ const ENTITY_LABELS: Record<string, { labelKey: string; fallback: string }> = {
 export default function FieldsPage() {
   const { isAdmin, loading: authLoading } = useAuth();
   const { t } = useLocalization();
-  const { settings, refresh } = useFieldSettings();
+  const { settings, refresh, orderFor } = useFieldSettings();
   const { success, error } = useToast();
   const [tab, setTab] = usePersistentState<FieldsTab>("crm.fields.tab", "contacts");
 
@@ -91,9 +91,14 @@ export default function FieldsPage() {
   }
 
   function renderRows(group: FieldSetting[]) {
+    // fixes50 §1.2: the order numbers admins type below only did anything
+    // once you left this page (ContactView/ApartmentView etc. already
+    // applied sortByFieldOrder) — sort here too so the effect is visible
+    // where it's configured, lowest number first, unordered fields last.
+    const ordered = sortByFieldOrder(group, (f) => f.field_key, orderFor);
     return (
       <ul className="divide-y divide-gray-100">
-        {group.map((f) => (
+        {ordered.map((f) => (
           <FieldRow
             key={f.field_key}
             field={f}

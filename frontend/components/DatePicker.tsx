@@ -46,12 +46,14 @@ export function DatePicker({
   withTime = false,
   className,
   placeholder,
+  disabled = false,
 }: {
   value: string | null;
   onChange: (value: string | null) => void;
   withTime?: boolean;
   className?: string;
   placeholder?: string;
+  disabled?: boolean;
 }) {
   const { t, lang } = useLocalization();
   const MONTHS = MONTH_KEYS.map((k, i) =>
@@ -106,10 +108,11 @@ export function DatePicker({
     <div className="relative" ref={wrapRef}>
       <input
         readOnly
-        className={className}
+        disabled={disabled}
+        className={`${className ?? ""} disabled:opacity-50 disabled:cursor-not-allowed`}
         value={display}
         placeholder={placeholder ?? t("date.pick", "בחר תאריך")}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => !disabled && setOpen((o) => !o)}
       />
       {open && (
         <div className="absolute z-30 mt-1 w-72 rounded-lg border border-gray-200 bg-white p-3 shadow-lg">

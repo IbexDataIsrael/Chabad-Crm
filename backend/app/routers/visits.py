@@ -287,8 +287,8 @@ def list_all_visits(
 
 @all_router.get("/summary", response_model=VisitSummaryOut)
 def visits_summary(
-    date_from: datetime.date,
-    date_to: datetime.date,
+    date_from: Optional[datetime.date] = None,
+    date_to: Optional[datetime.date] = None,
     contact_id: Optional[int] = None,
     assigned_user_id: Optional[str] = None,
     scope_all: bool = False,
@@ -298,7 +298,7 @@ def visits_summary(
     """fixes38 §1.2/§1.3: "Summary of Visits" report + per-contact Visit
     Summary — total count + per-category breakdown, scoped to the caller's
     assigned contacts unless a specific contact is requested or the caller
-    is an admin who opted into `scope_all`.
+    opted into `scope_all`.
 
     fixes39 §2: the breakdown is dynamic — every active
     entity_type="visit" boolean custom field (the 6 former Mivtzoim columns
@@ -311,24 +311,37 @@ def visits_summary(
     through this param — same guarantee the default branch already gave
     them (they only ever fell into the self-scoping "else" below), just
     made explicit now that a second, caller-suppliable scoping path exists.
+
+    fixes50 §3.1: `date_from`/`date_to` are optional — omitting either side
+    leaves that end of the range open (the "show all dates" control sends
+    neither). fixes50 §3.2: `scope_all` is no longer admin-exclusive — any
+    non-shliach caller may request it, same guard `assigned_user_id` already
+    used above; a shliach is still always confined to their own contacts.
     """
     org_id = current_user.organization_id
     q = db.query(models.VisitHistory).filter(
-        models.VisitHistory.organization_id == org_id,
-        models.VisitHistory.visit_date
-        >= datetime.datetime.combine(date_from, datetime.time.min),
-        models.VisitHistory.visit_date
-        <= datetime.datetime.combine(date_to, datetime.time.max),
+        models.VisitHistory.organization_id == org_id
     )
+    if date_from is not None:
+        q = q.filter(
+            models.VisitHistory.visit_date
+            >= datetime.datetime.combine(date_from, datetime.time.min)
+        )
+    if date_to is not None:
+        q = q.filter(
+            models.VisitHistory.visit_date
+            <= datetime.datetime.combine(date_to, datetime.time.max)
+        )
     if contact_id is not None:
         q = q.filter(models.VisitHistory.contact_id == contact_id)
     elif current_user.role != "shliach" and assigned_user_id is not None:
         q = q.join(
             models.Contact, models.VisitHistory.contact_id == models.Contact.id
         ).filter(models.Contact.assigned_user_id == assigned_user_id)
-    elif not (current_user.role == "admin" and scope_all):
-        # Standard user (or admin without the "all" toggle): only visits for
-        # contacts assigned to them. The inner join drops unlinked visits.
+    elif not (current_user.role != "shliach" and scope_all):
+        # Standard user (or admin/staff without the "all" toggle): only
+        # visits for contacts assigned to them. The inner join drops
+        # unlinked visits.
         q = q.join(
             models.Contact, models.VisitHistory.contact_id == models.Contact.id
         ).filter(models.Contact.assigned_user_id == current_user.guid)

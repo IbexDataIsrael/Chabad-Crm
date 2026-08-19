@@ -198,14 +198,18 @@ export function VisitForm({
           <span className="block text-sm font-medium">{t("visit.date", "תאריך")}</span>
           <DatePicker value={date} onChange={setDate} className={inputClass} />
         </label>
-        <label className="block space-y-1">
-          <span className="block text-sm font-medium">{t("visit.type", "סוג ביקור")}</span>
-          <PicklistSelect fieldKey="visit.type" value={type} onChange={setType} />
-        </label>
-        <label className="block space-y-1">
-          <span className="block text-sm font-medium">{t("visit.location", "מיקום")}</span>
-          <input className={inputClass} value={location} onChange={(e) => setLocation(e.target.value)} />
-        </label>
+        {vis("visits.visit_type") && (
+          <label className="block space-y-1">
+            <span className="block text-sm font-medium">{t("visit.type", "סוג ביקור")}</span>
+            <PicklistSelect fieldKey="visit.type" value={type} onChange={setType} />
+          </label>
+        )}
+        {vis("visits.location") && (
+          <label className="block space-y-1">
+            <span className="block text-sm font-medium">{t("visit.location", "מיקום")}</span>
+            <input className={inputClass} value={location} onChange={(e) => setLocation(e.target.value)} />
+          </label>
+        )}
         <label className="block space-y-1 sm:col-span-2">
           <span className="block text-sm font-medium">{t("visit.notes", "הערות")}</span>
           <input className={inputClass} value={notes} onChange={(e) => setNotes(e.target.value)} />

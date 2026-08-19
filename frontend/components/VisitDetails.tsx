@@ -23,6 +23,11 @@ import { InlineEdit } from "./ui/InlineEdit";
 const inputClass =
   "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
+// fixes50 §2.1: same label pill as ContactView.tsx — this card renders
+// inline on the contact page's "visits" segment, so it should match.
+const dtClass =
+  "inline-block w-fit rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-500";
+
 /**
  * A visit's full detail card (fixes26 §2). `readOnly` renders every field as
  * plain text; otherwise the fields edit in place with per-field autosave —
@@ -48,6 +53,9 @@ export function VisitDetails({
   const torah = usePicklist("checklist.torah_thought");
   const editable = !readOnly && onPatch != null;
   const showTorah = vis("visits.torah_thought");
+  // fixes50 §1.1: location + visit type join torah_thought as hideable.
+  const showLocation = vis("visits.location");
+  const showVisitType = vis("visits.visit_type");
 
   // fixes35: any non-boolean, non-select visit custom field (boolean stays
   // exclusively on the legacy CustomFieldsEditor checkbox+note path below),
@@ -210,24 +218,28 @@ export function VisitDetails({
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 flex-1">
           {visit.contact_name && (
             <div className="flex flex-col">
-              <dt className="text-xs text-gray-500">{t("visit.contact", "איש קשר")}</dt>
+              <dt className={dtClass}>{t("visit.contact", "איש קשר")}</dt>
               <dd className="text-sm">{visit.contact_name}</dd>
             </div>
           )}
           <div className="flex flex-col">
-            <dt className="text-xs text-gray-500">{t("visit.date", "תאריך")}</dt>
+            <dt className={dtClass}>{t("visit.date", "תאריך")}</dt>
             <dd className="text-sm">{dateNode}</dd>
           </div>
+          {showVisitType && (
+            <div className="flex flex-col">
+              <dt className={dtClass}>{t("visit.type", "סוג ביקור")}</dt>
+              <dd className="text-sm">{typeNode}</dd>
+            </div>
+          )}
+          {showLocation && (
+            <div className="flex flex-col">
+              <dt className={dtClass}>{t("visit.location", "מיקום")}</dt>
+              <dd className="text-sm">{inlineText("location")}</dd>
+            </div>
+          )}
           <div className="flex flex-col">
-            <dt className="text-xs text-gray-500">{t("visit.type", "סוג ביקור")}</dt>
-            <dd className="text-sm">{typeNode}</dd>
-          </div>
-          <div className="flex flex-col">
-            <dt className="text-xs text-gray-500">{t("visit.location", "מיקום")}</dt>
-            <dd className="text-sm">{inlineText("location")}</dd>
-          </div>
-          <div className="flex flex-col">
-            <dt className="text-xs text-gray-500">{t("visit.notes", "הערות")}</dt>
+            <dt className={dtClass}>{t("visit.notes", "הערות")}</dt>
             <dd className="text-sm">{inlineText("notes")}</dd>
           </div>
         </dl>
@@ -256,7 +268,7 @@ export function VisitDetails({
           {showTorah && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="flex flex-col">
-                <span className="text-xs text-gray-500">
+                <span className={dtClass}>
                   {t("visits.torah_thought", "דבר תורה")}
                 </span>
                 <span className="text-sm">{torahNode}</span>
@@ -294,7 +306,7 @@ export function VisitDetails({
                 const value = visit.picklist_values?.[d.field_key] ?? null;
                 return (
                   <div key={d.field_key} className="flex flex-col">
-                    <span className="text-xs text-gray-500">{d.hebrew_label}</span>
+                    <span className={dtClass}>{d.hebrew_label}</span>
                     <span className="text-sm">
                       {editable ? (
                         <InlineEdit<string | null>
@@ -318,7 +330,7 @@ export function VisitDetails({
                 const value = visit.custom_field_values?.[d.field_key] ?? null;
                 return (
                   <div key={d.field_key} className="flex flex-col">
-                    <span className="text-xs text-gray-500">{d.hebrew_label}</span>
+                    <span className={dtClass}>{d.hebrew_label}</span>
                     <span className="text-sm">
                       {editable ? (
                         <InlineEdit<string | number | boolean | null>
