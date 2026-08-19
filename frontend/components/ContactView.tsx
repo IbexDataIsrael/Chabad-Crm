@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -39,9 +39,13 @@ const inputClass =
   "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 // fixes50 §2.1: a subtle pill so field labels read as distinct from their
-// values instead of blending into the same gray weight.
-const dtClass =
-  "inline-block w-fit rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-500";
+// values instead of blending into the same gray weight. Background/text
+// color are inline styles (not Tailwind's bg-gray-100/text-gray-500)
+// deliberately — a production report showed the gray only appearing on
+// hover, which points at some cascade/specificity interaction with another
+// class on the same element; an inline style can't lose that fight.
+const dtClass = "inline-block w-fit rounded px-1.5 py-0.5 text-xs font-medium";
+const dtStyle: CSSProperties = { backgroundColor: "#f4f4f5", color: "#71717a" };
 
 /** A one-field partial for PATCH /api/contacts/{id} (fixes26 §2). */
 export type ContactPatch = Record<string, unknown>;
@@ -603,7 +607,7 @@ export function ContactView({
       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
         {allFields.map(([, label, value]) => (
           <div key={label} className="flex flex-col">
-            <dt className={dtClass}>{label}</dt>
+            <dt className={dtClass} style={dtStyle}>{label}</dt>
             <dd className="text-sm">{value}</dd>
           </div>
         ))}
@@ -611,7 +615,7 @@ export function ContactView({
           <>
             {vis("contact_shliach.areas") && (
               <div className="flex flex-col">
-                <dt className={dtClass}>{t("contact_shliach.areas", "אזורים באחריות הפעיל")}</dt>
+                <dt className={dtClass} style={dtStyle}>{t("contact_shliach.areas", "אזורים באחריות הפעיל")}</dt>
                 <dd className="text-sm">
                   {onPatch ? (
                     // fixes47: commitOnBlur is off here — see MultiSelectEditor's
@@ -642,7 +646,7 @@ export function ContactView({
                 apartments grid is gone). */}
             {vis("contact_shliach.report_numbers") && (
               <div className="flex flex-col">
-                <dt className={dtClass}>
+                <dt className={dtClass} style={dtStyle}>
                   {t("contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל")}
                 </dt>
                 <dd className="text-sm">
@@ -670,7 +674,7 @@ export function ContactView({
             )}
             {vis("contact_shliach.notes") && (
               <div className="flex flex-col">
-                <dt className={dtClass}>{t("contact_shliach.notes", "הערות")}</dt>
+                <dt className={dtClass} style={dtStyle}>{t("contact_shliach.notes", "הערות")}</dt>
                 <dd className="text-sm">
                   {inlineText("notes", contact.shliach.notes, {
                     nested: "shliach",
@@ -683,7 +687,7 @@ export function ContactView({
                 lock the shliach out. Empty input keeps the current password. */}
             {onPatch && (
               <div className="flex flex-col">
-                <dt className={dtClass}>
+                <dt className={dtClass} style={dtStyle}>
                   {t("contact_shliach.password", "סיסמה למערכת (לא חובה)")}
                 </dt>
                 <dd className="text-sm">

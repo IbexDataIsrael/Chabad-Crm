@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { apiFetch } from "@/lib/api";
 import { useCustomFieldDefs } from "@/lib/customFields";
@@ -25,8 +25,11 @@ const inputClass =
 
 // fixes50 §2.1: same label pill as ContactView.tsx — this card renders
 // inline on the contact page's "visits" segment, so it should match.
-const dtClass =
-  "inline-block w-fit rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-500";
+// Background/text color are inline styles (see ContactView.tsx's dtStyle
+// comment) — a production report showed the Tailwind bg-gray-100/
+// text-gray-500 classes only taking effect on hover.
+const dtClass = "inline-block w-fit rounded px-1.5 py-0.5 text-xs font-medium";
+const dtStyle: CSSProperties = { backgroundColor: "#f4f4f5", color: "#71717a" };
 
 /**
  * A visit's full detail card (fixes26 §2). `readOnly` renders every field as
@@ -218,28 +221,28 @@ export function VisitDetails({
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 flex-1">
           {visit.contact_name && (
             <div className="flex flex-col">
-              <dt className={dtClass}>{t("visit.contact", "איש קשר")}</dt>
+              <dt className={dtClass} style={dtStyle}>{t("visit.contact", "איש קשר")}</dt>
               <dd className="text-sm">{visit.contact_name}</dd>
             </div>
           )}
           <div className="flex flex-col">
-            <dt className={dtClass}>{t("visit.date", "תאריך")}</dt>
+            <dt className={dtClass} style={dtStyle}>{t("visit.date", "תאריך")}</dt>
             <dd className="text-sm">{dateNode}</dd>
           </div>
           {showVisitType && (
             <div className="flex flex-col">
-              <dt className={dtClass}>{t("visit.type", "סוג ביקור")}</dt>
+              <dt className={dtClass} style={dtStyle}>{t("visit.type", "סוג ביקור")}</dt>
               <dd className="text-sm">{typeNode}</dd>
             </div>
           )}
           {showLocation && (
             <div className="flex flex-col">
-              <dt className={dtClass}>{t("visit.location", "מיקום")}</dt>
+              <dt className={dtClass} style={dtStyle}>{t("visit.location", "מיקום")}</dt>
               <dd className="text-sm">{inlineText("location")}</dd>
             </div>
           )}
           <div className="flex flex-col">
-            <dt className={dtClass}>{t("visit.notes", "הערות")}</dt>
+            <dt className={dtClass} style={dtStyle}>{t("visit.notes", "הערות")}</dt>
             <dd className="text-sm">{inlineText("notes")}</dd>
           </div>
         </dl>
@@ -268,7 +271,7 @@ export function VisitDetails({
           {showTorah && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="flex flex-col">
-                <span className={dtClass}>
+                <span className={dtClass} style={dtStyle}>
                   {t("visits.torah_thought", "דבר תורה")}
                 </span>
                 <span className="text-sm">{torahNode}</span>
@@ -306,7 +309,7 @@ export function VisitDetails({
                 const value = visit.picklist_values?.[d.field_key] ?? null;
                 return (
                   <div key={d.field_key} className="flex flex-col">
-                    <span className={dtClass}>{d.hebrew_label}</span>
+                    <span className={dtClass} style={dtStyle}>{d.hebrew_label}</span>
                     <span className="text-sm">
                       {editable ? (
                         <InlineEdit<string | null>
@@ -330,7 +333,7 @@ export function VisitDetails({
                 const value = visit.custom_field_values?.[d.field_key] ?? null;
                 return (
                   <div key={d.field_key} className="flex flex-col">
-                    <span className={dtClass}>{d.hebrew_label}</span>
+                    <span className={dtClass} style={dtStyle}>{d.hebrew_label}</span>
                     <span className="text-sm">
                       {editable ? (
                         <InlineEdit<string | number | boolean | null>
