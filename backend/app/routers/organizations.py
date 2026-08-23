@@ -53,6 +53,8 @@ def update_my_org(
         "label_font_size",
         "label_color",
         "label_font_family",
+        # fixes51 §4: the Shliach Role Configuration Panel's settings blob.
+        "shliach_view_config",
     ):
         if field in data:
             setattr(org, field, data[field])

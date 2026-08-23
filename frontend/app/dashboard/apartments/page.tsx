@@ -9,6 +9,7 @@ import { PicklistSelect } from "@/components/PicklistSelect";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { CustomFieldValueDisplay, CustomFieldValueInput } from "@/components/CustomFieldValueInput";
 import { InlineEdit } from "@/components/ui/InlineEdit";
+import { MultiSelectEditor } from "@/components/ui/MultiSelectEditor";
 import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter";
 import { TruncatedText } from "@/components/ui/TruncatedText";
 import { apiFetch } from "@/lib/api";
@@ -81,7 +82,12 @@ const FIELD_REGISTRY_KEYS: Partial<Record<FieldKey, string>> = {
 };
 
 export default function ApartmentsPage() {
-  const { loading, isShliach } = useAuth();
+  const { loading, isShliach, user } = useAuth();
+  // fixes51 §4: org-wide Shliach Role Configuration Panel settings — only
+  // ever consulted for isShliach users (an admin/staff session ignores it).
+  const shliachViewConfig = user?.organization?.shliach_view_config;
+  const shliachEditDisabled = isShliach && !!shliachViewConfig?.disable_edit;
+  const shliachFiltersHidden = isShliach && !!shliachViewConfig?.hide_filters;
   const { t, lang } = useLocalization();
   const router = useRouter();
   // fixes33 §5.2: org-wide field hiding (Manage Fields) must also apply here
@@ -244,6 +250,43 @@ export default function ApartmentsPage() {
     setItems(res.items);
     setTotal(res.total);
   }
+
+  // fixes51 §4: an admin-configured default filter/column set for the
+  // Shliach role's landing view — applied once, only when the shliach hasn't
+  // already got their own persisted (non-empty) state. A shliach who
+  // explicitly clears everything back to empty won't see it reapplied on a
+  // later visit (there's no signal to distinguish "never touched" from
+  // "cleared" once both look identical) — an accepted, minor edge case.
+  const appliedShliachDefaults = useRef(false);
+  useEffect(() => {
+    if (appliedShliachDefaults.current || !isShliach || !shliachViewConfig) return;
+    appliedShliachDefaults.current = true;
+    const df = shliachViewConfig.default_filters;
+    if (df) {
+      if (areaIds.length === 0 && Array.isArray(df.area_ids) && df.area_ids.length) {
+        setAreaIds(df.area_ids as number[]);
+      }
+      if (buildingIds.length === 0 && Array.isArray(df.building_ids) && df.building_ids.length) {
+        setBuildingIds(df.building_ids as number[]);
+      }
+      if (jewishFilter.length === 0 && Array.isArray(df.jewish_status) && df.jewish_status.length) {
+        setJewishFilter(df.jewish_status as string[]);
+      }
+      if (mezuzahFilter.length === 0 && Array.isArray(df.mezuzah_status) && df.mezuzah_status.length) {
+        setMezuzahFilter(df.mezuzah_status as string[]);
+      }
+      if (languageFilter.length === 0 && Array.isArray(df.language) && df.language.length) {
+        setLanguageFilter(df.language as string[]);
+      }
+    }
+    if (
+      shliachViewConfig.default_columns &&
+      JSON.stringify(fields) === JSON.stringify(DEFAULT_FIELDS)
+    ) {
+      setFields(shliachViewConfig.default_columns as FieldKey[]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isShliach, shliachViewConfig]);
 
   // Boot: load the filter sources once; the list itself is fetched by the
   // effect below (restored filters included — fixes15 §1.2).
@@ -464,7 +507,7 @@ export default function ApartmentsPage() {
 
   const inlinePicklistCell = (
     a: ApartmentListItem,
-    field: "jewish_status" | "campaign_status" | "mezuzah_status" | "language",
+    field: "jewish_status" | "campaign_status" | "mezuzah_status",
     picklistKey: string,
     label: string | null | undefined,
   ) => (
@@ -472,9 +515,38 @@ export default function ApartmentsPage() {
       value={a[field] ?? null}
       display={<TruncatedText text={label || "—"} />}
       commitOnBlur={false}
+      disabled={shliachEditDisabled}
       onSave={(v) => saveListField(a, { [field]: v })}
       editor={(draft, _setDraft, commit) => (
         <PicklistSelect fieldKey={picklistKey} value={draft} onChange={commit} />
+      )}
+    />
+  );
+
+  // fixes51 §2.2: apartment.language is multi-select — same explicit-apply
+  // pattern as ContactView's area/report-number multi-selects (a raw
+  // mousedown listener inside MultiSelectFilter closes its own dropdown
+  // before InlineEdit's onBlur would ever fire).
+  const inlineLanguageCell = (a: ApartmentListItem) => (
+    <InlineEdit<string[]>
+      value={a.language}
+      display={
+        <TruncatedText
+          text={a.language.map((v) => language.labelFor(v)).join(", ") || "—"}
+        />
+      }
+      commitOnBlur={false}
+      disabled={shliachEditDisabled}
+      onSave={(vals) => saveListField(a, { language: vals })}
+      editor={(draft, setDraft, commit) => (
+        <MultiSelectEditor onApply={() => commit(draft)}>
+          <MultiSelectFilter
+            allLabel={t("filter.all_languages", "כל השפות")}
+            options={language.options.map((o) => ({ id: o.value, label: language.display(o) }))}
+            value={draft}
+            onChange={setDraft}
+          />
+        </MultiSelectEditor>
       )}
     />
   );
@@ -498,6 +570,7 @@ export default function ApartmentsPage() {
       }
       validate={opts.validate}
       enterCommits={!opts.multiline}
+      disabled={shliachEditDisabled}
       onSave={(v) => saveListField(a, { [field]: v.trim() || null })}
       editor={(draft, setDraft) =>
         opts.multiline ? (
@@ -636,9 +709,7 @@ export default function ApartmentsPage() {
               : t("validation.email_hint", EMAIL_HINT),
         });
       case "language":
-        return inlinePicklistCell(
-          a, "language", "apartment.language", language.labelFor(a.language),
-        );
+        return inlineLanguageCell(a);
       // fixes30 §1c: these three edit in place, straight from the list row.
       case "jewish_status":
         return inlinePicklistCell(
@@ -688,31 +759,38 @@ export default function ApartmentsPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">{t("apartments", "דירות")}</h1>
         <div className="flex items-center gap-2">
-          {/* fixes32 §6: always reachable while any filter narrows the list —
-              mirrors the Contacts page (fixes29 §1). */}
-          {activeFilterCount > 0 && (
-            <button
-              type="button"
-              onClick={clearAllFilters}
-              className="rounded-md border border-gray-300 text-gray-600 px-4 py-1.5 text-sm font-medium hover:bg-gray-50"
-            >
-              ✕ {t("filter.clear_all", "נקה את כל הסינונים")}
-            </button>
+          {/* fixes51 §4: an admin can hide the filter UI entirely for the
+              Shliach role — a stronger, org-enforced version of the
+              per-user filtersOpen collapse below. */}
+          {!shliachFiltersHidden && (
+            <>
+              {/* fixes32 §6: always reachable while any filter narrows the
+                  list — mirrors the Contacts page (fixes29 §1). */}
+              {activeFilterCount > 0 && (
+                <button
+                  type="button"
+                  onClick={clearAllFilters}
+                  className="rounded-md border border-gray-300 text-gray-600 px-4 py-1.5 text-sm font-medium hover:bg-gray-50"
+                >
+                  ✕ {t("filter.clear_all", "נקה את כל הסינונים")}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setFiltersOpen((v) => !v)}
+                className="rounded-md border border-gray-300 text-gray-600 px-4 py-1.5 text-sm font-medium hover:bg-gray-50"
+              >
+                {filtersOpen
+                  ? `▴ ${t("filter.hide_filters", "הסתר סינון")}`
+                  : `▾ ${t("filter.show_filters", "הצג סינון")}`}
+                {!filtersOpen && activeFilterCount > 0 && (
+                  <span className="ms-1.5 inline-flex items-center justify-center rounded-full bg-status-magenta text-white text-xs px-1.5 py-0.5 leading-none">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+            </>
           )}
-          <button
-            type="button"
-            onClick={() => setFiltersOpen((v) => !v)}
-            className="rounded-md border border-gray-300 text-gray-600 px-4 py-1.5 text-sm font-medium hover:bg-gray-50"
-          >
-            {filtersOpen
-              ? `▴ ${t("filter.hide_filters", "הסתר סינון")}`
-              : `▾ ${t("filter.show_filters", "הצג סינון")}`}
-            {!filtersOpen && activeFilterCount > 0 && (
-              <span className="ms-1.5 inline-flex items-center justify-center rounded-full bg-status-magenta text-white text-xs px-1.5 py-0.5 leading-none">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
           {/* fixes38 §2.1: the columns toggle lives outside the filtersOpen
               block so collapsing filters never hides it. */}
           <button
@@ -903,7 +981,7 @@ export default function ApartmentsPage() {
       {/* fixes32 §6: both filter rows unmount while the toggle is off; the
           persisted filter state is untouched, so it keeps filtering the list
           — the exact fixes29 §1 pattern from the Contacts page. */}
-      {filtersOpen && (<>
+      {filtersOpen && !shliachFiltersHidden && (<>
       {/* Dataset filters (fixes8 §2): multi-area (fixes15 §7.1) + building
           bounds, street lookup. */}
       <div className="flex flex-wrap items-center gap-2 text-sm">

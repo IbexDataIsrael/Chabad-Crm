@@ -23,27 +23,29 @@ def _mk_building(client, headers):
 
 
 def test_apartment_language_roundtrip_and_validation(client, admin_headers, db_session):
+    # fixes51 §2.2: language became multi-select — a list of technical
+    # values instead of one string.
     _provision(client, db_session, admin_headers)
     b = _mk_building(client, admin_headers)
     # Valid picklist value round-trips.
     r = client.post(
         "/api/apartments",
-        json={"building_id": b["id"], "apartment_name": "3", "language": "russian"},
+        json={"building_id": b["id"], "apartment_name": "3", "language": ["russian"]},
         headers=admin_headers,
     )
     assert r.status_code == 201, r.text
     apt = r.json()
-    assert apt["language"] == "russian"
+    assert apt["language"] == ["russian"]
     # Update to another valid value. fixes19: an update returns a NEW active
     # version (the old id becomes a historical snapshot) — follow the new id.
     r = client.put(
-        f"/api/apartments/{apt['id']}", json={"language": "yiddish"}, headers=admin_headers
+        f"/api/apartments/{apt['id']}", json={"language": ["yiddish"]}, headers=admin_headers
     )
-    assert r.status_code == 200 and r.json()["language"] == "yiddish"
+    assert r.status_code == 200 and r.json()["language"] == ["yiddish"]
     current_id = r.json()["id"]
     # Unknown value is rejected against the org's picklist.
     r = client.put(
-        f"/api/apartments/{current_id}", json={"language": "klingon"}, headers=admin_headers
+        f"/api/apartments/{current_id}", json={"language": ["klingon"]}, headers=admin_headers
     )
     assert r.status_code == 400
 

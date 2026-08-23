@@ -419,7 +419,8 @@ function CreateReportsInner() {
           case "mezuzah_status":
             return labelFor(mezuzah, a.mezuzah_status);
           case "language":
-            return labelFor(language, a.language);
+            // fixes51 §2.2: multi-select — comma-separated labels.
+            return a.language.map((v) => labelFor(language, v)).join(", ");
           case "campaign_status":
             return labelFor(campaign, a.campaign_status);
         }

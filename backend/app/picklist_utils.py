@@ -37,7 +37,15 @@ PICKLIST_FIELDS: dict[str, tuple[str, str]] = {
     "apartment.campaign_status": ("סטטוס קמפיין", "apartment"),
     "apartment.mezuzah_status": ("מזוזה", "apartment"),
     "apartment.language": ("שפה", "apartment"),  # fixes13
+    # fixes51 §3: admin-only field on contact_shliach, shares options with
+    # Jewish_status (see app/seed.py's PICKLISTS).
+    "contact_shliach.manager_jewish_status": ("סטטוס יהדות מנהל", "contact_shliach"),
 }
+
+# fixes51 §2.2: which of the fields above allow more than one selected value
+# (one PicklistLink row per value instead of exactly one) — provisioning
+# (app/seed.py) stamps `PicklistDefinition.allow_multiple` from this set.
+MULTI_VALUE_PICKLIST_FIELDS = {"apartment.language"}
 
 
 def active_values(db: Session, organization_id: int, field_key: str) -> list[str]:
@@ -303,6 +311,147 @@ def set_value(
                 picklist_value_id=picklist_value.id,
             )
         )
+
+
+def get_multi_values(
+    db: Session,
+    organization_id: int,
+    entity_table: str,
+    entity_id: int,
+    field_key: str,
+) -> list[str]:
+    """fixes51 §2.2: every selected value for a multi-value field (e.g.
+    apartment.language) — the plural counterpart to `get_values`' single
+    value per field."""
+    rows = (
+        db.query(models.PicklistValue.value)
+        .join(
+            models.PicklistLink,
+            models.PicklistLink.picklist_value_id == models.PicklistValue.id,
+        )
+        .join(
+            models.PicklistDefinition,
+            models.PicklistDefinition.id == models.PicklistLink.picklist_definition_id,
+        )
+        .filter(
+            models.PicklistLink.entity_table == entity_table,
+            models.PicklistLink.entity_id == entity_id,
+            models.PicklistDefinition.system_name == field_key,
+        )
+        .all()
+    )
+    return [r[0] for r in rows]
+
+
+def get_multi_values_bulk(
+    db: Session,
+    organization_id: int,
+    entity_table: str,
+    entity_ids: list[int],
+    field_key: str,
+) -> dict[int, list[str]]:
+    """`get_multi_values` for many entities in one query (list endpoints)."""
+    result: dict[int, list[str]] = {eid: [] for eid in entity_ids}
+    if not entity_ids:
+        return result
+    rows = (
+        db.query(models.PicklistLink.entity_id, models.PicklistValue.value)
+        .join(
+            models.PicklistValue,
+            models.PicklistValue.id == models.PicklistLink.picklist_value_id,
+        )
+        .join(
+            models.PicklistDefinition,
+            models.PicklistDefinition.id == models.PicklistLink.picklist_definition_id,
+        )
+        .filter(
+            models.PicklistLink.entity_table == entity_table,
+            models.PicklistLink.entity_id.in_(entity_ids),
+            models.PicklistDefinition.system_name == field_key,
+        )
+        .all()
+    )
+    for entity_id, value in rows:
+        result[entity_id].append(value)
+    return result
+
+
+def set_multi_values(
+    db: Session,
+    organization_id: int,
+    entity_table: str,
+    entity_id: int,
+    field_key: str,
+    values: list[str],
+) -> None:
+    """Replace every selected value for a multi-value field with `values`
+    (delete-all-then-insert — the field's selection set is small, e.g.
+    apartment languages, so this is simpler and safer than diffing).
+    Mirrors `set_value`'s definition-provisioning/validation behavior."""
+    for value in values:
+        validate_picklist_value(db, organization_id, field_key, value)
+
+    definition = (
+        db.query(models.PicklistDefinition)
+        .filter(
+            models.PicklistDefinition.organization_id == organization_id,
+            models.PicklistDefinition.system_name == field_key,
+        )
+        .first()
+    )
+    if definition is None:
+        if field_key not in PICKLIST_FIELDS:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, f"unknown picklist '{field_key}'"
+            )
+        hebrew_label, entity_type = PICKLIST_FIELDS[field_key]
+        definition = models.PicklistDefinition(
+            organization_id=organization_id,
+            system_name=field_key,
+            hebrew_display_name=hebrew_label,
+            entity_type=entity_type,
+            is_system=True,
+            allow_multiple=True,
+        )
+        db.add(definition)
+        db.flush()
+
+    db.query(models.PicklistLink).filter(
+        models.PicklistLink.entity_table == entity_table,
+        models.PicklistLink.entity_id == entity_id,
+        models.PicklistLink.picklist_definition_id == definition.id,
+    ).delete(synchronize_session=False)
+
+    for value in values:
+        picklist_value = (
+            db.query(models.PicklistValue)
+            .filter(
+                models.PicklistValue.organization_id == organization_id,
+                models.PicklistValue.field_key == field_key,
+                models.PicklistValue.value == value,
+            )
+            .first()
+        )
+        if picklist_value is None:
+            picklist_value = models.PicklistValue(
+                organization_id=organization_id,
+                field_key=field_key,
+                value=value,
+                hebrew_label=value,
+                is_active=False,
+            )
+            db.add(picklist_value)
+            db.flush()
+        db.add(
+            models.PicklistLink(
+                organization_id=organization_id,
+                entity_table=entity_table,
+                entity_id=entity_id,
+                picklist_definition_id=definition.id,
+                picklist_value_id=picklist_value.id,
+            )
+        )
+    db.flush()
 
 
 def copy_links(db: Session, entity_table: str, from_entity_id: int, to_entity_id: int) -> None:

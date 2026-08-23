@@ -329,16 +329,26 @@ export function ContactView({
     ["contacts.created_at", t("contacts.created_at", "נוצר בתאריך"), createdNode],
     // fixes35 §5: any admin-added shliach.* custom picklist.
     ...shliachPicklistDefs.map(
-      (d): [string | null, string, ReactNode] => [
-        d.field_key,
-        (lang === "en" ? d.english_label || d.label : d.label) || d.field_key,
-        inlinePicklist(
+      (d): [string | null, string, ReactNode] => {
+        const displayLabel =
+          shliachPicklists.labelFor(d.field_key, contact.picklist_values?.[d.field_key]) || "—";
+        // fixes51 §3: manager_jewish_status is admin-only to edit — every
+        // other role only ever sees the plain label, never the picker.
+        const isAdminOnly =
+          d.field_key === "contact_shliach.manager_jewish_status" && !isAdmin;
+        return [
           d.field_key,
-          contact.picklist_values?.[d.field_key] ?? null,
-          shliachPicklists.labelFor(d.field_key, contact.picklist_values?.[d.field_key]) || "—",
-          (v) => ({ picklist_values: { [d.field_key]: v } }),
-        ),
-      ],
+          (lang === "en" ? d.english_label || d.label : d.label) || d.field_key,
+          isAdminOnly
+            ? displayLabel
+            : inlinePicklist(
+                d.field_key,
+                contact.picklist_values?.[d.field_key] ?? null,
+                displayLabel,
+                (v) => ({ picklist_values: { [d.field_key]: v } }),
+              ),
+        ];
+      },
     ),
     // fixes35: any non-select custom field for shliach contacts.
     ...shliachCustomFieldDefs.map(

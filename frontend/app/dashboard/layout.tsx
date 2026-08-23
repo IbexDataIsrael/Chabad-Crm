@@ -84,6 +84,12 @@ function DashboardChrome({ children }: { children: ReactNode }) {
     { href: "/dashboard/custom-fields", label: t("nav.custom_fields", "שדות מותאמים"), admin: true },
     { href: "/dashboard/fields", label: t("page.fields_title", "ניהול שדות"), admin: true },
     { href: "/dashboard/localization", label: t("nav.localization", "תרגומים"), admin: true },
+    // fixes51 §4: admin-only config panel for the Shliach role's Apartments view.
+    {
+      href: "/dashboard/shliach-config",
+      label: t("nav.shliach_config", "הגדרות לתצוגת פעילים"),
+      admin: true,
+    },
     { href: "/dashboard/settings", label: t("nav.settings", "הגדרות") },
   ]);
 

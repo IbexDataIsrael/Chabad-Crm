@@ -41,15 +41,17 @@ from app.schemas import (
 router = APIRouter(prefix="/api/apartments", tags=["apartments"])
 
 # Apartment fields constrained by an org-managed picklist (fixes7 §4). Values
-# live in PicklistLink (fixes32) — these 4 keep dedicated API fields for
+# live in PicklistLink (fixes32) — these keep dedicated API fields for
 # backward compatibility; any other apartment.* picklist is dynamic (see
-# ApartmentOut.picklist_values).
+# ApartmentOut.picklist_values). `language` (fixes13) is handled separately
+# below — fixes51 §2.2 made it multi-select, so it doesn't fit this
+# one-scalar-field-per-key map any more.
 _APARTMENT_PICKLISTS = {
     "jewish_status": "apartment.Jewish_status",
     "campaign_status": "apartment.campaign_status",
     "mezuzah_status": "apartment.mezuzah_status",
-    "language": "apartment.language",  # fixes13
 }
+_APARTMENT_LANGUAGE_FIELD_KEY = "apartment.language"
 
 
 def _validate_picklist_changes(changes: dict, org_id: int, db: Session) -> None:
@@ -80,13 +82,19 @@ def _split_custom_field_changes(data: dict):
     return data.pop("custom_field_values", None) or {}
 
 
-def _apply_picklist_fields(out, values: dict[str, Optional[str]]) -> None:
-    """Populate an ApartmentOut's 4 fixed fields + the dynamic picklist_values
-    dict from a resolved {field_key: value} map."""
+def _apply_picklist_fields(
+    out, values: dict[str, Optional[str]], language_values: Optional[list[str]] = None
+) -> None:
+    """Populate an ApartmentOut's fixed fields + the dynamic picklist_values
+    dict from a resolved {field_key: value} map, plus (fixes51 §2.2) the
+    multi-select `language` list from its own separate lookup."""
     for field, field_key in _APARTMENT_PICKLISTS.items():
         setattr(out, field, values.get(field_key))
+    out.language = language_values or []
     out.picklist_values = {
-        k: v for k, v in values.items() if k not in _APARTMENT_PICKLISTS.values()
+        k: v
+        for k, v in values.items()
+        if k not in _APARTMENT_PICKLISTS.values() and k != _APARTMENT_LANGUAGE_FIELD_KEY
     }
 
 
@@ -95,14 +103,19 @@ def _apartment_out(
     a: models.Apartment,
     picklist_map: Optional[dict] = None,
     custom_field_map: Optional[dict] = None,
+    language_values: Optional[list[str]] = None,
 ) -> ApartmentOut:
     values = (
         picklist_map
         if picklist_map is not None
         else picklist_utils.get_values(db, a.organization_id, "apartments", a.id)
     )
+    if language_values is None:
+        language_values = picklist_utils.get_multi_values(
+            db, a.organization_id, "apartments", a.id, _APARTMENT_LANGUAGE_FIELD_KEY
+        )
     out = ApartmentOut.model_validate(a)
-    _apply_picklist_fields(out, values)
+    _apply_picklist_fields(out, values, language_values)
     out.custom_field_values = (
         custom_field_map
         if custom_field_map is not None
@@ -175,6 +188,7 @@ def _enrich(
     a: models.Apartment,
     picklist_map: dict[str, Optional[str]],
     custom_field_map: Optional[dict] = None,
+    language_values: Optional[list[str]] = None,
 ) -> ApartmentListOut:
     building = a.building
     area = building.area if building else None
@@ -184,7 +198,7 @@ def _enrich(
     if contact:
         contact_name = f"{contact.name} {contact.last_name or ''}".strip()
     out = ApartmentListOut.model_validate(a)
-    _apply_picklist_fields(out, picklist_map)
+    _apply_picklist_fields(out, picklist_map, language_values)
     out.custom_field_values = custom_field_map or {}
     out.building_name = building.building_name if building else None
     out.building_address = building.building_address if building else None
@@ -250,11 +264,18 @@ def list_apartments(
     picklist_map = picklist_utils.get_values_bulk(
         db, current_user.organization_id, "apartments", [r.id for r in rows]
     )
+    language_map = picklist_utils.get_multi_values_bulk(
+        db, current_user.organization_id, "apartments", [r.id for r in rows],
+        _APARTMENT_LANGUAGE_FIELD_KEY,
+    )
     custom_field_map = custom_field_utils.get_values_bulk(
         db, current_user.organization_id, "apartment", [r.id for r in rows]
     )
     return [
-        _apartment_out(db, a, picklist_map.get(a.id, {}), custom_field_map.get(a.id, {}))
+        _apartment_out(
+            db, a, picklist_map.get(a.id, {}), custom_field_map.get(a.id, {}),
+            language_map.get(a.id, []),
+        )
         for a in rows
     ]
 
@@ -476,12 +497,19 @@ def list_apartments_enriched(
     picklist_map = picklist_utils.get_values_bulk(
         db, current_user.organization_id, "apartments", [r.id for r in rows]
     )
+    language_map = picklist_utils.get_multi_values_bulk(
+        db, current_user.organization_id, "apartments", [r.id for r in rows],
+        _APARTMENT_LANGUAGE_FIELD_KEY,
+    )
     custom_field_map = custom_field_utils.get_values_bulk(
         db, current_user.organization_id, "apartment", [r.id for r in rows]
     )
     return ApartmentPageOut(
         items=[
-            _enrich(a, picklist_map.get(a.id, {}), custom_field_map.get(a.id, {}))
+            _enrich(
+                a, picklist_map.get(a.id, {}), custom_field_map.get(a.id, {}),
+                language_map.get(a.id, []),
+            )
             for a in rows
         ],
         total=total,
@@ -500,6 +528,11 @@ def create_apartment(
     _validate_building(payload.building_id, org_id, db)
     data = payload.model_dump()
     contact_id = data.pop("contact_id", None)
+    # fixes51 §2.2: language is multi-select, handled separately from the
+    # scalar picklist fields below.
+    language_values = data.pop("language", None) or []
+    for value in language_values:
+        validate_picklist_value(db, org_id, _APARTMENT_LANGUAGE_FIELD_KEY, value)
     picklist_changes = _split_picklist_changes(data)
     _validate_picklist_changes(picklist_changes, org_id, db)
     custom_field_changes = _split_custom_field_changes(data)
@@ -510,6 +543,10 @@ def create_apartment(
     for field_key, value in picklist_changes.items():
         if value is not None:
             picklist_utils.set_value(db, org_id, "apartments", a.id, field_key, value)
+    if language_values:
+        picklist_utils.set_multi_values(
+            db, org_id, "apartments", a.id, _APARTMENT_LANGUAGE_FIELD_KEY, language_values
+        )
     for field_key, value in custom_field_changes.items():
         if value is not None:
             custom_field_utils.set_value(db, org_id, "apartment", a.id, field_key, value)
@@ -826,11 +863,14 @@ def apartment_history(
 
 
 # Fields an admin may roll back per-field (building_id is excluded — a restore
-# should not silently move an apartment to a different building). Covers both
-# the real versioned columns and the 4 fixed picklist fields (fixes32).
-_RESTORABLE_FIELDS = tuple(
-    c for c in _VERSIONED_COLUMNS if c != "building_id"
-) + tuple(_APARTMENT_PICKLISTS.keys())
+# should not silently move an apartment to a different building). Covers the
+# real versioned columns, the fixed scalar picklist fields (fixes32), and
+# (fixes51 §2.2) the multi-select language field.
+_RESTORABLE_FIELDS = (
+    tuple(c for c in _VERSIONED_COLUMNS if c != "building_id")
+    + tuple(_APARTMENT_PICKLISTS.keys())
+    + ("language",)
+)
 
 
 @router.post("/{apartment_id}/restore-field", response_model=ApartmentOut)
@@ -872,7 +912,12 @@ def restore_apartment_field(
         )
     changes: dict = {}
     picklist_changes: dict[str, Optional[str]] = {}
-    if payload.field in _APARTMENT_PICKLISTS:
+    language_values: Optional[list[str]] = None
+    if payload.field == "language":
+        language_values = picklist_utils.get_multi_values(
+            db, org_id, "apartments", version.id, _APARTMENT_LANGUAGE_FIELD_KEY
+        )
+    elif payload.field in _APARTMENT_PICKLISTS:
         field_key = _APARTMENT_PICKLISTS[payload.field]
         picklist_changes[field_key] = picklist_utils.get_values(
             db, org_id, "apartments", version.id, [field_key]
@@ -881,7 +926,12 @@ def restore_apartment_field(
         changes[payload.field] = getattr(version, payload.field)
     _validate_picklist_changes(picklist_changes, org_id, db)
     _validate_report_number(changes, org_id, db)
-    return _apartment_out(db, _apply_versioned_update(db, active, changes, picklist_changes, admin))
+    return _apartment_out(
+        db,
+        _apply_versioned_update(
+            db, active, changes, picklist_changes, admin, language_values=language_values
+        ),
+    )
 
 
 @router.get("/{apartment_id}", response_model=ApartmentOut)
@@ -905,6 +955,7 @@ def _apply_versioned_update(
     picklist_changes: dict[str, Optional[str]],
     editor: models.User,
     custom_field_changes: Optional[dict] = None,
+    language_values: Optional[list[str]] = None,
 ) -> models.Apartment:
     """Core of the fixes19 §3 versioning: retire the active row (is_display=False
     + last_edit/editor_id stamp) and insert a new active row carrying `changes`
@@ -936,6 +987,13 @@ def _apply_versioned_update(
     picklist_utils.copy_links(db, "apartments", active.id, new.id)
     for field_key, value in picklist_changes.items():
         picklist_utils.set_value(db, org_id, "apartments", new.id, field_key, value)
+    # fixes51 §2.2: None = no change requested — the languages `copy_links`
+    # just carried forward stand as-is; anything else (including []) replaces
+    # them outright.
+    if language_values is not None:
+        picklist_utils.set_multi_values(
+            db, org_id, "apartments", new.id, _APARTMENT_LANGUAGE_FIELD_KEY, language_values
+        )
     custom_field_utils.copy_values(db, "apartments", active.id, new.id)
     for field_key, value in (custom_field_changes or {}).items():
         custom_field_utils.set_value(db, org_id, "apartment", new.id, field_key, value)
@@ -968,8 +1026,26 @@ def update_apartment(
             status.HTTP_403_FORBIDDEN, "You can only edit apartments assigned to you"
         )
     data = payload.model_dump(exclude_unset=True)
+    # fixes51 §2.1: apartment_name (מספר דירה) is never shliach-editable, even
+    # on an apartment assigned to them.
+    if (
+        current_user.role == "shliach"
+        and "apartment_name" in data
+        and data["apartment_name"] != a.apartment_name
+    ):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Shliach users cannot edit the apartment number"
+        )
     if "building_id" in data and data["building_id"] is not None:
         _validate_building(data["building_id"], org_id, db)
+    # fixes51 §2.2: pop language out before `data` becomes the real-column
+    # `changes` dict below — it isn't a column any more (PicklistLink), and
+    # it's multi-select so it doesn't fit `_split_picklist_changes`'s scalar
+    # map either. Absent from `data` (exclude_unset) => no change requested.
+    language_values = data.pop("language", None)
+    if language_values is not None:
+        for value in language_values:
+            validate_picklist_value(db, org_id, _APARTMENT_LANGUAGE_FIELD_KEY, value)
     picklist_changes = _split_picklist_changes(data)
     _validate_picklist_changes(picklist_changes, org_id, db)
     custom_field_changes = _split_custom_field_changes(data)
@@ -977,7 +1053,8 @@ def update_apartment(
     return _apartment_out(
         db,
         _apply_versioned_update(
-            db, a, data, picklist_changes, current_user, custom_field_changes
+            db, a, data, picklist_changes, current_user, custom_field_changes,
+            language_values=language_values,
         ),
     )
 

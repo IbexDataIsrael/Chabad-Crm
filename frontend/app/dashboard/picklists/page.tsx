@@ -12,14 +12,18 @@ import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 import type { CustomFieldDefinition, PicklistField, PicklistValue } from "@/lib/types";
 
-// fixes33 §4 / fixes37: which of the 3 admin tabs a picklist is managed
-// from. Driven by the real entity_type column now, not a prefix guess.
-// "contact_mekurav"/"contact_shliach"/"significant_date" all group under
-// "contacts" — same grouping fixes33 chose deliberately for significant_date.*.
-type PicklistTab = "contacts" | "visit" | "apartment";
+// fixes33 §4 / fixes37: which admin tab a picklist is managed from. Driven
+// by the real entity_type column now, not a prefix guess.
+// "contact_mekurav"/"significant_date" group under "contacts" — same
+// grouping fixes33 chose deliberately for significant_date.*. fixes51 §3:
+// "contact_shliach" got pulled out into its own tab (was lumped into
+// "contacts" too) so an admin-only shliach field (manager_jewish_status)
+// gets a dedicated home, per spec.
+type PicklistTab = "contacts" | "visit" | "apartment" | "shliach";
 function tabFor(entityType: string): PicklistTab {
   if (entityType === "apartment") return "apartment";
   if (entityType === "visit") return "visit";
+  if (entityType === "contact_shliach") return "shliach";
   return "contacts";
 }
 
@@ -130,6 +134,7 @@ export default function PicklistsPage() {
   const contactDefs = fields.filter((f) => tabFor(f.entity_type) === "contacts");
   const visitDefs = fields.filter((f) => tabFor(f.entity_type) === "visit");
   const apartmentDefs = fields.filter((f) => tabFor(f.entity_type) === "apartment");
+  const shliachDefs = fields.filter((f) => tabFor(f.entity_type) === "shliach");
 
   // fixes44 §4: a select-type custom field already has a matching row in
   // `fields` above (routers/custom_fields.py auto-provisions a
@@ -176,6 +181,7 @@ export default function PicklistsPage() {
     { key: "contacts", icon: "👤", labelKey: "pl.tab_contacts", fallback: "אנשי קשר" },
     { key: "visit", icon: "📋", labelKey: "pl.tab_visit", fallback: "ביקורים" },
     { key: "apartment", icon: "🏠", labelKey: "pl.tab_apartment", fallback: "דירה" },
+    { key: "shliach", icon: "🧑‍🏫", labelKey: "pl.tab_shliach", fallback: "פעילים" },
   ];
 
   return (
@@ -242,6 +248,19 @@ export default function PicklistsPage() {
             onAdded={loadAll}
           />
           {renderCustomFieldsSection("apartment")}
+        </section>
+      )}
+
+      {tab === "shliach" && (
+        <section className="space-y-6 rounded-2xl border border-gray-200 bg-white p-5">
+          {shliachDefs.map(renderDefinition)}
+          <AddPicklist
+            heading={t("pl.add_list_shliach", "הוספת רשימת בחירה לפעיל")}
+            prefix=""
+            entityType="contact_shliach"
+            onAdded={loadAll}
+          />
+          {renderCustomFieldsSection("shliach")}
         </section>
       )}
     </div>

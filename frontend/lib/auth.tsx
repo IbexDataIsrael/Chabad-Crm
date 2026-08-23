@@ -36,6 +36,18 @@ export interface Organization {
   label_font_size?: number | null;
   label_color?: string | null;
   label_font_family?: string | null;
+  /** fixes51 §4: the Shliach Role Configuration Panel's settings blob. */
+  shliach_view_config?: ShliachViewConfig | null;
+}
+
+/** fixes51 §4: org-wide config for the Shliach role's Apartments experience —
+ *  set from /dashboard/shliach-config (admin-only), consumed by the
+ *  Apartments page for isShliach users. */
+export interface ShliachViewConfig {
+  disable_edit?: boolean;
+  hide_filters?: boolean;
+  default_filters?: Record<string, unknown>;
+  default_columns?: string[] | null;
 }
 
 export interface User {

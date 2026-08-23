@@ -4,14 +4,16 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { CustomFieldValueInput } from "@/components/CustomFieldValueInput";
 import { EmailInput } from "@/components/EmailInput";
+import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { PhoneInput } from "@/components/PhoneInput";
 import { PicklistSelect } from "@/components/PicklistSelect";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { useCustomFieldDefs } from "@/lib/customFields";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
-import { FIXED_APARTMENT_PICKLIST_KEYS } from "@/lib/picklists";
+import { FIXED_APARTMENT_PICKLIST_KEYS, usePicklist } from "@/lib/picklists";
 import {
   buildingDisplayName,
   contactFullName,
@@ -48,6 +50,8 @@ export function ApartmentEditor({
 }) {
   const { t, lang } = useLocalization();
   const { isFieldVisible: vis } = useFieldSettings();
+  const { isShliach } = useAuth();
+  const languagePicklist = usePicklist("apartment.language");
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [floors, setFloors] = useState<Floor[]>([]);
@@ -68,7 +72,8 @@ export function ApartmentEditor({
   const [mezuzahStatus, setMezuzahStatus] = useState<string | null>(
     apt?.mezuzah_status ?? null,
   );
-  const [language, setLanguage] = useState<string | null>(apt?.language ?? null);
+  // fixes51 §2.2: multi-select (was single-value, fixes13).
+  const [language, setLanguage] = useState<string[]>(apt?.language ?? []);
   const [notes, setNotes] = useState(apt?.apartment_notes ?? "");
   const [contactId, setContactId] = useState<number | "">("");
   // fixes19: linked report number (searchable dropdown).
@@ -205,7 +210,12 @@ export function ApartmentEditor({
             <span className="block text-sm font-medium">
               {t("apartments.apartment_name", "מספר דירה")}
             </span>
-            <input className={inputClass} value={label} onChange={(e) => setLabel(e.target.value)} />
+            <input
+              className={inputClass}
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              disabled={isShliach}
+            />
           </label>
         )}
         {vis("apartments.floor") && (
@@ -289,8 +299,13 @@ export function ApartmentEditor({
             <span className="block text-sm font-medium">
               {t("picklist.apartment.language", "שפה")}
             </span>
-            <PicklistSelect
-              fieldKey="apartment.language"
+            {/* fixes51 §2.2: multi-select (was a single PicklistSelect). */}
+            <MultiSelectFilter
+              allLabel={t("filter.all_languages", "כל השפות")}
+              options={languagePicklist.options.map((o) => ({
+                id: o.value,
+                label: languagePicklist.display(o),
+              }))}
               value={language}
               onChange={setLanguage}
             />

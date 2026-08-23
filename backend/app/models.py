@@ -83,6 +83,12 @@ class Organization(Base):
     label_font_size = Column(Integer, nullable=True)  # px
     label_color = Column(String(20), nullable=True)  # hex, e.g. "#374151"
     label_font_family = Column(String(100), nullable=True)
+    # fixes51 §4: the org-wide Shliach Role Configuration Panel's settings —
+    # {disable_edit, hide_filters, default_filters, default_columns}. One JSON
+    # blob (matches UserPreference.value's pattern for "a small settings bag")
+    # rather than 4 columns; null = nothing configured yet (every setting's
+    # own default applies).
+    shliach_view_config = Column(JSON, nullable=True)
     # Platform-level enable/disable (superadmin). A disabled org's users can't log in.
     is_active = Column(Boolean, nullable=False, default=True, server_default=text("true"))
     # Signup approval workflow: 'pending' (awaiting superadmin approval) | 'approved'.
@@ -970,6 +976,12 @@ class PicklistDefinition(Base):
     entity_type = Column(String(30), nullable=False, default="contact_mekurav")
     is_system = Column(Boolean, nullable=False, default=True)
     sort_order = Column(Integer, nullable=False, default=0)
+    # fixes51 §2.2: True lets an entity carry more than one selected value for
+    # this field (one `PicklistLink` row per value instead of exactly one) —
+    # only `apartment.language` is seeded this way today.
+    allow_multiple = Column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
@@ -993,8 +1005,12 @@ class PicklistLink(Base):
 
     __tablename__ = "picklist_links"
     __table_args__ = (
+        # fixes51 §2.2: `picklist_value_id` joined the uniqueness key so a
+        # multi-value field (`PicklistDefinition.allow_multiple`) can carry
+        # more than one link row — single-value fields still get exactly one
+        # row because `picklist_utils.set_value` upserts in place.
         UniqueConstraint(
-            "entity_table", "entity_id", "picklist_definition_id",
+            "entity_table", "entity_id", "picklist_definition_id", "picklist_value_id",
             name="uq_picklist_link_entity_field",
         ),
     )

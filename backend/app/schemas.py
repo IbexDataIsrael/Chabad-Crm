@@ -71,6 +71,9 @@ class OrganizationOut(BaseModel):
     label_font_size: Optional[int] = None
     label_color: Optional[str] = None
     label_font_family: Optional[str] = None
+    # fixes51 §4: the Shliach Role Configuration Panel's settings blob (null =
+    # nothing configured yet).
+    shliach_view_config: Optional[dict] = None
 
 
 class OrganizationUpdate(BaseModel):
@@ -82,6 +85,7 @@ class OrganizationUpdate(BaseModel):
     default_zoom: Optional[int] = None
     shliach_can_view_contacts: Optional[bool] = None
     report_notes: Optional[str] = None
+    shliach_view_config: Optional[dict] = None
     label_font_size: Optional[int] = None
     label_color: Optional[str] = None
     label_font_family: Optional[str] = None
@@ -639,7 +643,8 @@ class ApartmentBase(BaseModel):
     jewish_status: Optional[str] = None
     campaign_status: Optional[str] = None
     mezuzah_status: Optional[str] = None
-    language: Optional[str] = None  # picklist apartment.language (fixes13)
+    # fixes51 §2.2: multi-select (was single-value, fixes13).
+    language: Optional[list[str]] = None
     name: Optional[str] = None  # resident name
     phone: Optional[str] = None
     email: Optional[str] = None
@@ -674,7 +679,7 @@ class ApartmentUpdate(BaseModel):
     jewish_status: Optional[str] = None
     campaign_status: Optional[str] = None
     mezuzah_status: Optional[str] = None
-    language: Optional[str] = None
+    language: Optional[list[str]] = None
     name: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
@@ -705,7 +710,7 @@ class ApartmentOut(BaseModel):
     jewish_status: Optional[str] = None
     campaign_status: Optional[str] = None
     mezuzah_status: Optional[str] = None
-    language: Optional[str] = None
+    language: Optional[list[str]] = None
     name: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None

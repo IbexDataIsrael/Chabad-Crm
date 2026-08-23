@@ -6,9 +6,11 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { CustomFieldValueDisplay, CustomFieldValueInput } from "@/components/CustomFieldValueInput";
+import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { PicklistSelect } from "@/components/PicklistSelect";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { InlineEdit } from "@/components/ui/InlineEdit";
+import { MultiSelectEditor } from "@/components/ui/MultiSelectEditor";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { mapsHref } from "@/lib/contactActions";
@@ -47,7 +49,10 @@ const inputClass =
  *  fixes19 §3 versioned edit, so the page follows the new active id. */
 export default function ApartmentDetailPage() {
   const router = useRouter();
-  const { loading, isAdmin, isShliach } = useAuth();
+  const { loading, isAdmin, isShliach, user } = useAuth();
+  // fixes51 §4: org-wide "disable edit" for the Shliach role.
+  const shliachEditDisabled =
+    isShliach && !!user?.organization?.shliach_view_config?.disable_edit;
   const { t, lang } = useLocalization();
   const { isFieldVisible: vis, orderFor } = useFieldSettings();
   const { success } = useToast();
@@ -78,7 +83,10 @@ export default function ApartmentDetailPage() {
   const { labelFor: jewishLabel } = usePicklist("apartment.Jewish_status");
   const { labelFor: campaignLabel } = usePicklist("apartment.campaign_status");
   const { labelFor: mezuzahLabel } = usePicklist("apartment.mezuzah_status");
-  const { labelFor: languageLabel } = usePicklist("apartment.language");
+  // fixes51 §2.2: multi-select — the full picklist object (not just labelFor)
+  // so the inline editor has its option list too.
+  const languagePicklist = usePicklist("apartment.language");
+  const languageLabel = languagePicklist.labelFor;
   const { labelFor: customLabel } = usePicklistsMap(
     customDefs.map((d) => d.field_key),
   );
@@ -210,13 +218,14 @@ export default function ApartmentDetailPage() {
       dir?: "ltr";
       multiline?: boolean;
       validate?: (v: string) => string | null;
+      disabled?: boolean;
     } = {},
   ) => (
     <InlineEdit<string>
       value={value ?? ""}
       display={<span dir={opts.dir}>{value || "—"}</span>}
       validate={opts.validate}
-      disabled={!editable}
+      disabled={opts.disabled ?? (!editable || shliachEditDisabled)}
       enterCommits={!opts.multiline}
       onSave={(v) => patch({ [fieldName]: v.trim() === "" ? null : v.trim() })}
       editor={(draft, setDraft) =>
@@ -249,10 +258,35 @@ export default function ApartmentDetailPage() {
       value={value ?? null}
       display={labelFor(value) || "—"}
       commitOnBlur={false}
-      disabled={!editable}
+      disabled={!editable || shliachEditDisabled}
       onSave={(v) => patch({ [fieldName]: v })}
       editor={(draft, _setDraft, commit) => (
         <PicklistSelect fieldKey={picklistKey} value={draft} onChange={commit} />
+      )}
+    />
+  );
+
+  // fixes51 §2.2: apartment.language is multi-select — same explicit-apply
+  // pattern used across the app for a multi-select-inside-InlineEdit.
+  const inlineLanguage = () => (
+    <InlineEdit<string[]>
+      value={apt.language}
+      display={apt.language.map((v) => languageLabel(v)).join(", ") || "—"}
+      commitOnBlur={false}
+      disabled={!editable || shliachEditDisabled}
+      onSave={(vals) => patch({ language: vals })}
+      editor={(draft, setDraft, commit) => (
+        <MultiSelectEditor onApply={() => commit(draft)}>
+          <MultiSelectFilter
+            allLabel={t("filter.all_languages", "כל השפות")}
+            options={languagePicklist.options.map((o) => ({
+              id: o.value,
+              label: languagePicklist.display(o),
+            }))}
+            value={draft}
+            onChange={setDraft}
+          />
+        </MultiSelectEditor>
       )}
     />
   );
@@ -345,7 +379,7 @@ export default function ApartmentDetailPage() {
                     value={apt.floor ?? null}
                     display={apt.floor || "—"}
                     commitOnBlur={false}
-                    disabled={!editable}
+                    disabled={!editable || shliachEditDisabled}
                     onSave={(v) => patch({ floor: v })}
                     editor={(draft, _setDraft, commit) => (
                       <select
@@ -369,7 +403,11 @@ export default function ApartmentDetailPage() {
                   "apartments.apartment_name",
                   "apartments.apartment_name",
                   "מספר דירה",
-                  inlineText("apartment_name", apt.apartment_name),
+                  // fixes51 §2.1: a shliach may never edit the apartment
+                  // number, even for apartments assigned to them.
+                  inlineText("apartment_name", apt.apartment_name, {
+                    disabled: !editable || isShliach,
+                  }),
                 ),
                 field(
                   "apartments.name",
@@ -438,7 +476,7 @@ export default function ApartmentDetailPage() {
                   "apartment.language",
                   "picklist.apartment.language",
                   "שפה",
-                  inlinePicklist("apartment.language", "language", apt.language, languageLabel),
+                  inlineLanguage(),
                 ),
                 field(
                   "apartments.report_number_id",
@@ -450,7 +488,7 @@ export default function ApartmentDetailPage() {
                       reportNumbers.find((rn) => rn.id === apt.report_number_id)?.name || "—"
                     }
                     commitOnBlur={false}
-                    disabled={!editable}
+                    disabled={!editable || shliachEditDisabled}
                     onSave={(v) => patch({ report_number_id: v })}
                     editor={(draft, _setDraft, commit) => (
                       <SearchableSelect
@@ -482,7 +520,7 @@ export default function ApartmentDetailPage() {
                             customLabel(d.field_key, apt.picklist_values?.[d.field_key]) || "—"
                           }
                           commitOnBlur={false}
-                          disabled={!editable}
+                          disabled={!editable || shliachEditDisabled}
                           onSave={(v) => patch({ picklist_values: { [d.field_key]: v } })}
                           editor={(draft, _setDraft, commit) => (
                             <PicklistSelect fieldKey={d.field_key} value={draft} onChange={commit} />
@@ -510,7 +548,7 @@ export default function ApartmentDetailPage() {
                             />
                           }
                           commitOnBlur={d.field_type === "text" || d.field_type === "number"}
-                          disabled={!editable}
+                          disabled={!editable || shliachEditDisabled}
                           onSave={(v) => patch({ custom_field_values: { [d.field_key]: v } })}
                           editor={(draft, setDraft, commit) => (
                             <CustomFieldValueInput
@@ -617,7 +655,7 @@ export default function ApartmentDetailPage() {
                     <SnapRow label={t("picklist.apartment.Jewish_status", "יהדות")} value={jewishLabel(snapshot.jewish_status)} field="jewish_status" onRestore={restoreField} t={t} />
                     <SnapRow label={t("picklist.apartment.campaign_status", "סטטוס קמפיין")} value={campaignLabel(snapshot.campaign_status)} field="campaign_status" onRestore={restoreField} t={t} />
                     <SnapRow label={t("picklist.apartment.mezuzah_status", "מזוזה")} value={mezuzahLabel(snapshot.mezuzah_status)} field="mezuzah_status" onRestore={restoreField} t={t} />
-                    <SnapRow label={t("picklist.apartment.language", "שפה")} value={languageLabel(snapshot.language)} field="language" onRestore={restoreField} t={t} />
+                    <SnapRow label={t("picklist.apartment.language", "שפה")} value={snapshot.language.map((v) => languageLabel(v)).join(", ")} field="language" onRestore={restoreField} t={t} />
                     <SnapRow
                       label={t("apartments.report_number_id", "מספר דוח")}
                       value={

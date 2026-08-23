@@ -134,7 +134,10 @@ export default function ContactDetailPage() {
     switch (key) {
       case "main":
         return (
-          <section key="main" className="bg-white rounded-xl shadow-sm p-6">
+          <section
+            key="main"
+            className="bg-white rounded-xl shadow-sm border-2 border-status-magenta/30 p-6"
+          >
             <h2 className="font-semibold mb-4">
               {contact!.contact_type === "shliach"
                 ? t("page.shliach_details", "פרטי פעיל")
@@ -149,7 +152,10 @@ export default function ContactDetailPage() {
         // fixes25: interactions/Mivtzoim are logged per visit.
         if (contact!.contact_type !== "mekurav") return null;
         return (
-          <section key="visits" className="bg-white rounded-xl shadow-sm p-6">
+          <section
+            key="visits"
+            className="bg-white rounded-xl shadow-sm border-2 border-status-magenta/30 p-6"
+          >
             <h2 className="font-semibold mb-4">{t("visit.history", "היסטורית ביקורים")}</h2>
             <VisitHistoryEditor contactId={contact!.id} />
           </section>
@@ -158,7 +164,10 @@ export default function ContactDetailPage() {
         // fixes38 §1.3: same scoping as the "visits" segment.
         if (contact!.contact_type !== "mekurav") return null;
         return (
-          <section key="visitSummary" className="bg-white rounded-xl shadow-sm p-6">
+          <section
+            key="visitSummary"
+            className="bg-white rounded-xl shadow-sm border-2 border-status-magenta/30 p-6"
+          >
             <h2 className="font-semibold mb-4">{t("nav.visit_summary", "סיכום ביקורים")}</h2>
             <VisitSummary contactId={contact!.id} />
           </section>
@@ -166,7 +175,10 @@ export default function ContactDetailPage() {
       case "dates":
         if (contact!.contact_type !== "mekurav") return null;
         return (
-          <section key="dates" className="bg-white rounded-xl shadow-sm p-6">
+          <section
+            key="dates"
+            className="bg-white rounded-xl shadow-sm border-2 border-status-magenta/30 p-6"
+          >
             <h2 className="font-semibold mb-4">{t("significant_dates", "תאריכים חשובים")}</h2>
             <SignificantDatesEditor contactId={contact!.id} />
           </section>
@@ -175,7 +187,10 @@ export default function ContactDetailPage() {
         // fixes18 §3.1: donations are mekurav relationship data, admin-only.
         if (!isAdmin || contact!.contact_type !== "mekurav") return null;
         return (
-          <section key="donations" className="bg-white rounded-xl shadow-sm p-6">
+          <section
+            key="donations"
+            className="bg-white rounded-xl shadow-sm border-2 border-status-magenta/30 p-6"
+          >
             <h2 className="font-semibold mb-4">{t("donation.history", "היסטורית תרומות")}</h2>
             <DonationsEditor contactId={contact!.id} />
           </section>

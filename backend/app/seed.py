@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app import custom_field_utils, models, picklist_utils
 from app.config import settings
 from app.core.security import hash_password
-from app.picklist_utils import PICKLIST_FIELDS
+from app.picklist_utils import MULTI_VALUE_PICKLIST_FIELDS, PICKLIST_FIELDS
 
 logger = logging.getLogger("app.seed")
 
@@ -73,6 +73,8 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("nav", "nav.picklists", "רשימות בחירה", "Picklists"),
     ("nav", "nav.custom_fields", "שדות מותאמים", "Custom fields"),
     ("nav", "nav.localization", "תרגומים", "Translations"),
+    # fixes51 §4: admin-only config panel for the Shliach role's Apartments view.
+    ("nav", "nav.shliach_config", "הגדרות לתצוגת פעילים", "Configuration for Activist Role"),
     ("nav", "nav.settings", "הגדרות", "Settings"),
     ("nav", "nav.donations", "תרומות", "Donations"),
     ("nav", "nav.system_admin", "מנהל מערכת", "System admin"),
@@ -310,6 +312,11 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("picklist", "picklist.Jewish_status", "יהדות", "Jewish status"),
     ("picklist", "picklist.affiliation", "השתייכות דתית", "Affiliation"),
     ("picklist", "picklist.language", "שפה", "Language"),
+    # fixes51 §3: admin-only field on the shliach (contact_shliach) form.
+    (
+        "picklist", "picklist.contact_shliach.manager_jewish_status",
+        "סטטוס יהדות מנהל", "Manager Jewish status",
+    ),
     # --- Significant dates ---
     ("sd", "sd.none", "אין תאריכים חשובים.", "No significant dates."),
     ("sd", "sd.add_date", "הוסף תאריך חשוב", "Add significant date"),
@@ -792,6 +799,11 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("picklist_def", "picklist_def.apartment.campaign_status", "סטטוס קמפיין", "Campaign status"),
     ("picklist_def", "picklist_def.apartment.mezuzah_status", "מזוזה", "Mezuzah"),
     ("picklist_def", "picklist_def.apartment.language", "שפה", "Language"),
+    # fixes51 §3: dedicated Picklists-dashboard tab entry.
+    (
+        "picklist_def", "picklist_def.contact_shliach.manager_jewish_status",
+        "סטטוס יהדות מנהל", "Manager Jewish status",
+    ),
     ("common", "common.hebrew_label", "עברית", "Hebrew"),
     ("common", "common.english_label", "English", "English"),
     # fixes48 §3: boolean custom-field column filter (Users page).
@@ -840,6 +852,33 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("pl", "pl.tab_visit", "ביקורים", "Visits"),
     ("pl", "pl.tab_apartment", "דירה", "Apartment"),
     ("pl", "pl.add_list_visit", "הוספת רשימת בחירה לביקור", "Add picklist to visit"),
+    # fixes51 §3: dedicated shliach tab (manager_jewish_status + any future
+    # contact_shliach-scoped admin picklist).
+    ("pl", "pl.tab_shliach", "פעילים", "Activists"),
+    ("pl", "pl.add_list_shliach", "הוספת רשימת בחירה לפעיל", "Add picklist to activist"),
+    # --- fixes51 §4: Shliach Role Configuration Panel ---
+    ("shliach_config", "shliach_config.title", "הגדרות לתצוגת פעילים", "Configuration for Activist Role"),
+    (
+        "shliach_config", "shliach_config.intro",
+        "שולט על תצוגת הדירות שרואים משתמשי פעיל — עריכה, סינון ועמודות ברירת מחדל.",
+        "Controls the Apartments view activist users see — editing, filtering, and default columns.",
+    ),
+    ("shliach_config", "shliach_config.disable_edit", "בטל אפשרות עריכה לפעילים", "Disable editing for activists"),
+    ("shliach_config", "shliach_config.hide_filters", "הסתר את כל הסינונים מהפעילים", "Hide all filters from activists"),
+    ("shliach_config", "shliach_config.default_filters", "סינון ברירת מחדל", "Default filter"),
+    (
+        "shliach_config", "shliach_config.default_filters_hint",
+        "הסינון שבו תיפתח תצוגת הדירות עבור פעילים.",
+        "The filter the Apartments view opens with for activists.",
+    ),
+    ("shliach_config", "shliach_config.default_columns", "עמודות ברירת מחדל", "Default columns"),
+    (
+        "shliach_config", "shliach_config.default_columns_hint",
+        "כאשר כבוי, פעילים מתחילים מברירת המחדל הכללית של המערכת. פעיל יכול תמיד להתאים אישית "
+        "את העמודות שלו דרך \"התאמת שדות\" בעמוד הדירות.",
+        "When off, activists start from the system's general default. An activist can always "
+        "customize their own columns via \"Customize Fields\" on the Apartments page.",
+    ),
     # --- fixes33 §6/§7: report notes setting + PDF header ---
     ("settings", "settings.report_notes", "הערות לדוח", "Report notes"),
     ("settings", "settings.report_notes_hint", "טקסט חופשי שיופיע בראש כל דוח שמופק (הבהרה, כותרת, הערת שוליים...)", "Free text shown at the top of every generated report (disclaimer, header, footer note...)"),
@@ -962,6 +1001,25 @@ PICKLISTS: list[tuple[str, str, str, str | None, int, bool]] = [
     ("apartment.language", "english", "אנגלית", None, 1, False),
     ("apartment.language", "russian", "רוסית", None, 2, False),
     ("apartment.language", "yiddish", "יידיש", None, 3, False),
+    # fixes51 §3: shares its options with Jewish_status (per spec).
+    ("contact_shliach.manager_jewish_status", "na", "/", None, 0, True),
+    ("contact_shliach.manager_jewish_status", "jewish", "יהודי", None, 1, False),
+    (
+        "contact_shliach.manager_jewish_status", "jewish_interested",
+        "יהודי מעוניין ביהדות", None, 2, False,
+    ),
+    (
+        "contact_shliach.manager_jewish_status", "jewish_gentile",
+        "יהודי וגוי", None, 3, False,
+    ),
+    (
+        "contact_shliach.manager_jewish_status", "jewish_interested_gentile",
+        "יהודי מעוניין וגוי", None, 4, False,
+    ),
+    (
+        "contact_shliach.manager_jewish_status", "jewish_shtumtz",
+        "יהודי שתומצ", None, 5, False,
+    ),
 ]
 
 # English display for picklist OPTION values, keyed by (field_key, value).
@@ -989,6 +1047,7 @@ PICKLIST_ENGLISH_DISPLAY: dict[str, str] = {
     "apartment.campaign_status": "Campaign status",
     "apartment.mezuzah_status": "Mezuzah",
     "apartment.language": "Language",
+    "contact_shliach.manager_jewish_status": "Manager Jewish status",
 }
 
 
@@ -1188,6 +1247,7 @@ def seed_picklist_definitions(db: Session, organization_id: int) -> None:
             entity_type=entity_type,
             is_system=True,
             sort_order=index,
+            allow_multiple=system_name in MULTI_VALUE_PICKLIST_FIELDS,
         )
         for index, (system_name, (hebrew_display, entity_type)) in enumerate(
             PICKLIST_FIELDS.items()

@@ -195,7 +195,7 @@ export interface Apartment {
   jewish_status: string | null;
   campaign_status: string | null;
   mezuzah_status: string | null;
-  language: string | null; // picklist apartment.language (fixes13)
+  language: string[]; // picklist apartment.language, multi-select (fixes51 §2.2)
   name: string | null; // resident name
   phone: string | null;
   email: string | null;
@@ -420,6 +420,8 @@ export interface OrgDetails {
   label_font_size: number | null;
   label_color: string | null;
   label_font_family: string | null;
+  /** fixes51 §4: the Shliach Role Configuration Panel's settings blob. */
+  shliach_view_config?: Record<string, unknown> | null;
 }
 
 /** One org restore point (fixes16) — metadata only, the blob stays server-side. */

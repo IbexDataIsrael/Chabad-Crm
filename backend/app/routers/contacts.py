@@ -218,6 +218,24 @@ def _validate_admin_area(admin_area_id: Optional[int], org_id: int, db: Session)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "admin_area_id does not exist")
 
 
+# fixes51 §3: contact_shliach.manager_jewish_status is admin-only to edit —
+# every other role gets it read-only (rendering side: ContactView.tsx).
+_ADMIN_ONLY_PICKLIST_FIELDS = {"contact_shliach.manager_jewish_status"}
+
+
+def _check_admin_only_picklist_fields(
+    current_user: models.User, values: dict
+) -> None:
+    if current_user.role == "admin":
+        return
+    blocked = _ADMIN_ONLY_PICKLIST_FIELDS & values.keys()
+    if blocked:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            f"Only admins may set {', '.join(sorted(blocked))}",
+        )
+
+
 # --- Dynamic picklist values (generic store) -------------------------------
 def _apply_picklist_values(
     db: Session, org_id: int, contact: models.Contact, values: dict
@@ -1226,6 +1244,7 @@ def create_contact(
             )
 
     if payload.picklist_values:
+        _check_admin_only_picklist_fields(current_user, payload.picklist_values)
         _apply_picklist_values(db, org_id, contact, payload.picklist_values)
     if payload.custom_field_values:
         _apply_contact_custom_field_values(db, org_id, contact, payload.custom_field_values)
@@ -1458,6 +1477,7 @@ def update_contact(
             _sync_user_email(db, user, contact.email)
 
     if payload.picklist_values is not None:
+        _check_admin_only_picklist_fields(current_user, payload.picklist_values)
         _apply_picklist_values(db, org_id, contact, payload.picklist_values)
     if payload.custom_field_values is not None:
         _apply_contact_custom_field_values(db, org_id, contact, payload.custom_field_values)
