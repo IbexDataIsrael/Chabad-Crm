@@ -18,6 +18,7 @@ requests = "*"
 apscheduler = "*"
 psycopg2-binary = "*"  # PostgreSQL driver (production database)
 anthropic = "*"  # Claude Sonnet 5 — NL query → data grid (/api/ai/query)
+openpyxl = "*"  # scripts/import_apartment_data.py — reads .xlsx source files
 
 [dev-packages]
 pytest = "*"

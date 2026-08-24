@@ -330,9 +330,17 @@ def main() -> int:
             key = normalize_address_key(b.building_address)
             if key:
                 buildings_by_norm.setdefault(key, b)
+        # Keyed by building OBJECT (not building_id) so a not-yet-flushed new
+        # building — which has no id yet under the batched-flush strategy
+        # below — still dedups correctly against floors seen later in the
+        # same batch. Existing (already-persisted) floors are remapped onto
+        # the same building-object identity space via building_by_id so both
+        # populations share one consistent key space.
+        building_by_id = {b.id: b for b in existing_buildings}
         floors = {
-            (f.building_id, f.name): f
+            (building_by_id[f.building_id], f.name): f
             for f in db.query(models.Floor).filter(models.Floor.organization_id == org.id)
+            if f.building_id in building_by_id
         }
         reports = {
             r.name: r
@@ -347,7 +355,77 @@ def main() -> int:
         jewish_counts = Counter()
         language_counts = Counter()
         new_areas, new_buildings, matched_existing_buildings = [], [], []
-        apartments_by_key = {}  # (building_id, floor_raw, apt_raw) -> Apartment
+        apartments_by_key = {}  # (building, floor_raw, apt_raw) -> Apartment
+
+        # Neon-perf note (see docs/apartment_data_import.md "Result" section):
+        # flushing after every single row paid one real network round-trip per
+        # row, which is fine against local Docker Postgres (near-zero latency)
+        # but far too slow — and apparently unstable over a long-lived
+        # connection — against a remote Neon DB. Area/Building/Floor/Report
+        # stay eagerly flushed (their combined ~2,500 create events are cheap
+        # individually); it's the ~24,700 Apartment inserts — the dominant
+        # cost by two orders of magnitude — that get deferred and flushed in
+        # batches instead (mixing several different tables' pending inserts
+        # into one flush() confused SQLAlchemy's RETURNING-id matching in
+        # testing — two different Apartment objects came back with the same
+        # .id — so apartments are batched alone, a same-table flush being the
+        # well-tested case). Apartment is built via a `building=` relationship
+        # assignment instead of a raw building_id so it doesn't need the
+        # building's id resolved at construction time — though building is
+        # already flushed eagerly above anyway. PicklistLink/CustomFieldValue
+        # rows DO need a real apartment.id (entity_id is a plain int, not a
+        # relationship — see picklist_utils's own comment on why), so newly
+        # created apartments are queued in pending_batch and their links are
+        # created only once flush_batch() has given them a real id.
+        pending_batch = []  # [(apartment, jewish_status, languages, mezuzah_raw), ...]
+        BATCH_SIZE = 500
+
+        def flush_batch():
+            db.flush()
+            for apt, j_status, langs, mezuzah in pending_batch:
+                if j_status:
+                    db.add(
+                        models.PicklistLink(
+                            organization_id=org.id,
+                            entity_table="apartments",
+                            entity_id=apt.id,
+                            picklist_definition_id=jewish_definition.id,
+                            picklist_value_id=picklist_value_cache[
+                                ("apartment.Jewish_status", j_status)
+                            ].id,
+                        )
+                    )
+                for lang in langs:
+                    db.add(
+                        models.PicklistLink(
+                            organization_id=org.id,
+                            entity_table="apartments",
+                            entity_id=apt.id,
+                            picklist_definition_id=language_definition.id,
+                            picklist_value_id=picklist_value_cache[
+                                ("apartment.language", lang)
+                            ].id,
+                        )
+                    )
+                if mezuzah:
+                    db.add(
+                        models.CustomFieldValue(
+                            organization_id=org.id,
+                            entity_table="apartments",
+                            entity_id=apt.id,
+                            definition_id=mezuzah_def.id,
+                            value=mezuzah,
+                        )
+                    )
+            # Second flush: the links/values just added above must themselves
+            # be visible to a same-transaction query before this function
+            # returns (autoflush=False — see picklist-set-value-autoheal-
+            # gotcha) — otherwise the merge branch's very next
+            # picklist_utils.get_values() call (right after calling this
+            # function) won't see an apartment's own just-created jewish
+            # status/language link and will insert a duplicate.
+            db.flush()
+            pending_batch.clear()
 
         start_time = time.time()
         PROGRESS_EVERY = 2000
@@ -404,7 +482,7 @@ def main() -> int:
                 coords = geocode_address(f"{address}{GEOCODE_SUFFIX}")
                 building = models.Building(
                     organization_id=org.id,
-                    area_id=area.id if area else None,
+                    area=area,
                     building_address=address,
                     is_town_house=not is_building_type(btype),
                     longitude=coords[1] if coords else None,
@@ -419,16 +497,16 @@ def main() -> int:
             stats["buildings_seen"] += 1
 
             # Step 5: floor.
-            if floor_raw and (building.id, floor_raw) not in floors:
+            if floor_raw and (building, floor_raw) not in floors:
                 floor = models.Floor(
                     organization_id=org.id,
-                    building_id=building.id,
+                    building=building,
                     name=floor_raw,
                     sort_order=floor_sort_order(floor_raw, warnings),
                 )
                 db.add(floor)
                 db.flush()
-                floors[(building.id, floor_raw)] = floor
+                floors[(building, floor_raw)] = floor
                 stats["floors_created"] += 1
 
             # Step 1: report number.
@@ -473,15 +551,17 @@ def main() -> int:
                 warnings["fallback_th_name"] += 1
 
             # Q3: merge duplicate (building, floor, apt) rows within this import.
-            dedup_key = (building.id, floor_raw, apt_raw)
+            dedup_key = (building, floor_raw, apt_raw)
             existing_apt = apartments_by_key.get(dedup_key)
             if existing_apt is not None:
                 # autoflush=False (see picklist-set-value-autoheal-gotcha): flush
                 # here, once, only for the ~1.7% of rows that actually merge —
                 # not after every row — so this apartment's already-pending
                 # picklist/custom-field writes (from its creation or an earlier
-                # merge) are visible to the reads/upserts below.
-                db.flush()
+                # merge) are visible to the reads/upserts below. flush_batch()
+                # also drains any apartments still waiting in pending_batch for
+                # their own picklist links, since existing_apt may be one of them.
+                flush_batch()
                 stats["rows_merged"] += 1
                 if name_raw and not existing_apt.name:
                     existing_apt.name = name_raw
@@ -544,8 +624,7 @@ def main() -> int:
 
             apartment = models.Apartment(
                 organization_id=org.id,
-                building_id=building.id,
-                report_number_id=report.id if report else None,
+                building=building,
                 floor=floor_raw,
                 apartment_name=apartment_name,
                 name=name_raw,
@@ -553,50 +632,23 @@ def main() -> int:
                 email=email,
                 apartment_notes=notes,
             )
+            if report:
+                apartment.report_number = report
             db.add(apartment)
-            db.flush()
             apartments_by_key[dedup_key] = apartment
 
-            # Fast path: this apartment.id is brand new, so there can be no
-            # pre-existing PicklistLink for it — insert directly using the
-            # pre-cached definition/value ids instead of going through
-            # picklist_utils.set_value/set_multi_values (whose existing-link
-            # and definition/value lookups are wasted work for a fresh row).
-            if jewish_status:
-                db.add(
-                    models.PicklistLink(
-                        organization_id=org.id,
-                        entity_table="apartments",
-                        entity_id=apartment.id,
-                        picklist_definition_id=jewish_definition.id,
-                        picklist_value_id=picklist_value_cache[
-                            ("apartment.Jewish_status", jewish_status)
-                        ].id,
-                    )
-                )
-            for lang in languages:
-                db.add(
-                    models.PicklistLink(
-                        organization_id=org.id,
-                        entity_table="apartments",
-                        entity_id=apartment.id,
-                        picklist_definition_id=language_definition.id,
-                        picklist_value_id=picklist_value_cache[
-                            ("apartment.language", lang)
-                        ].id,
-                    )
-                )
-            if mezuzah_raw:
-                db.add(
-                    models.CustomFieldValue(
-                        organization_id=org.id,
-                        entity_table="apartments",
-                        entity_id=apartment.id,
-                        definition_id=mezuzah_def.id,
-                        value=mezuzah_raw,
-                    )
-                )
+            # This apartment.id isn't resolved yet (no flush happened above —
+            # see Neon-perf note) — queue it so flush_batch() can create its
+            # PicklistLink/CustomFieldValue rows once it has a real id. Since
+            # it's brand new there can be no pre-existing PicklistLink to
+            # worry about, so flush_batch() always inserts directly rather
+            # than going through picklist_utils.set_value/set_multi_values.
+            pending_batch.append((apartment, jewish_status, languages, mezuzah_raw))
+            if len(pending_batch) >= BATCH_SIZE:
+                flush_batch()
             stats["apartments_created"] += 1
+
+        flush_batch()  # drain whatever remains from the last partial batch
 
         print(f"\nrows processed: {stats['rows']}")
         print(f"mezuzah_notes custom field: {'created' if mezuzah_created else 'already existed'}")
