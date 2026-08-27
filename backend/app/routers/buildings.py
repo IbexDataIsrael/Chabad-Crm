@@ -4,7 +4,7 @@ from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import nullslast
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app import models
 from app.core.display import building_display_name
@@ -69,7 +69,9 @@ def list_buildings(
     current_user: models.User = Depends(get_current_user),
     area_id: Optional[int] = None,
 ):
-    query = db.query(models.Building).filter(
+    query = db.query(models.Building).options(
+        selectinload(models.Building.floors)
+    ).filter(
         models.Building.organization_id == current_user.organization_id
     )
     if area_id is not None:
@@ -96,7 +98,9 @@ def list_buildings_paginated(
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY, "page_size must be 20, 50 or 100"
         )
-    query = db.query(models.Building).filter(
+    query = db.query(models.Building).options(
+        selectinload(models.Building.floors)
+    ).filter(
         models.Building.organization_id == current_user.organization_id
     )
     if area_id is not None:
