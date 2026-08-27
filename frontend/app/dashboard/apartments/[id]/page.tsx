@@ -91,41 +91,58 @@ export default function ApartmentDetailPage() {
     customDefs.map((d) => d.field_key),
   );
 
+  // fixes52 (perf): the org-wide buildings list (thousands of rows once a
+  // building-heavy import has run — see docs/apartment_data_import.md) is
+  // only needed for the rarely-used "move to a different building" picker
+  // below, so it's fetched lazily on first open instead of on every page
+  // load — see loadBuildingsIfNeeded, wired to that InlineEdit's `onOpen`.
+  const [buildingsLoaded, setBuildingsLoaded] = useState(false);
+  async function loadBuildingsIfNeeded() {
+    if (buildingsLoaded) return;
+    setBuildingsLoaded(true);
+    setBuildings(await apiFetch<Building[]>("/api/buildings").catch(() => []));
+  }
+
   async function reload() {
     const a = await apiFetch<Apartment>(`/api/apartments/${apartmentId}`);
     setApt(a);
-    setBuilding(await apiFetch<Building>(`/api/buildings/${a.building_id}`).catch(() => null));
-    setFloors(
-      await apiFetch<Floor[]>(`/api/buildings/${a.building_id}/floors`).catch(() => []),
-    );
-    setBuildings(await apiFetch<Building[]>("/api/buildings").catch(() => []));
-    const defs = await apiFetch<PicklistField[]>("/api/picklists").catch(() => []);
+    // fixes52 (perf): these five requests don't depend on each other, only
+    // on `a` above — running them in parallel instead of one-after-another
+    // cuts total wait time from the sum of every round-trip to roughly the
+    // slowest single one.
+    const [buildingResult, floorsResult, picklistDefs, enriched, reportNumbersResult, historyResult] =
+      await Promise.all([
+        apiFetch<Building>(`/api/buildings/${a.building_id}`).catch(() => null),
+        apiFetch<Floor[]>(`/api/buildings/${a.building_id}/floors`).catch(() => []),
+        apiFetch<PicklistField[]>("/api/picklists").catch(() => []),
+        // The linked contact comes from the enriched list (shliach-scoped
+        // too); apartment_id fetches just this row instead of the whole
+        // building (fixes8).
+        apiFetch<ApartmentPage>(
+          `/api/apartments/list?apartment_id=${apartmentId}`,
+        ).catch(() => null),
+        apiFetch<ReportNumber[]>("/api/report-numbers").catch(() => []),
+        isAdmin
+          ? apiFetch<ApartmentVersion[]>(
+              `/api/apartments/${apartmentId}/history`,
+            ).catch(() => [])
+          : Promise.resolve<ApartmentVersion[]>([]),
+      ]);
+    setBuilding(buildingResult);
+    setFloors(floorsResult);
     setCustomDefs(
-      defs.filter(
+      picklistDefs.filter(
         (d) =>
           d.entity_type === "apartment" &&
           !FIXED_APARTMENT_PICKLIST_KEYS.includes(d.field_key),
       ),
     );
-    // The linked contact comes from the enriched list (shliach-scoped too);
-    // apartment_id fetches just this row instead of the whole building (fixes8).
-    const enriched = await apiFetch<ApartmentPage>(
-      `/api/apartments/list?apartment_id=${apartmentId}`,
-    ).catch(() => null);
     const row = enriched?.items[0];
     setLinked(
       row?.contact_id ? { id: row.contact_id, name: row.contact_name ?? "" } : null,
     );
-    setReportNumbers(
-      await apiFetch<ReportNumber[]>("/api/report-numbers").catch(() => []),
-    );
-    if (isAdmin) {
-      setHistory(
-        await apiFetch<ApartmentVersion[]>(
-          `/api/apartments/${apartmentId}/history`,
-        ).catch(() => []),
-      );
-    }
+    setReportNumbers(reportNumbersResult);
+    setHistory(historyResult);
   }
 
   useEffect(() => {
@@ -348,6 +365,7 @@ export default function ApartmentDetailPage() {
                     </span>
                   }
                   commitOnBlur={false}
+                  onOpen={loadBuildingsIfNeeded}
                   onSave={(v) => (v == null ? Promise.resolve() : patch({ building_id: v }))}
                   editor={(draft, _setDraft, commit) => (
                     <SearchableSelect

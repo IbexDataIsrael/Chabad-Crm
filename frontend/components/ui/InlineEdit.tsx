@@ -27,6 +27,7 @@ export function InlineEdit<T>({
   disabled = false,
   commitOnBlur = true,
   enterCommits = true,
+  onOpen,
 }: {
   value: T;
   display: ReactNode;
@@ -40,6 +41,9 @@ export function InlineEdit<T>({
   commitOnBlur?: boolean;
   /** false for textareas — Enter makes a newline (Ctrl+Enter still saves). */
   enterCommits?: boolean;
+  /** Fires the first time this editor opens — for an editor whose option
+   *  list is expensive to fetch, load it here instead of on page mount. */
+  onOpen?: () => void;
 }) {
   const { t } = useLocalization();
   const { error: toastError } = useToast();
@@ -63,6 +67,7 @@ export function InlineEdit<T>({
     if (disabled || editing) return;
     setDraft(value);
     setEditing(true);
+    onOpen?.();
   }
 
   async function commit(next?: T) {
