@@ -277,8 +277,25 @@ export default function UsersPage() {
     apiFetch<ReportNumber[]>("/api/report-numbers").then(setReportNumbers).catch(() => {});
     // fixes46: any admin-added contact_shliach picklist (entity_type is real
     // data, mirrors the contacts/apartments pages' own customDefs fetch).
+    // "manager_jewish_status" (fixes51 §3) is excluded from this page — a
+    // production admin reported it as an unexplained, un-hideable column:
+    // it's an `is_system` picklist, so the per-admin "Customize Columns"
+    // hide toggle technically still works and persists (verified), but the
+    // Picklists dashboard's "system list" badge means it can never be
+    // deleted, and its filter dropdown shares the exact same label as the
+    // column, which made the two easy to conflate. Dropping it here removes
+    // it from the grid, the column picker, and the filter row in one place;
+    // the field itself and any data already stored in it are untouched.
     apiFetch<PicklistField[]>("/api/picklists")
-      .then((defs) => setShliachPicklistDefs(defs.filter((d) => d.entity_type === "contact_shliach")))
+      .then((defs) =>
+        setShliachPicklistDefs(
+          defs.filter(
+            (d) =>
+              d.entity_type === "contact_shliach" &&
+              d.field_key !== "contact_shliach.manager_jewish_status",
+          ),
+        ),
+      )
       .catch(() => setShliachPicklistDefs([]));
   }, [loading, isAdmin]);
 

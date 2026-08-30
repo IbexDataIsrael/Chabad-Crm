@@ -189,12 +189,22 @@ export default function ReportNumbersPage() {
   };
 
   function SortHeader({ column, label }: { column: SortKey; label: string }) {
+    // A user complaint on production traced back here: only the *active*
+    // sort column ever showed an arrow, so every other header looked like
+    // plain non-interactive text with no visual hint it's clickable — a
+    // discoverability gap, not a missing feature. Every sortable header now
+    // always carries an indicator: a dim "⇅" when inactive, a solid ↑/↓
+    // when it's the active key.
+    const active = sortKey === column;
     return (
       <th
         className="px-3 py-2 text-start font-medium cursor-pointer select-none hover:bg-gray-100"
         onClick={() => onSortClick(column)}
       >
-        {label} {sortKey === column ? (sortDir === "asc" ? "↑" : "↓") : ""}
+        {label}{" "}
+        <span className={active ? "text-gray-700" : "text-gray-300"}>
+          {active ? (sortDir === "asc" ? "↑" : "↓") : "⇅"}
+        </span>
       </th>
     );
   }

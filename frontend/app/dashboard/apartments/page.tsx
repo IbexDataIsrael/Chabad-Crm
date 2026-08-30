@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { PicklistSelect } from "@/components/PicklistSelect";
@@ -536,9 +536,21 @@ export default function ApartmentsPage() {
     if (sort === key) onDirToggle();
     else onSortChange(key);
   }
-  function sortArrow(key: SortKey): string {
-    if (groupByBuilding || sort !== key) return "";
-    return dir === "asc" ? " ↑" : " ↓";
+  // A real production complaint traced back here: only the *active* sort
+  // column ever showed an arrow, so every other sortable header looked like
+  // plain non-interactive text with no hint it's clickable. Every sortable
+  // header now always carries an indicator — dim "⇅" when inactive, a solid
+  // ↑/↓ when it's the active key (hidden entirely while grouped, since the
+  // headers aren't clickable in that mode).
+  function sortArrow(key: SortKey): ReactNode {
+    if (groupByBuilding) return null;
+    const active = sort === key;
+    return (
+      <span className={active ? "text-gray-700" : "text-gray-300"}>
+        {" "}
+        {active ? (dir === "asc" ? "↑" : "↓") : "⇅"}
+      </span>
+    );
   }
 
   function onPageSizeChange(n: number) {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ApartmentPicker } from "@/components/ApartmentPicker";
 import { CustomFieldValueDisplay, CustomFieldValueInput } from "@/components/CustomFieldValueInput";
@@ -609,8 +609,19 @@ export default function ContactsPage() {
     }
     setPage(1);
   }
-  function sortArrow(key: SortKey): string {
-    return sort === key ? (dir === "asc" ? " ↑" : " ↓") : "";
+  // A real production complaint traced back here: only the *active* sort
+  // column ever showed an arrow, so the other sortable header looked like
+  // plain non-interactive text with no hint it's clickable. Both sortable
+  // headers now always carry an indicator — dim "⇅" when inactive, a solid
+  // ↑/↓ when active.
+  function sortArrow(key: SortKey): ReactNode {
+    const active = sort === key;
+    return (
+      <span className={active ? "text-gray-700" : "text-gray-300"}>
+        {" "}
+        {active ? (dir === "asc" ? "↑" : "↓") : "⇅"}
+      </span>
+    );
   }
 
   // fixes39 §3 / fixes48 §2: SortableJS's container holds every chip — fixed
