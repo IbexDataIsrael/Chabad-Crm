@@ -597,6 +597,22 @@ export default function ContactsPage() {
   // name + actions + quick actions + the trailing filler column.
   const colCount = 4 + orderedActiveColumns.length;
 
+  // fixes54 §3.1: clicking a sortable column header — toggles direction if
+  // it's already the active key, else switches to it (ascending). Replaces
+  // the removed standalone sort <select> + direction button.
+  function onHeaderSortClick(key: SortKey) {
+    if (sort === key) {
+      setDir(dir === "asc" ? "desc" : "asc");
+    } else {
+      setSort(key);
+      setDir("asc");
+    }
+    setPage(1);
+  }
+  function sortArrow(key: SortKey): string {
+    return sort === key ? (dir === "asc" ? " ↑" : " ↓") : "";
+  }
+
   // fixes39 §3 / fixes48 §2: SortableJS's container holds every chip — fixed
   // and custom, active and inactive — so a drag persists the full resulting
   // order directly (each child's data-sort-key = gridColumnSortKey).
@@ -1237,32 +1253,9 @@ export default function ContactsPage() {
             />
           </span>
         )}
-        {/* fixes11 §2.3: sorting — default is creation date, newest first. */}
-        <span className="flex items-center gap-2 text-sm text-gray-500">
-          {t("sort.label", "מיון:")}
-          <select
-            className={selectClass}
-            value={sort}
-            onChange={(e) => {
-              setSort(e.target.value as SortKey);
-              setPage(1);
-            }}
-          >
-            <option value="created">{t("sort.created", "תאריך יצירה")}</option>
-            <option value="name">{t("sort.by_name", "שם")}</option>
-          </select>
-          <button
-            type="button"
-            onClick={() => {
-              setDir(dir === "asc" ? "desc" : "asc");
-              setPage(1);
-            }}
-            className="rounded-md border border-gray-300 px-3 py-2 hover:bg-gray-50"
-            title={dir === "asc" ? t("sort.asc", "עולה") : t("sort.desc", "יורד")}
-          >
-            {dir === "asc" ? "↑" : "↓"}
-          </button>
-        </span>
+        {/* fixes54 §3.1: the standalone sort select + direction button are
+            gone — sorting now happens via clickable column-header arrows
+            (the "שם" header and, when active, the "created" column). */}
         <span className="ms-auto flex items-center gap-2 text-sm text-gray-500">
           {t("pager.page_size", "בעמוד:")}
           <select
@@ -1359,21 +1352,35 @@ export default function ContactsPage() {
               column absorbs the slack so everything condenses to the start. */}
           <thead className="bg-gray-50 text-gray-600 text-right">
             <tr>
-              <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap min-w-[150px]">
+              {/* fixes54 §3.1: clickable sort-arrow header (mirrors Report
+                  Numbers) — the backend only orders by "name"/"created",
+                  so those are the only two clickable headers. */}
+              <th
+                onClick={() => onHeaderSortClick("name")}
+                className="px-3 py-1.5 font-medium w-px whitespace-nowrap min-w-[150px] cursor-pointer select-none hover:bg-gray-100"
+              >
                 {t("common.name", "שם")}
+                {sortArrow("name")}
               </th>
               {/* fixes48 §2: fixed + custom picklist + custom field columns,
                   in the user's unified (draggable) order. fixes49 §1: each
                   column carries a data-type-dependent min-width floor so RTL
                   headers don't squeeze. */}
-              {orderedActiveColumns.map((entry) => (
-                <th
-                  key={gridColumnSortKey(entry)}
-                  className={`px-3 py-1.5 font-medium w-px whitespace-nowrap ${gridColumnMinWidth(entry)}`}
-                >
-                  {gridColumnLabel(entry)}
-                </th>
-              ))}
+              {orderedActiveColumns.map((entry) => {
+                const sortable = entry.kind === "col" && entry.key === "created";
+                return (
+                  <th
+                    key={gridColumnSortKey(entry)}
+                    onClick={sortable ? () => onHeaderSortClick("created") : undefined}
+                    className={`px-3 py-1.5 font-medium w-px whitespace-nowrap ${gridColumnMinWidth(entry)} ${
+                      sortable ? "cursor-pointer select-none hover:bg-gray-100" : ""
+                    }`}
+                  >
+                    {gridColumnLabel(entry)}
+                    {sortable ? sortArrow("created") : ""}
+                  </th>
+                );
+              })}
               <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap"></th>
               <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap"></th>
               <th className="w-full"></th>

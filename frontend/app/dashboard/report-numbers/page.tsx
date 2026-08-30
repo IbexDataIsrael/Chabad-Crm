@@ -10,6 +10,7 @@ import { useLocalization } from "@/lib/localization";
 import { naturalCompare } from "@/lib/naturalSort";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
+import { useSortableList } from "@/lib/useSortableList";
 import {
   contactFullName,
   type JewishCounts,
@@ -54,6 +55,38 @@ export default function ReportNumbersPage() {
   const [fields, setFields] = usePersistentState<OptionalColumn[]>(
     "crm.reportNumbers.fields", ["jews", "engaged", "activist"],
   );
+  // fixes54 §2: "Customize Columns" parity with Contacts — a persisted
+  // relative order spanning every optional column (a permutation of
+  // OPTIONAL_COLUMNS); anything not yet in it keeps OPTIONAL_COLUMNS' own
+  // order, so an existing "which columns are on" preference is unaffected
+  // until someone actually drags one.
+  const [fieldOrder, setFieldOrder] = usePersistentState<OptionalColumn[]>(
+    "crm.reportNumbers.fieldOrder", [],
+  );
+  const fieldOrderIndex = new Map(fieldOrder.map((k, i) => [k, i]));
+  const sortedOptionalColumns = [...OPTIONAL_COLUMNS].sort((a, b) => {
+    const ai = fieldOrderIndex.get(a) ?? Number.MAX_SAFE_INTEGER;
+    const bi = fieldOrderIndex.get(b) ?? Number.MAX_SAFE_INTEGER;
+    return ai - bi;
+  });
+  const orderedActiveFields = sortedOptionalColumns.filter((f) => fields.includes(f));
+  function reorderFields(orderedKeys: string[]) {
+    if (orderedKeys.length > 0) setFieldOrder(orderedKeys as OptionalColumn[]);
+  }
+  const { containerRef: fieldsSortableRef, withClickGuard } =
+    useSortableList<HTMLDivElement>(reorderFields);
+  // fixes38-style guaranteed-reliable fallback alongside the drag —
+  // ▲/▼ buttons swap adjacent active columns directly, no gesture involved.
+  function moveActiveField(f: OptionalColumn, delta: -1 | 1) {
+    const idx = orderedActiveFields.indexOf(f);
+    const to = idx + delta;
+    if (idx === -1 || to < 0 || to >= orderedActiveFields.length) return;
+    const fullKeys = [...sortedOptionalColumns];
+    const ia = fullKeys.indexOf(orderedActiveFields[idx]);
+    const ib = fullKeys.indexOf(orderedActiveFields[to]);
+    [fullKeys[ia], fullKeys[ib]] = [fullKeys[ib], fullKeys[ia]];
+    setFieldOrder(fullKeys);
+  }
   const [sortKey, setSortKey] = usePersistentState<SortKey>(
     "crm.reportNumbers.sortKey", "name",
   );
@@ -222,26 +255,59 @@ export default function ReportNumbersPage() {
         </button>
       </div>
 
+      {/* fixes54 §2: "Customize Columns" parity with Contacts — toggle
+          visibility (click) + reorder (drag, or the ▲/▼ fallback) in one
+          panel instead of a plain toggle-only list. */}
       {fieldsOpen && (
-        <div className="bg-white rounded-xl shadow-sm p-4 flex flex-wrap gap-2">
-          {OPTIONAL_COLUMNS.map((f) => {
-            const active = fields.includes(f);
-            return (
+        <div className="bg-white rounded-xl shadow-sm p-4 space-y-2">
+          <p className="text-xs text-gray-400">
+            {t("columns.reorder_hint", "גרור עמודה פעילה כדי לשנות את סדר ההצגה.")}
+          </p>
+          <div ref={fieldsSortableRef} className="flex flex-wrap gap-2">
+            {orderedActiveFields.map((f, activeIdx) => (
+              <span key={f} data-sort-key={f} className="inline-flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={withClickGuard(() => toggleField(f))}
+                  className="rounded-md border px-3 py-1.5 text-sm border-status-magenta bg-status-magenta/10 text-status-magenta cursor-grab active:cursor-grabbing"
+                >
+                  ⠿ {columnLabels[f]}
+                </button>
+                <span className="flex flex-col gap-0.5">
+                  <button
+                    type="button"
+                    disabled={activeIdx === 0}
+                    onClick={() => moveActiveField(f, -1)}
+                    title={t("action.move_up", "העלה")}
+                    className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeIdx === orderedActiveFields.length - 1}
+                    onClick={() => moveActiveField(f, 1)}
+                    title={t("action.move_down", "הורד")}
+                    className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
+                  >
+                    ▼
+                  </button>
+                </span>
+              </span>
+            ))}
+            {sortedOptionalColumns.filter((f) => !fields.includes(f)).map((f) => (
               <button
                 key={f}
                 type="button"
+                data-sort-key={f}
+                data-sortable-disabled=""
                 onClick={() => toggleField(f)}
-                className={`rounded-md border px-3 py-1.5 text-sm ${
-                  active
-                    ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
-                    : "border-gray-200 text-gray-600 hover:bg-gray-50"
-                }`}
+                className="rounded-md border px-3 py-1.5 text-sm border-gray-200 text-gray-600 hover:bg-gray-50"
               >
-                {active ? "✓ " : ""}
                 {columnLabels[f]}
               </button>
-            );
-          })}
+            ))}
+          </div>
         </div>
       )}
 
@@ -257,7 +323,7 @@ export default function ReportNumbersPage() {
             <thead className="bg-gray-50 text-gray-500">
               <tr>
                 <SortHeader column="name" label={t("report_number.name", "שם")} />
-                {fields.map((f) => (
+                {orderedActiveFields.map((f) => (
                   <SortHeader key={f} column={f} label={columnLabels[f]} />
                 ))}
                 <th className="px-3 py-2 text-start font-medium">
@@ -269,7 +335,7 @@ export default function ReportNumbersPage() {
               {rows.map(({ rn, jews, engaged, activists }) => (
                 <tr key={rn.id}>
                   <td className="px-3 py-2 font-medium">{rn.name}</td>
-                  {fields.map((f) => (
+                  {orderedActiveFields.map((f) => (
                     <td key={f} className="px-3 py-2">
                       {f === "jews" && jews}
                       {f === "engaged" && engaged}

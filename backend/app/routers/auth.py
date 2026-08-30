@@ -443,7 +443,7 @@ def me(
     # fixes52 §5: was never resolved here (only on GET /api/users/{id}) — the
     # frontend needs a shliach session's own contact_id to redirect them off
     # the admin-only /dashboard/users page to their contact profile instead.
-    sh = _linked_shliach(db, current_user.id)
+    sh = _linked_shliach(db, current_user)
     if sh:
         out.shliach = _shliach_out(sh)
     return out

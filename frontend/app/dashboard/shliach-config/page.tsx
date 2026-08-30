@@ -3,7 +3,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
+import { RichTextEditor } from "@/components/RichTextEditor";
 import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter";
+import { useConfirm } from "@/lib/confirm";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCustomFieldDefs } from "@/lib/customFields";
@@ -16,6 +18,7 @@ import {
   type Building,
   type OrgDetails,
   type PicklistField,
+  type ShliachAnnouncement,
 } from "@/lib/types";
 
 // fixes53 §7/§8: the fixed self-edit fields an admin can lock beyond the
@@ -98,6 +101,40 @@ export default function ShliachConfigPage() {
   const [loaded, setLoaded] = useState(false);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  // fixes54 §5: admin-managed announcements shown in the feed on the
+  // activist landing page — its own CRUD, independent of the settings
+  // form's single PUT-on-submit flow above.
+  const [announcements, setAnnouncements] = useState<ShliachAnnouncement[]>([]);
+  const [announcementsLoading, setAnnouncementsLoading] = useState(true);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<
+    ShliachAnnouncement | "new" | null
+  >(null);
+  const confirmDialog = useConfirm();
+
+  function reloadAnnouncements() {
+    return apiFetch<ShliachAnnouncement[]>("/api/shliach-messages/announcements")
+      .then(setAnnouncements)
+      .catch(() => setAnnouncements([]));
+  }
+
+  useEffect(() => {
+    reloadAnnouncements().finally(() => setAnnouncementsLoading(false));
+  }, []);
+
+  async function deleteAnnouncement(a: ShliachAnnouncement) {
+    if (
+      !(await confirmDialog({
+        message: t("shliach_config.announcement_delete_confirm", "למחוק את ההודעה?"),
+        detail: a.message_title,
+      }))
+    ) {
+      return;
+    }
+    await apiFetch(`/api/shliach-messages/announcements/${a.id}`, { method: "DELETE" });
+    await reloadAnnouncements();
+    success(t("msg.deleted", "נמחק בהצלחה"));
+  }
 
   const fieldLabels: Record<ApartmentFieldKey, string> = {
     resident: t("apartments.name", "שם דייר"),
@@ -195,7 +232,7 @@ export default function ShliachConfigPage() {
   }
 
   return (
-    <div className="space-y-5 max-w-2xl">
+    <div className="space-y-5 max-w-4xl">
       <div>
         <h1 className="text-2xl font-bold">
           {t("shliach_config.title", "הגדרות לתצוגת פעילים")}
@@ -370,6 +407,195 @@ export default function ShliachConfigPage() {
           {saved && <span className="text-sm text-status-green">{t("action.saved", "נשמר ✓")}</span>}
         </div>
       </form>
+
+      {/* fixes54 §5: announcements for the activist landing page's feed —
+          WYSIWYG-authored HTML messages, full CRUD. */}
+      <div className="bg-white rounded-xl shadow-sm p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">
+              {t("shliach_config.announcements_title", "הודעות לפעילים")}
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
+              {t(
+                "shliach_config.announcements_hint",
+                "הודעות אלו מוצגות לפעילים בעמוד הבית שלהם, כאשר הן פעילות.",
+              )}
+            </p>
+          </div>
+          {editingAnnouncement === null && (
+            <button
+              type="button"
+              onClick={() => setEditingAnnouncement("new")}
+              className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
+            >
+              + {t("shliach_config.announcement_add", "הודעה חדשה")}
+            </button>
+          )}
+        </div>
+
+        {editingAnnouncement !== null && (
+          <AnnouncementForm
+            item={editingAnnouncement === "new" ? undefined : editingAnnouncement}
+            onClose={() => setEditingAnnouncement(null)}
+            onSaved={async () => {
+              setEditingAnnouncement(null);
+              await reloadAnnouncements();
+              success(t("msg.saved", "נשמר בהצלחה"));
+            }}
+          />
+        )}
+
+        <div className="rounded-lg border border-gray-100 divide-y divide-gray-100">
+          {announcementsLoading ? (
+            <p className="px-4 py-6 text-center text-gray-400">{t("action.loading", "טוען…")}</p>
+          ) : announcements.length === 0 ? (
+            <p className="px-4 py-6 text-center text-gray-400">
+              {t("shliach_config.announcements_none", "אין הודעות עדיין.")}
+            </p>
+          ) : (
+            announcements.map((a) => (
+              <div key={a.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium truncate">{a.message_title}</span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs ${
+                        a.is_visible
+                          ? "bg-status-green/10 text-status-green"
+                          : "bg-gray-100 text-gray-500"
+                      }`}
+                    >
+                      {a.is_visible
+                        ? t("shliach_config.announcement_visible", "מוצגת")
+                        : t("shliach_config.announcement_hidden", "מוסתרת")}
+                    </span>
+                  </div>
+                  <span className="text-xs text-gray-400" dir="ltr">
+                    {new Date(a.updated_at).toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setEditingAnnouncement(a)}
+                    className="rounded-md bg-gray-800 text-white px-3 py-1 text-xs hover:opacity-90"
+                  >
+                    {t("action.edit", "ערוך")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteAnnouncement(a)}
+                    className="rounded-md border border-status-darkred/40 text-status-darkred px-2 py-1 text-xs hover:bg-red-50"
+                  >
+                    {t("action.delete", "מחק")}
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
+  );
+}
+
+/** fixes54 §5: add/edit form for one announcement — a WYSIWYG-authored HTML
+ *  body via the shared RichTextEditor (same component the superadmin email
+ *  templates use, fixes15 §2.1). */
+function AnnouncementForm({
+  item,
+  onClose,
+  onSaved,
+}: {
+  item?: ShliachAnnouncement;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const { t, lang } = useLocalization();
+  const { error: toastError } = useToast();
+  const [title, setTitle] = useState(item?.message_title ?? "");
+  const [content, setContent] = useState(item?.message_content ?? "");
+  const [visible, setVisible] = useState(item?.is_visible ?? true);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (!title.trim()) {
+      setError(t("shliach_config.announcement_title_required", "יש להזין כותרת"));
+      return;
+    }
+    setBusy(true);
+    const body = JSON.stringify({
+      message_title: title.trim(),
+      message_content: content,
+      is_visible: visible,
+    });
+    try {
+      if (item) {
+        await apiFetch(`/api/shliach-messages/announcements/${item.id}`, {
+          method: "PUT",
+          body,
+        });
+      } else {
+        await apiFetch("/api/shliach-messages/announcements", { method: "POST", body });
+      }
+      await onSaved();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה");
+      setError(msg);
+      toastError(msg);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={save} className="rounded-lg border border-gray-200 p-4 space-y-3">
+      <label className="block space-y-1">
+        <span className="block text-sm font-medium">
+          {t("shliach_config.announcement_title_field", "כותרת ההודעה")}
+        </span>
+        <input
+          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          required
+        />
+      </label>
+      <label className="block space-y-1">
+        <span className="block text-sm font-medium">
+          {t("shliach_config.announcement_content", "תוכן ההודעה")}
+        </span>
+        <RichTextEditor value={content} onChange={setContent} dir={lang === "en" ? "ltr" : "rtl"} />
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={visible}
+          onChange={(e) => setVisible(e.target.checked)}
+        />
+        {t("shliach_config.announcement_visible_toggle", "מוצגת לפעילים")}
+      </label>
+      {error && <p className="text-sm text-status-darkred">{error}</p>}
+      <div className="flex items-center gap-2">
+        <button
+          type="submit"
+          disabled={busy}
+          className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
+        >
+          {busy ? t("action.saving", "שומר…") : t("action.save", "שמור")}
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+        >
+          {t("action.cancel", "ביטול")}
+        </button>
+      </div>
+    </form>
   );
 }

@@ -314,6 +314,18 @@ def _sort_keys(sort: str, db: Session) -> list:
         return [models.Building.building_address]
     if sort == "created":
         return [models.Apartment.created_at]  # fixes17 §3.2
+    # fixes54 §1.1: header-click sorting for the plain/single-join grid
+    # columns — the caller joins Area/ReportNumber in for these two.
+    if sort == "area":
+        return [models.Area.area_name]
+    if sort == "report_number":
+        return [models.ReportNumber.name]
+    if sort == "notes":
+        return [models.Apartment.apartment_notes]
+    if sort == "phone":
+        return [models.Apartment.phone]
+    if sort == "email":
+        return [models.Apartment.email]
     if sort == "hierarchy":
         # fixes53 §2: the mandatory canonical order — Report Number, then
         # Building, then Floor. Always ascending regardless of `dir` (the
@@ -484,7 +496,10 @@ def list_apartments_enriched(
     # field, sent the same "field_key:query" way.
     custom_field_filter: Optional[list[str]] = Query(None),
     sort: Literal[
-        "floor", "label", "resident", "building", "created", "hierarchy"
+        "floor", "label", "resident", "building", "created", "hierarchy",
+        # fixes54 §1.1: header-click sorting on the remaining plain/
+        # single-join grid columns.
+        "area", "report_number", "notes", "phone", "email",
     ] = "floor",
     dir: Literal["asc", "desc"] = "asc",
     page: int = Query(1, ge=1),
@@ -546,13 +561,16 @@ def list_apartments_enriched(
         custom_picklists=custom_picklists,
         custom_field_filters=custom_field_filters,
     )
-    if sort == "hierarchy":
-        # fixes53 §2: the hierarchy's Report Number tier needs the table
-        # joined in — an outer join since report_number_id is nullable.
+    if sort in ("hierarchy", "report_number"):
+        # fixes53 §2 / fixes54 §1.1: the Report Number tier/column needs the
+        # table joined in — an outer join since report_number_id is nullable.
         query = query.outerjoin(
             models.ReportNumber,
             models.ReportNumber.id == models.Apartment.report_number_id,
         )
+    if sort == "area":
+        # fixes54 §1.1: outer join since Building.area_id is nullable.
+        query = query.outerjoin(models.Area, models.Area.id == models.Building.area_id)
 
     total = query.count()
 

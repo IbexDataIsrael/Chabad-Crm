@@ -552,6 +552,33 @@ class SystemCommentOut(BaseModel):
     activist: ShliachSummary
 
 
+class ShliachAnnouncementCreate(BaseModel):
+    """fixes54 §5: an admin-authored announcement for the activist landing
+    page's feed."""
+
+    message_title: str
+    message_content: str
+    is_visible: bool = True
+
+
+class ShliachAnnouncementUpdate(BaseModel):
+    message_title: Optional[str] = None
+    message_content: Optional[str] = None
+    is_visible: Optional[bool] = None
+
+
+class ShliachAnnouncementOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    guid: str
+    message_title: str
+    message_content: str
+    is_visible: bool
+    created_at: datetime
+    updated_at: datetime
+
+
 # --- Areas / Buildings / Apartments ----------------------------------------
 class AreaBase(BaseModel):
     area_name: str

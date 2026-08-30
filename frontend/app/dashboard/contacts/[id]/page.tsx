@@ -6,6 +6,10 @@ import { useEffect, useState } from "react";
 
 import { ContactView, type ContactPatch } from "@/components/ContactView";
 import { DonationsEditor } from "@/components/DonationsEditor";
+import {
+  ReportCompletionModal,
+  SystemCommentModal,
+} from "@/components/ShliachSelfServiceModals";
 import { SignificantDatesEditor } from "@/components/SignificantDatesEditor";
 import { VisitHistoryEditor } from "@/components/VisitHistoryEditor";
 import { VisitSummary } from "@/components/VisitSummary";
@@ -17,12 +21,7 @@ import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { useDbPreference } from "@/lib/preferences";
 import { useToast } from "@/lib/toast";
-import {
-  contactFullName,
-  type Contact,
-  type ReportCompletionStatus,
-  type UserSummary,
-} from "@/lib/types";
+import { contactFullName, type Contact, type UserSummary } from "@/lib/types";
 
 /** fixes30 §2b: the orderable page segments; the stored preference is
  *  sanitized against this list (unknown keys dropped, missing appended). */
@@ -263,14 +262,17 @@ export default function ContactDetailPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        {contact.contact_type === "shliach" ? (
-          <Link href="/dashboard/users" className="text-sm text-gray-500 hover:underline">
-            {t("page.back_to_shluchim", "← חזרה לפעילים")}
-          </Link>
-        ) : (
+        {/* fixes54 §3.3: the "back to activists" link is gone — "activists"
+            have no standalone list page any more (that nav entry merged into
+            Users, fixes42 §4A), and for a shliach viewing their own profile
+            it pointed at an admin-only page that would just bounce them.
+            A non-shliach contact still gets its "back to contacts" link. */}
+        {contact.contact_type !== "shliach" ? (
           <Link href="/dashboard/contacts" className="text-sm text-gray-500 hover:underline">
             {t("page.back_to_contacts", "← חזרה לאנשי קשר")}
           </Link>
+        ) : (
+          <span />
         )}
         <div className="flex items-center gap-2">
           {/* fixes30 §2b: open the segment-order configuration. */}
@@ -419,161 +421,6 @@ export default function ContactDetailPage() {
           }}
         />
       )}
-    </div>
-  );
-}
-
-/** fixes53 §7: "Report completed" — 3-choice status + optional comments. */
-function ReportCompletionModal({
-  onClose,
-  onSubmitted,
-}: {
-  onClose: () => void;
-  onSubmitted: () => void;
-}) {
-  const { t } = useLocalization();
-  const { error: toastError } = useToast();
-  const [status, setStatus] = useState<ReportCompletionStatus | null>(null);
-  const [comments, setComments] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const choices: { value: ReportCompletionStatus; label: string }[] = [
-    { value: "completed", label: t("shliach_msg.status_completed", "דוח הושלם") },
-    { value: "not_completed", label: t("shliach_msg.status_not_completed", "דוח לא הושלם") },
-    { value: "partial", label: t("shliach_msg.status_partial", "דוח הושלם חלקית") },
-  ];
-
-  async function submit() {
-    if (!status) return;
-    setBusy(true);
-    try {
-      await apiFetch("/api/shliach-messages/report-completions", {
-        method: "POST",
-        body: JSON.stringify({ status, comments: comments.trim() || null }),
-      });
-      onSubmitted();
-    } catch (err) {
-      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm bg-white rounded-xl shadow-xl p-5 space-y-4">
-        <h2 className="text-lg font-bold">
-          {t("shliach_msg.report_completed_btn", "דיווח על השלמת הדוח")}
-        </h2>
-        <div className="space-y-2">
-          {choices.map((c) => (
-            <label
-              key={c.value}
-              className="flex items-center gap-2 text-sm rounded-md border border-gray-200 px-3 py-2 cursor-pointer hover:bg-gray-50"
-            >
-              <input
-                type="radio"
-                name="completion-status"
-                checked={status === c.value}
-                onChange={() => setStatus(c.value)}
-              />
-              {c.label}
-            </label>
-          ))}
-        </div>
-        <label className="block space-y-1">
-          <span className="block text-sm font-medium">
-            {t("shliach_msg.comments", "הערות")}
-          </span>
-          <textarea
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
-            rows={3}
-            value={comments}
-            onChange={(e) => setComments(e.target.value)}
-          />
-        </label>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled={!status || busy}
-            onClick={submit}
-            className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-          >
-            {busy ? t("action.saving", "שומר…") : t("action.submit", "שלח")}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
-          >
-            {t("action.cancel", "ביטול")}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** fixes53 §7: "Comments about the system" — free-text feedback. */
-function SystemCommentModal({
-  onClose,
-  onSubmitted,
-}: {
-  onClose: () => void;
-  onSubmitted: () => void;
-}) {
-  const { t } = useLocalization();
-  const { error: toastError } = useToast();
-  const [comment, setComment] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  async function submit() {
-    if (!comment.trim()) return;
-    setBusy(true);
-    try {
-      await apiFetch("/api/shliach-messages/system-comments", {
-        method: "POST",
-        body: JSON.stringify({ comment: comment.trim() }),
-      });
-      onSubmitted();
-    } catch (err) {
-      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm bg-white rounded-xl shadow-xl p-5 space-y-4">
-        <h2 className="text-lg font-bold">
-          {t("shliach_msg.system_comment_btn", "הערות על המערכת")}
-        </h2>
-        <textarea
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
-          rows={4}
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          placeholder={t("shliach_msg.comment_ph", "מה תרצה לספר לנו?")}
-        />
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled={!comment.trim() || busy}
-            onClick={submit}
-            className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-          >
-            {busy ? t("action.saving", "שומר…") : t("action.submit", "שלח")}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
-          >
-            {t("action.cancel", "ביטול")}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

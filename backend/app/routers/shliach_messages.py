@@ -15,6 +15,9 @@ from app.deps import get_current_user, require_admin
 from app.schemas import (
     ReportCompletionCreate,
     ReportCompletionOut,
+    ShliachAnnouncementCreate,
+    ShliachAnnouncementOut,
+    ShliachAnnouncementUpdate,
     ShliachSummary,
     SystemCommentCreate,
     SystemCommentOut,
@@ -137,3 +140,85 @@ def list_system_comments(
         )
         for r, c in rows
     ]
+
+
+# fixes54 §5/§6.1: admin-authored announcements for the activist landing
+# page's feed. Reads are open to any org member (a shliach needs their own
+# org's feed); a non-admin caller only ever sees is_visible=True rows — the
+# filter lives here, not trusted to the frontend. Writes (full CRUD) are
+# admin-only, same split as the picklist registry.
+@router.get("/announcements", response_model=list[ShliachAnnouncementOut])
+def list_announcements(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    query = db.query(models.ShliachAnnouncement).filter(
+        models.ShliachAnnouncement.organization_id == current_user.organization_id
+    )
+    if current_user.role != "admin":
+        query = query.filter(models.ShliachAnnouncement.is_visible.is_(True))
+    return query.order_by(models.ShliachAnnouncement.created_at.desc()).all()
+
+
+@router.post(
+    "/announcements",
+    response_model=ShliachAnnouncementOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_announcement(
+    payload: ShliachAnnouncementCreate,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    row = models.ShliachAnnouncement(
+        organization_id=admin.organization_id,
+        message_title=payload.message_title,
+        message_content=payload.message_content,
+        is_visible=payload.is_visible,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def _get_announcement_or_404(
+    announcement_id: int, org_id: int, db: Session
+) -> models.ShliachAnnouncement:
+    row = (
+        db.query(models.ShliachAnnouncement)
+        .filter(
+            models.ShliachAnnouncement.id == announcement_id,
+            models.ShliachAnnouncement.organization_id == org_id,
+        )
+        .first()
+    )
+    if not row:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Announcement not found")
+    return row
+
+
+@router.put("/announcements/{announcement_id}", response_model=ShliachAnnouncementOut)
+def update_announcement(
+    announcement_id: int,
+    payload: ShliachAnnouncementUpdate,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    row = _get_announcement_or_404(announcement_id, admin.organization_id, db)
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(row, field, value)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.delete("/announcements/{announcement_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_announcement(
+    announcement_id: int,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    row = _get_announcement_or_404(announcement_id, admin.organization_id, db)
+    db.delete(row)
+    db.commit()

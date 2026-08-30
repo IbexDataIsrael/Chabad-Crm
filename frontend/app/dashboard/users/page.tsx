@@ -235,14 +235,14 @@ export default function UsersPage() {
   const { containerRef: columnsSortableRef, withClickGuard } =
     useSortableList<HTMLDivElement>(reorderColumns);
 
-  // fixes52 §5: a shliach landing here (direct URL — the nav link is
-  // admin-only) goes to their own contact profile instead of the generic
-  // dashboard, when one exists.
+  // fixes52 §5 / fixes54 §6.1: a shliach landing here (direct URL — the nav
+  // link is admin-only) goes to their own dedicated landing page instead of
+  // the generic dashboard, when a contact is linked.
   useEffect(() => {
     if (loading || isAdmin) return;
     router.replace(
       me?.role === "shliach" && me.shliach?.contact_id
-        ? `/dashboard/contacts/${me.shliach.contact_id}`
+        ? "/dashboard/activist"
         : "/dashboard",
     );
   }, [loading, isAdmin, me, router]);

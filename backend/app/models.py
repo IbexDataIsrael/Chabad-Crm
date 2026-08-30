@@ -402,6 +402,32 @@ class ShliachSystemComment(Base):
     contact = relationship("Contact")
 
 
+class ShliachAnnouncement(Base):
+    """fixes54 §5: an admin-authored announcement shown in the feed on an
+    activist's dedicated landing page (`/dashboard/activist`). `is_visible`
+    lets an admin draft/retire a message without deleting its row."""
+
+    __tablename__ = "shliach_announcements"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    message_title = Column(String(255), nullable=False)
+    message_content = Column(Text, nullable=False)  # HTML, from the WYSIWYG editor
+    is_visible = Column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+        nullable=False,
+    )
+
+
 class ReportNumberContactShliach(Base):
     """M2M: which report numbers a shliach covers (fixes19 — replaces the
     dropped contact_shliach_apartment coverage)."""

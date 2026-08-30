@@ -21,6 +21,7 @@ from app.core.email import send_shliach_welcome
 from app.core.security import hash_password
 from app.core.shliach import (
     apply_shliach_versioned_update,
+    resolve_shliach,
     set_shliach_areas,
     set_shliach_report_numbers,
 )
@@ -67,22 +68,21 @@ def _shliach_out(sh: models.ContactShliach) -> ShliachOut:
     )
 
 
-def _linked_shliach(db: Session, user_id: int) -> Optional[models.ContactShliach]:
-    return (
-        db.query(models.ContactShliach)
-        .filter(
-            models.ContactShliach.user_id == user_id,
-            models.ContactShliach.is_display.is_(True),
-        )
-        .first()
-    )
+def _linked_shliach(db: Session, user: models.User) -> Optional[models.ContactShliach]:
+    """fixes54 §6.2: delegates to core.shliach.resolve_shliach's user_id-then-
+    email fallback. A raw user_id-only lookup left activists with an unlinked
+    ContactShliach.user_id (imported contacts, or a login (re)created
+    separately — fixes21's exact scenario) with `UserOut.shliach == null`,
+    which silently disabled self-edit everywhere `isOwnShliachProfile` is
+    derived from it, regardless of the /shliach-config field-lock settings."""
+    return resolve_shliach(db, user)
 
 
 def _user_out(db: Session, user: models.User) -> UserOut:
     """fixes47: single-user version of list_users' bulk enrichment below —
     used by GET /api/users/{id} and the PUT response."""
     item = UserOut.model_validate(user)
-    sh = _linked_shliach(db, user.id)
+    sh = _linked_shliach(db, user)
     if sh:
         item.shliach = _shliach_out(sh)
     return item
@@ -237,7 +237,7 @@ def update_user(
 
     # fixes14 (user → contact sync): email/phone edits propagate to the linked
     # shliach contact so the two records never drift apart.
-    linked = _linked_shliach(db, user.id)
+    linked = _linked_shliach(db, user)
     email = data.pop("email", None)
     if email and email != user.email:
         dup = (
@@ -324,7 +324,7 @@ def restore_shliach_field(
     restored field" contract as apartments.restore_apartment_field. Admin
     only; mirrors the history dashboard/users/{id} now shows."""
     user = _get_or_404(user_id, admin.organization_id, db)
-    linked = _linked_shliach(db, user.id)
+    linked = _linked_shliach(db, user)
     if not linked:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No linked shliach contact")
     if payload.field not in _SHLIACH_RESTORABLE_FIELDS:

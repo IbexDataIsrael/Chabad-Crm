@@ -483,6 +483,18 @@ export interface SystemComment {
   activist: ShliachSummary;
 }
 
+/** fixes54 §5/§6.1: an admin-authored announcement shown in the feed on an
+ *  activist's dedicated landing page. */
+export interface ShliachAnnouncement {
+  id: number;
+  guid: string;
+  message_title: string;
+  message_content: string;
+  is_visible: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 /** fixes45: one historical shliach version — the full snapshot plus who
  *  retired it and when (same shape as the Apartments history view). */
 export interface ShliachVersion {

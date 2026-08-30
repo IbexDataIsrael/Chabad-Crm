@@ -49,7 +49,11 @@ const PAGE_SIZES = [20, 50, 100];
 // — must exactly match the backend's EMPTY_FIELD_SENTINEL (apartments.py).
 const EMPTY_FIELD_SENTINEL = "\x00__empty__\x00";
 
-type SortKey = "floor" | "label" | "resident" | "building" | "created" | "hierarchy";
+type SortKey =
+  | "floor" | "label" | "resident" | "building" | "created" | "hierarchy"
+  // fixes54 §1.1: header-click sorting on the remaining plain/single-join
+  // grid columns.
+  | "area" | "report_number" | "notes" | "phone" | "email";
 type SortDir = "asc" | "desc";
 
 /** Toggleable table columns (fixes15 §7.2 / fixes17 §3.1); the apartment
@@ -83,6 +87,20 @@ const FIELD_REGISTRY_KEYS: Partial<Record<FieldKey, string>> = {
   jewish_status: "apartment.Jewish_status",
   campaign_status: "apartment.campaign_status",
   mezuzah_status: "apartment.mezuzah_status",
+};
+// fixes54 §1.1: header-click sort arrows (mirrors Report Numbers) — only for
+// columns the backend can actually order by (plain columns / single-join
+// relations). Picklist-backed columns (jewish/campaign/mezuzah status,
+// language) and every dynamic custom field/picklist/contact column have no
+// entry here, so their header renders with no arrow and isn't clickable.
+const FIELD_SORT_KEYS: Partial<Record<FieldKey, SortKey>> = {
+  resident: "resident",
+  building: "building",
+  area: "area",
+  report_number: "report_number",
+  notes: "notes",
+  phone: "phone",
+  email: "email",
 };
 
 export default function ApartmentsPage() {
@@ -507,6 +525,20 @@ export default function ApartmentsPage() {
   function onDirToggle() {
     setDir(dir === "asc" ? "desc" : "asc");
     setPage(1);
+  }
+
+  // fixes54 §1.1: clicking a sortable column header — toggles direction if
+  // it's already the active key, else switches to it (ascending). No-op
+  // while grouped by building, since that mode forces sort="building"
+  // server-side (the select above is disabled there too).
+  function onHeaderSortClick(key: SortKey) {
+    if (groupByBuilding) return;
+    if (sort === key) onDirToggle();
+    else onSortChange(key);
+  }
+  function sortArrow(key: SortKey): string {
+    if (groupByBuilding || sort !== key) return "";
+    return dir === "asc" ? " ↑" : " ↓";
   }
 
   function onPageSizeChange(n: number) {
@@ -1363,28 +1395,49 @@ export default function ApartmentsPage() {
       )}
 
       {/* fixes17 §3.1: a real table — every column carries its field's title.
-          fixes52 §2.5: sticky header row + sticky first column, RTL/LTR-aware. */}
-      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+          fixes52 §2.5 / fixes54 §1.4: sticky header row + sticky first
+          column, RTL/LTR-aware — the wrapper needs its own bounded scroll
+          frame (max-h + overflow-y-auto) for `sticky top-0` to actually
+          engage; an `overflow-x-auto`-only div never scrolls vertically
+          itself, so a sticky child inside it just scrolls away with the page
+          instead of sticking. */}
+      <div className="bg-white rounded-xl shadow-sm overflow-x-auto overflow-y-auto max-h-[75vh]">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-600 text-right">
             <tr>
               {/* The corner cell needs both stickiness axes, so it sits above
-                  the plain header row (z-20 vs. z-10) at their intersection. */}
+                  the plain header row (z-20 vs. z-10) at their intersection.
+                  fixes54 §1.1: clickable sort-arrow header (mirrors Report
+                  Numbers), inert while grouped by building. */}
               <th
-                className={`px-3 py-1.5 font-medium w-px whitespace-nowrap min-w-[150px] sticky top-0 z-20 bg-gray-50 ${firstColStickySide}`}
+                onClick={groupByBuilding ? undefined : () => onHeaderSortClick("label")}
+                className={`px-3 py-1.5 font-medium w-px whitespace-nowrap min-w-[150px] sticky top-0 z-20 bg-gray-50 ${firstColStickySide} ${
+                  groupByBuilding ? "" : "cursor-pointer select-none hover:bg-gray-100"
+                }`}
               >
                 {t("apartments.apartment_name", "מספר דירה")}
+                {sortArrow("label")}
               </th>
               {/* fixes49 §1: each column carries a data-type-dependent
-                  min-width floor so RTL headers don't squeeze. */}
-              {renderedFields.map((k) => (
-                <th
-                  key={k}
-                  className={`px-3 py-1.5 font-medium w-px whitespace-nowrap sticky top-0 z-10 bg-gray-50 ${fieldMinWidth(k)}`}
-                >
-                  {fieldLabels[k]}
-                </th>
-              ))}
+                  min-width floor so RTL headers don't squeeze. fixes54 §1.1:
+                  sortable columns (FIELD_SORT_KEYS) get a click handler +
+                  arrow; the rest (picklist-backed / dynamic) render plain. */}
+              {renderedFields.map((k) => {
+                const sortKeyForField = FIELD_SORT_KEYS[k];
+                const sortable = sortKeyForField && !groupByBuilding;
+                return (
+                  <th
+                    key={k}
+                    onClick={sortable ? () => onHeaderSortClick(sortKeyForField!) : undefined}
+                    className={`px-3 py-1.5 font-medium w-px whitespace-nowrap sticky top-0 z-10 bg-gray-50 ${fieldMinWidth(k)} ${
+                      sortable ? "cursor-pointer select-none hover:bg-gray-100" : ""
+                    }`}
+                  >
+                    {fieldLabels[k]}
+                    {sortKeyForField ? sortArrow(sortKeyForField) : ""}
+                  </th>
+                );
+              })}
               {/* fixes32 §6 / fixes33 §3.1: one column per admin-added
                   apartment.* picklist the column-selector panel has left on. */}
               {visibleCustomDefs.map((d) => (
@@ -1435,19 +1488,45 @@ export default function ApartmentsPage() {
                 <Fragment key={a.id}>
                   {/* fixes30 §1a / fixes53 §2: a header row opens each building
                       group; groups always render in full now (no +/- collapse —
-                      the count badge is the exact rendered row count below it). */}
+                      the count badge is the exact rendered row count below it).
+                      fixes54 §1.2: a building holding exactly one apartment
+                      (a townhouse) skips the group header entirely — its row
+                      renders directly, indistinguishable from ungrouped mode. */}
                   {groupByBuilding &&
+                    (buildingCounts.get(a.building_id) ?? 0) > 1 &&
                     (i === 0 || items[i - 1].building_id !== a.building_id) && (
                       <tr className="border-t border-gray-200 bg-gray-50/80">
                         <td colSpan={colCount} className="px-3 py-2">
-                          <span className="font-semibold">
+                          {/* fixes54 §1.3 BUG FIX: without an isolated bidi
+                              context, adjacent spans that each end/start with
+                              digits (a street address ending in a house
+                              number, immediately followed by the count
+                              badge's leading digit) get their boxes
+                              repositioned by the Unicode Bidi Algorithm and
+                              visually overlap/merge — confirmed live via
+                              getBoundingClientRect (the badge rendered ~60px
+                              too far right, overlapping the area name) even
+                              though the ms-2 margins themselves compute
+                              correctly. `unicode-bidi: isolate` on each
+                              dynamic-text span stops that cross-span
+                              reordering; margin-based spacing between them
+                              then measures exactly as authored. */}
+                          <span className="font-semibold" style={{ unicodeBidi: "isolate" }}>
                             {cell(a, "building")}
                           </span>
                           {a.area_name && (
-                            <span className="ms-2 text-gray-500">{a.area_name}</span>
+                            <span
+                              className="ms-2 text-gray-500"
+                              style={{ unicodeBidi: "isolate" }}
+                            >
+                              {a.area_name}
+                            </span>
                           )}
                           {buildingCounts.has(a.building_id) && (
-                            <span className="ms-2 rounded-full bg-status-magenta/10 text-status-magenta px-2 py-0.5 text-xs">
+                            <span
+                              className="ms-2 rounded-full bg-status-magenta/10 text-status-magenta px-2 py-0.5 text-xs"
+                              style={{ unicodeBidi: "isolate" }}
+                            >
                               {t("apt.group_count", "{n} דירות").replace(
                                 "{n}",
                                 String(buildingCounts.get(a.building_id)),

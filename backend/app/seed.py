@@ -997,6 +997,48 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ),
     ("action", "action.expand", "הרחב", "Expand"),
     ("action", "action.collapse", "כווץ", "Collapse"),
+    # --- fixes54 §4: messages-from-activists search + pagination ---
+    (
+        "messages_from_activists", "messages_from_activists.search_ph",
+        "חיפוש לפי שם פעיל, סטטוס או תוכן…", "Search by activist name, status, or content…",
+    ),
+    (
+        "messages_from_activists", "messages_from_activists.no_results",
+        "לא נמצאו תוצאות התואמות לחיפוש.", "No results match the search.",
+    ),
+    ("pager", "pager.page_of", "עמוד {page} מתוך {total}", "Page {page} of {total}"),
+    # --- fixes54 §5: shliach-config activist announcements (WYSIWYG CRUD) ---
+    ("shliach_config", "shliach_config.announcements_title", "הודעות לפעילים", "Announcements to activists"),
+    (
+        "shliach_config", "shliach_config.announcements_hint",
+        "הודעות אלו מוצגות לפעילים בעמוד הבית שלהם, כאשר הן פעילות.",
+        "These messages are shown to activists on their home page, while active.",
+    ),
+    ("shliach_config", "shliach_config.announcement_add", "הודעה חדשה", "New announcement"),
+    ("shliach_config", "shliach_config.announcement_delete_confirm", "למחוק את ההודעה?", "Delete this announcement?"),
+    ("shliach_config", "shliach_config.announcements_none", "אין הודעות עדיין.", "No announcements yet."),
+    ("shliach_config", "shliach_config.announcement_visible", "מוצגת", "Visible"),
+    ("shliach_config", "shliach_config.announcement_hidden", "מוסתרת", "Hidden"),
+    ("shliach_config", "shliach_config.announcement_title_field", "כותרת ההודעה", "Announcement title"),
+    ("shliach_config", "shliach_config.announcement_content", "תוכן ההודעה", "Announcement content"),
+    ("shliach_config", "shliach_config.announcement_visible_toggle", "מוצגת לפעילים", "Visible to activists"),
+    ("shliach_config", "shliach_config.announcement_title_required", "יש להזין כותרת", "A title is required"),
+    # --- fixes54 §6.1: dedicated activist landing page ---
+    ("activist_home", "activist_home.title", "ברוך הבא", "Welcome"),
+    (
+        "activist_home", "activist_home.intro",
+        "עמוד הבית שלך — הפעולות והעדכונים שלך במקום אחד.",
+        "Your home page — your actions and updates in one place.",
+    ),
+    ("activist_home", "activist_home.edit_profile", "עריכת הפרטים שלי", "Edit my details"),
+    ("activist_home", "activist_home.edit_profile_hint", "עדכן את הפרטים האישיים שלך", "Update your personal details"),
+    ("activist_home", "activist_home.my_apartments", "הדירות שלי", "My apartments"),
+    (
+        "activist_home", "activist_home.my_apartments_count",
+        "{n} דירות משויכות", "{n} assigned apartments",
+    ),
+    ("activist_home", "activist_home.announcements", "עדכונים", "Announcements"),
+    ("activist_home", "activist_home.no_announcements", "אין עדכונים כרגע.", "No announcements right now."),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)
