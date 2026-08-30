@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.core.geo import point_in_polygon, polygon_ring
+from app.core.natural_sort import natural_sort_key
 from app.core.shliach import resolve_shliach
 from app.database import get_db
 from app.deps import get_current_user, require_admin
@@ -65,7 +66,10 @@ def list_areas(
         if not area_ids:
             return []
         query = query.filter(models.Area.id.in_(area_ids))
-    return query.order_by(models.Area.area_name).all()
+    # fixes52 §6: natural sort — "אזור 10" must not sort before "אזור 2".
+    # This list is never paginated, so sorting in Python (correctly handling
+    # a number embedded mid-string, unlike the SQL-level helper) is safe.
+    return sorted(query.all(), key=lambda a: natural_sort_key(a.area_name or ""))
 
 
 @router.get("/shliach-assignments", response_model=dict[int, list[ShliachSummary]])

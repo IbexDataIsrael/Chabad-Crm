@@ -34,6 +34,7 @@ import {
   type Area,
   type Building,
   type BuildingAggregate,
+  type CustomFieldDefinition,
   type Floor,
   type PicklistField,
   type ReportNumber,
@@ -137,19 +138,34 @@ export default function ApartmentsPage() {
   const [customFilters, setCustomFilters] = usePersistentState<Record<string, string[]>>(
     "crm.apartments.customFilters", {},
   );
-  // fixes33 §3.1: which custom apartment.* picklists show as table columns —
-  // null (unset) means "all of them", so existing users see no change until
-  // they explicitly hide one via the column-selector panel.
-  const [visibleCustomKeys, setVisibleCustomKeys] = useDbPreference<string[] | null>(
-    "apartments.customFields", null,
+  // fixes52 §2.6: which custom apartment.* picklists are HIDDEN from the
+  // table — a field absent from this array is visible, same as any built-in
+  // column. Was an inclusion-list ("apartments.customFields", null = all
+  // visible) — the moment an admin hid even one field it became the concrete
+  // set of field_keys that existed *then*, so any field created afterward
+  // was silently absent from it and defaulted to hidden. New preference key
+  // (not reused) so a stale inclusion-list value is never misread as a
+  // hidden-list one — same migration fixes50 did for the Users page.
+  const [hiddenCustomKeys, setHiddenCustomKeys] = useDbPreference<string[]>(
+    "apartments.customFieldsHidden", [],
   );
   // fixes35 §3: any non-select apartment custom field — same column-selector
   // treatment as the picklist ones above, in its own preference so existing
-  // "apartments.customFields" selections (picklist-only) are untouched.
+  // "apartments.customFieldFields" selections (picklist-only) are untouched.
+  // fixes52 §2.6: same inclusion→exclusion-list flip as above.
   const customFieldDefs = useCustomFieldDefs("apartment").filter((d) => d.field_type !== "select");
-  const [visibleCustomFieldKeys, setVisibleCustomFieldKeys] = useDbPreference<string[] | null>(
-    "apartments.customFieldFields", null,
+  const [hiddenCustomFieldKeys, setHiddenCustomFieldKeys] = useDbPreference<string[]>(
+    "apartments.customFieldFieldsHidden", [],
   );
+  // fixes52 §2.2: one filter per non-select apartment custom field — boolean
+  // fields store "true"/"false"/"" (unset), text/number/date store a free-
+  // text "contains" query. Same shape as the Users page's shliachFieldFilters
+  // (fixes48 §3), but resolved server-side here since this list is paginated.
+  const [customFieldFilters, setCustomFieldFilters] = usePersistentState<
+    Record<string, string>
+  >("crm.apartments.customFieldFilters", {});
+  const [debouncedCustomFieldFilters, setDebouncedCustomFieldFilters] =
+    useState(customFieldFilters);
   const [query, setQuery] = usePersistentState("crm.apartments.q", "");
   const [sort, setSort] = usePersistentState<SortKey>("crm.apartments.sort", "floor");
   const [dir, setDir] = usePersistentState<SortDir>("crm.apartments.dir", "asc");
@@ -170,6 +186,21 @@ export default function ApartmentsPage() {
   const [groupByBuilding, setGroupByBuilding] = usePersistentState(
     "crm.apartments.groupByBuilding", false,
   );
+  // fixes52 §2.4: which building groups are expanded — starts empty (every
+  // group collapsed by default). Not persisted: a fresh page load always
+  // starts fully collapsed, matching the spec. Keyed by building_id (not
+  // row/page position), so a group's state naturally survives paging.
+  const [expandedBuildings, setExpandedBuildings] = useState<Set<number>>(
+    new Set(),
+  );
+  function toggleBuildingExpanded(buildingId: number) {
+    setExpandedBuildings((prev) => {
+      const next = new Set(prev);
+      if (next.has(buildingId)) next.delete(buildingId);
+      else next.add(buildingId);
+      return next;
+    });
+  }
   const [aggregates, setAggregates] = useState<Record<number, number>>({});
   // fixes32 §6: the whole filter section can be tucked away, mirroring the
   // Contacts page (fixes29 §1) — hidden filters keep applying to the list.
@@ -225,6 +256,16 @@ export default function ApartmentsPage() {
     effectiveMezuzahFilter.forEach((v) => params.append("mezuzah_status", v));
     effectiveLanguageFilter.forEach((v) => params.append("language", v));
     appendCustomPicklistParams(params);
+    // fixes52 §2.2: dynamic custom (non-select) apartment field filters —
+    // same "field_key:query" convention as the picklist ones above.
+    // fixes33 §5.2-style guard: a field hidden org-wide never filters even
+    // if a stale value survives from before it was hidden.
+    const visibleFieldKeys = new Set(orgVisibleCustomFieldDefs.map((d) => d.field_key));
+    for (const [fieldKey, val] of Object.entries(debouncedCustomFieldFilters)) {
+      if (val && visibleFieldKeys.has(fieldKey)) {
+        params.append("custom_field_filter", `${fieldKey}:${val}`);
+      }
+    }
     if (debouncedQ.trim()) params.set("q", debouncedQ.trim());
     return params;
   }
@@ -331,7 +372,8 @@ export default function ApartmentsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     loading, areaIds, buildingIds, reportNumberIds, jewishFilter, mezuzahFilter,
-    languageFilter, customFilters, debouncedQ, sort, dir, page, pageSize, groupByBuilding,
+    languageFilter, customFilters, debouncedCustomFieldFilters, debouncedQ,
+    sort, dir, page, pageSize, groupByBuilding,
   ]);
 
   // fixes30 §1a: filter-scoped per-building counts for the group headers —
@@ -347,7 +389,8 @@ export default function ApartmentsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     loading, groupByBuilding, areaIds, buildingIds, reportNumberIds,
-    jewishFilter, mezuzahFilter, languageFilter, customFilters, debouncedQ,
+    jewishFilter, mezuzahFilter, languageFilter, customFilters,
+    debouncedCustomFieldFilters, debouncedQ,
   ]);
 
   // Debounced dynamic search (street name / label / resident).
@@ -356,6 +399,21 @@ export default function ApartmentsPage() {
     setPage(1);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => setDebouncedQ(v), 300);
+  }
+
+  // fixes52 §2.2: debounced custom-field text filters — same 300ms pattern
+  // as the free-text street search above, one shared timer for the whole
+  // filters object (a per-keystroke request per field would be excessive).
+  const customFieldFilterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function onCustomFieldFilterChange(fieldKey: string, value: string) {
+    setCustomFieldFilters((prev) => ({ ...prev, [fieldKey]: value }));
+    setPage(1);
+    if (customFieldFilterDebounceRef.current) {
+      clearTimeout(customFieldFilterDebounceRef.current);
+    }
+    customFieldFilterDebounceRef.current = setTimeout(() => {
+      setDebouncedCustomFieldFilters((prev) => ({ ...prev, [fieldKey]: value }));
+    }, 300);
   }
 
   // fixes23 §2: buildings that hold an apartment carrying a selected report
@@ -408,6 +466,11 @@ export default function ApartmentsPage() {
   const customFilterCount = Object.entries(customFilters).reduce(
     (sum, [fieldKey, vals]) => sum + (vis(fieldKey) ? vals.length : 0), 0,
   );
+  // fixes52 §2.2: same org-visibility-guarded count for custom field filters.
+  const customFieldFilterCount = Object.entries(customFieldFilters).reduce(
+    (sum, [fieldKey, val]) =>
+      sum + (val && vis(`customfield.apartment.${fieldKey}`) ? 1 : 0), 0,
+  );
   const activeFilterCount =
     areaIds.length +
     buildingIds.length +
@@ -416,6 +479,7 @@ export default function ApartmentsPage() {
     effectiveMezuzahFilter.length +
     effectiveLanguageFilter.length +
     customFilterCount +
+    customFieldFilterCount +
     (query.trim() ? 1 : 0);
 
   function clearAllFilters() {
@@ -426,6 +490,8 @@ export default function ApartmentsPage() {
     setMezuzahFilter([]);
     setLanguageFilter([]);
     setCustomFilters({});
+    setCustomFieldFilters({});
+    setDebouncedCustomFieldFilters({});
     setQuery("");
     setDebouncedQ("");
     setPage(1);
@@ -597,6 +663,9 @@ export default function ApartmentsPage() {
   const WIDE_FIELD_KEYS = new Set<FieldKey>(["resident", "building", "area", "notes"]);
   const fieldMinWidth = (k: FieldKey) =>
     WIDE_FIELD_KEYS.has(k) ? "min-w-[150px]" : "min-w-[120px]";
+  // fixes52 §2.5: the sticky first column pins to the side the table's own
+  // text starts from — right in RTL (Hebrew), left in LTR (English).
+  const firstColStickySide = lang === "en" ? "left-0" : "right-0";
 
   const fieldLabels: Record<FieldKey, string> = {
     resident: t("apartments.name", "שם דייר"),
@@ -618,18 +687,19 @@ export default function ApartmentsPage() {
   // fixes33 §5.2: custom picklists an admin hid org-wide (Manage Fields)
   // never reach the filter row or the column-selector panel at all.
   const orgVisibleCustomDefs = customDefs.filter((d) => vis(d.field_key));
-  // fixes33 §3.1: the subset of (org-visible) custom picklists the personal
-  // column-selector panel has left switched on.
+  // fixes33 §3.1 / fixes52 §2.6: the subset of (org-visible) custom
+  // picklists the personal column-selector panel hasn't hidden — a field
+  // missing from `hiddenCustomKeys` is visible, including one created just
+  // now, with no reload needed.
   const visibleCustomDefs = orgVisibleCustomDefs.filter(
-    (d) => visibleCustomKeys === null || visibleCustomKeys.includes(d.field_key),
+    (d) => !hiddenCustomKeys.includes(d.field_key),
   );
   function toggleCustomField(fieldKey: string) {
-    setVisibleCustomKeys((prev) => {
-      const current = prev ?? orgVisibleCustomDefs.map((d) => d.field_key);
-      return current.includes(fieldKey)
-        ? current.filter((k) => k !== fieldKey)
-        : [...current, fieldKey];
-    });
+    setHiddenCustomKeys((prev) =>
+      prev.includes(fieldKey)
+        ? prev.filter((k) => k !== fieldKey)
+        : [...prev, fieldKey],
+    );
   }
   // fixes35 §3: same org-visibility + personal column-selector treatment for
   // non-select apartment custom fields.
@@ -637,15 +707,14 @@ export default function ApartmentsPage() {
     vis(`customfield.apartment.${d.field_key}`),
   );
   const visibleCustomFieldDefs = orgVisibleCustomFieldDefs.filter(
-    (d) => visibleCustomFieldKeys === null || visibleCustomFieldKeys.includes(d.field_key),
+    (d) => !hiddenCustomFieldKeys.includes(d.field_key),
   );
   function toggleCustomFieldColumn(fieldKey: string) {
-    setVisibleCustomFieldKeys((prev) => {
-      const current = prev ?? orgVisibleCustomFieldDefs.map((d) => d.field_key);
-      return current.includes(fieldKey)
-        ? current.filter((k) => k !== fieldKey)
-        : [...current, fieldKey];
-    });
+    setHiddenCustomFieldKeys((prev) =>
+      prev.includes(fieldKey)
+        ? prev.filter((k) => k !== fieldKey)
+        : [...prev, fieldKey],
+    );
   }
   // fixes32 §6: the stored array's own order is now the display order — drag-
   // reordering the chips below persists it. (Previously this always rendered
@@ -751,6 +820,9 @@ export default function ApartmentsPage() {
     .replace("{from}", String(total === 0 ? 0 : (page - 1) * pageSize + 1))
     .replace("{to}", String(Math.min(page * pageSize, total)))
     .replace("{total}", String(total));
+  // fixes52 §2.3: the custom-picklist/custom-field-filter "field_key:value"
+  // params, computed once for the bulk-edit modal's filter payload below.
+  const currentFilterParams = buildFilterParams();
 
   if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
 
@@ -758,7 +830,10 @@ export default function ApartmentsPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">{t("apartments", "דירות")}</h1>
-        <div className="flex items-center gap-2">
+        {/* fixes52 §2.1: flex-wrap (was missing) + py-2 (was py-1.5) so this
+            row folds instead of overflowing on mobile and matches the
+            Contacts page's header button heights exactly. */}
+        <div className="flex flex-wrap items-center gap-2">
           {/* fixes51 §4: an admin can hide the filter UI entirely for the
               Shliach role — a stronger, org-enforced version of the
               per-user filtersOpen collapse below. */}
@@ -770,7 +845,7 @@ export default function ApartmentsPage() {
                 <button
                   type="button"
                   onClick={clearAllFilters}
-                  className="rounded-md border border-gray-300 text-gray-600 px-4 py-1.5 text-sm font-medium hover:bg-gray-50"
+                  className="rounded-md border border-gray-300 text-gray-600 px-4 py-2 text-sm font-medium hover:bg-gray-50"
                 >
                   ✕ {t("filter.clear_all", "נקה את כל הסינונים")}
                 </button>
@@ -778,7 +853,7 @@ export default function ApartmentsPage() {
               <button
                 type="button"
                 onClick={() => setFiltersOpen((v) => !v)}
-                className="rounded-md border border-gray-300 text-gray-600 px-4 py-1.5 text-sm font-medium hover:bg-gray-50"
+                className="rounded-md border border-gray-300 text-gray-600 px-4 py-2 text-sm font-medium hover:bg-gray-50"
               >
                 {filtersOpen
                   ? `▴ ${t("filter.hide_filters", "הסתר סינון")}`
@@ -796,7 +871,7 @@ export default function ApartmentsPage() {
           <button
             type="button"
             onClick={() => setFieldsOpen((v) => !v)}
-            className="rounded-md border border-gray-300 px-4 py-1.5 text-sm font-medium hover:bg-gray-50"
+            className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50"
           >
             ⚙ {t("columns.fields_configure", "התאמת שדות")}
           </button>
@@ -805,7 +880,7 @@ export default function ApartmentsPage() {
               {!batchOpen && (
                 <button
                   onClick={() => setBatchOpen(true)}
-                  className="rounded-md border border-status-magenta text-status-magenta px-4 py-1.5 text-sm font-medium hover:bg-status-magenta/10"
+                  className="rounded-md border border-status-magenta text-status-magenta px-4 py-2 text-sm font-medium hover:bg-status-magenta/10"
                 >
                   {t("batch.open", "יצירה מרובה")}
                 </button>
@@ -813,7 +888,7 @@ export default function ApartmentsPage() {
               {/* Dedicated add route (fixes12 §2.2). */}
               <Link
                 href="/dashboard/apartments/add"
-                className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
+                className="rounded-md bg-status-magenta text-white px-4 py-2 text-sm font-medium hover:opacity-90"
               >
                 + {t("apt.add_apartment", "הוסף דירה")}
               </Link>
@@ -919,7 +994,7 @@ export default function ApartmentsPage() {
                 picklist — a personal preference, separate from whether the
                 field is hidden org-wide (Manage Fields, fixes33 §5.2). */}
             {orgVisibleCustomDefs.map((d) => {
-              const active = visibleCustomKeys === null || visibleCustomKeys.includes(d.field_key);
+              const active = !hiddenCustomKeys.includes(d.field_key);
               return (
                 <button
                   key={d.field_key}
@@ -940,8 +1015,7 @@ export default function ApartmentsPage() {
             {/* fixes35 §3: one show/hide toggle per admin-added non-select
                 apartment custom field. */}
             {orgVisibleCustomFieldDefs.map((d) => {
-              const active =
-                visibleCustomFieldKeys === null || visibleCustomFieldKeys.includes(d.field_key);
+              const active = !hiddenCustomFieldKeys.includes(d.field_key);
               return (
                 <button
                   key={d.field_key}
@@ -1069,6 +1143,37 @@ export default function ApartmentsPage() {
             />
           );
         })}
+        {/* fixes52 §2.2: one filter per admin-added, non-select apartment
+            custom field — boolean fields get a 3-state select, everything
+            else a "contains" text input. */}
+        {orgVisibleCustomFieldDefs.map((d) => {
+          const label =
+            (lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
+            d.field_key;
+          if (d.field_type === "boolean") {
+            return (
+              <select
+                key={d.field_key}
+                className={inputClass}
+                value={customFieldFilters[d.field_key] ?? ""}
+                onChange={(e) => onCustomFieldFilterChange(d.field_key, e.target.value)}
+              >
+                <option value="">{label}</option>
+                <option value="true">{t("filter.yes", "כן")}</option>
+                <option value="false">{t("filter.no", "לא")}</option>
+              </select>
+            );
+          }
+          return (
+            <input
+              key={d.field_key}
+              className={`${inputClass} min-w-[10rem]`}
+              placeholder={label}
+              value={customFieldFilters[d.field_key] ?? ""}
+              onChange={(e) => onCustomFieldFilterChange(d.field_key, e.target.value)}
+            />
+          );
+        })}
         <input
           className={`${inputClass} flex-1 min-w-[12rem]`}
           placeholder={t("apt.street_search", "חיפוש לפי שם רחוב…")}
@@ -1171,12 +1276,20 @@ export default function ApartmentsPage() {
         <BulkEditModal
           total={total}
           reportNumbers={reportNumbers}
+          customDefs={orgVisibleCustomDefs}
+          customFieldDefs={orgVisibleCustomFieldDefs}
+          // fixes52 §2.3: the full active filter set (was a 6-of-9 subset —
+          // bulk-edit now touches exactly the rows the grid shows, including
+          // campaign_status/language/custom-picklist/custom-field filters).
           filters={{
             building_ids: buildingIds,
             area_ids: areaIds,
-            report_number_ids: reportNumberIds,
-            jewish_status: jewishFilter,
-            mezuzah_status: mezuzahFilter,
+            report_number_ids: effectiveReportNumberIds,
+            jewish_status: effectiveJewishFilter,
+            mezuzah_status: effectiveMezuzahFilter,
+            language: effectiveLanguageFilter,
+            picklist: currentFilterParams.getAll("picklist"),
+            custom_field_filter: currentFilterParams.getAll("custom_field_filter"),
             q: debouncedQ.trim() || undefined,
           }}
           onClose={() => setBulkOpen(false)}
@@ -1187,12 +1300,17 @@ export default function ApartmentsPage() {
         />
       )}
 
-      {/* fixes17 §3.1: a real table — every column carries its field's title. */}
+      {/* fixes17 §3.1: a real table — every column carries its field's title.
+          fixes52 §2.5: sticky header row + sticky first column, RTL/LTR-aware. */}
       <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-600 text-right">
             <tr>
-              <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap min-w-[150px]">
+              {/* The corner cell needs both stickiness axes, so it sits above
+                  the plain header row (z-20 vs. z-10) at their intersection. */}
+              <th
+                className={`px-3 py-1.5 font-medium w-px whitespace-nowrap min-w-[150px] sticky top-0 z-20 bg-gray-50 ${firstColStickySide}`}
+              >
                 {t("apartments.apartment_name", "מספר דירה")}
               </th>
               {/* fixes49 §1: each column carries a data-type-dependent
@@ -1200,7 +1318,7 @@ export default function ApartmentsPage() {
               {renderedFields.map((k) => (
                 <th
                   key={k}
-                  className={`px-3 py-1.5 font-medium w-px whitespace-nowrap ${fieldMinWidth(k)}`}
+                  className={`px-3 py-1.5 font-medium w-px whitespace-nowrap sticky top-0 z-10 bg-gray-50 ${fieldMinWidth(k)}`}
                 >
                   {fieldLabels[k]}
                 </th>
@@ -1210,7 +1328,7 @@ export default function ApartmentsPage() {
               {visibleCustomDefs.map((d) => (
                 <th
                   key={d.field_key}
-                  className="px-3 py-1.5 font-medium w-px whitespace-nowrap min-w-[120px]"
+                  className="px-3 py-1.5 font-medium w-px whitespace-nowrap min-w-[120px] sticky top-0 z-10 bg-gray-50"
                 >
                   {customDefLabel(d)}
                 </th>
@@ -1220,7 +1338,7 @@ export default function ApartmentsPage() {
               {visibleCustomFieldDefs.map((d) => (
                 <th
                   key={d.field_key}
-                  className={`px-3 py-1.5 font-medium w-px whitespace-nowrap ${
+                  className={`px-3 py-1.5 font-medium w-px whitespace-nowrap sticky top-0 z-10 bg-gray-50 ${
                     d.field_type === "text" ? "min-w-[150px]" : "min-w-[120px]"
                   }`}
                 >
@@ -1230,11 +1348,11 @@ export default function ApartmentsPage() {
               ))}
               {/* fixes30 §1b: toggleable via the fields panel. */}
               {showContact && (
-                <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap">
+                <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap sticky top-0 z-10 bg-gray-50">
                   {t("apartments.contact", "איש קשר")}
                 </th>
               )}
-              <th className="w-full"></th>
+              <th className="w-full sticky top-0 z-10 bg-gray-50"></th>
             </tr>
           </thead>
           <tbody>
@@ -1254,11 +1372,24 @@ export default function ApartmentsPage() {
               items.map((a, i) => (
                 <Fragment key={a.id}>
                   {/* fixes30 §1a: a header row opens each building group (also
-                      when a group continues from the previous page). */}
+                      when a group continues from the previous page).
+                      fixes52 §2.4: +/- expand toggle, default collapsed. */}
                   {groupByBuilding &&
                     (i === 0 || items[i - 1].building_id !== a.building_id) && (
                       <tr className="border-t border-gray-200 bg-gray-50/80">
                         <td colSpan={colCount} className="px-3 py-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleBuildingExpanded(a.building_id)}
+                            className="me-2 inline-flex items-center justify-center w-5 h-5 rounded border border-gray-300 text-xs leading-none hover:bg-gray-100"
+                            title={
+                              expandedBuildings.has(a.building_id)
+                                ? t("action.collapse", "כווץ")
+                                : t("action.expand", "הרחב")
+                            }
+                          >
+                            {expandedBuildings.has(a.building_id) ? "−" : "+"}
+                          </button>
                           <span className="font-semibold">
                             {cell(a, "building")}
                           </span>
@@ -1276,8 +1407,11 @@ export default function ApartmentsPage() {
                         </td>
                       </tr>
                     )}
+                  {(!groupByBuilding || expandedBuildings.has(a.building_id)) && (
                   <tr className="border-t border-gray-100">
-                    <td className="px-3 py-2 w-px whitespace-nowrap min-w-[150px]">
+                    <td
+                      className={`px-3 py-2 w-px whitespace-nowrap min-w-[150px] sticky z-10 bg-white ${firstColStickySide}`}
+                    >
                       <ApartmentNameCell
                         a={a}
                         onSave={(v) => saveListField(a, { apartment_name: v })}
@@ -1380,6 +1514,7 @@ export default function ApartmentsPage() {
                     )}
                     <td></td>
                   </tr>
+                  )}
                 </Fragment>
               ))
             )}
@@ -1728,45 +1863,182 @@ function BatchModal({
 }
 
 /** The active-filter snapshot passed to the bulk editor — mirrors the query
- *  params sent to /api/apartments/list (fixes23 §3). */
+ *  params sent to /api/apartments/list (fixes23 §3, expanded fixes52 §2.3
+ *  to the page's full filter set, not just a subset). */
 type BulkFilters = {
   building_ids: number[];
   area_ids: number[];
   report_number_ids: number[];
   jewish_status: string[];
   mezuzah_status: string[];
+  language: string[];
+  picklist: string[];
+  custom_field_filter: string[];
   q?: string;
 };
 
-/** Bulk apartment editor (fixes23 §3): apply a new report number and/or notes
+// fixes52 §2.3: standard bulk-editable fields — everything on the apartment
+// EXCEPT apartment_name/building (the spec explicitly excludes both; they
+// simply have no row here, and no field on the API's ApartmentBulkChanges
+// schema either).
+const BULK_STANDARD_FIELDS = [
+  "floor", "name", "phone", "email", "report_number_id",
+  "jewish_status", "campaign_status", "mezuzah_status", "language",
+  "apartment_notes",
+] as const;
+type BulkStandardField = (typeof BULK_STANDARD_FIELDS)[number];
+
+/** Bulk apartment editor (fixes23 §3, expanded fixes52 §2.3): apply a change
  *  to *every* apartment matching the page's current filters, in one request.
- *  Each field carries an explicit "update this field" toggle so an untouched
- *  field is left alone (rather than silently cleared). */
+ *  Every standard field plus every custom picklist/custom field carries its
+ *  own "update this field" toggle — an unchecked field's key is simply
+ *  omitted from the payload, so the backend (`exclude_unset` semantics on
+ *  `ApartmentBulkChanges`) leaves the existing DB value untouched. */
 function BulkEditModal({
   total,
   reportNumbers,
+  customDefs,
+  customFieldDefs,
   filters,
   onClose,
   onDone,
 }: {
   total: number;
   reportNumbers: ReportNumber[];
+  customDefs: PicklistField[];
+  customFieldDefs: CustomFieldDefinition[];
   filters: BulkFilters;
   onClose: () => void;
   onDone: () => Promise<void>;
 }) {
-  const { t } = useLocalization();
+  const { t, lang } = useLocalization();
   const { success, error: toastError } = useToast();
-  const [updateReport, setUpdateReport] = useState(false);
-  const [reportNumberId, setReportNumberId] = useState<number | null>(null);
-  const [updateNotes, setUpdateNotes] = useState(false);
-  const [notes, setNotes] = useState("");
+  const language = usePicklist("apartment.language");
+  // Keyed by BulkStandardField, `picklist:<field_key>` or
+  // `customfield:<field_key>` — one enabled-flag/value pair per row.
+  const [enabled, setEnabled] = useState<Record<string, boolean>>({});
+  const [values, setValues] = useState<Record<string, unknown>>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  function setFieldEnabled(key: string, on: boolean) {
+    setEnabled((prev) => ({ ...prev, [key]: on }));
+  }
+  function setFieldValue(key: string, value: unknown) {
+    setValues((prev) => ({ ...prev, [key]: value }));
+  }
+
+  const standardLabels: Record<BulkStandardField, string> = {
+    floor: t("apartments.floor", "קומה"),
+    name: t("apartments.name", "שם דייר"),
+    phone: t("apartments.phone", "טלפון"),
+    email: t("apartments.email", "אימייל"),
+    report_number_id: t("apartments.report_number_id", "מספר דוח"),
+    jewish_status: t("picklist.apartment.Jewish_status", "יהדות"),
+    campaign_status: t("picklist.apartment.campaign_status", "סטטוס קמפיין"),
+    mezuzah_status: t("picklist.apartment.mezuzah_status", "מזוזה"),
+    language: t("picklist.apartment.language", "שפה"),
+    apartment_notes: t("apartments.apartment_notes", "הערות"),
+  };
+
+  function renderStandardEditor(field: BulkStandardField) {
+    switch (field) {
+      case "floor":
+      case "name":
+        return (
+          <input
+            className={`${inputClass} w-full`}
+            value={(values[field] as string) ?? ""}
+            onChange={(e) => setFieldValue(field, e.target.value)}
+          />
+        );
+      case "phone":
+      case "email":
+        return (
+          <input
+            className={`${inputClass} w-full`}
+            dir="ltr"
+            value={(values[field] as string) ?? ""}
+            onChange={(e) => setFieldValue(field, e.target.value)}
+          />
+        );
+      case "report_number_id":
+        return (
+          <div className="space-y-1">
+            <SearchableSelect
+              value={(values.report_number_id as number | null) ?? null}
+              onChange={(id) => setFieldValue("report_number_id", id)}
+              options={reportNumbers.map((rn) => ({ id: rn.id, label: rn.name }))}
+              placeholder={t("bulkedit.choose_report", "בחר מספר דוח…")}
+            />
+            <p className="text-xs text-gray-400">
+              {t("bulkedit.clear_hint", "השאר ריק כדי להסיר את מספר הדוח מהדירות.")}
+            </p>
+          </div>
+        );
+      case "jewish_status":
+        return (
+          <PicklistSelect
+            fieldKey="apartment.Jewish_status"
+            value={(values.jewish_status as string | null) ?? null}
+            onChange={(v) => setFieldValue("jewish_status", v)}
+          />
+        );
+      case "campaign_status":
+        return (
+          <PicklistSelect
+            fieldKey="apartment.campaign_status"
+            value={(values.campaign_status as string | null) ?? null}
+            onChange={(v) => setFieldValue("campaign_status", v)}
+          />
+        );
+      case "mezuzah_status":
+        return (
+          <PicklistSelect
+            fieldKey="apartment.mezuzah_status"
+            value={(values.mezuzah_status as string | null) ?? null}
+            onChange={(v) => setFieldValue("mezuzah_status", v)}
+          />
+        );
+      case "language":
+        return (
+          <MultiSelectFilter
+            allLabel={t("filter.all_languages", "כל השפות")}
+            options={language.options.map((o) => ({ id: o.value, label: language.display(o) }))}
+            value={(values.language as string[]) ?? []}
+            onChange={(vals) => setFieldValue("language", vals)}
+          />
+        );
+      case "apartment_notes":
+        return (
+          <textarea
+            className={`${inputClass} w-full`}
+            rows={3}
+            value={(values.apartment_notes as string) ?? ""}
+            onChange={(e) => setFieldValue("apartment_notes", e.target.value)}
+          />
+        );
+    }
+  }
+
   async function apply() {
     setError("");
-    if (!updateReport && !updateNotes) {
+    const changes: Record<string, unknown> = {};
+    const picklistValues: Record<string, unknown> = {};
+    const customFieldValues: Record<string, unknown> = {};
+    for (const [key, on] of Object.entries(enabled)) {
+      if (!on) continue;
+      if (key.startsWith("picklist:")) {
+        picklistValues[key.slice("picklist:".length)] = values[key] ?? null;
+      } else if (key.startsWith("customfield:")) {
+        customFieldValues[key.slice("customfield:".length)] = values[key] ?? null;
+      } else {
+        changes[key] = values[key] ?? (key === "language" ? [] : null);
+      }
+    }
+    if (Object.keys(picklistValues).length) changes.picklist_values = picklistValues;
+    if (Object.keys(customFieldValues).length) changes.custom_field_values = customFieldValues;
+    if (Object.keys(changes).length === 0) {
       setError(t("bulkedit.pick_field", "יש לבחור לפחות שדה אחד לעדכון"));
       return;
     }
@@ -1782,11 +2054,11 @@ function BulkEditModal({
             report_number_ids: filters.report_number_ids,
             jewish_status: filters.jewish_status,
             mezuzah_status: filters.mezuzah_status,
+            language: filters.language,
+            picklist: filters.picklist,
+            custom_field_filter: filters.custom_field_filter,
             q: filters.q,
-            set_report_number: updateReport,
-            report_number_id: updateReport ? reportNumberId : null,
-            set_notes: updateNotes,
-            apartment_notes: updateNotes ? notes : null,
+            changes,
           }),
         },
       );
@@ -1804,6 +2076,51 @@ function BulkEditModal({
     }
   }
 
+  function FieldRow({ fieldKey, label }: { fieldKey: string; label: string }) {
+    const on = !!enabled[fieldKey];
+    return (
+      <div className="space-y-1 rounded-lg border border-gray-200 p-3">
+        <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+          <input
+            type="checkbox"
+            className="accent-status-magenta"
+            checked={on}
+            onChange={(e) => setFieldEnabled(fieldKey, e.target.checked)}
+          />
+          {label}
+        </label>
+        {on && (
+          <div className="pt-1">
+            {BULK_STANDARD_FIELDS.includes(fieldKey as BulkStandardField)
+              ? renderStandardEditor(fieldKey as BulkStandardField)
+              : fieldKey.startsWith("picklist:")
+                ? (
+                  <PicklistSelect
+                    fieldKey={fieldKey.slice("picklist:".length)}
+                    value={(values[fieldKey] as string | null) ?? null}
+                    onChange={(v) => setFieldValue(fieldKey, v)}
+                  />
+                )
+                : (() => {
+                    const def = customFieldDefs.find(
+                      (d) => `customfield:${d.field_key}` === fieldKey,
+                    );
+                    return def ? (
+                      <CustomFieldValueInput
+                        fieldType={def.field_type}
+                        value={
+                          (values[fieldKey] as string | number | boolean | null) ?? null
+                        }
+                        onChange={(v) => setFieldValue(fieldKey, v)}
+                      />
+                    ) : null;
+                  })()}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-lg bg-white rounded-xl shadow-xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -1819,53 +2136,25 @@ function BulkEditModal({
           </p>
         </div>
 
-        {/* Report number */}
-        <div className="space-y-1 rounded-lg border border-gray-200 p-3">
-          <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
-            <input
-              type="checkbox"
-              className="accent-status-magenta"
-              checked={updateReport}
-              onChange={(e) => setUpdateReport(e.target.checked)}
-            />
-            {t("bulkedit.set_report", "עדכן מספר דוח")}
-          </label>
-          {updateReport && (
-            <div className="pt-1 space-y-1">
-              <SearchableSelect
-                value={reportNumberId}
-                onChange={(id) => setReportNumberId(id)}
-                options={reportNumbers.map((rn) => ({ id: rn.id, label: rn.name }))}
-                placeholder={t("bulkedit.choose_report", "בחר מספר דוח…")}
-              />
-              <p className="text-xs text-gray-400">
-                {t("bulkedit.clear_hint", "השאר ריק כדי להסיר את מספר הדוח מהדירות.")}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Notes */}
-        <div className="space-y-1 rounded-lg border border-gray-200 p-3">
-          <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
-            <input
-              type="checkbox"
-              className="accent-status-magenta"
-              checked={updateNotes}
-              onChange={(e) => setUpdateNotes(e.target.checked)}
-            />
-            {t("bulkedit.set_notes", "עדכן הערות")}
-          </label>
-          {updateNotes && (
-            <textarea
-              className={`${inputClass} w-full`}
-              rows={3}
-              placeholder={t("apartments.apartment_notes", "הערות")}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          )}
-        </div>
+        {BULK_STANDARD_FIELDS.map((f) => (
+          <FieldRow key={f} fieldKey={f} label={standardLabels[f]} />
+        ))}
+        {/* fixes52 §2.3: one row per admin-added apartment.* picklist. */}
+        {customDefs.map((d) => (
+          <FieldRow
+            key={d.field_key}
+            fieldKey={`picklist:${d.field_key}`}
+            label={(lang === "en" ? d.english_label || d.label : d.label) || d.field_key}
+          />
+        ))}
+        {/* fixes52 §2.3: one row per admin-added non-select apartment field. */}
+        {customFieldDefs.map((d) => (
+          <FieldRow
+            key={d.field_key}
+            fieldKey={`customfield:${d.field_key}`}
+            label={(lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) || d.field_key}
+          />
+        ))}
 
         {error && <p className="text-sm text-status-darkred">{error}</p>}
         <div className="flex items-center gap-2 pt-1">

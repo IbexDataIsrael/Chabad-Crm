@@ -21,6 +21,7 @@ from app import custom_field_utils, models, picklist_utils
 from app.core.display import building_display_name
 from app.core.email import send_shliach_welcome
 from app.core.geocode import geocode_address
+from app.core.natural_sort import natural_sort_keys
 from app.core.security import hash_password
 from app.core.shliach import (
     apply_shliach_versioned_update,
@@ -830,7 +831,8 @@ def list_contacts(
     query = _contacts_query(
         db, current_user, pipeline_status, contact_type, assigned_user_id
     )
-    rows = query.order_by(models.Contact.name).all()
+    # fixes52 §6: natural sort.
+    rows = query.order_by(*natural_sort_keys(models.Contact.name, db)).all()
     picklist_map = picklist_utils.get_values_bulk(
         db, current_user.organization_id, "contacts", [c.id for c in rows]
     )
@@ -965,11 +967,20 @@ def list_contacts_paginated(
         custom_fields=custom_fields, picklist=picklist,
     )
     total = query.count()
-    key = models.Contact.created_at if sort == "created" else models.Contact.name
+    if sort == "created":
+        order = [
+            models.Contact.created_at.desc()
+            if dir == "desc"
+            else models.Contact.created_at.asc()
+        ]
+    else:
+        # fixes52 §6: natural sort.
+        order = [
+            k.desc() if dir == "desc" else k.asc()
+            for k in natural_sort_keys(models.Contact.name, db)
+        ]
     rows = (
-        query.order_by(
-            key.desc() if dir == "desc" else key.asc(), models.Contact.id
-        )
+        query.order_by(*order, models.Contact.id)
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
@@ -1029,7 +1040,7 @@ def list_contact_emails(
     )
     rows = (
         query.filter(models.Contact.email.isnot(None), models.Contact.email != "")
-        .order_by(models.Contact.name)
+        .order_by(*natural_sort_keys(models.Contact.name, db))
         .all()
     )
     seen: set[str] = set()

@@ -142,10 +142,10 @@ class TestBulkUpdate:
             "/api/apartments/bulk-update",
             json={
                 "building_ids": [b["id"]],
-                "set_report_number": True,
-                "report_number_id": rn2["id"],
-                "set_notes": True,
-                "apartment_notes": "BULK",
+                "changes": {
+                    "report_number_id": rn2["id"],
+                    "apartment_notes": "BULK",
+                },
             },
             headers=admin_headers,
         )
@@ -170,8 +170,7 @@ class TestBulkUpdate:
             "/api/apartments/bulk-update",
             json={
                 "building_ids": [b1["id"]],
-                "set_notes": True,
-                "apartment_notes": "ONLY-B1",
+                "changes": {"apartment_notes": "ONLY-B1"},
             },
             headers=admin_headers,
         )
@@ -192,7 +191,7 @@ class TestBulkUpdate:
 
         res = client.post(
             "/api/apartments/bulk-update",
-            json={"set_report_number": True, "report_number_id": None},
+            json={"changes": {"report_number_id": None}},
             headers=admin_headers,
         )
         assert res.json()["updated"] == 1
@@ -218,7 +217,7 @@ class TestBulkUpdate:
 
         res = client.post(
             "/api/apartments/bulk-update",
-            json={"set_report_number": True, "report_number_id": 999999},
+            json={"changes": {"report_number_id": 999999}},
             headers=admin_headers,
         )
         assert res.status_code == 400, res.text
@@ -232,8 +231,7 @@ class TestBulkUpdate:
             "/api/apartments/bulk-update",
             json={
                 "building_ids": [b["id"]],
-                "set_notes": True,
-                "apartment_notes": "v2",
+                "changes": {"apartment_notes": "v2"},
             },
             headers=admin_headers,
         )
@@ -264,7 +262,7 @@ class TestBulkUpdate:
         # The shliach sees only MINE, and a bulk update touches only it.
         res = client.post(
             "/api/apartments/bulk-update",
-            json={"set_notes": True, "apartment_notes": "S"},
+            json={"changes": {"apartment_notes": "S"}},
             headers=shliach,
         )
         assert res.json()["updated"] == 1

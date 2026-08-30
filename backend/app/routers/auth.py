@@ -33,6 +33,7 @@ from app.core.security import (
 )
 from app.database import get_db
 from app.deps import get_current_user
+from app.routers.users import _linked_shliach, _shliach_out
 from app.schemas import (
     ChangePasswordRequest,
     GoogleLoginRequest,
@@ -439,6 +440,12 @@ def me(
 ) -> UserOut:
     out = UserOut.model_validate(current_user)
     out.display_name = _resolve_display_name(db, current_user)
+    # fixes52 §5: was never resolved here (only on GET /api/users/{id}) — the
+    # frontend needs a shliach session's own contact_id to redirect them off
+    # the admin-only /dashboard/users page to their contact profile instead.
+    sh = _linked_shliach(db, current_user.id)
+    if sh:
+        out.shliach = _shliach_out(sh)
     return out
 
 

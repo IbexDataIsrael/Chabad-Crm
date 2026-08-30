@@ -790,10 +790,44 @@ class BuildingAggregate(BaseModel):
     count: int
 
 
+class ApartmentBulkChanges(BaseModel):
+    """fixes52 §2.3: the "new values" half of a bulk edit — deliberately the
+    same shape as `ApartmentUpdate` minus `apartment_name`/`building_id` (the
+    spec excludes both from bulk editing; leaving them off the schema blocks
+    a crafted request too, not just the UI). Key presence = "update this
+    field" (`model_dump(exclude_unset=True)`, mirrors the single-apartment
+    PATCH contract exactly) — an omitted field is left untouched, an explicit
+    `null` clears it."""
+
+    floor: Optional[str] = None
+    apartment_notes: Optional[str] = None
+    jewish_status: Optional[str] = None
+    campaign_status: Optional[str] = None
+    mezuzah_status: Optional[str] = None
+    language: Optional[list[str]] = None
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    report_number_id: Optional[int] = None
+    picklist_values: Optional[dict[str, Optional[str]]] = None
+    custom_field_values: Optional[dict[str, CustomFieldValue]] = None
+
+    @field_validator("phone")
+    @classmethod
+    def _check_phone(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_phone(v) if v else None
+
+    @field_validator("email")
+    @classmethod
+    def _check_email(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_email(v)
+
+
 class ApartmentBulkUpdate(BaseModel):
-    """fixes23 §3: apply a change to every active apartment matching the page's
-    current filters. The filter block mirrors the /list query params; the
-    `set_*` flags disambiguate "leave unchanged" from "clear to empty"."""
+    """fixes23 §3, expanded fixes52 §2.3: apply a change to every active
+    apartment matching the page's current filters. The filter block mirrors
+    the /list query params exactly, so "matching the active filters" resolves
+    to the same rows the grid shows."""
 
     # Filters (same semantics as GET /api/apartments/list).
     building_ids: Optional[list[int]] = None
@@ -801,12 +835,13 @@ class ApartmentBulkUpdate(BaseModel):
     report_number_ids: Optional[list[int]] = None
     jewish_status: Optional[list[str]] = None
     mezuzah_status: Optional[list[str]] = None
+    campaign_status: Optional[list[str]] = None
+    language: Optional[list[str]] = None
+    picklist: Optional[list[str]] = None
+    custom_field_filter: Optional[list[str]] = None
     q: Optional[str] = None
-    # New values — each only applied when its companion flag is true.
-    set_report_number: bool = False
-    report_number_id: Optional[int] = None
-    set_notes: bool = False
-    apartment_notes: Optional[str] = None
+    # The new values to apply — see ApartmentBulkChanges.
+    changes: ApartmentBulkChanges = ApartmentBulkChanges()
 
 
 class ApartmentBulkUpdateResult(BaseModel):

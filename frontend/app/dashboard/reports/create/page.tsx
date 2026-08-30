@@ -7,6 +7,7 @@ import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
+import { naturalCompare } from "@/lib/naturalSort";
 import {
   drawPdfHeaders,
   loadHeaderLogo,
@@ -451,6 +452,12 @@ function CreateReportsInner() {
       doc.text(t("reports.pdf_title", "דוח ריכוז דירות"), pageW - MARGIN, y + 8, {
         align: "right",
       });
+      // fixes52 §4: a prominent divider under the report's own title —
+      // distinct from drawPdfHeaders' pale org-branding hairline.
+      doc.setDrawColor(31, 41, 55);
+      doc.setLineWidth(1.2);
+      doc.line(MARGIN, y + 16, pageW - MARGIN, y + 16);
+      doc.setLineWidth(0.2);
       y += 34;
 
       // fixes33 §7.1 / fixes38 §4.1: the report description, once, at the
@@ -481,9 +488,8 @@ function CreateReportsInner() {
           list.push(a);
           byBuilding.set(key, list);
         }
-        const buildingKeys = [...byBuilding.keys()].sort((a, b) =>
-          a.localeCompare(b, "he"),
-        );
+        // fixes52 §6: natural sort — "רחוב 10" must not sort before "רחוב 2".
+        const buildingKeys = [...byBuilding.keys()].sort(naturalCompare);
 
         for (const buildingKey of buildingKeys) {
           if (y + 60 > bottom) {

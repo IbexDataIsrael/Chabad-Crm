@@ -14,10 +14,11 @@ import datetime
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import case, func, nullslast, or_, select
+from sqlalchemy import func, nullslast, or_, select
 from sqlalchemy.orm import Session
 
 from app import custom_field_utils, models, picklist_utils
+from app.core.natural_sort import natural_sort_keys
 from app.core.shliach import resolve_shliach
 from app.database import get_db
 from app.deps import get_current_user, require_admin
@@ -281,22 +282,10 @@ def list_apartments(
 
 
 def _natural(col, db: Session):
-    """Natural sort keys that respect the alphabet (fixes17 §3.2).
-
-    Pure-numeric values keep the natural (length, value) ordering — '2' before
-    '10' — while anything containing a non-digit sorts plainly alphabetically.
-    The old unconditional (length, value) key broke alphabetical labels
-    ('Bet' sorted before 'Aleph' because it's shorter). Digit detection is
-    dialect-specific: regex on PostgreSQL, GLOB on SQLite (tests)."""
-    if db.get_bind().dialect.name == "postgresql":
-        is_numeric = col.op("~")(r"^\d+$")
-    else:
-        is_numeric = ~col.op("GLOB")("*[^0-9]*")
-    # NULL values keep sorting last (the caller wraps keys in nullslast).
-    return [
-        case((col.is_(None), None), (is_numeric, func.length(col)), else_=0),
-        col,
-    ]
+    """fixes52 §6: moved to app.core.natural_sort so areas/report_numbers/
+    contacts can share it too — kept as a thin local alias since every call
+    site in this module already says `_natural(...)`."""
+    return natural_sort_keys(col, db)
 
 
 def _floor_rank():
@@ -340,8 +329,39 @@ def _picklist_filter(query, field_key: str, values: list[str]):
     )
 
 
+def _custom_field_text_filter(query, db: Session, org_id: int, field_key: str, text: str):
+    """fixes52 §2.2: restrict to apartments whose non-select custom-field
+    value for `field_key` matches `text` — a boolean field matches "true"/
+    "false" against `checked`; text/number/date match an ILIKE contains
+    against the stored string. An unknown field_key is a silent no-op (same
+    "don't error mid filter-chain on a stale key" stance the picklist
+    filters already take)."""
+    definition = (
+        db.query(models.CustomFieldDefinition)
+        .filter(
+            models.CustomFieldDefinition.organization_id == org_id,
+            models.CustomFieldDefinition.entity_type == "apartment",
+            models.CustomFieldDefinition.field_key == field_key,
+        )
+        .first()
+    )
+    if definition is None:
+        return query
+    sub = select(models.CustomFieldValue.entity_id).where(
+        models.CustomFieldValue.entity_table == "apartments",
+        models.CustomFieldValue.definition_id == definition.id,
+    )
+    if definition.field_type == "boolean":
+        sub = sub.where(models.CustomFieldValue.checked.is_(text.strip().lower() == "true"))
+    else:
+        sub = sub.where(models.CustomFieldValue.value.ilike(f"%{text.strip()}%"))
+    return query.filter(models.Apartment.id.in_(sub))
+
+
 def _apply_apartment_filters(
     query,
+    db: Session,
+    org_id: int,
     *,
     building_id: Optional[int] = None,
     building_ids: Optional[list[int]] = None,
@@ -356,6 +376,7 @@ def _apply_apartment_filters(
     campaign_status: Optional[list[str]] = None,
     language: Optional[list[str]] = None,
     custom_picklists: Optional[dict[str, list[str]]] = None,
+    custom_field_filters: Optional[dict[str, str]] = None,
 ):
     """Apply the shared apartment-list filters (fixes8/15/18/20/23). The caller's
     query must already be joined to `models.Building` (area/street filters need
@@ -404,6 +425,10 @@ def _apply_apartment_filters(
     for field_key, values in (custom_picklists or {}).items():
         if values:
             query = _picklist_filter(query, field_key, values)
+    # fixes52 §2.2: dynamic custom (non-select) apartment field filters.
+    for field_key, text in (custom_field_filters or {}).items():
+        if text and text.strip():
+            query = _custom_field_text_filter(query, db, org_id, field_key, text)
     return query
 
 
@@ -426,6 +451,9 @@ def list_apartments_enriched(
     # fixes32 §6: dynamic filter for any custom apartment.* picklist, sent as
     # repeated "field_key:value" pairs (OR within a field_key, AND across).
     picklist: Optional[list[str]] = Query(None),
+    # fixes52 §2.2: dynamic filter for any custom (non-select) apartment
+    # field, sent the same "field_key:query" way.
+    custom_field_filter: Optional[list[str]] = Query(None),
     sort: Literal["floor", "label", "resident", "building", "created"] = "floor",
     dir: Literal["asc", "desc"] = "asc",
     page: int = Query(1, ge=1),
@@ -463,8 +491,15 @@ def list_apartments_enriched(
         key, sep, value = entry.partition(":")
         if sep:
             custom_picklists.setdefault(key, []).append(value)
+    custom_field_filters: dict[str, str] = {}
+    for entry in custom_field_filter or []:
+        key, sep, value = entry.partition(":")
+        if sep:
+            custom_field_filters[key] = value
     query = _apply_apartment_filters(
         query,
+        db,
+        current_user.organization_id,
         building_id=building_id,
         building_ids=building_ids,
         area_id=area_id,
@@ -478,6 +513,7 @@ def list_apartments_enriched(
         campaign_status=campaign_status,
         language=language,
         custom_picklists=custom_picklists,
+        custom_field_filters=custom_field_filters,
     )
 
     total = query.count()
@@ -677,6 +713,7 @@ def building_aggregates(
     campaign_status: Optional[list[str]] = Query(None),
     language: Optional[list[str]] = Query(None),
     picklist: Optional[list[str]] = Query(None),
+    custom_field_filter: Optional[list[str]] = Query(None),
 ):
     """fixes30 §1: apartment counts per building under the exact /list filters —
     the group-by-building view shows each building header with its full
@@ -700,8 +737,15 @@ def building_aggregates(
         key, sep, value = entry.partition(":")
         if sep:
             custom_picklists.setdefault(key, []).append(value)
+    custom_field_filters: dict[str, str] = {}
+    for entry in custom_field_filter or []:
+        key, sep, value = entry.partition(":")
+        if sep:
+            custom_field_filters[key] = value
     query = _apply_apartment_filters(
         query,
+        db,
+        current_user.organization_id,
         building_id=building_id,
         building_ids=building_ids,
         area_id=area_id,
@@ -713,6 +757,7 @@ def building_aggregates(
         campaign_status=campaign_status,
         language=language,
         custom_picklists=custom_picklists,
+        custom_field_filters=custom_field_filters,
     )
     return [
         BuildingAggregate(building_id=b_id, count=count)
@@ -725,13 +770,20 @@ def _bulk_versioned_update(
     apartments: list[models.Apartment],
     changes: dict,
     editor: models.User,
+    picklist_changes: dict,
+    custom_field_changes: dict,
+    language_values: Optional[list[str]],
 ) -> int:
-    """Apply `changes` to a list of active apartments as fixes19 §3 versioned
+    """Apply `changes`/`picklist_changes`/`custom_field_changes`/
+    `language_values` to a list of active apartments as fixes19 §3 versioned
     edits, in a single transaction: retire each current row and insert its
-    successor carrying the change, re-pointing any mekurav link. `changes` here
-    only ever carries real columns (report_number_id / apartment_notes) — the
-    picklist-backed fields are copied forward untouched (fixes32). Returns the
-    number of apartments updated."""
+    successor carrying the change, re-pointing any mekurav link. fixes52
+    §2.3: mirrors `_apply_versioned_update`'s per-row body (picklist/custom-
+    field/language handling included, not just real columns) — kept as its
+    own function rather than merged with the single-row version since one
+    commits per row in a loop and the other doesn't; that's a control-flow
+    difference, not duplicated logic. Returns the number of apartments
+    updated."""
     for active in apartments:
         active.is_display = False
         active.last_edit = datetime.datetime.utcnow()
@@ -753,6 +805,20 @@ def _bulk_versioned_update(
             {models.ContactMekurav.apartment_id: new.id}, synchronize_session=False
         )
         picklist_utils.copy_links(db, "apartments", active.id, new.id)
+        for field_key, value in picklist_changes.items():
+            picklist_utils.set_value(
+                db, active.organization_id, "apartments", new.id, field_key, value
+            )
+        if language_values is not None:
+            picklist_utils.set_multi_values(
+                db, active.organization_id, "apartments", new.id,
+                _APARTMENT_LANGUAGE_FIELD_KEY, language_values,
+            )
+        custom_field_utils.copy_values(db, "apartments", active.id, new.id)
+        for field_key, value in custom_field_changes.items():
+            custom_field_utils.set_value(
+                db, active.organization_id, "apartment", new.id, field_key, value
+            )
     db.commit()
     return len(apartments)
 
@@ -763,21 +829,24 @@ def bulk_update_apartments(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """fixes23 §3: apply a change (report number and/or notes) to every active
-    apartment matching the page's current filters, as versioned edits. The filter
-    block mirrors GET /api/apartments/list, so "all apartments currently matching
-    the active filters" resolves to the exact same rows the user sees. Shliach
-    users only touch apartments assigned to them."""
+    """fixes23 §3, expanded fixes52 §2.3: apply a change to every active
+    apartment matching the page's current filters, as versioned edits. The
+    filter block mirrors GET /api/apartments/list, so "all apartments
+    currently matching the active filters" resolves to the exact same rows
+    the user sees. Shliach users only touch apartments assigned to them.
+    `apartment_name`/`building_id` are never bulk-editable — they simply
+    aren't fields on `ApartmentBulkChanges`."""
     org_id = current_user.organization_id
-    changes: dict = {}
-    if payload.set_report_number:
-        _validate_report_number(
-            {"report_number_id": payload.report_number_id}, org_id, db
-        )
-        changes["report_number_id"] = payload.report_number_id
-    if payload.set_notes:
-        changes["apartment_notes"] = payload.apartment_notes
-    if not changes:
+    data = payload.changes.model_dump(exclude_unset=True)
+    language_values = data.pop("language", None)
+    if language_values is not None:
+        for value in language_values:
+            validate_picklist_value(db, org_id, _APARTMENT_LANGUAGE_FIELD_KEY, value)
+    picklist_changes = _split_picklist_changes(data)
+    _validate_picklist_changes(picklist_changes, org_id, db)
+    custom_field_changes = _split_custom_field_changes(data)
+    _validate_report_number(data, org_id, db)
+    if not data and not picklist_changes and not custom_field_changes and language_values is None:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, "Select at least one field to update"
         )
@@ -795,17 +864,36 @@ def bulk_update_apartments(
         if not ids:
             return ApartmentBulkUpdateResult(updated=0)
         query = query.filter(models.Apartment.id.in_(ids))
+    custom_picklists: dict[str, list[str]] = {}
+    for entry in payload.picklist or []:
+        key, sep, value = entry.partition(":")
+        if sep:
+            custom_picklists.setdefault(key, []).append(value)
+    custom_field_filters: dict[str, str] = {}
+    for entry in payload.custom_field_filter or []:
+        key, sep, value = entry.partition(":")
+        if sep:
+            custom_field_filters[key] = value
     query = _apply_apartment_filters(
         query,
+        db,
+        org_id,
         building_ids=payload.building_ids,
         area_ids=payload.area_ids,
         report_number_ids=payload.report_number_ids,
         q=payload.q,
         jewish_status=payload.jewish_status,
         mezuzah_status=payload.mezuzah_status,
+        campaign_status=payload.campaign_status,
+        language=payload.language,
+        custom_picklists=custom_picklists,
+        custom_field_filters=custom_field_filters,
     )
     apartments = query.all()
-    updated = _bulk_versioned_update(db, apartments, changes, current_user)
+    updated = _bulk_versioned_update(
+        db, apartments, data, current_user,
+        picklist_changes, custom_field_changes, language_values,
+    )
     return ApartmentBulkUpdateResult(updated=updated)
 
 

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app import models
+from app.core.natural_sort import natural_sort_key
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.schemas import (
@@ -40,12 +41,16 @@ def list_report_numbers(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    return (
+    # fixes52 §6: natural sort — report numbers are literally numeric
+    # strings, the textbook "10 sorts before 2" bug. This list is never
+    # paginated, so sorting in Python (correctly handling a number embedded
+    # mid-string too, e.g. an admin-named "RN 10") is safe.
+    rows = (
         db.query(models.ReportNumber)
         .filter(models.ReportNumber.organization_id == current_user.organization_id)
-        .order_by(models.ReportNumber.name)
         .all()
     )
+    return sorted(rows, key=lambda r: natural_sort_key(r.name or ""))
 
 
 @router.get("/shliach-assignments", response_model=dict[int, list[ShliachSummary]])

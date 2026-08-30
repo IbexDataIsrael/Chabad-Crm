@@ -937,6 +937,12 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
         "These fields (checkbox, text, number, or date — e.g. \"Connection to the Rebbe\") aren't option lists but single fields; shown here for central management. Add a new one from the Custom Fields page.",
     ),
     ("pl", "pl.go_to_custom_fields", "מעבר לדף שדות מותאמים אישית ←", "Go to the Custom Fields page →"),
+    # --- fixes52 §2.2/§2.4: apartments custom-field filters + building-group
+    # collapse toggle ---
+    ("filter", "filter.yes", "כן", "Yes"),
+    ("filter", "filter.no", "לא", "No"),
+    ("action", "action.expand", "הרחב", "Expand"),
+    ("action", "action.collapse", "כווץ", "Collapse"),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)

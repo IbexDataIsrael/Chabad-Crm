@@ -17,6 +17,7 @@ import {
   setToken,
   type LoginOrgOption,
 } from "./api";
+import type { Shliach } from "./types";
 
 export type { LoginOrgOption };
 
@@ -61,6 +62,10 @@ export interface User {
   created_at: string;
   organization_id: number;
   organization?: Organization | null;
+  // fixes52 §5: the linked ContactShliach (role='shliach' only) — mirrors
+  // schemas.UserOut.shliach, already returned by GET /api/auth/me but never
+  // exposed on this type before now.
+  shliach?: Shliach | null;
 }
 
 interface AuthContextValue {

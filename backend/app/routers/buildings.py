@@ -238,7 +238,13 @@ def add_floor(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Floor name is required")
     sort_order = payload.sort_order
     if sort_order is None:
-        sort_order = (b.floors[-1].sort_order + 1) if b.floors else 0
+        # fixes52 §3: "L" (Lobby/Level) always sorts ahead of every numbered
+        # floor, regardless of when it's added — there's no drag/reorder UI
+        # for floors, so this auto-placement is the only way to get it right.
+        if name.upper() == "L":
+            sort_order = min((f.sort_order for f in b.floors), default=0) - 1
+        else:
+            sort_order = (b.floors[-1].sort_order + 1) if b.floors else 0
     f = models.Floor(
         organization_id=admin.organization_id,
         building_id=b.id,
