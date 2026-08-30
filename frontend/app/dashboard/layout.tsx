@@ -76,6 +76,12 @@ function DashboardChrome({ children }: { children: ReactNode }) {
           label: t("nav.report_numbers", "מספרי דוח"),
           admin: true,
         },
+        // fixes53 §9: the activist report-completion/comment log.
+        {
+          href: "/dashboard/messages-from-activists",
+          label: t("nav.messages_from_activists", "הודעות מהפעילים"),
+          admin: true,
+        },
       ]);
   const moreItems = adminOnly([
     { href: "/dashboard", label: t("nav.home", "בית") },

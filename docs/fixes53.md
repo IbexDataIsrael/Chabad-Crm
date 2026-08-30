@@ -218,3 +218,187 @@ sort), §3–§10 in full. All still pending.
   itself was left in place (still covered by its own passing tests) even
   though the frontend no longer calls it — nothing else in the codebase
   uses it, and removing it was out of scope for this single-bug fix.
+
+### 2026-08-30 (same day, later) — the rest of the plan, in full
+
+User: "yes implement all changes on fixes53.md." Went through every
+remaining section. Some were **already satisfied by prior rounds** (verified
+by reading the live code, not assumed from memory) — those are marked as
+such below rather than re-touched. Everything else is new this round.
+
+- [x] **§1 CSS Alternating Borders** — already done (fixes52 §1):
+  `frontend/app/dashboard/contacts/[id]/page.tsx`'s `renderSegment` already
+  alternates `border-status-magenta/30` / `border-black/70` by render
+  position across all 5 page segments. No changes needed.
+- [x] **§2 Mobile Header Buttons Fix** — already done (fixes52 §2.1, code
+  comment literally says "matches the Contacts page's header button heights
+  exactly").
+- [x] **§2 Sticky Column & Header Layout** — already done (fixes52 §2.5:
+  `sticky top-0 z-20`/`z-10` header row + sticky first column, RTL/LTR-aware
+  via `firstColStickySide`).
+- [x] **§2 Bulk Edit Expansion** — already done (fixes52 §2.3): every
+  standard field + every custom picklist + every custom field is a row in
+  `BulkEditModal`; `apartment_name`/`building` are absent from
+  `BULK_STANDARD_FIELDS` by construction.
+- [x] **§2 Data Grid Filtering — dynamic text fields** — already done
+  (fixes52 §2.2). **"Empty" selection — new this round**:
+  `EMPTY_FIELD_SENTINEL` (`apartments.py`) — a null-byte-wrapped string no
+  real search text can collide with — sent as the `custom_field_filter`
+  value; `_custom_field_text_filter` matches apartments with no
+  `CustomFieldValue` row *or* one explicitly cleared to `""` (the
+  `custom_field_utils.set_value` contract: only `None` deletes the row).
+  Frontend: an "☐ ריק" checkbox next to each non-boolean custom-field filter
+  input, mutually exclusive with the text box.
+- [x] **§2 Dynamic Field Customization Sync** — verified already correct,
+  not a bug: `useCustomFieldDefs`/the picklist-defs fetch are both
+  fetch-on-mount effects, and Next.js App Router remounts the page component
+  on every navigation to it — a field created on `/dashboard/fields` (or via
+  the API) is visible on `/dashboard/apartments` on the very next visit, no
+  hard refresh needed. Live-verified: created a field via the API, loaded
+  `/dashboard/apartments` in a fresh browser context, and its filter input
+  (and Customize Fields toggle) were present immediately.
+- [x] **§2 Mandatory Grid Hierarchy Sorting — new this round**: added
+  `sort=hierarchy` to `/api/apartments/list` — Report Number (natural sort,
+  nulls last) → Building (`building_address`) → Floor (`_floor_rank()`, "L"
+  already first via fixes52 §3) → apartment number, always ascending
+  regardless of `dir` (enforced server-side, not just hidden client-side).
+  Made it the new default `sort` value (existing users' saved preference is
+  untouched — `usePersistentState` only applies a new default to fresh
+  state). The direction toggle button is replaced with a static "↑ עולה"
+  indicator while this mode is active.
+- [x] **§3/§4 Calculated Columns + Activist Navigation + Grid Controls** —
+  new `app/core/jewish_status.py`: the 5 real `apartment.Jewish_status`
+  technical values map 1:1 onto the spec's category names (`jewish`→Yid,
+  `jewish_gentile`→Yid and Goy, `jewish_shtumtz`→Frum,
+  `jewish_interested`→Engaged Yid, `jewish_interested_gentile`→Engaged Yid
+  and Goy — matches the 5 real Hebrew picklist labels exactly); "Number of
+  Jews" = any of the 5, "Number of Engaged Jews" = the 2 "interested" ones
+  (a subset). New `GET /api/report-numbers/jewish-counts` and
+  `GET /api/areas/jewish-counts` (org-scoped, shliach-scoped like their
+  plain list siblings), reusing the *already-existing*
+  `/api/report-numbers/shliach-assignments` and `/api/areas/shliach-
+  assignments` endpoints (fixes43) for "Name of Activist" — no new coverage
+  data needed. Both `/dashboard/report-numbers` and `/dashboard/areas` grew
+  from a plain card/row list into a real grid: sortable `<th>` columns
+  (client-side — both lists are already fetched in full; natural/locale
+  compare via the existing `naturalCompare` helper for name/activist,
+  numeric compare for the counts), a Customize Fields toggle for the new
+  optional columns, and (`/dashboard/report-numbers` only) a "הצג דירות"
+  link to `/dashboard/apartments?report_number_ids=<id>` — a new one-shot
+  deep-link effect on the apartments page reads that param once on mount,
+  clears every other filter, and applies it (there was no existing "filter
+  applied via URL" path into that page before now). The Areas page keeps
+  its map, cascade-delete-with-buildings modal, and area multi-select
+  filter unchanged — only the list-of-cards became a table.
+- [x] **§5 Floor Model & Sort Logic** — already done (Floor model +
+  fixes52 §3's "L" = `min(sort_order) - 1` trick, reused as-is by the new
+  hierarchy sort's `_floor_rank()`).
+- [x] **§6 PDF Layout Adjustment** — already done (fixes52 §4: a 1.2pt-wide
+  dark divider directly under the report's own title, explicitly described
+  in its own code comment as "distinct from drawPdfHeaders' pale
+  org-branding hairline").
+- [x] **§7 Shliach Conditional Redirect & Self-Service Edit**:
+  `/dashboard/users` already redirected a shliach to their own contact
+  (fixes52 §5); **new this round**: `/dashboard/page.tsx` (the real
+  post-login landing page) now does the same — a shliach with a linked
+  contact lands on `/dashboard/contacts/{id}` directly, making it "the
+  default screen upon initial system entry" as asked, not just a page they'd
+  reach if they happened to visit Users. "Edit your data" button: the
+  contact page renders fully read-only for a shliach viewing their own
+  profile until they click it (reuses `ContactView`'s existing `!onPatch` →
+  plain-display path, no new prop needed for that half); once clicked,
+  `ContactView` gets new `isSelfEdit`/`lockedFieldKeys` props — Email,
+  `shliach.areas`, `shliach.report_numbers` are hard-coded always-locked
+  (`MANDATORY_SELF_EDIT_LOCKS`), rendered with a 🔒 hint instead of the
+  normal click-to-edit. **Enforced server-side too**, not just hidden in the
+  UI: `contacts.py`'s `update_contact` strips `email`/
+  `shliach.area_ids`/`shliach.report_number_ids` from the payload whenever
+  the editor is a shliach editing their own linked contact, regardless of
+  what a raw API call sends.
+- [x] **§7 Report Completion Action** + **System Comments Action** +
+  **Persistence Layer**: two new tables via Alembic migration
+  `6c7d8e9f0a1b` — `shliach_report_completions` (status + optional comments)
+  and `shliach_system_comments` (free text), both keyed by `contacts.id`
+  (deliberately *not* `contact_shliach.id`, which is versioned and would
+  orphan old submissions on the next profile edit — see fixes45). New router
+  `app/routers/shliach_messages.py`: `POST` self-scoped (resolves the
+  caller's own shliach contact via `resolve_shliach`, 403s a non-shliach),
+  `GET` admin-only, for `/dashboard/messages-from-activists`. Two buttons +
+  modals on the self-edit page ("דיווח על השלמת הדוח" — 3 radio choices +
+  a comments textarea; "הערות על המערכת" — free text), both available
+  regardless of whether "Edit your data" mode is on.
+- [x] **§8 Activist Configuration field-level locks**: `shliach_view_config`
+  (already a free-form JSON blob on `organizations`, no migration needed)
+  grew a `self_edit_locked_fields: string[]` key. New section on
+  `/dashboard/shliach-config`: checkboxes for name/last_name/phone/
+  `shliach.notes` plus every admin-added `contact_shliach.*` picklist/custom
+  field — Email/Areas/Report Numbers deliberately don't appear here (they're
+  the mandatory, non-configurable floor, not something an admin can
+  *unlock*). Enforced server-side for the 4 static fields (same
+  `update_contact` code path as the mandatory locks); the dynamic
+  picklist/custom-field locks are enforced client-side only (`ContactView`'s
+  `isLocked()`) — a scope decision, not an oversight, since tracing an
+  arbitrary field_key through the picklist/custom-field storage layer for a
+  guardrail aimed at less-technical activists (not a hard security
+  boundary) wasn't worth the added complexity this round.
+- [x] **§9 Messages from Activists**: new `/dashboard/messages-from-
+  activists` page (admin-only) + a new nav entry in the Reports group
+  (hidden for shliach, like its siblings). Two lists — report completions
+  and system comments — each linking the activist's name to their contact
+  page. Status badges use the spec's *exact* hex values (`#2e7d32`/
+  `#d32f2f`/`#ed6c02`) via inline styles, deliberately not this app's own
+  (different-shade) `status-green`/`status-darkred`/`status-orange` theme
+  tokens — confirmed live: a submitted "not completed" badge's computed
+  `background-color` is `rgb(211, 47, 47)`, i.e. `#d32f2f` exactly.
+- [x] **§10 General Natural Alphanumeric Sorting Fix** — already done
+  (fixes52 §6): backend `natural_sort_key`/`natural_sort_keys`
+  (`app/core/natural_sort.py`) applied to Areas, Report Numbers, and
+  Contacts; frontend `naturalCompare` (`lib/naturalSort.ts`, the spec's own
+  `localeCompare(..., {numeric:true})` snippet) already used in
+  `reports/create`, Users, admin-areas, Localization. This round's two new
+  grids (Report Numbers, Areas) reuse `naturalCompare` for their new
+  client-side sortable columns, so the "10 before 2" bug can't reappear
+  there either.
+
+**Evidence:**
+- New backend tests: `backend/tests/test_fixes53.py` now holds 16 tests
+  across 6 classes (`TestListGroupedByBuilding` from the earlier building-
+  count fix, `TestHierarchySort`, `TestEmptyFieldFilter`, `TestJewishCounts`,
+  `TestShliachSelfEditLocks`, `TestShliachMessages`) — all passing. Full
+  backend suite: **498 passed, 0 failed**. `npx tsc --noEmit` clean
+  throughout.
+- Independent SQL cross-check: `report_number_id=2048`'s "jews" count from
+  the new endpoint (17) matched a hand-written raw-SQL count over
+  `picklist_links`/`picklist_values`/`picklists` exactly.
+- Live-drive (Playwright, headless Chromium, local Docker+Postgres, real
+  logins — admin and freshly-created throwaway shliach contacts):
+  - Report Numbers grid: Jews/Engaged/Activist columns render; clicking the
+    "Number of Jews" header re-sorts the rows; "הצג דירות" navigates to
+    `/dashboard/apartments?report_number_ids=<id>` and the apartments page
+    actually applies that filter (confirmed via URL + network params).
+  - Areas grid: same calculated/activist columns; the "New area" admin
+    button, per-row edit action, and (implicitly, unchanged code) the
+    cascade-delete modal and polygon map all still present after the
+    card→table rewrite.
+  - Apartments: default sort selector reads "hierarchy" on a fresh session;
+    an "Empty" checkbox is present next to a real non-boolean custom field's
+    filter input.
+  - Shliach self-service, full round trip: login → lands on
+    `/dashboard/contacts/{own id}` (confirmed the 2-hop redirect chain
+    completes in ~2.5s, not instant — a slow first check that doesn't wait
+    long enough will incorrectly read this as broken); "Edit your data"
+    click reveals exactly 3 🔒 icons (email, areas, report numbers) and
+    every other field shows the normal ✎ edit affordance; clicking the
+    locked email field opens no input (0 `<input>` elements appear);
+    submitted a "not completed" + comment and a system comment; both then
+    appeared on the admin's `/dashboard/messages-from-activists` with the
+    activist's real name linked to their contact page and the exact
+    `#d32f2f` badge color.
+  - `shliach_view_config.self_edit_locked_fields` round-tripped through
+    `/dashboard/shliach-config`'s new UI and was verified to actually block
+    edits server-side (locked "phone" via the admin panel → the shliach's
+    own PATCH silently left `phone` unchanged).
+- All of this session's temporary/throwaway test contacts and orgs live only
+  in the local dev Postgres container — nothing was touched in any deployed
+  environment, and per house rule no commit/push happened without an
+  explicit ask.

@@ -9,10 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app import models
+from app.core.jewish_status import apartment_jewish_counts_by
 from app.core.natural_sort import natural_sort_key
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.schemas import (
+    JewishCounts,
     ReportNumberCreate,
     ReportNumberOut,
     ReportNumberUpdate,
@@ -89,6 +91,19 @@ def report_number_shliach_assignments(
             ShliachSummary(id=contact_id, name=name, last_name=last_name)
         )
     return result
+
+
+@router.get("/jewish-counts", response_model=dict[int, JewishCounts])
+def report_number_jewish_counts(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """fixes53 §3: "Number of Jews" / "Number of Engaged Jews" calculated
+    columns for the Report Numbers grid, keyed by report_number_id. Missing
+    keys (no matching apartment) are 0/0 — the frontend fills those in."""
+    return apartment_jewish_counts_by(
+        db, current_user.organization_id, models.Apartment.report_number_id
+    )
 
 
 @router.post("", response_model=ReportNumberOut, status_code=status.HTTP_201_CREATED)

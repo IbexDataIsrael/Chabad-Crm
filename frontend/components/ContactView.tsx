@@ -55,19 +55,55 @@ export type ContactPatch = Record<string, unknown>;
  *  (or Enter) to save; pickers save on selection. Without `onPatch` it is the
  *  old read-only card. fixes25: the Mivtzoim checklist and custom fields live
  *  on the visit log. */
+// fixes53 §7/§8: fields ALWAYS locked in shliach self-edit mode, regardless
+// of admin config — integrity-sensitive (login identity / self-reassigning
+// your own coverage). Matches the backend's own hard-coded strip in
+// contacts.py's update_contact.
+const MANDATORY_SELF_EDIT_LOCKS = new Set(["email", "shliach.areas", "shliach.report_numbers"]);
+
 export function ContactView({
   contact,
   users,
   onPatch,
+  isSelfEdit = false,
+  lockedFieldKeys,
 }: {
   contact: Contact;
   users: UserSummary[];
   onPatch?: (partial: ContactPatch) => Promise<void>;
+  /** fixes53 §7: true when the viewer is a shliach editing their OWN
+   *  profile via "Edit your data" — Email/Areas/Report Numbers lock
+   *  unconditionally; `lockedFieldKeys` adds the admin-configured extras
+   *  (§8's Shliach Role Config Panel field locks). Ignored (no extra
+   *  locking) for anyone else — an admin/staff editor, or a shliach editing
+   *  someone else's record, keeps full access as before. */
+  isSelfEdit?: boolean;
+  lockedFieldKeys?: Set<string>;
 }) {
   const { t, lang } = useLocalization();
   const { isFieldVisible: vis, orderFor } = useFieldSettings();
   // The logged-in user's role (distinct from the contact's type).
   const { isShliach: isShliachUser, isAdmin } = useAuth();
+  function isLocked(key: string): boolean {
+    if (!isSelfEdit) return false;
+    return MANDATORY_SELF_EDIT_LOCKS.has(key) || !!lockedFieldKeys?.has(key);
+  }
+  /** A locked-but-otherwise-editable field renders its plain value plus a
+   *  small lock hint, so it reads as "deliberately blocked" rather than
+   *  looking broken. */
+  function lockedNode(display: ReactNode): ReactNode {
+    return (
+      <span className="inline-flex items-center gap-1">
+        {display}
+        <span
+          className="text-gray-300 text-xs"
+          title={t("contact.field_locked", "שדה זה נעול לעריכה עצמית")}
+        >
+          🔒
+        </span>
+      </span>
+    );
+  }
   const status = usePicklist("contact.pipeline_status");
   const potential = usePicklist("contact.potential_next_step");
   const color = usePicklist("contact.color_tag");
@@ -144,6 +180,9 @@ export function ContactView({
       multiline?: boolean;
       nested?: "mekurav" | "shliach";
       validate?: (v: string) => string | null;
+      /** fixes53 §7/§8: the self-edit lock key to check (defaults to `field`
+       *  — pass e.g. "shliach.notes" when it differs from the raw column). */
+      lockKey?: string;
     } = {},
   ): ReactNode {
     const displayNode = value ? (
@@ -154,6 +193,7 @@ export function ContactView({
       "—"
     );
     if (!onPatch) return displayNode;
+    if (isLocked(opts.lockKey ?? field)) return lockedNode(displayNode);
     return (
       <InlineEdit<string>
         value={value ?? ""}
@@ -195,6 +235,9 @@ export function ContactView({
     save: (v: string | null) => ContactPatch,
   ): ReactNode {
     if (!onPatch) return displayNode;
+    // fixes53 §7/§8: mekurav picklists never match here (self-edit only
+    // ever applies to a shliach's own — contact_type="shliach" — profile).
+    if (isLocked(fieldKey)) return lockedNode(displayNode);
     return (
       <InlineEdit<string | null>
         value={value}
@@ -216,6 +259,7 @@ export function ContactView({
   ): ReactNode {
     const displayNode = <CustomFieldValueDisplay fieldType={fieldType} value={value} />;
     if (!onPatch) return displayNode;
+    if (isLocked(fieldKey)) return lockedNode(displayNode);
     return (
       <InlineEdit<string | number | boolean | null>
         value={value}
@@ -627,7 +671,9 @@ export function ContactView({
               <div className="flex flex-col">
                 <dt className={dtClass} style={dtStyle}>{t("contact_shliach.areas", "אזורים באחריות הפעיל")}</dt>
                 <dd className="text-sm">
-                  {onPatch ? (
+                  {onPatch && isLocked("shliach.areas") ? (
+                    lockedNode(<AreaNames ids={contact.shliach.area_ids} />)
+                  ) : onPatch ? (
                     // fixes47: commitOnBlur is off here — see MultiSelectEditor's
                     // doc comment for why blur-to-save silently never fires for
                     // this picker; an explicit apply button replaces it.
@@ -660,7 +706,9 @@ export function ContactView({
                   {t("contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל")}
                 </dt>
                 <dd className="text-sm">
-                  {onPatch ? (
+                  {onPatch && isLocked("shliach.report_numbers") ? (
+                    lockedNode(<ReportNumbersLabel ids={contact.shliach.report_number_ids} />)
+                  ) : onPatch ? (
                     <InlineEdit<number[]>
                       value={contact.shliach.report_number_ids}
                       display={<ReportNumbersLabel ids={contact.shliach.report_number_ids} />}
@@ -689,6 +737,7 @@ export function ContactView({
                   {inlineText("notes", contact.shliach.notes, {
                     nested: "shliach",
                     multiline: true,
+                    lockKey: "shliach.notes",
                   })}
                 </dd>
               </div>

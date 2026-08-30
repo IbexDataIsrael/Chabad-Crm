@@ -314,6 +314,18 @@ def _sort_keys(sort: str, db: Session) -> list:
         return [models.Building.building_address]
     if sort == "created":
         return [models.Apartment.created_at]  # fixes17 §3.2
+    if sort == "hierarchy":
+        # fixes53 §2: the mandatory canonical order — Report Number, then
+        # Building, then Floor. Always ascending regardless of `dir` (the
+        # caller forces `dir="asc"` for this option); "L" already sorts
+        # ahead of every numbered floor via Floor.sort_order (fixes52 §3),
+        # reused as-is through _floor_rank().
+        return [
+            *_natural(models.ReportNumber.name, db),
+            models.Building.building_address,
+            _floor_rank(),
+            *_natural(models.Apartment.floor, db),
+        ]
     # Default "floor": canonical floor order, then the free-text floor name for
     # floors that no longer exist in the floors table.
     return [_floor_rank(), *_natural(models.Apartment.floor, db)]
@@ -329,13 +341,20 @@ def _picklist_filter(query, field_key: str, values: list[str]):
     )
 
 
+# fixes53 §2: sent as the `custom_field_filter` query value in place of real
+# search text to mean "this field is blank" (Excel-style blank selection) —
+# a value no real search text can collide with.
+EMPTY_FIELD_SENTINEL = "\x00__empty__\x00"
+
+
 def _custom_field_text_filter(query, db: Session, org_id: int, field_key: str, text: str):
-    """fixes52 §2.2: restrict to apartments whose non-select custom-field
-    value for `field_key` matches `text` — a boolean field matches "true"/
-    "false" against `checked`; text/number/date match an ILIKE contains
-    against the stored string. An unknown field_key is a silent no-op (same
-    "don't error mid filter-chain on a stale key" stance the picklist
-    filters already take)."""
+    """fixes52 §2.2 / fixes53 §2: restrict to apartments whose non-select
+    custom-field value for `field_key` matches `text` — a boolean field
+    matches "true"/"false" against `checked`; text/number/date match an
+    ILIKE contains against the stored string, or (EMPTY_FIELD_SENTINEL) match
+    apartments with no meaningful value at all. An unknown field_key is a
+    silent no-op (same "don't error mid filter-chain on a stale key" stance
+    the picklist filters already take)."""
     definition = (
         db.query(models.CustomFieldDefinition)
         .filter(
@@ -347,6 +366,16 @@ def _custom_field_text_filter(query, db: Session, org_id: int, field_key: str, t
     )
     if definition is None:
         return query
+    if text == EMPTY_FIELD_SENTINEL and definition.field_type != "boolean":
+        # No row at all, or a row whose value was cleared to "" rather than
+        # deleted (set_value only deletes on None — see custom_field_utils).
+        has_value = select(models.CustomFieldValue.entity_id).where(
+            models.CustomFieldValue.entity_table == "apartments",
+            models.CustomFieldValue.definition_id == definition.id,
+            models.CustomFieldValue.value.isnot(None),
+            models.CustomFieldValue.value != "",
+        )
+        return query.filter(models.Apartment.id.notin_(has_value))
     sub = select(models.CustomFieldValue.entity_id).where(
         models.CustomFieldValue.entity_table == "apartments",
         models.CustomFieldValue.definition_id == definition.id,
@@ -454,7 +483,9 @@ def list_apartments_enriched(
     # fixes52 §2.2: dynamic filter for any custom (non-select) apartment
     # field, sent the same "field_key:query" way.
     custom_field_filter: Optional[list[str]] = Query(None),
-    sort: Literal["floor", "label", "resident", "building", "created"] = "floor",
+    sort: Literal[
+        "floor", "label", "resident", "building", "created", "hierarchy"
+    ] = "floor",
     dir: Literal["asc", "desc"] = "asc",
     page: int = Query(1, ge=1),
     page_size: int = Query(20),
@@ -515,10 +546,23 @@ def list_apartments_enriched(
         custom_picklists=custom_picklists,
         custom_field_filters=custom_field_filters,
     )
+    if sort == "hierarchy":
+        # fixes53 §2: the hierarchy's Report Number tier needs the table
+        # joined in — an outer join since report_number_id is nullable.
+        query = query.outerjoin(
+            models.ReportNumber,
+            models.ReportNumber.id == models.Apartment.report_number_id,
+        )
 
     total = query.count()
 
-    primary = [k.desc() if dir == "desc" else k.asc() for k in _sort_keys(sort, db)]
+    # fixes53 §2: the hierarchy is a fixed, mandatory order — always
+    # ascending across all three tiers, regardless of what `dir` a caller
+    # sends (the UI disables the direction toggle while it's selected).
+    effective_dir = "asc" if sort == "hierarchy" else dir
+    primary = [
+        k.desc() if effective_dir == "desc" else k.asc() for k in _sort_keys(sort, db)
+    ]
     # Secondary keys always ascend: within a floor, apartments sort by number.
     secondary = (
         [] if sort == "label" else _natural(models.Apartment.apartment_name, db)

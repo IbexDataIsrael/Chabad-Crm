@@ -49,6 +49,11 @@ export interface ShliachViewConfig {
   hide_filters?: boolean;
   default_filters?: Record<string, unknown>;
   default_columns?: string[] | null;
+  /** fixes53 §7/§8: field keys an admin locked on top of the mandatory
+   *  self-edit locks (email / shliach.areas / shliach.report_numbers) —
+   *  set from /dashboard/shliach-config, consumed by ContactView's
+   *  "Edit your data" self-edit mode. */
+  self_edit_locked_fields?: string[];
 }
 
 export interface User {

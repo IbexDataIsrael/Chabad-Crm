@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.core.geo import point_in_polygon, polygon_ring
+from app.core.jewish_status import apartment_jewish_counts_by
 from app.core.natural_sort import natural_sort_key
 from app.core.shliach import resolve_shliach
 from app.database import get_db
@@ -21,6 +22,7 @@ from app.schemas import (
     AreaUpdate,
     BuildingOut,
     ContactOut,
+    JewishCounts,
     ShliachSummary,
 )
 
@@ -106,6 +108,24 @@ def area_shliach_assignments(
             ShliachSummary(id=contact_id, name=name, last_name=last_name)
         )
     return result
+
+
+@router.get("/jewish-counts", response_model=dict[int, JewishCounts])
+def area_jewish_counts(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """fixes53 §3: "Number of Jews" / "Number of Engaged Jews" calculated
+    columns for the Areas grid, keyed by area_id. Missing keys (no matching
+    apartment) are 0/0 — the frontend fills those in. Scoped to a shliach's
+    covered areas, matching `list_areas`."""
+    counts = apartment_jewish_counts_by(
+        db, current_user.organization_id, models.Building.area_id, join_building=True
+    )
+    if current_user.role == "shliach":
+        allowed = _shliach_area_ids(current_user, db)
+        counts = {k: v for k, v in counts.items() if k in allowed}
+    return counts
 
 
 @router.post("", response_model=AreaOut, status_code=status.HTTP_201_CREATED)

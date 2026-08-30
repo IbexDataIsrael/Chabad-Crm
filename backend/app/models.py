@@ -354,6 +354,54 @@ class ReportNumber(Base):
     )
 
 
+class ShliachReportCompletion(Base):
+    """fixes53 §7/§9: an activist's self-reported reporting status, from the
+    "Report completed" button on their self-edit page (3-choice modal + an
+    optional comment). One row per submission — an append-only log so
+    /dashboard/messages-from-activists can show history, not just the latest
+    state. Keyed by `contact_id` (stable) rather than `contact_shliach_id`
+    (versioned — every edit retires and replaces that row, fixes45), so a
+    later profile edit never orphans an older submission."""
+
+    __tablename__ = "shliach_report_completions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    contact_id = Column(
+        Integer, ForeignKey("contacts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # 'completed' | 'not_completed' | 'partial'
+    status = Column(String(30), nullable=False)
+    comments = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+    contact = relationship("Contact")
+
+
+class ShliachSystemComment(Base):
+    """fixes53 §7/§9: free-text feedback about the system, from the
+    "Comments about the system" button on an activist's self-edit page.
+    Keyed by `contact_id` for the same reason as ShliachReportCompletion."""
+
+    __tablename__ = "shliach_system_comments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    contact_id = Column(
+        Integer, ForeignKey("contacts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    comment = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+    contact = relationship("Contact")
+
+
 class ReportNumberContactShliach(Base):
     """M2M: which report numbers a shliach covers (fixes19 — replaces the
     dropped contact_shliach_apartment coverage)."""

@@ -1349,6 +1349,29 @@ def update_contact(
     )
     if current_user.role == "shliach":
         data.pop("assigned_user_id", None)  # a shliach cannot reassign ownership
+
+    # fixes53 §7/§8: a shliach editing their OWN profile ("Edit your data")
+    # can never touch Email, Report Numbers, or Areas — always locked, since
+    # those are integrity-sensitive (self-reassigning your own coverage, or
+    # your login identity). An admin can additionally lock name/last_name/
+    # phone/notes via shliach_view_config.self_edit_locked_fields (§8's
+    # field-lock UI); dynamic admin-added shliach fields are guarded
+    # client-side only, not enforced here.
+    is_self_edit = (
+        current_user.role == "shliach"
+        and contact.contact_type == "shliach"
+        and contact.shliach is not None
+        and contact.shliach.user_id == current_user.id
+    )
+    self_edit_locked: set = set()
+    if is_self_edit:
+        data.pop("email", None)
+        org = db.get(models.Organization, org_id)
+        if org and org.shliach_view_config:
+            self_edit_locked = set(org.shliach_view_config.get("self_edit_locked_fields") or [])
+        for key in ("name", "last_name", "phone"):
+            if key in self_edit_locked:
+                data.pop(key, None)
     _validate_fks(data, org_id, db)
     _validate_picklists(data, org_id, db)
     if data.get("phone"):
@@ -1401,6 +1424,11 @@ def update_contact(
         # autosave patching {shliach: {notes}} must not wipe the report-number
         # and area links (their schema defaults are empty lists).
         sh_sent = sh_data.model_dump(exclude_unset=True) if sh_data is not None else {}
+        if is_self_edit:
+            sh_sent.pop("report_number_ids", None)
+            sh_sent.pop("area_ids", None)
+            if "notes" in self_edit_locked:
+                sh_sent.pop("notes", None)
         active = contact.shliach
 
         if active is None:

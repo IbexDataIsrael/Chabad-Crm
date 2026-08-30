@@ -495,6 +495,15 @@ class ReportNumberOut(BaseModel):
     created_at: Optional[datetime] = None
 
 
+class JewishCounts(BaseModel):
+    """fixes53 §3/§4: calculated columns for the Report Numbers/Areas grids —
+    apartment counts under a report number or area matching the Jewish-status
+    categories in app.core.jewish_status."""
+
+    jews: int
+    engaged: int
+
+
 class ShliachSummary(BaseModel):
     """fixes43 §4.2/4.3: a shliach contact already covering an area/report
     number — powers the reassignment conflict warning on the shliach edit
@@ -503,6 +512,44 @@ class ShliachSummary(BaseModel):
     id: int
     name: str
     last_name: Optional[str] = None
+
+
+ReportCompletionStatus = Literal["completed", "not_completed", "partial"]
+
+
+class ReportCompletionCreate(BaseModel):
+    """fixes53 §7: the "Report completed" button's 3-choice modal + comment."""
+
+    status: ReportCompletionStatus
+    comments: Optional[str] = None
+
+
+class ReportCompletionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    guid: str
+    status: ReportCompletionStatus
+    comments: Optional[str] = None
+    created_at: datetime
+    # fixes53 §9: who submitted it, for the Messages-from-activists list.
+    activist: ShliachSummary
+
+
+class SystemCommentCreate(BaseModel):
+    """fixes53 §7: the "Comments about the system" button."""
+
+    comment: str
+
+
+class SystemCommentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    guid: str
+    comment: str
+    created_at: datetime
+    activist: ShliachSummary
 
 
 # --- Areas / Buildings / Apartments ----------------------------------------

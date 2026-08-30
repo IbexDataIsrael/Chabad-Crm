@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Fragment, useEffect, useRef, useState } from "react";
 
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
@@ -45,7 +45,11 @@ const inputClass =
 
 const PAGE_SIZES = [20, 50, 100];
 
-type SortKey = "floor" | "label" | "resident" | "building";
+// fixes53 §2: Excel-style "blank" selection for a dynamic text-field filter
+// — must exactly match the backend's EMPTY_FIELD_SENTINEL (apartments.py).
+const EMPTY_FIELD_SENTINEL = "\x00__empty__\x00";
+
+type SortKey = "floor" | "label" | "resident" | "building" | "created" | "hierarchy";
 type SortDir = "asc" | "desc";
 
 /** Toggleable table columns (fixes15 §7.2 / fixes17 §3.1); the apartment
@@ -90,6 +94,7 @@ export default function ApartmentsPage() {
   const shliachFiltersHidden = isShliach && !!shliachViewConfig?.hide_filters;
   const { t, lang } = useLocalization();
   const router = useRouter();
+  const searchParams = useSearchParams();
   // fixes33 §5.2: org-wide field hiding (Manage Fields) must also apply here
   // — filters, column-selector chips and the rendered columns themselves.
   const { isFieldVisible: vis } = useFieldSettings();
@@ -166,7 +171,11 @@ export default function ApartmentsPage() {
   const [debouncedCustomFieldFilters, setDebouncedCustomFieldFilters] =
     useState(customFieldFilters);
   const [query, setQuery] = usePersistentState("crm.apartments.q", "");
-  const [sort, setSort] = usePersistentState<SortKey>("crm.apartments.sort", "floor");
+  // fixes53 §2: the mandatory canonical default — Report Number → Building →
+  // Floor. A user who already customized their sort (persisted under this
+  // key from before this round) keeps their own choice; only fresh state
+  // gets the new default.
+  const [sort, setSort] = usePersistentState<SortKey>("crm.apartments.sort", "hierarchy");
   const [dir, setDir] = usePersistentState<SortDir>("crm.apartments.dir", "asc");
   const [page, setPage] = usePersistentState("crm.apartments.page", 1);
   const [pageSize, setPageSize] = usePersistentState("crm.apartments.pageSize", 20);
@@ -320,6 +329,24 @@ export default function ApartmentsPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isShliach, shliachViewConfig]);
+
+  // fixes53 §3: a deep link from the Report Numbers grid ("view its
+  // apartments") — ?report_number_ids=<id> replaces whatever filters were
+  // already persisted (matching what "create report from filtered results"
+  // does in reverse) so the visitor lands on exactly that report number's
+  // apartments, not a stale mix of their own last filters plus this one.
+  const appliedReportNumberDeepLink = useRef(false);
+  useEffect(() => {
+    if (appliedReportNumberDeepLink.current || loading) return;
+    const raw = searchParams.getAll("report_number_ids");
+    if (raw.length === 0) return;
+    appliedReportNumberDeepLink.current = true;
+    const ids = raw.map(Number).filter((n) => !Number.isNaN(n));
+    if (ids.length === 0) return;
+    clearAllFilters();
+    setReportNumberIds(ids);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, searchParams]);
 
   // Boot: load the filter sources once; the list itself is fetched by the
   // effect below (restored filters included — fixes15 §1.2).
@@ -1160,14 +1187,38 @@ export default function ApartmentsPage() {
               </select>
             );
           }
+          // fixes53 §2: an "Empty" toggle alongside the free-text search —
+          // Excel-style blank selection. Checking it sends the sentinel
+          // instead of typed text and disables the input (they're mutually
+          // exclusive: you're either searching text or matching blanks).
+          const isEmptyFilter = customFieldFilters[d.field_key] === EMPTY_FIELD_SENTINEL;
           return (
-            <input
-              key={d.field_key}
-              className={`${inputClass} min-w-[10rem]`}
-              placeholder={label}
-              value={customFieldFilters[d.field_key] ?? ""}
-              onChange={(e) => onCustomFieldFilterChange(d.field_key, e.target.value)}
-            />
+            <div key={d.field_key} className="flex items-center gap-1">
+              <input
+                className={`${inputClass} min-w-[10rem]`}
+                placeholder={label}
+                disabled={isEmptyFilter}
+                value={isEmptyFilter ? "" : customFieldFilters[d.field_key] ?? ""}
+                onChange={(e) => onCustomFieldFilterChange(d.field_key, e.target.value)}
+              />
+              <label
+                className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer whitespace-nowrap"
+                title={t("filter.empty_hint", "הצג רק דירות ללא ערך בשדה זה")}
+              >
+                <input
+                  type="checkbox"
+                  className="accent-status-magenta"
+                  checked={isEmptyFilter}
+                  onChange={(e) =>
+                    onCustomFieldFilterChange(
+                      d.field_key,
+                      e.target.checked ? EMPTY_FIELD_SENTINEL : "",
+                    )
+                  }
+                />
+                {t("filter.empty", "ריק")}
+              </label>
+            </div>
           );
         })}
         <input
@@ -1192,6 +1243,12 @@ export default function ApartmentsPage() {
           }
           onChange={(e) => onSortChange(e.target.value as SortKey)}
         >
+          {/* fixes53 §2: the mandatory default — Report Number → Building →
+              Floor (floor's own "L"-first order is unchanged) — always
+              ascending, hence no dir toggle for it below. */}
+          <option value="hierarchy">
+            {t("sort.hierarchy", "היררכיה (מס׳ דוח ← בניין ← קומה)")}
+          </option>
           <option value="floor">{t("sort.floor", "קומה")}</option>
           <option value="label">{t("sort.by_label", "תווית דירה")}</option>
           <option value="resident">{t("sort.resident", "שם דייר")}</option>
@@ -1199,14 +1256,23 @@ export default function ApartmentsPage() {
           {/* fixes17 §3.2: chronological sorting. */}
           <option value="created">{t("sort.created", "תאריך יצירה")}</option>
         </select>
-        <button
-          type="button"
-          onClick={onDirToggle}
-          className="rounded-md border border-gray-300 px-3 py-2 hover:bg-gray-50"
-          title={dir === "asc" ? t("sort.asc", "עולה") : t("sort.desc", "יורד")}
-        >
-          {dir === "asc" ? "↑" : "↓"} {dir === "asc" ? t("sort.asc", "עולה") : t("sort.desc", "יורד")}
-        </button>
+        {!groupByBuilding && sort === "hierarchy" ? (
+          <span
+            className="rounded-md border border-gray-200 px-3 py-2 text-gray-400"
+            title={t("apt.hierarchy_sort_hint", "מיון היררכיה תמיד עולה")}
+          >
+            ↑ {t("sort.asc", "עולה")}
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={onDirToggle}
+            className="rounded-md border border-gray-300 px-3 py-2 hover:bg-gray-50"
+            title={dir === "asc" ? t("sort.asc", "עולה") : t("sort.desc", "יורד")}
+          >
+            {dir === "asc" ? "↑" : "↓"} {dir === "asc" ? t("sort.asc", "עולה") : t("sort.desc", "יורד")}
+          </button>
+        )}
         {/* fixes30 §1a: aggregate the rows under per-building headers. */}
         <button
           type="button"

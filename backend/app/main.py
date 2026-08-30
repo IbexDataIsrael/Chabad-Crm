@@ -62,6 +62,7 @@ from app.routers import (
     preferences,
     report_numbers,
     search,
+    shliach_messages,
     uploads,
     users,
     visits,
@@ -119,6 +120,7 @@ app.include_router(custom_fields.router)
 app.include_router(field_settings.router)
 app.include_router(admin_areas.router)
 app.include_router(report_numbers.router)
+app.include_router(shliach_messages.router)
 app.include_router(areas.router)
 app.include_router(buildings.router)
 app.include_router(apartments.router)

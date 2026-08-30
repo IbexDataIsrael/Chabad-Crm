@@ -455,6 +455,34 @@ export interface ShliachSummary {
   last_name: string | null;
 }
 
+/** fixes53 §3/§4: the "Number of Jews" / "Number of Engaged Jews"
+ *  calculated columns on the Report Numbers/Areas grids. */
+export interface JewishCounts {
+  jews: number;
+  engaged: number;
+}
+
+/** fixes53 §7/§9: an activist's "Report completed" self-edit submission —
+ *  read on /dashboard/messages-from-activists. */
+export type ReportCompletionStatus = "completed" | "not_completed" | "partial";
+export interface ReportCompletion {
+  id: number;
+  guid: string;
+  status: ReportCompletionStatus;
+  comments: string | null;
+  created_at: string;
+  activist: ShliachSummary;
+}
+
+/** fixes53 §7/§9: an activist's "Comments about the system" submission. */
+export interface SystemComment {
+  id: number;
+  guid: string;
+  comment: string;
+  created_at: string;
+  activist: ShliachSummary;
+}
+
 /** fixes45: one historical shliach version — the full snapshot plus who
  *  retired it and when (same shape as the Apartments history view). */
 export interface ShliachVersion {

@@ -6,6 +6,7 @@ import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useCustomFieldDefs } from "@/lib/customFields";
 import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
 import { useToast } from "@/lib/toast";
@@ -14,7 +15,14 @@ import {
   type Area,
   type Building,
   type OrgDetails,
+  type PicklistField,
 } from "@/lib/types";
+
+// fixes53 §7/§8: the fixed self-edit fields an admin can lock beyond the
+// mandatory 3 (email / areas / report numbers, never configurable — see
+// ContactView's MANDATORY_SELF_EDIT_LOCKS). Keys match ContactView's
+// `lockKey`/field-key convention exactly.
+const FIXED_SELF_EDIT_FIELDS = ["name", "last_name", "phone", "shliach.notes"] as const;
 
 /** fixes51 §4: mirrors the Apartments page's own toggleable-column set
  *  (app/dashboard/apartments/page.tsx's FIELD_KEYS) — kept in sync manually
@@ -45,11 +53,12 @@ interface ShliachViewConfigShape {
     language?: string[];
   };
   default_columns?: string[] | null;
+  self_edit_locked_fields?: string[];
 }
 
 export default function ShliachConfigPage() {
   const { isAdmin, loading } = useAuth();
-  const { t } = useLocalization();
+  const { t, lang } = useLocalization();
   const { success, error: toastError } = useToast();
 
   const [areas, setAreas] = useState<Area[]>([]);
@@ -57,9 +66,25 @@ export default function ShliachConfigPage() {
   const jewish = usePicklist("apartment.Jewish_status");
   const mezuzah = usePicklist("apartment.mezuzah_status");
   const language = usePicklist("apartment.language");
+  // fixes53 §8: any admin-added shliach.* custom field/picklist is also a
+  // lockable self-edit option, alongside the 4 fixed ones.
+  const shliachCustomFieldDefs = useCustomFieldDefs("contact_shliach").filter(
+    (d) => d.field_type !== "select",
+  );
+  const [shliachPicklistDefs, setShliachPicklistDefs] = useState<PicklistField[]>([]);
+  useEffect(() => {
+    apiFetch<PicklistField[]>("/api/picklists")
+      .then((defs) =>
+        setShliachPicklistDefs(defs.filter((d) => d.entity_type === "contact_shliach")),
+      )
+      .catch(() => setShliachPicklistDefs([]));
+  }, []);
 
   const [disableEdit, setDisableEdit] = useState(false);
   const [hideFilters, setHideFilters] = useState(false);
+  // fixes53 §8: field-level self-edit locks (Email/Areas/Report Numbers are
+  // mandatory and never appear here — see ContactView.MANDATORY_SELF_EDIT_LOCKS).
+  const [selfEditLockedFields, setSelfEditLockedFields] = useState<string[]>([]);
   const [areaIds, setAreaIds] = useState<number[]>([]);
   const [buildingIds, setBuildingIds] = useState<number[]>([]);
   const [jewishFilter, setJewishFilter] = useState<string[]>([]);
@@ -100,6 +125,7 @@ export default function ShliachConfigPage() {
         const cfg = (org.shliach_view_config ?? {}) as ShliachViewConfigShape;
         setDisableEdit(!!cfg.disable_edit);
         setHideFilters(!!cfg.hide_filters);
+        setSelfEditLockedFields(cfg.self_edit_locked_fields ?? []);
         setAreaIds(cfg.default_filters?.area_ids ?? []);
         setBuildingIds(cfg.default_filters?.building_ids ?? []);
         setJewishFilter(cfg.default_filters?.jewish_status ?? []);
@@ -120,6 +146,12 @@ export default function ShliachConfigPage() {
     );
   }
 
+  function toggleSelfEditLock(key: string) {
+    setSelfEditLockedFields((prev) =>
+      prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key],
+    );
+  }
+
   async function save(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -127,6 +159,7 @@ export default function ShliachConfigPage() {
       const shliach_view_config: ShliachViewConfigShape = {
         disable_edit: disableEdit,
         hide_filters: hideFilters,
+        self_edit_locked_fields: selfEditLockedFields,
         default_filters: {
           area_ids: areaIds,
           building_ids: buildingIds,
@@ -193,6 +226,61 @@ export default function ShliachConfigPage() {
           />
           {t("shliach_config.hide_filters", "הסתר את כל הסינונים מהפעילים")}
         </label>
+
+        {/* fixes53 §7/§8: field-level locks for a shliach's own "עריכת המידע
+            שלך" self-edit — Email/Areas/Report Numbers are always locked
+            (never listed here); anything else is opt-in per org. */}
+        <div className="border-t border-gray-100 pt-4 space-y-3">
+          <span className="block text-sm font-medium">
+            {t("shliach_config.self_edit_locks", "נעילת שדות לעריכה עצמית")}
+          </span>
+          <p className="text-xs text-gray-400">
+            {t(
+              "shliach_config.self_edit_locks_hint",
+              "אימייל, אזורים ומספרי דוח נעולים תמיד בעריכה עצמית. סמן שדות נוספים לנעילה.",
+            )}
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {FIXED_SELF_EDIT_FIELDS.map((key) => (
+              <label key={key} className="flex items-center gap-1.5 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selfEditLockedFields.includes(key)}
+                  onChange={() => toggleSelfEditLock(key)}
+                />
+                {
+                  {
+                    name: t("contacts.name", "שם פרטי"),
+                    last_name: t("contacts.last_name", "שם משפחה"),
+                    phone: t("contacts.phone", "טלפון"),
+                    "shliach.notes": t("contact_shliach.notes", "הערות"),
+                  }[key]
+                }
+              </label>
+            ))}
+            {shliachPicklistDefs.map((d) => (
+              <label key={d.field_key} className="flex items-center gap-1.5 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selfEditLockedFields.includes(d.field_key)}
+                  onChange={() => toggleSelfEditLock(d.field_key)}
+                />
+                {(lang === "en" ? d.english_label || d.label : d.label) || d.field_key}
+              </label>
+            ))}
+            {shliachCustomFieldDefs.map((d) => (
+              <label key={d.field_key} className="flex items-center gap-1.5 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selfEditLockedFields.includes(d.field_key)}
+                  onChange={() => toggleSelfEditLock(d.field_key)}
+                />
+                {(lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
+                  d.field_key}
+              </label>
+            ))}
+          </div>
+        </div>
 
         <div className="border-t border-gray-100 pt-4 space-y-3">
           <span className="block text-sm font-medium">
