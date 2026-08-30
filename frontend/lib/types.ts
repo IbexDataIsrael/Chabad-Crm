@@ -244,6 +244,11 @@ export interface ApartmentPage {
   total: number;
   page: number;
   page_size: number;
+  // fixes53 §2: set only when sort="building" — distinct buildings matching
+  // the current filters. Grouped view paginates by building (page_size =
+  // buildings per page), so `items` always holds every apartment for the
+  // buildings on this page, never a partial building.
+  total_buildings?: number | null;
 }
 
 /** fixes23 §2: a distinct (report number → building) pair, driving the
@@ -251,13 +256,6 @@ export interface ApartmentPage {
 export interface ReportNumberBuildingLink {
   report_number_id: number;
   building_id: number;
-}
-
-/** fixes30 §1: apartment count per building under the current list filters —
- *  feeds the group-by-building header rows. */
-export interface BuildingAggregate {
-  building_id: number;
-  count: number;
 }
 
 /** fixes23 §3: outcome of a bulk apartment update. */

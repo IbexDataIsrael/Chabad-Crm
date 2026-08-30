@@ -515,6 +515,10 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("pager", "pager.prev", "→ הקודם", "← Previous"),
     ("pager", "pager.next", "הבא ←", "Next →"),
     ("pager", "pager.range", "{from}–{to} מתוך {total}", "{from}–{to} of {total}"),
+    (
+        "pager", "pager.range_buildings",
+        "בניינים {from}–{to} מתוך {total}", "Buildings {from}–{to} of {total}",
+    ),
     ("pager", "pager.page_size", "בעמוד:", "Per page:"),
     # --- fixes9: admin areas + mekurav fields + system title settings ---
     ("nav", "nav.admin_areas", "אזור מנהל", "Admin area"),

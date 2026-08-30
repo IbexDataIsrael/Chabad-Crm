@@ -173,3 +173,60 @@ class TestBuildingAggregates:
 
         counts = _aggregates(client, shliach)
         assert counts == {b1["id"]: 1}
+
+
+# --- fixes53 §2: /list paginates by building (not by row) once grouped -------
+class TestListGroupedByBuilding:
+    """The bug: the group-by-building header showed each building's full
+    filtered count (from /building-aggregates), but /list paginated by
+    apartment row — a building with more apartments than fit on one page was
+    split, so the header count never matched what actually rendered below
+    it. Fix: sort="building" now paginates the distinct buildings themselves
+    (page_size = buildings per page) and always returns every apartment for
+    each included building, so a header's count is exactly its row count."""
+
+    def test_a_building_is_never_split_across_a_page(self, client, admin_headers):
+        area = _mk_area(client, admin_headers)
+        b1 = _mk_building(client, admin_headers, area["id"], "1 A St")
+        b2 = _mk_building(client, admin_headers, area["id"], "2 B St")
+        for n in range(3):
+            _mk_apartment(client, admin_headers, b1["id"], apartment_name=str(n + 1))
+        _mk_apartment(client, admin_headers, b2["id"], apartment_name="1")
+
+        # 1 building per page: b1's 3 apartments must all land on its page,
+        # not be truncated by the (apartment-row-shaped) page_size=20 cap.
+        page1 = _list(
+            client, admin_headers, "?sort=building&dir=asc&page=1&page_size=20"
+        )
+        assert page1["total_buildings"] == 2
+        by_building = {}
+        for a in page1["items"]:
+            by_building.setdefault(a["building_id"], []).append(a)
+        assert len(by_building[b1["id"]]) == 3
+        assert len(by_building[b2["id"]]) == 1
+
+    def test_page_size_paginates_buildings_not_rows(self, client, admin_headers):
+        area = _mk_area(client, admin_headers)
+        buildings = [
+            _mk_building(client, admin_headers, area["id"], f"{n} Multi St")
+            for n in range(3)
+        ]
+        for b in buildings:
+            for n in range(2):
+                _mk_apartment(client, admin_headers, b["id"], apartment_name=str(n + 1))
+
+        page1 = _list(
+            client, admin_headers, "?sort=building&dir=asc&page=1&page_size=20"
+        )
+        # page_size=20 buildings is well over 3 — everything fits on page 1,
+        # every apartment present, no row-count truncation.
+        assert page1["total_buildings"] == 3
+        assert len(page1["items"]) == 6
+
+    def test_ungrouped_sort_leaves_total_buildings_null(self, client, admin_headers):
+        area = _mk_area(client, admin_headers)
+        b = _mk_building(client, admin_headers, area["id"])
+        _mk_apartment(client, admin_headers, b["id"], apartment_name="1")
+
+        page = _list(client, admin_headers, "?sort=floor&page=1&page_size=20")
+        assert page["total_buildings"] is None

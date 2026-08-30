@@ -757,6 +757,12 @@ class ApartmentPageOut(BaseModel):
     total: int
     page: int
     page_size: int
+    # fixes53 §2: set only when sort="building" — the count of distinct
+    # buildings matching the current filters, so the frontend pager can
+    # paginate by building (not by row) in grouped view. `page_size` in that
+    # mode means buildings-per-page, and `items` holds every apartment for
+    # the buildings on this page (never a partial building).
+    total_buildings: Optional[int] = None
 
 
 class ApartmentBatchCreate(BaseModel):

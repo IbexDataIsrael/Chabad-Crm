@@ -524,12 +524,44 @@ def list_apartments_enriched(
         [] if sort == "label" else _natural(models.Apartment.apartment_name, db)
     )
     order = [nullslast(k) for k in (*primary, *secondary)]
-    rows = (
-        query.order_by(*order, models.Apartment.id)
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-        .all()
-    )
+
+    total_buildings = None
+    if sort == "building":
+        # fixes53 §2: the group-by-building view paginates by building, not
+        # by apartment row — a building's apartments must never be split
+        # across pages, or its header count (rendered rows) can't ever match
+        # the number the header prints. `page`/`page_size` here address
+        # buildings; the raw (direction-free) sort column must be in the
+        # SELECT list alongside `distinct()` (Postgres requires ORDER BY
+        # columns to appear there) — direction is applied only in order_by.
+        building_col = _sort_keys("building", db)[0]
+        building_key = building_col.desc() if dir == "desc" else building_col.asc()
+        building_rows = (
+            query.with_entities(models.Apartment.building_id, building_col)
+            .distinct()
+            .order_by(nullslast(building_key))
+        )
+        total_buildings = building_rows.count()
+        page_building_ids = [
+            row[0]
+            for row in building_rows.offset((page - 1) * page_size)
+            .limit(page_size)
+            .all()
+        ]
+        rows = (
+            query.filter(models.Apartment.building_id.in_(page_building_ids))
+            .order_by(*order, models.Apartment.id)
+            .all()
+            if page_building_ids
+            else []
+        )
+    else:
+        rows = (
+            query.order_by(*order, models.Apartment.id)
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+            .all()
+        )
     picklist_map = picklist_utils.get_values_bulk(
         db, current_user.organization_id, "apartments", [r.id for r in rows]
     )
@@ -551,6 +583,7 @@ def list_apartments_enriched(
         total=total,
         page=page,
         page_size=page_size,
+        total_buildings=total_buildings,
     )
 
 

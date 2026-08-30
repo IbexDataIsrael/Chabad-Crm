@@ -142,7 +142,10 @@ class TestPagination:
                 client, admin_headers, b["id"], floor="1", apartment_name=str(n + 1)
             )
         page1 = _list(client, admin_headers, "?page=1&page_size=20")
-        assert set(page1) == {"items", "total", "page", "page_size"}
+        # fixes53 §2: total_buildings joined the envelope (grouped-by-building
+        # pagination) — null here since sort defaults to "floor", not "building".
+        assert set(page1) == {"items", "total", "page", "page_size", "total_buildings"}
+        assert page1["total_buildings"] is None
         assert page1["total"] == 25 and page1["page"] == 1 and page1["page_size"] == 20
         assert len(page1["items"]) == 20
         page2 = _list(client, admin_headers, "?page=2&page_size=20")

@@ -33,7 +33,6 @@ import {
   type ApartmentPage,
   type Area,
   type Building,
-  type BuildingAggregate,
   type CustomFieldDefinition,
   type Floor,
   type PicklistField,
@@ -181,27 +180,19 @@ export default function ApartmentsPage() {
   const [showContact, setShowContact] = useDbPreference<boolean>(
     "apartments.showContact", true,
   );
-  // fixes30 §1a: group the table by building; the sort is forced to
-  // "building" while active so groups stay contiguous across pages.
+  // fixes30 §1a / fixes53 §2: group the table by building; the sort is
+  // forced to "building" while active. The backend paginates by building in
+  // this mode (page_size = buildings per page) so a building's apartments
+  // are never split across pages — every group renders in full and its
+  // header count is just the rendered row count, never a separate fetch
+  // that could disagree with what's on screen (fixes53's reported bug).
+  // fixes53 §2 also drops the old +/- per-group collapse toggle.
   const [groupByBuilding, setGroupByBuilding] = usePersistentState(
     "crm.apartments.groupByBuilding", false,
   );
-  // fixes52 §2.4: which building groups are expanded — starts empty (every
-  // group collapsed by default). Not persisted: a fresh page load always
-  // starts fully collapsed, matching the spec. Keyed by building_id (not
-  // row/page position), so a group's state naturally survives paging.
-  const [expandedBuildings, setExpandedBuildings] = useState<Set<number>>(
-    new Set(),
-  );
-  function toggleBuildingExpanded(buildingId: number) {
-    setExpandedBuildings((prev) => {
-      const next = new Set(prev);
-      if (next.has(buildingId)) next.delete(buildingId);
-      else next.add(buildingId);
-      return next;
-    });
-  }
-  const [aggregates, setAggregates] = useState<Record<number, number>>({});
+  // Distinct buildings matching the current filters — only meaningful while
+  // groupByBuilding is on; drives the building-based pager in that mode.
+  const [totalBuildings, setTotalBuildings] = useState(0);
   // fixes32 §6: the whole filter section can be tucked away, mirroring the
   // Contacts page (fixes29 §1) — hidden filters keep applying to the list.
   const [filtersOpen, setFiltersOpen] = usePersistentState(
@@ -290,6 +281,7 @@ export default function ApartmentsPage() {
     const res = await apiFetch<ApartmentPage>(`/api/apartments/list?${params}`);
     setItems(res.items);
     setTotal(res.total);
+    setTotalBuildings(res.total_buildings ?? 0);
   }
 
   // fixes51 §4: an admin-configured default filter/column set for the
@@ -374,23 +366,6 @@ export default function ApartmentsPage() {
     loading, areaIds, buildingIds, reportNumberIds, jewishFilter, mezuzahFilter,
     languageFilter, customFilters, debouncedCustomFieldFilters, debouncedQ,
     sort, dir, page, pageSize, groupByBuilding,
-  ]);
-
-  // fixes30 §1a: filter-scoped per-building counts for the group headers —
-  // each building shows its full filtered count, not just this page's rows.
-  useEffect(() => {
-    if (loading || !groupByBuilding) return;
-    const params = buildFilterParams();
-    apiFetch<BuildingAggregate[]>(`/api/apartments/building-aggregates?${params}`)
-      .then((rows) =>
-        setAggregates(Object.fromEntries(rows.map((r) => [r.building_id, r.count]))),
-      )
-      .catch(() => setAggregates({}));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    loading, groupByBuilding, areaIds, buildingIds, reportNumberIds,
-    jewishFilter, mezuzahFilter, languageFilter, customFilters,
-    debouncedCustomFieldFilters, debouncedQ,
   ]);
 
   // Debounced dynamic search (street name / label / resident).
@@ -806,6 +781,18 @@ export default function ApartmentsPage() {
       (buildingIdsForReports === null || buildingIdsForReports.has(b.id)),
   );
 
+  // fixes53 §2: the backend now returns every apartment for each building on
+  // the page in grouped mode (never a partial building), so the header
+  // count is simply how many loaded rows share that building_id — no
+  // separate aggregate fetch that could disagree with what's rendered.
+  const buildingCounts = (() => {
+    const counts = new Map<number, number>();
+    if (groupByBuilding) {
+      for (const a of items) counts.set(a.building_id, (counts.get(a.building_id) ?? 0) + 1);
+    }
+    return counts;
+  })();
+
   // Title + optional data columns + custom-picklist columns + optional
   // contact column + trailing filler.
   const colCount =
@@ -815,11 +802,20 @@ export default function ApartmentsPage() {
     visibleCustomFieldDefs.length +
     (showContact ? 1 : 0);
 
-  const lastPage = Math.max(1, Math.ceil(total / pageSize));
-  const rangeText = t("pager.range", "{from}–{to} מתוך {total}")
-    .replace("{from}", String(total === 0 ? 0 : (page - 1) * pageSize + 1))
-    .replace("{to}", String(Math.min(page * pageSize, total)))
-    .replace("{total}", String(total));
+  // fixes53 §2: while grouped by building, the pager paginates buildings
+  // (page_size = buildings per page), not apartment rows — `total` is still
+  // the real apartment count (used elsewhere, e.g. the bulk-edit dialog),
+  // so it can't drive `lastPage`/`rangeText` here without the last page
+  // undercounting or truncating a building's rows mid-list.
+  const pagerTotal = groupByBuilding ? totalBuildings : total;
+  const lastPage = Math.max(1, Math.ceil(pagerTotal / pageSize));
+  const rangeText = t(
+    groupByBuilding ? "pager.range_buildings" : "pager.range",
+    groupByBuilding ? "בניינים {from}–{to} מתוך {total}" : "{from}–{to} מתוך {total}",
+  )
+    .replace("{from}", String(pagerTotal === 0 ? 0 : (page - 1) * pageSize + 1))
+    .replace("{to}", String(Math.min(page * pageSize, pagerTotal)))
+    .replace("{total}", String(pagerTotal));
   // fixes52 §2.3: the custom-picklist/custom-field-filter "field_key:value"
   // params, computed once for the bulk-edit modal's filter payload below.
   const currentFilterParams = buildFilterParams();
@@ -1371,43 +1367,30 @@ export default function ApartmentsPage() {
             ) : (
               items.map((a, i) => (
                 <Fragment key={a.id}>
-                  {/* fixes30 §1a: a header row opens each building group (also
-                      when a group continues from the previous page).
-                      fixes52 §2.4: +/- expand toggle, default collapsed. */}
+                  {/* fixes30 §1a / fixes53 §2: a header row opens each building
+                      group; groups always render in full now (no +/- collapse —
+                      the count badge is the exact rendered row count below it). */}
                   {groupByBuilding &&
                     (i === 0 || items[i - 1].building_id !== a.building_id) && (
                       <tr className="border-t border-gray-200 bg-gray-50/80">
                         <td colSpan={colCount} className="px-3 py-2">
-                          <button
-                            type="button"
-                            onClick={() => toggleBuildingExpanded(a.building_id)}
-                            className="me-2 inline-flex items-center justify-center w-5 h-5 rounded border border-gray-300 text-xs leading-none hover:bg-gray-100"
-                            title={
-                              expandedBuildings.has(a.building_id)
-                                ? t("action.collapse", "כווץ")
-                                : t("action.expand", "הרחב")
-                            }
-                          >
-                            {expandedBuildings.has(a.building_id) ? "−" : "+"}
-                          </button>
                           <span className="font-semibold">
                             {cell(a, "building")}
                           </span>
                           {a.area_name && (
                             <span className="ms-2 text-gray-500">{a.area_name}</span>
                           )}
-                          {aggregates[a.building_id] !== undefined && (
+                          {buildingCounts.has(a.building_id) && (
                             <span className="ms-2 rounded-full bg-status-magenta/10 text-status-magenta px-2 py-0.5 text-xs">
                               {t("apt.group_count", "{n} דירות").replace(
                                 "{n}",
-                                String(aggregates[a.building_id]),
+                                String(buildingCounts.get(a.building_id)),
                               )}
                             </span>
                           )}
                         </td>
                       </tr>
                     )}
-                  {(!groupByBuilding || expandedBuildings.has(a.building_id)) && (
                   <tr className="border-t border-gray-100">
                     <td
                       className={`px-3 py-2 w-px whitespace-nowrap min-w-[150px] sticky z-10 bg-white ${firstColStickySide}`}
@@ -1514,7 +1497,6 @@ export default function ApartmentsPage() {
                     )}
                     <td></td>
                   </tr>
-                  )}
                 </Fragment>
               ))
             )}
@@ -1522,8 +1504,8 @@ export default function ApartmentsPage() {
         </table>
       </div>
 
-      {/* Server-side pager (fixes8 §2C). */}
-      {!busy && total > 0 && (
+      {/* Server-side pager (fixes8 §2C; fixes53 §2: paginates buildings while grouped). */}
+      {!busy && pagerTotal > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
           <button
             type="button"
