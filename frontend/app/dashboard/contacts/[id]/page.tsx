@@ -146,18 +146,18 @@ export default function ContactDetailPage() {
   };
 
   // Each segment keeps its own visibility rule; the order only rearranges
-  // whichever of them render. fixes52 §1: the border alternates pink/black by
-  // render position (not a fixed per-segment color) so reordering the
-  // segments keeps the alternation intact.
-  function renderSegment(key: SegmentKey, index: number) {
-    const borderClass =
-      index % 2 === 0 ? "border-status-magenta/30" : "border-black/70";
+  // whichever of them render. Per repeated user feedback, the colored border
+  // per SECTION (fixes52 §1) was the wrong reading of "make it easier to
+  // read" — reverted to a plain shadow card, matching every other card in
+  // the app; readability now comes from bordering each FIELD instead (see
+  // ContactView.tsx).
+  function renderSegment(key: SegmentKey) {
     switch (key) {
       case "main":
         return (
           <section
             key="main"
-            className={`bg-white rounded-xl shadow-sm border-2 ${borderClass} p-6`}
+            className="bg-white rounded-xl shadow-sm p-6"
           >
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold">
@@ -215,7 +215,7 @@ export default function ContactDetailPage() {
         return (
           <section
             key="visits"
-            className={`bg-white rounded-xl shadow-sm border-2 ${borderClass} p-6`}
+            className="bg-white rounded-xl shadow-sm p-6"
           >
             <h2 className="font-semibold mb-4">{t("visit.history", "היסטורית ביקורים")}</h2>
             <VisitHistoryEditor contactId={contact!.id} />
@@ -227,7 +227,7 @@ export default function ContactDetailPage() {
         return (
           <section
             key="visitSummary"
-            className={`bg-white rounded-xl shadow-sm border-2 ${borderClass} p-6`}
+            className="bg-white rounded-xl shadow-sm p-6"
           >
             <h2 className="font-semibold mb-4">{t("nav.visit_summary", "סיכום ביקורים")}</h2>
             <VisitSummary contactId={contact!.id} />
@@ -238,7 +238,7 @@ export default function ContactDetailPage() {
         return (
           <section
             key="dates"
-            className={`bg-white rounded-xl shadow-sm border-2 ${borderClass} p-6`}
+            className="bg-white rounded-xl shadow-sm p-6"
           >
             <h2 className="font-semibold mb-4">{t("significant_dates", "תאריכים חשובים")}</h2>
             <SignificantDatesEditor contactId={contact!.id} />
@@ -250,7 +250,7 @@ export default function ContactDetailPage() {
         return (
           <section
             key="donations"
-            className={`bg-white rounded-xl shadow-sm border-2 ${borderClass} p-6`}
+            className="bg-white rounded-xl shadow-sm p-6"
           >
             <h2 className="font-semibold mb-4">{t("donation.history", "היסטורית תרומות")}</h2>
             <DonationsEditor contactId={contact!.id} />
@@ -401,7 +401,7 @@ export default function ContactDetailPage() {
       {/* fixes19 §2: the "apartments covered by the activist" grid is gone —
           shluchim associate with report numbers (shown in the details card).
           fixes30 §2b: the segments render in the user's configured order. */}
-      {order.map((k, i) => renderSegment(k, i))}
+      {order.map(renderSegment)}
 
       {completionModalOpen && (
         <ReportCompletionModal

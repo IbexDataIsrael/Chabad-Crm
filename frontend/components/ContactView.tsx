@@ -658,9 +658,17 @@ export function ContactView({
 
   return (
     <div className="space-y-6">
-      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+      {/* Per-field bordered boxes, not a border around the whole section —
+          the point (per repeated user feedback) is readability: each
+          label+value pair reads as its own distinct unit at a glance,
+          rather than plain text runs blending into one another down the
+          page. A light, consistent brand-colored border (not a rainbow of
+          alternating colors per field) keeps ~15-20 fields on one page from
+          turning into visual noise; the color itself was explicitly called
+          out as a minor detail, not the point. */}
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {allFields.map(([, label, value]) => (
-          <div key={label} className="flex flex-col">
+          <div key={label} className="flex flex-col gap-1 rounded-lg border-2 border-status-magenta/25 p-3 transition-colors hover:border-status-magenta/50 hover:bg-status-magenta/5">
             <dt className={dtClass} style={dtStyle}>{label}</dt>
             <dd className="text-sm">{value}</dd>
           </div>
@@ -668,7 +676,7 @@ export function ContactView({
         {contact.shliach && (
           <>
             {vis("contact_shliach.areas") && (
-              <div className="flex flex-col">
+              <div className="flex flex-col gap-1 rounded-lg border-2 border-status-magenta/25 p-3 transition-colors hover:border-status-magenta/50 hover:bg-status-magenta/5">
                 <dt className={dtClass} style={dtStyle}>{t("contact_shliach.areas", "אזורים באחריות הפעיל")}</dt>
                 <dd className="text-sm">
                   {onPatch && isLocked("shliach.areas") ? (
@@ -701,7 +709,7 @@ export function ContactView({
             {/* fixes19: shluchim associate with report numbers (the covered
                 apartments grid is gone). */}
             {vis("contact_shliach.report_numbers") && (
-              <div className="flex flex-col">
+              <div className="flex flex-col gap-1 rounded-lg border-2 border-status-magenta/25 p-3 transition-colors hover:border-status-magenta/50 hover:bg-status-magenta/5">
                 <dt className={dtClass} style={dtStyle}>
                   {t("contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל")}
                 </dt>
@@ -731,7 +739,7 @@ export function ContactView({
               </div>
             )}
             {vis("contact_shliach.notes") && (
-              <div className="flex flex-col">
+              <div className="flex flex-col gap-1 rounded-lg border-2 border-status-magenta/25 p-3 transition-colors hover:border-status-magenta/50 hover:bg-status-magenta/5">
                 <dt className={dtClass} style={dtStyle}>{t("contact_shliach.notes", "הערות")}</dt>
                 <dd className="text-sm">
                   {inlineText("notes", contact.shliach.notes, {
@@ -745,7 +753,7 @@ export function ContactView({
             {/* fixes14: without a password the login is Google-only, which can
                 lock the shliach out. Empty input keeps the current password. */}
             {onPatch && (
-              <div className="flex flex-col">
+              <div className="flex flex-col gap-1 rounded-lg border-2 border-status-magenta/25 p-3 transition-colors hover:border-status-magenta/50 hover:bg-status-magenta/5">
                 <dt className={dtClass} style={dtStyle}>
                   {t("contact_shliach.password", "סיסמה למערכת (לא חובה)")}
                 </dt>
