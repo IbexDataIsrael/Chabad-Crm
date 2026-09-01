@@ -1,18 +1,20 @@
 "use client";
 
+import { ChevronDown, ChevronUp, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface SystemConfig {
   title_template: string;
   fallback_name: string;
 }
-
-const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none";
 
 /** Superadmin editor for the platform title configuration (fixes9 §1):
  *  the <title> template and the fallback org name. */
@@ -54,7 +56,7 @@ export function SystemSettingsCard() {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+    <Card className="overflow-hidden">
       <button
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center justify-between p-4 text-start"
@@ -62,59 +64,58 @@ export function SystemSettingsCard() {
         <span className="font-semibold">
           {t("admin.system_settings_title", "הגדרות מערכת")}
         </span>
-        <span className="text-gray-400 text-sm">{open ? "▲" : "▼"}</span>
+        {open ? (
+          <ChevronUp className="h-4 w-4 text-muted-foreground" />
+        ) : (
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+        )}
       </button>
 
       {open && (
-        <div className="border-t border-gray-100 bg-gray-50/60 p-4 space-y-3">
-          <p className="text-xs text-gray-500">
+        <div className="border-t border-border bg-background/60 p-4 space-y-3">
+          <p className="text-xs text-muted-foreground">
             {t(
               "admin.system_settings_intro",
               "תבנית כותרת הדפדפן לכל העמודים ושם ברירת מחדל כשאין שם ארגון.",
             )}
           </p>
           {config === null ? (
-            <p className="text-sm text-gray-400">{t("action.loading", "טוען…")}</p>
+            <p className="text-sm text-muted-foreground">{t("action.loading", "טוען…")}</p>
           ) : (
             <>
-              <label className="block text-xs text-gray-500">
+              <Label className="block text-xs text-muted-foreground">
                 {t("admin.title_template", "תבנית כותרת המערכת")}
-              </label>
-              <input
-                className={inputClass}
+              </Label>
+              <Input
                 dir="ltr"
                 value={config.title_template}
                 onChange={(e) =>
                   setConfig({ ...config, title_template: e.target.value })
                 }
               />
-              <p className="text-xs text-gray-400" dir="ltr">
+              <p className="text-xs text-muted-foreground" dir="ltr">
                 {t(
                   "admin.title_template_hint",
                   "{public.organizations.name} יוחלף בשם הארגון.",
                 )}
               </p>
-              <label className="block text-xs text-gray-500">
+              <Label className="block text-xs text-muted-foreground">
                 {t("admin.fallback_name", "שם זמני / ברירת מחדל")}
-              </label>
-              <input
-                className={inputClass}
+              </Label>
+              <Input
                 value={config.fallback_name}
                 onChange={(e) =>
                   setConfig({ ...config, fallback_name: e.target.value })
                 }
               />
-              <button
-                disabled={saving}
-                onClick={onSave}
-                className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-              >
+              <Button size="sm" disabled={saving} onClick={onSave}>
+                <Save className="h-4 w-4" />
                 {saving ? t("action.saving", "שומר…") : t("action.save", "שמור")}
-              </button>
+              </Button>
             </>
           )}
         </div>
       )}
-    </div>
+    </Card>
   );
 }

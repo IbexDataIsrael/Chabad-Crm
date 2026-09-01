@@ -65,32 +65,32 @@ export function MultiSelectFilter<Id extends number | string>({
         className={`rounded-md border px-3 py-2 text-sm ${
           value.length > 0
             ? "border-status-magenta text-status-magenta bg-status-magenta/5"
-            : "border-gray-300 text-gray-700 hover:bg-gray-50"
+            : "border-input text-foreground hover:bg-accent"
         }`}
       >
         {summary} <span className="text-xs">▾</span>
       </button>
       {open && (
-        <div className="absolute z-30 mt-1 min-w-[12rem] max-h-64 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg p-2 space-y-1 text-sm">
+        <div className="absolute z-30 mt-1 min-w-[12rem] max-h-64 overflow-y-auto rounded-xl border border-border bg-card shadow-lg p-2 space-y-1 text-sm">
           {searchable && (
             <input
-              className="w-full rounded-md border border-gray-300 px-2 py-1.5 focus:border-status-magenta focus:outline-none"
+              className="w-full rounded-md border border-input px-2 py-1.5 focus:border-status-magenta focus:outline-none"
               placeholder={t("select.search_ph", "הקלד לחיפוש…")}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
           )}
           {options.length === 0 ? (
-            <p className="px-2 py-1 text-gray-400">—</p>
+            <p className="px-2 py-1 text-muted-foreground">—</p>
           ) : visible.length === 0 ? (
-            <p className="px-2 py-1 text-gray-400">
+            <p className="px-2 py-1 text-muted-foreground">
               {t("select.no_matches", "אין תוצאות")}
             </p>
           ) : (
             visible.map((o) => (
               <label
                 key={o.id}
-                className="flex items-center gap-2 rounded px-2 py-1 cursor-pointer hover:bg-gray-50"
+                className="flex items-center gap-2 rounded px-2 py-1 cursor-pointer hover:bg-accent"
               >
                 <input
                   type="checkbox"

@@ -47,17 +47,17 @@ export function RichTextEditor({
   }
 
   const toolBtn =
-    "rounded border border-gray-200 px-2 py-1 text-xs hover:bg-gray-50 min-w-[1.9rem]";
+    "rounded border border-border px-2 py-1 text-xs hover:bg-accent min-w-[1.9rem]";
   const modeBtn = (active: boolean) =>
     `rounded px-2 py-1 text-xs ${
       active
-        ? "bg-status-magenta text-white"
-        : "border border-gray-200 text-gray-600 hover:bg-gray-50"
+        ? "bg-primary text-primary-foreground"
+        : "border border-border text-muted-foreground hover:bg-accent"
     }`;
 
   return (
-    <div className="rounded-md border border-gray-300 overflow-hidden bg-white">
-      <div className="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50 px-2 py-1.5">
+    <div className="rounded-md border border-input overflow-hidden bg-card">
+      <div className="flex flex-wrap items-center gap-1 border-b border-border bg-background px-2 py-1.5">
         {mode === "visual" && (
           <>
             <button type="button" className={`${toolBtn} font-bold`} title={t("editor.bold", "מודגש")} onClick={() => exec("bold")}>

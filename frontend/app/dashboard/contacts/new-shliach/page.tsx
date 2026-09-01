@@ -4,7 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { ArrowRight, Plus } from "lucide-react";
+
 import { ContactForm, type ContactFormValues } from "@/components/ContactForm";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
@@ -34,7 +38,7 @@ export default function NewShliachPage() {
     router.push(`/dashboard/contacts/${contact.id}`);
   }
 
-  if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!isAdmin) {
     return (
       <p className="text-status-darkred">
@@ -45,37 +49,39 @@ export default function NewShliachPage() {
 
   return (
     <div className="space-y-4">
-      <Link href="/dashboard/users" className="text-sm text-gray-500 hover:underline">
-        {t("page.back_to_shluchim", "← חזרה לפעילים")}
+      <Link
+        href="/dashboard/users"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:underline"
+      >
+        <ArrowRight className="h-4 w-4" /> {t("page.back_to_shluchim", "חזרה לפעילים")}
       </Link>
       <h1 className="text-2xl font-bold">{t("page.add_shliach", "הוסף פעיל")}</h1>
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-muted-foreground">
         {t(
           "page.shliach_intro",
           "פעיל מקבל גישת התחברות למערכת לפי כתובת הדוא״ל, ורואה רק מקורבים בדירות שבאחריותו.",
         )}
       </p>
       {areas !== null && areas.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm p-6 space-y-3">
+        <Card className="p-6 space-y-3">
           <p className="text-status-darkred text-sm">
             {t("error.no_areas_for_shliach", "נא להוסיף לפחות אזור אחד למערכת")}
           </p>
-          <Link
-            href="/dashboard/areas/add"
-            className="inline-block rounded-md bg-status-magenta text-white px-4 py-2 text-sm font-medium hover:opacity-90"
-          >
-            {t("page.add_area", "הוסף אזור")}
-          </Link>
-        </div>
+          <Button asChild>
+            <Link href="/dashboard/areas/add">
+              <Plus className="h-4 w-4" /> {t("page.add_area", "הוסף אזור")}
+            </Link>
+          </Button>
+        </Card>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm p-6">
+        <Card className="p-6">
           <ContactForm
             initial={{ contact_type: "shliach" }}
             users={users}
             onSubmit={create}
             submitLabel={t("action.create_shliach", "צור פעיל")}
           />
-        </div>
+        </Card>
       )}
     </div>
   );

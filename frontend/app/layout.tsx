@@ -1,8 +1,16 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { Heebo } from "next/font/google";
 
 import { Footer } from "@/components/Footer";
 import { Providers } from "./providers";
+
+const heebo = Heebo({
+  subsets: ["hebrew", "latin"],
+  weight: ["300", "400", "500", "600", "700", "800"],
+  variable: "--font-heebo",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   // Pre-hydration default only — TitleManager applies the configured template
@@ -18,8 +26,8 @@ export default function RootLayout({
 }) {
   // Native RTL layout: Hebrew is the primary UI language.
   return (
-    <html lang="he" dir="rtl">
-      <body className="bg-gray-50 text-gray-900 min-h-screen flex flex-col">
+    <html lang="he" dir="rtl" className={heebo.variable}>
+      <body className="bg-background text-foreground min-h-screen flex flex-col">
         <Providers>
           <div className="flex-1">{children}</div>
           <Footer />

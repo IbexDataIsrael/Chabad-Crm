@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Trash2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -9,6 +10,7 @@ import { CustomFieldValueDisplay, CustomFieldValueInput } from "@/components/Cus
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { PicklistSelect } from "@/components/PicklistSelect";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { Button } from "@/components/ui/button";
 import { InlineEdit } from "@/components/ui/InlineEdit";
 import { MultiSelectEditor } from "@/components/ui/MultiSelectEditor";
 import { apiFetch } from "@/lib/api";
@@ -42,7 +44,7 @@ import {
 } from "@/lib/types";
 
 const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 /** Apartment card (fixes30 §2): the fields edit in place, Google-style — the
  *  same InlineEdit flow as the contact page (fixes26 §2). Every save is a
@@ -194,14 +196,14 @@ export default function ApartmentDetailPage() {
     }
   }
 
-  if (loading || !loaded) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading || !loaded) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (error || !apt) {
     return (
       <div className="space-y-3">
-        <Link href="/dashboard/apartments" className="text-sm text-status-magenta hover:underline">
+        <Link href="/dashboard/apartments" className="text-sm text-primary hover:underline">
           {t("page.back_to_apartments", "← חזרה לדירות")}
         </Link>
-        <p className="text-status-darkred">
+        <p className="text-destructive">
           {error || t("page.apartment_not_found", "הדירה לא נמצאה.")}
         </p>
       </div>
@@ -311,7 +313,7 @@ export default function ApartmentDetailPage() {
   return (
     <div className="space-y-5 max-w-3xl">
       <div className="flex items-center justify-between">
-        <Link href="/dashboard/apartments" className="text-sm text-status-magenta hover:underline">
+        <Link href="/dashboard/apartments" className="text-sm text-primary hover:underline">
           {t("page.back_to_apartments", "← חזרה לדירות")}
         </Link>
         <div className="flex items-center gap-2">
@@ -319,12 +321,13 @@ export default function ApartmentDetailPage() {
               place. fixes22 §2 still holds: the backend scopes shliach edits
               to their assigned apartments (others get the save-failed toast). */}
           {isAdmin && (
-            <button
+            <Button
+              variant="outline"
+              className="border-destructive/40 text-destructive hover:bg-destructive/10"
               onClick={() => setConfirmingDelete(true)}
-              className="rounded-md border border-status-darkred/40 text-status-darkred px-3 py-1.5 text-sm hover:bg-red-50"
             >
-              {t("action.delete", "מחק")}
-            </button>
+              <Trash2 className="h-4 w-4" /> {t("action.delete", "מחק")}
+            </Button>
           )}
         </div>
       </div>
@@ -338,11 +341,11 @@ export default function ApartmentDetailPage() {
         />
       )}
 
-      <div className="bg-white rounded-xl shadow-sm p-5 space-y-3">
+      <div className="bg-card border border-border rounded-xl shadow-sm p-5 space-y-3">
           <h1 className="text-2xl font-bold">{apartmentTitle(apt)}</h1>
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <div>
-              <dt className="text-gray-500">{t("apartments.building_id", "בניין")}</dt>
+              <dt className="text-muted-foreground">{t("apartments.building_id", "בניין")}</dt>
               <dd className="font-medium flex items-baseline gap-2">
                 {building ? (
                   <Link
@@ -360,7 +363,7 @@ export default function ApartmentDetailPage() {
                 <InlineEdit<number | null>
                   value={apt.building_id}
                   display={
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-muted-foreground">
                       {t("action.edit", "ערוך")}
                     </span>
                   }
@@ -587,14 +590,14 @@ export default function ApartmentDetailPage() {
 
               return sortByFieldOrder(entries, (e) => e.key, orderFor).map((e) => (
                 <div key={e.key} className={e.span2 ? "sm:col-span-2" : undefined}>
-                  <dt className="text-gray-500">{e.label}</dt>
+                  <dt className="text-muted-foreground">{e.label}</dt>
                   <dd className="font-medium">{e.node}</dd>
                 </div>
               ));
             })()}
             {building?.building_address && (
               <div className="sm:col-span-2">
-                <dt className="text-gray-500">{t("buildings.building_address", "כתובת בניין")}</dt>
+                <dt className="text-muted-foreground">{t("buildings.building_address", "כתובת בניין")}</dt>
                 <dd className="font-medium">
                   {/* fixes30 §4: the shluchim display navigates via Maps. */}
                   {isShliach ? (
@@ -619,18 +622,18 @@ export default function ApartmentDetailPage() {
       {/* fixes19 §3: admin edit history — pick a previous version to view a
           read-only snapshot (Wikipedia-revisions style). */}
       {isAdmin && (
-        <section className="bg-white rounded-xl shadow-sm p-5 space-y-3">
-          <h2 className="text-sm font-semibold text-gray-500">
+        <section className="bg-card border border-border rounded-xl shadow-sm p-5 space-y-3">
+          <h2 className="text-sm font-semibold text-muted-foreground">
             {t("apt.history", "היסטוריית שינויים")}
           </h2>
           {history.length === 0 ? (
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-muted-foreground">
               {t("apt.history_none", "אין גרסאות קודמות.")}
             </p>
           ) : (
             <>
               <select
-                className="w-full sm:w-auto rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+                className="w-full sm:w-auto rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
                 value={snapshot?.id ?? ""}
                 onChange={(e) => {
                   const id = Number(e.target.value);
@@ -647,9 +650,9 @@ export default function ApartmentDetailPage() {
                 ))}
               </select>
               {snapshot && (
-                <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 space-y-3">
+                <div className="rounded-lg border border-dashed border-input bg-background p-4 space-y-3">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-medium text-gray-500">
+                    <p className="text-xs font-medium text-muted-foreground">
                       {t("apt.history_snapshot", "תצוגת גרסה היסטורית (לקריאה בלבד)")}
                     </p>
                     <button
@@ -661,7 +664,7 @@ export default function ApartmentDetailPage() {
                   </div>
                   {/* fixes22 §2: each field can be restored to this version's
                       value (a new active version is created on restore). */}
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-muted-foreground">
                     {t("apt.restore_hint", "לחץ \"שחזר\" ליד שדה כדי להחזיר את ערכו לגרסה זו.")}
                   </p>
                   <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
@@ -696,8 +699,8 @@ export default function ApartmentDetailPage() {
       )}
 
       {/* Linked contact (mekurav) — name links to their contact page. */}
-      <section className="bg-white rounded-xl shadow-sm p-5 space-y-2">
-        <h2 className="text-sm font-semibold text-gray-500">{t("apt.contact", "איש קשר")}</h2>
+      <section className="bg-card border border-border rounded-xl shadow-sm p-5 space-y-2">
+        <h2 className="text-sm font-semibold text-muted-foreground">{t("apt.contact", "איש קשר")}</h2>
         {linked ? (
           <Link
             href={`/dashboard/contacts/${linked.id}`}
@@ -706,7 +709,7 @@ export default function ApartmentDetailPage() {
             {linked.name}
           </Link>
         ) : (
-          <p className="text-sm text-gray-400">{t("apt.no_contact", "ללא איש קשר")}</p>
+          <p className="text-sm text-muted-foreground">{t("apt.no_contact", "ללא איש קשר")}</p>
         )}
       </section>
     </div>
@@ -742,7 +745,7 @@ function SnapRow({
   }
   return (
     <div>
-      <dt className="text-gray-500 flex items-center justify-between gap-2">
+      <dt className="text-muted-foreground flex items-center justify-between gap-2">
         <span>{label}</span>
         {field && onRestore && (
           <button

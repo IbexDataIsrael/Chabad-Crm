@@ -1,5 +1,6 @@
 "use client";
 
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
@@ -9,9 +10,13 @@ import type { Reminder, SignificantDate } from "@/lib/types";
 import { useConfirm } from "@/lib/confirm";
 import { DatePicker } from "./DatePicker";
 import { PicklistSelect } from "./PicklistSelect";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 
 const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 // Android-style "remind me …" presets (minutes before the date). Label via t().
 const OFFSET_PRESETS: { value: number; key: string; he: string }[] = [
@@ -82,48 +87,56 @@ export function SignificantDatesEditor({ contactId }: { contactId: number }) {
   const editingDate =
     editing && editing.id != null ? dates.find((d) => d.id === editing.id) : undefined;
 
-  if (loading) return <p className="text-sm text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading) return <p className="text-sm text-muted-foreground">{t("action.loading", "טוען…")}</p>;
 
   return (
     <div className="space-y-3">
       {dates.map((d) => (
         <div
           key={d.id}
-          className="flex flex-wrap items-center gap-2 rounded-md border border-gray-100 px-3 py-2"
+          className="flex flex-wrap items-center gap-2 rounded-md border border-border px-3 py-2"
         >
           <span className="font-medium" dir="ltr">
             {d.special_date ? new Date(d.special_date).toLocaleDateString("he-IL") : "—"}
           </span>
-          <span className="text-sm text-gray-600">
+          <span className="text-sm text-muted-foreground">
             {types.labelFor(d.special_date_type)}
             {d.special_date_title ? ` · ${d.special_date_title}` : ""}
           </span>
           {d.hebrew_date && (
-            <span className="text-sm text-gray-400">({d.hebrew_date})</span>
+            <span className="text-sm text-muted-foreground">({d.hebrew_date})</span>
           )}
           {d.is_set_reminder && (
-            <span className="rounded bg-status-orange/10 text-status-orange text-xs px-2 py-0.5">
+            <Badge variant="status-orange">
               {d.reminders.length} {t("sd.reminders_count", "תזכורות")}
-            </span>
+            </Badge>
           )}
           <div className="flex items-center gap-2 ms-auto">
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
+              title={t("action.edit", "ערוך")}
+              aria-label={t("action.edit", "ערוך")}
+              className="h-8 w-8 text-primary hover:text-primary"
               onClick={() => setEditing({ id: d.id })}
-              className="text-sm text-status-magenta hover:underline"
             >
-              {t("action.edit", "ערוך")}
-            </button>
-            <button
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              title={t("action.delete", "מחק")}
+              aria-label={t("action.delete", "מחק")}
+              className="h-8 w-8 text-destructive hover:text-destructive"
               onClick={() => remove(d.id)}
-              className="text-sm text-status-darkred hover:underline"
             >
-              {t("action.delete", "מחק")}
-            </button>
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       ))}
       {dates.length === 0 && !editing && (
-        <p className="text-sm text-gray-400">{t("sd.none", "אין תאריכים חשובים.")}</p>
+        <p className="text-sm text-muted-foreground">{t("sd.none", "אין תאריכים חשובים.")}</p>
       )}
 
       {editing ? (
@@ -148,13 +161,9 @@ export function SignificantDatesEditor({ contactId }: { contactId: number }) {
           }}
         />
       ) : (
-        <button
-          type="button"
-          onClick={() => setEditing({ id: null })}
-          className="text-sm text-status-magenta hover:underline"
-        >
-          + {t("sd.add_date", "הוסף תאריך חשוב")}
-        </button>
+        <Button type="button" variant="outline" size="sm" onClick={() => setEditing({ id: null })}>
+          <Plus className="h-4 w-4" /> {t("sd.add_date", "הוסף תאריך חשוב")}
+        </Button>
       )}
     </div>
   );
@@ -222,41 +231,36 @@ function DateForm({
   }
 
   return (
-    <div className="rounded-md border border-gray-200 p-3 space-y-3">
+    <div className="rounded-md border border-border p-3 space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <label className="block space-y-1">
-          <span className="block text-sm font-medium">{t("significant_dates.special_date", "תאריך חשוב")}</span>
+        <div className="space-y-1">
+          <Label>{t("significant_dates.special_date", "תאריך חשוב")}</Label>
           <DatePicker
             value={draft.special_date}
             onChange={(v) => set("special_date", v)}
             withTime
             className={inputClass}
           />
-        </label>
-        <label className="block space-y-1">
-          <span className="block text-sm font-medium">{t("significant_dates.hebrew_date", "תאריך עברי")}</span>
-          <input
-            className={inputClass}
-            value={draft.hebrew_date}
-            onChange={(e) => set("hebrew_date", e.target.value)}
-          />
-        </label>
-        <label className="block space-y-1">
-          <span className="block text-sm font-medium">{t("significant_dates.special_date_type", "סוג תאריך")}</span>
+        </div>
+        <div className="space-y-1">
+          <Label>{t("significant_dates.hebrew_date", "תאריך עברי")}</Label>
+          <Input value={draft.hebrew_date} onChange={(e) => set("hebrew_date", e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label>{t("significant_dates.special_date_type", "סוג תאריך")}</Label>
           <PicklistSelect
             fieldKey="significant_date.type"
             value={draft.special_date_type}
             onChange={(v) => set("special_date_type", v)}
           />
-        </label>
-        <label className="block space-y-1">
-          <span className="block text-sm font-medium">{t("significant_dates.special_date_title", "כותרת")}</span>
-          <input
-            className={inputClass}
+        </div>
+        <div className="space-y-1">
+          <Label>{t("significant_dates.special_date_title", "כותרת")}</Label>
+          <Input
             value={draft.special_date_title ?? ""}
             onChange={(e) => set("special_date_title", e.target.value || null)}
           />
-        </label>
+        </div>
       </div>
 
       <label className="flex items-center gap-2 text-sm">
@@ -273,7 +277,7 @@ function DateForm({
           {draft.reminders.map((r, i) => (
             <div key={i} className="flex flex-wrap items-center gap-2">
               <select
-                className="rounded-md border border-gray-300 px-2 py-1 text-sm"
+                className="rounded-md border border-input px-2 py-1 text-sm"
                 value={r.offset_minutes}
                 onChange={(e) => setReminder(i, { offset_minutes: Number(e.target.value) })}
               >
@@ -286,57 +290,53 @@ function DateForm({
               <input
                 type="time"
                 dir="ltr"
-                className="rounded-md border border-gray-300 px-2 py-1 text-sm"
+                className="rounded-md border border-input px-2 py-1 text-sm"
                 value={r.remind_at_time}
                 onChange={(e) => setReminder(i, { remind_at_time: e.target.value })}
               />
-              <span className="text-xs text-gray-400">{t("sd.email_channel", "אימייל")}</span>
-              <button
+              <span className="text-xs text-muted-foreground">{t("sd.email_channel", "אימייל")}</span>
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon"
+                title={t("action.remove", "הסר")}
+                aria-label={t("action.remove", "הסר")}
+                className="h-7 w-7 text-destructive hover:text-destructive"
                 onClick={() =>
                   set(
                     "reminders",
                     draft.reminders.filter((_, idx) => idx !== i),
                   )
                 }
-                className="text-sm text-status-darkred hover:underline"
               >
-                {t("action.remove", "הסר")}
-              </button>
+                <Trash2 className="h-4 w-4" />
+              </Button>
             </div>
           ))}
-          <button
+          <Button
             type="button"
+            variant="link"
+            className="h-auto p-0"
             onClick={() =>
               set("reminders", [
                 ...draft.reminders,
                 { offset_minutes: 1440, remind_at_time: "09:00" },
               ])
             }
-            className="text-sm text-status-magenta hover:underline"
           >
-            + {t("sd.add_reminder", "הוסף תזכורת")}
-          </button>
+            <Plus className="h-4 w-4" /> {t("sd.add_reminder", "הוסף תזכורת")}
+          </Button>
         </div>
       )}
 
-      {error && <p className="text-sm text-status-darkred">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={save}
-          disabled={busy}
-          className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-        >
+        <Button type="button" onClick={save} disabled={busy}>
           {busy ? t("action.saving", "שומר…") : t("action.save", "שמור")}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="text-sm text-gray-500 hover:underline"
-        >
+        </Button>
+        <Button type="button" variant="ghost" onClick={onCancel}>
           {t("action.cancel", "ביטול")}
-        </button>
+        </Button>
       </div>
     </div>
   );

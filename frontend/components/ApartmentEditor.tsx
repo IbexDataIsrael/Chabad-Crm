@@ -8,6 +8,7 @@ import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { PhoneInput } from "@/components/PhoneInput";
 import { PicklistSelect } from "@/components/PicklistSelect";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCustomFieldDefs } from "@/lib/customFields";
@@ -27,7 +28,7 @@ import {
 } from "@/lib/types";
 
 const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 /**
  * Full apartment form (fixes7 §2/§4) — the same structural flow as editing a
@@ -378,22 +379,14 @@ export function ApartmentEditor({
           </label>
         )}
       </div>
-      {error && <p className="text-sm text-status-darkred">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex items-center gap-2">
-        <button
-          type="submit"
-          disabled={busy}
-          className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-        >
+        <Button type="submit" disabled={busy}>
           {busy ? t("action.saving", "שומר…") : t("action.save", "שמור")}
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
-        >
+        </Button>
+        <Button type="button" variant="outline" onClick={onClose}>
           {t("action.cancel", "ביטול")}
-        </button>
+        </Button>
       </div>
     </form>
   );

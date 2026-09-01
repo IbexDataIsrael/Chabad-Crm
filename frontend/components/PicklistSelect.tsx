@@ -3,7 +3,7 @@
 import { usePicklist } from "@/lib/picklists";
 
 const baseClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 export function PicklistSelect({
   fieldKey,

@@ -49,10 +49,10 @@ export function PhoneInput({
         className={`${baseClass} ${
           invalid
             ? "border-status-darkred focus:border-status-darkred focus:ring-status-darkred"
-            : "border-gray-300 focus:border-status-magenta focus:ring-status-magenta"
+            : "border-input focus:border-status-magenta focus:ring-status-magenta"
         }`}
       />
-      <span className={`block text-xs ${invalid ? "text-status-darkred" : "text-gray-400"}`}>
+      <span className={`block text-xs ${invalid ? "text-status-darkred" : "text-muted-foreground"}`}>
         {t("validation.phone_hint", PHONE_HINT)}
       </span>
     </div>

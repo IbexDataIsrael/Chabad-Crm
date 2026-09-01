@@ -31,5 +31,5 @@ export default function DashboardHome() {
             : "/dashboard/contacts",
     );
   }, [router, user, isShliach, isSuperadmin, loading]);
-  return <p className="p-8 text-center text-gray-400">{t("action.loading", "טוען…")}</p>;
+  return <p className="p-8 text-center text-muted-foreground">{t("action.loading", "טוען…")}</p>;
 }

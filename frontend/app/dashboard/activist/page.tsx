@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Home, MessageSquare, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import {
   ReportCompletionModal,
   SystemCommentModal,
 } from "@/components/ShliachSelfServiceModals";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
@@ -51,7 +54,7 @@ export default function ActivistLandingPage() {
   }, [loading, isShliach, router]);
 
   if (loading || !isShliach) {
-    return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+    return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   }
 
   const contactId = user?.shliach?.contact_id ?? null;
@@ -63,60 +66,65 @@ export default function ActivistLandingPage() {
           {t("activist_home.title", "ברוך הבא")}
           {user?.display_name ? `, ${user.display_name}` : ""}
         </h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           {t("activist_home.intro", "עמוד הבית שלך — הפעולות והעדכונים שלך במקום אחד.")}
         </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         {contactId && (
-          <Link
-            href={`/dashboard/contacts/${contactId}`}
-            className="rounded-xl border-2 border-status-magenta/30 bg-white shadow-sm p-5 hover:bg-status-magenta/5"
-          >
-            <div className="text-lg font-semibold">
-              {t("activist_home.edit_profile", "עריכת הפרטים שלי")}
-            </div>
-            <p className="mt-1 text-sm text-gray-500">
-              {t("activist_home.edit_profile_hint", "עדכן את הפרטים האישיים שלך")}
-            </p>
+          <Link href={`/dashboard/contacts/${contactId}`}>
+            <Card className="border-2 border-primary/30 p-5 transition-colors hover:bg-primary/5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <UserRound className="h-5 w-5" />
+                </div>
+                <div className="text-lg font-semibold">
+                  {t("activist_home.edit_profile", "עריכת הפרטים שלי")}
+                </div>
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {t("activist_home.edit_profile_hint", "עדכן את הפרטים האישיים שלך")}
+              </p>
+            </Card>
           </Link>
         )}
-        <Link
-          href="/dashboard/apartments"
-          className="rounded-xl border-2 border-black/70 bg-white shadow-sm p-5 hover:bg-gray-50"
-        >
-          <div className="text-lg font-semibold">
-            {t("activist_home.my_apartments", "הדירות שלי")}
-          </div>
-          <p className="mt-1 text-sm text-gray-500">
-            {apartmentsTotal == null
-              ? t("action.loading", "טוען…")
-              : t("activist_home.my_apartments_count", "{n} דירות משויכות").replace(
-                  "{n}", String(apartmentsTotal),
-                )}
-          </p>
+        <Link href="/dashboard/apartments">
+          <Card className="border-2 border-foreground/70 p-5 transition-colors hover:bg-accent">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground">
+                <Home className="h-5 w-5" />
+              </div>
+              <div className="text-lg font-semibold">
+                {t("activist_home.my_apartments", "הדירות שלי")}
+              </div>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {apartmentsTotal == null
+                ? t("action.loading", "טוען…")
+                : t("activist_home.my_apartments_count", "{n} דירות משויכות").replace(
+                    "{n}", String(apartmentsTotal),
+                  )}
+            </p>
+          </Card>
         </Link>
       </div>
 
       <div className="flex flex-wrap gap-2">
         {/* fixes54 §6.1: only when the activist has ≥1 assigned apartment. */}
         {(apartmentsTotal ?? 0) >= 1 && (
-          <button
+          <Button
             type="button"
+            variant="outline"
+            className="border-primary text-primary hover:bg-primary/10"
             onClick={() => setCompletionModalOpen(true)}
-            className="rounded-md border border-status-magenta text-status-magenta px-4 py-1.5 text-sm font-medium hover:bg-status-magenta/10"
           >
             {t("shliach_msg.report_completed_btn", "דיווח על השלמת הדוח")}
-          </button>
+          </Button>
         )}
-        <button
-          type="button"
-          onClick={() => setCommentModalOpen(true)}
-          className="rounded-md border border-gray-300 text-gray-600 px-4 py-1.5 text-sm font-medium hover:bg-gray-50"
-        >
-          {t("shliach_msg.system_comment_btn", "הערות על המערכת")}
-        </button>
+        <Button type="button" variant="outline" onClick={() => setCommentModalOpen(true)}>
+          <MessageSquare className="h-4 w-4" /> {t("shliach_msg.system_comment_btn", "הערות על המערכת")}
+        </Button>
       </div>
 
       <div className="space-y-3">
@@ -124,26 +132,24 @@ export default function ActivistLandingPage() {
           {t("activist_home.announcements", "עדכונים")}
         </h2>
         {announcementsLoading ? (
-          <p className="text-gray-400">{t("action.loading", "טוען…")}</p>
+          <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>
         ) : announcements.length === 0 ? (
-          <p className="text-gray-400">{t("activist_home.no_announcements", "אין עדכונים כרגע.")}</p>
+          <p className="text-muted-foreground">{t("activist_home.no_announcements", "אין עדכונים כרגע.")}</p>
         ) : (
           <div className="space-y-3">
             {announcements.map((a, i) => (
-              <div
+              <Card
                 key={a.id}
-                className={`bg-white rounded-xl shadow-sm border-2 ${
-                  i % 2 === 0 ? "border-status-magenta/30" : "border-black/70"
-                } p-5`}
+                className={`border-2 p-5 ${i % 2 === 0 ? "border-primary/30" : "border-foreground/70"}`}
               >
                 <h3 className="font-semibold">{a.message_title}</h3>
                 <div
-                  className="mt-2 text-sm text-gray-700"
+                  className="mt-2 text-sm text-foreground"
                   // fixes54 §5: admin-authored HTML from the shliach-config
                   // WYSIWYG editor — trusted content, admin-only write access.
                   dangerouslySetInnerHTML={{ __html: a.message_content }}
                 />
-              </div>
+              </Card>
             ))}
           </div>
         )}

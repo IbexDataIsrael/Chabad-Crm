@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Mail, Plus, SquarePen, SlidersHorizontal, Settings2, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ApartmentPicker } from "@/components/ApartmentPicker";
@@ -10,6 +11,7 @@ import { DatePicker } from "@/components/DatePicker";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { PicklistSelect } from "@/components/PicklistSelect";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { Button } from "@/components/ui/button";
 import { InlineEdit } from "@/components/ui/InlineEdit";
 import { TruncatedText } from "@/components/ui/TruncatedText";
 import { VisitForm } from "@/components/VisitForm";
@@ -46,7 +48,7 @@ import {
 } from "@/lib/types";
 
 const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 type SortKey = "created" | "name";
 
@@ -617,7 +619,7 @@ export default function ContactsPage() {
   function sortArrow(key: SortKey): ReactNode {
     const active = sort === key;
     return (
-      <span className={active ? "text-gray-700" : "text-gray-300"}>
+      <span className={active ? "text-foreground" : "text-muted-foreground"}>
         {" "}
         {active ? (dir === "asc" ? "↑" : "↓") : "⇅"}
       </span>
@@ -892,7 +894,7 @@ export default function ContactsPage() {
     .replace("{total}", String(total));
 
   const selectClass =
-    "rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none";
+    "rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none";
 
   return (
     <div className="space-y-4">
@@ -905,65 +907,53 @@ export default function ContactsPage() {
               filter must never require hunting through the controls to undo
               (the empty-state button below only covers the zero-results case). */}
           {activeFilterCount > 0 && (
-            <button
-              type="button"
-              onClick={clearAllFilters}
-              className="rounded-md border border-gray-300 text-gray-600 px-4 py-2 text-sm font-medium hover:bg-gray-50"
-            >
-              ✕ {t("filter.clear_all", "נקה את כל הסינונים")}
-            </button>
+            <Button type="button" variant="outline" onClick={clearAllFilters}>
+              <X className="h-4 w-4" /> {t("filter.clear_all", "נקה את כל הסינונים")}
+            </Button>
           )}
           {/* fixes29 §1: show/hide the whole filter block below. */}
-          <button
-            type="button"
-            onClick={() => setFiltersOpen((v) => !v)}
-            className="rounded-md border border-gray-300 text-gray-600 px-4 py-2 text-sm font-medium hover:bg-gray-50"
-          >
-            {filtersOpen
-              ? `▴ ${t("filter.hide_filters", "הסתר סינון")}`
-              : `▾ ${t("filter.show_filters", "הצג סינון")}`}
+          <Button type="button" variant="outline" onClick={() => setFiltersOpen((v) => !v)}>
+            <SlidersHorizontal className="h-4 w-4" />
+            {filtersOpen ? t("filter.hide_filters", "הסתר סינון") : t("filter.show_filters", "הצג סינון")}
             {/* Collapsed filters keep applying — surface how many are active. */}
             {!filtersOpen && activeFilterCount > 0 && (
-              <span className="ms-1.5 inline-flex items-center justify-center rounded-full bg-status-magenta text-white text-xs px-1.5 py-0.5 leading-none">
+              <span className="ms-1 inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground text-xs px-1.5 py-0.5 leading-none">
                 {activeFilterCount}
               </span>
             )}
-          </button>
+          </Button>
           {/* fixes38 §1.1: the columns toggle lives outside the filtersOpen
               block so collapsing filters never hides it. */}
-          <button
+          <Button type="button" variant="outline" onClick={() => setColumnsOpen((v) => !v)}>
+            <Settings2 className="h-4 w-4" /> {t("columns.configure", "התאמת עמודות")}
+          </Button>
+          <Button
             type="button"
-            onClick={() => setColumnsOpen((v) => !v)}
-            className="rounded-md border border-gray-300 text-gray-600 px-4 py-2 text-sm font-medium hover:bg-gray-50"
-          >
-            ⚙ {t("columns.configure", "התאמת עמודות")}
-          </button>
-          <button
-            type="button"
+            variant="outline"
+            className="border-primary text-primary hover:bg-primary/10"
             onClick={bulkEmail}
-            className="rounded-md border border-status-magenta text-status-magenta px-4 py-2 text-sm font-medium hover:bg-status-magenta/10"
           >
-            ✉ {t("action.bulk_email", "מייל לכל התוצאות")}
-          </button>
+            <Mail className="h-4 w-4" /> {t("action.bulk_email", "מייל לכל התוצאות")}
+          </Button>
           {/* fixes43 §1: bulk "Assigned To" edit — a shliach can't reassign
               ownership, same guard as the inline per-row edit. */}
           {!isShliach && (
-            <button
+            <Button
               type="button"
+              variant="outline"
+              className="border-primary text-primary hover:bg-primary/10"
               onClick={() => setBulkOpen(true)}
               disabled={total === 0}
-              className="rounded-md border border-status-magenta text-status-magenta px-4 py-2 text-sm font-medium hover:bg-status-magenta/10 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              ✎ {t("bulkedit.open", "עריכה מרובה")}
-            </button>
+              <SquarePen className="h-4 w-4" /> {t("bulkedit.open", "עריכה מרובה")}
+            </Button>
           )}
           {/* fixes10 §3.3: shliach users create (their own) contacts too. */}
-          <Link
-            href="/dashboard/contacts/new"
-            className="rounded-md bg-status-magenta text-white px-4 py-2 text-sm font-medium hover:opacity-90"
-          >
-            + {t("page.new_contact", "איש קשר חדש")}
-          </Link>
+          <Button asChild>
+            <Link href="/dashboard/contacts/new">
+              <Plus className="h-4 w-4" /> {t("page.new_contact", "איש קשר חדש")}
+            </Link>
+          </Button>
         </div>
       </div>
 
@@ -971,24 +961,24 @@ export default function ContactsPage() {
           fixes38 §1.1: deliberately OUTSIDE the filtersOpen fragment below,
           so collapsing filters never hides it. */}
       {columnsOpen && (
-        <div className="bg-white rounded-xl shadow-sm p-4 space-y-2">
+        <div className="bg-card border border-border rounded-xl shadow-sm p-4 space-y-2">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">{t("columns.title", "עמודות מוצגות")}</h3>
             <button
               type="button"
               onClick={() => setColumns(DEFAULT_COLUMNS)}
-              className="text-xs text-status-magenta hover:underline"
+              className="text-xs text-primary hover:underline"
             >
               {t("columns.reset", "איפוס ברירת מחדל")}
             </button>
           </div>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-muted-foreground">
             {t(
               "columns.hint",
               "בחר אילו עמודות יוצגו בטבלה. ההעדפה נשמרת בדפדפן זה.",
             )}
           </p>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-muted-foreground">
             {t("columns.reorder_hint", "גרור עמודה פעילה כדי לשנות את סדר ההצגה.")}
           </p>
           {/* fixes39 §3 / fixes48 §2: one real SortableJS-managed container
@@ -1022,7 +1012,7 @@ export default function ContactsPage() {
                       disabled={activeIdx === 0}
                       onClick={() => moveActiveColumn(entry, -1)}
                       title={t("action.move_up", "העלה")}
-                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
+                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-status-magenta hover:bg-accent active:bg-muted disabled:opacity-20"
                     >
                       ▲
                     </button>
@@ -1031,7 +1021,7 @@ export default function ContactsPage() {
                       disabled={activeIdx === orderedActiveColumns.length - 1}
                       onClick={() => moveActiveColumn(entry, 1)}
                       title={t("action.move_down", "הורד")}
-                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
+                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-status-magenta hover:bg-accent active:bg-muted disabled:opacity-20"
                     >
                       ▼
                     </button>
@@ -1048,7 +1038,7 @@ export default function ContactsPage() {
                   data-sort-key={key}
                   data-sortable-disabled=""
                   onClick={() => toggleGridColumn(entry)}
-                  className="rounded-md border px-3 py-1.5 text-sm border-gray-200 text-gray-600 hover:bg-gray-50"
+                  className="rounded-md border px-3 py-1.5 text-sm border-border text-muted-foreground hover:bg-accent"
                 >
                   {gridColumnLabel(entry)}
                 </button>
@@ -1191,7 +1181,7 @@ export default function ContactsPage() {
         />
         {/* fixes25 §4: visit date-range filter (טווח תאריכי ביקור). */}
         <span className="flex items-center gap-2">
-          <span className="text-gray-500">{t("visits.date_range", "טווח תאריכי ביקור")}:</span>
+          <span className="text-muted-foreground">{t("visits.date_range", "טווח תאריכי ביקור")}:</span>
           <DatePicker
             value={visitFrom}
             onChange={(v) => {
@@ -1249,7 +1239,7 @@ export default function ContactsPage() {
             fixes40 §2: searchable, and restricted to admin/staff options
             when activists may not view contacts. */}
         {!isShliach && ownerOptions.length > 0 && (
-          <span className="flex items-center gap-2 text-sm text-gray-500">
+          <span className="flex items-center gap-2 text-sm text-muted-foreground">
             {t("filter.by_assigned", "משויך ל:")}
             <SearchableSelect
               className="w-48"
@@ -1267,7 +1257,7 @@ export default function ContactsPage() {
         {/* fixes54 §3.1: the standalone sort select + direction button are
             gone — sorting now happens via clickable column-header arrows
             (the "שם" header and, when active, the "created" column). */}
-        <span className="ms-auto flex items-center gap-2 text-sm text-gray-500">
+        <span className="ms-auto flex items-center gap-2 text-sm text-muted-foreground">
           {t("pager.page_size", "בעמוד:")}
           <select
             className={selectClass}
@@ -1293,10 +1283,10 @@ export default function ContactsPage() {
           org member, same as the contact page's visit section). */}
       {visitFor && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-2xl bg-white rounded-xl shadow-xl p-5 space-y-3 max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-2xl bg-card rounded-xl shadow-xl p-5 space-y-3 max-h-[90vh] overflow-y-auto">
             <div>
               <h2 className="text-lg font-bold">{t("page.add_visit", "ביקור חדש")}</h2>
-              <p className="text-sm text-gray-500">{contactFullName(visitFor)}</p>
+              <p className="text-sm text-muted-foreground">{contactFullName(visitFor)}</p>
             </div>
             <VisitForm
               contacts={[]}
@@ -1357,18 +1347,18 @@ export default function ContactsPage() {
         />
       )}
 
-      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+      <div className="bg-card rounded-xl border border-border shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           {/* Data columns are content-width (w-px + nowrap); the empty trailing
               column absorbs the slack so everything condenses to the start. */}
-          <thead className="bg-gray-50 text-gray-600 text-right">
+          <thead className="bg-background text-muted-foreground text-right">
             <tr>
               {/* fixes54 §3.1: clickable sort-arrow header (mirrors Report
                   Numbers) — the backend only orders by "name"/"created",
                   so those are the only two clickable headers. */}
               <th
                 onClick={() => onHeaderSortClick("name")}
-                className="px-3 py-1.5 font-medium w-px whitespace-nowrap min-w-[150px] cursor-pointer select-none hover:bg-gray-100"
+                className="px-3 py-1.5 font-medium w-px whitespace-nowrap min-w-[150px] cursor-pointer select-none hover:bg-accent"
               >
                 {t("common.name", "שם")}
                 {sortArrow("name")}
@@ -1384,7 +1374,7 @@ export default function ContactsPage() {
                     key={gridColumnSortKey(entry)}
                     onClick={sortable ? () => onHeaderSortClick("created") : undefined}
                     className={`px-3 py-1.5 font-medium w-px whitespace-nowrap ${gridColumnMinWidth(entry)} ${
-                      sortable ? "cursor-pointer select-none hover:bg-gray-100" : ""
+                      sortable ? "cursor-pointer select-none hover:bg-accent" : ""
                     }`}
                   >
                     {gridColumnLabel(entry)}
@@ -1400,13 +1390,13 @@ export default function ContactsPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={colCount} className="px-4 py-6 text-center text-gray-400">
-                  {t("action.loading", "טוען…")}
+                <td colSpan={colCount} className="px-4 py-10 text-center">
+                  <div className="mx-auto h-6 w-6 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
                 </td>
               </tr>
             ) : contacts.length === 0 ? (
               <tr>
-                <td colSpan={colCount} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={colCount} className="px-4 py-6 text-center text-muted-foreground">
                   {/* An empty page with active filters is almost never "no
                       data" — say which, and offer a one-click way out. */}
                   {activeFilterCount > 0 ? (
@@ -1418,7 +1408,7 @@ export default function ContactsPage() {
                       <button
                         type="button"
                         onClick={clearAllFilters}
-                        className="text-status-magenta hover:underline"
+                        className="text-primary hover:underline"
                       >
                         {t("filter.clear_all", "נקה את כל הסינונים")}
                       </button>
@@ -1434,7 +1424,7 @@ export default function ContactsPage() {
                   key={c.id}
                   style={showColor ? rowStyle(c.color_tag) : undefined}
                   onClick={() => router.push(`/dashboard/contacts/${c.id}`)}
-                  className="border-t border-gray-100 cursor-pointer hover:bg-gray-50/80"
+                  className="border-t border-border cursor-pointer hover:bg-accent/80"
                 >
                   <td
                     className="px-3 py-1.5 font-medium min-w-[150px] max-w-[11rem] truncate"
@@ -1483,7 +1473,7 @@ export default function ContactsPage() {
                           href={telHref(c.phone)}
                           onClick={(e) => e.stopPropagation()}
                           title={t("action.call", "חיוג")}
-                          className="rounded-full border border-gray-200 p-1.5 leading-none hover:bg-status-green/10"
+                          className="rounded-full border border-border p-1.5 leading-none hover:bg-status-green/10"
                         >
                           📞
                         </a>
@@ -1495,7 +1485,7 @@ export default function ContactsPage() {
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
                           title={t("action.whatsapp", "וואטסאפ")}
-                          className="rounded-full border border-gray-200 p-1.5 leading-none hover:bg-status-green/10"
+                          className="rounded-full border border-border p-1.5 leading-none hover:bg-status-green/10"
                         >
                           💬
                         </a>
@@ -1505,7 +1495,7 @@ export default function ContactsPage() {
                           href={`mailto:${c.email}`}
                           onClick={(e) => e.stopPropagation()}
                           title={t("action.send_email", "שליחת מייל")}
-                          className="rounded-full border border-gray-200 p-1.5 leading-none hover:bg-status-magenta/10"
+                          className="rounded-full border border-border p-1.5 leading-none hover:bg-status-magenta/10"
                         >
                           ✉
                         </a>
@@ -1518,7 +1508,7 @@ export default function ContactsPage() {
                           setVisitFor(c);
                         }}
                         title={t("visit.add", "הוסף ביקור")}
-                        className="rounded-full border border-gray-200 p-1.5 leading-none hover:bg-status-green/10"
+                        className="rounded-full border border-border p-1.5 leading-none hover:bg-status-green/10"
                       >
                         📅
                       </button>
@@ -1548,16 +1538,16 @@ export default function ContactsPage() {
             type="button"
             disabled={page <= 1}
             onClick={() => setPage(page - 1)}
-            className="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="rounded-md border border-input px-3 py-1.5 hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {t("pager.prev", "→ הקודם")}
           </button>
-          <span className="text-gray-500">{rangeText}</span>
+          <span className="text-muted-foreground">{rangeText}</span>
           <button
             type="button"
             disabled={page >= lastPage}
             onClick={() => setPage(page + 1)}
-            className="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="rounded-md border border-input px-3 py-1.5 hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {t("pager.next", "הבא ←")}
           </button>
@@ -1644,7 +1634,7 @@ function ContactNameCell({
           setEditing(true);
         }}
         title={t("inline.click_to_edit", "לחץ לעריכה")}
-        className="text-xs text-gray-300 opacity-0 group-hover:opacity-100 hover:text-status-magenta"
+        className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-status-magenta"
       >
         ✎
       </button>
@@ -1728,12 +1718,12 @@ function ContactBulkEditModal({
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg bg-white rounded-xl shadow-xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div className="w-full max-w-lg bg-card rounded-xl shadow-xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
         <div>
           <h2 className="text-lg font-bold">
             {t("bulkedit.contacts_title", "עריכה מרובה של אנשי קשר")}
           </h2>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             {t(
               "bulkedit.contacts_intro",
               "השינויים יחולו על כל {total} אנשי הקשר התואמים לסינון הנוכחי.",
@@ -1772,7 +1762,7 @@ function ContactBulkEditModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+            className="rounded-md border border-input px-4 py-2 text-sm hover:bg-accent"
           >
             {t("action.cancel", "ביטול")}
           </button>

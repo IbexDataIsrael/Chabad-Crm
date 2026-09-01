@@ -36,11 +36,11 @@ import { InlineEdit } from "./ui/InlineEdit";
 import { MultiSelectEditor } from "./ui/MultiSelectEditor";
 
 const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 // fixes50 §2.1: a subtle pill so field labels read as distinct from their
 // values instead of blending into the same gray weight. Background/text
-// color are inline styles (not Tailwind's bg-gray-100/text-gray-500)
+// color are inline styles (not Tailwind's bg-muted/text-muted-foreground)
 // deliberately — a production report showed the gray only appearing on
 // hover, which points at some cascade/specificity interaction with another
 // class on the same element; an inline style can't lose that fight.
@@ -96,7 +96,7 @@ export function ContactView({
       <span className="inline-flex items-center gap-1">
         {display}
         <span
-          className="text-gray-300 text-xs"
+          className="text-muted-foreground text-xs"
           title={t("contact.field_locked", "שדה זה נעול לעריכה עצמית")}
         >
           🔒
@@ -791,14 +791,14 @@ export function ContactView({
           snapshot history view as the Apartments module's (see model
           docstring): each entry is a complete past version, not a diff. */}
       {isAdmin && contact.contact_type === "shliach" && shliachHistory.length > 0 && (
-        <div className="rounded-lg border border-gray-200 p-4 space-y-2">
-          <h3 className="text-xs font-semibold text-gray-500">
+        <div className="rounded-lg border border-border p-4 space-y-2">
+          <h3 className="text-xs font-semibold text-muted-foreground">
             {t("contact_shliach.history", "היסטוריית שינויים")}
           </h3>
           <ul className="text-sm space-y-1.5">
             {shliachHistory.map((v) => (
-              <li key={v.id} className="text-gray-600">
-                <span className="text-xs text-gray-400">
+              <li key={v.id} className="text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   {(v.editor_name || t("apt.history_unknown_editor", "עורך לא ידוע")) +
                     " — " +
                     (v.last_edit ? new Date(v.last_edit).toLocaleString("he-IL") : "")}
@@ -835,7 +835,7 @@ export function ContactView({
       {/* fixes25: the Mivtzoim checklist + custom fields moved to the visit
           log (each visit records what happened on it). */}
 
-      <p className="text-xs text-gray-300" dir="ltr">
+      <p className="text-xs text-muted-foreground" dir="ltr">
         GUID: {contact.guid}
       </p>
     </div>

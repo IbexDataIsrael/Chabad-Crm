@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { LogIn, Loader2 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { ApiError, getToken, resendVerification } from "@/lib/api";
@@ -9,6 +10,9 @@ import { useAuth, type LoginOrgOption } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { LanguageToggle } from "@/components/LanguageToggle";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 /** Post-login destination from ?redirect= (fixes8 §3), restricted to internal
  *  paths — absolute and protocol-relative URLs fall back to the dashboard. */
@@ -110,12 +114,12 @@ export default function LoginPage() {
   if (orgOptions) {
     return (
       <main className="min-h-screen flex items-center justify-center p-6">
-        <div className="w-full max-w-sm bg-white rounded-xl shadow-md p-8 space-y-5">
+        <div className="w-full max-w-sm bg-card rounded-xl shadow-md p-8 space-y-5">
           <div className="text-center">
             <h1 className="text-2xl font-bold">
               {t("auth.select_org_title", "בחירת ארגון")}
             </h1>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-muted-foreground">
               {t(
                 "auth.select_org_subtitle",
                 "החשבון שלך מקושר למספר ארגונים. יש לבחור לאיזה ארגון להתחבר.",
@@ -129,17 +133,17 @@ export default function LoginPage() {
                   type="button"
                   disabled={busy}
                   onClick={() => onSelectOrg(org.id)}
-                  className="w-full flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3 text-start hover:border-status-magenta hover:bg-status-magenta/5 disabled:opacity-50"
+                  className="w-full flex items-center gap-3 rounded-xl border border-border px-4 py-3 text-start transition-colors hover:border-primary/30 hover:bg-primary/5 disabled:opacity-50"
                 >
                   {org.logo_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={org.logo_url}
                       alt=""
-                      className="h-8 w-8 rounded-md object-contain border border-gray-200 bg-white"
+                      className="h-8 w-8 rounded-md object-contain border border-border bg-card"
                     />
                   ) : (
-                    <span className="flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-gray-50">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background">
                       🏢
                     </span>
                   )}
@@ -149,21 +153,22 @@ export default function LoginPage() {
             ))}
           </ul>
           {error && (
-            <p className="text-sm text-status-darkred bg-red-50 rounded-md px-3 py-2">
+            <p className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">
               {error}
             </p>
           )}
-          <button
+          <Button
             type="button"
+            variant="outline"
+            className="w-full"
             onClick={() => {
               setOrgOptions(null);
               setGoogleCredential(null);
               setError("");
             }}
-            className="w-full rounded-md border border-gray-300 py-2 text-sm text-gray-600 hover:bg-gray-50"
           >
             {t("auth.select_org_back", "חזרה להתחברות")}
-          </button>
+          </Button>
         </div>
       </main>
     );
@@ -173,91 +178,93 @@ export default function LoginPage() {
     <main className="min-h-screen flex items-center justify-center p-6">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-sm bg-white rounded-xl shadow-md p-8 space-y-5"
+        className="w-full max-w-sm bg-card rounded-xl shadow-md p-8 space-y-5"
       >
         <div className="flex justify-end">
           <LanguageToggle />
         </div>
         <div className="text-center">
+          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <LogIn className="h-6 w-6" />
+          </div>
           <h1 className="text-2xl font-bold">{t("auth.app_title", "מיני CRM")}</h1>
-          <p className="mt-1 text-sm text-gray-500">{t("auth.login_subtitle")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t("auth.login_subtitle")}</p>
         </div>
 
         <div className="space-y-1">
-          <label htmlFor="username" className="block text-sm font-medium">
-            {t("auth.username")}
-          </label>
-          <input
+          <Label htmlFor="username">{t("auth.username")}</Label>
+          <Input
             id="username"
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             autoComplete="username"
             required
-            className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
+            className="h-11"
           />
         </div>
 
         <div className="space-y-1">
-          <label htmlFor="password" className="block text-sm font-medium">
-            {t("auth.password")}
-          </label>
-          <input
+          <Label htmlFor="password">{t("auth.password")}</Label>
+          <Input
             id="password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
             required
-            className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
+            className="h-11"
           />
         </div>
 
         {error && (
-          <p className="text-sm text-status-darkred bg-red-50 rounded-md px-3 py-2">
+          <p className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">
             {error}
           </p>
         )}
 
         {unverified && (
           <div className="space-y-2">
-            <input
+            <Input
               type="email"
               dir="ltr"
               placeholder={t("auth.your_email")}
               value={resendEmail}
               onChange={(e) => setResendEmail(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
             />
-            <button
+            <Button
               type="button"
+              variant="outline"
+              className="w-full border-primary text-primary hover:bg-primary/5"
               onClick={() => resendEmail && resendVerification(resendEmail)}
-              className="w-full rounded-md border border-status-magenta text-status-magenta py-2 text-sm hover:bg-status-magenta/5"
             >
               {t("auth.resend_verification")}
-            </button>
+            </Button>
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={busy}
-          className="w-full rounded-md bg-status-magenta text-white py-2 font-medium hover:opacity-90 disabled:opacity-50"
-        >
-          {busy ? t("auth.logging_in") : t("auth.login")}
-        </button>
+        <Button type="submit" disabled={busy} className="w-full h-11 font-medium">
+          {busy ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {t("auth.logging_in")}
+            </>
+          ) : (
+            t("auth.login")
+          )}
+        </Button>
 
-        <div className="flex items-center gap-3 text-xs text-gray-400">
-          <span className="h-px flex-1 bg-gray-200" />
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <span className="h-px flex-1 bg-border" />
           {t("common.or", "או")}
-          <span className="h-px flex-1 bg-gray-200" />
+          <span className="h-px flex-1 bg-border" />
         </div>
 
         <GoogleSignInButton onCredential={onGoogleCredential} onError={setError} />
 
-        <p className="text-center text-sm text-gray-500">
+        <p className="text-center text-sm text-muted-foreground">
           {t("auth.no_account")}{" "}
-          <Link href="/signup" className="text-status-magenta hover:underline">
+          <Link href="/signup" className="text-primary hover:underline">
             {t("auth.open_org_account")}
           </Link>
         </p>

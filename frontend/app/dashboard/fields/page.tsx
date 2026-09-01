@@ -67,7 +67,7 @@ export default function FieldsPage() {
     }
   }
 
-  if (authLoading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (authLoading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!isAdmin) {
     return (
       <p className="text-status-darkred">
@@ -97,7 +97,7 @@ export default function FieldsPage() {
     // where it's configured, lowest number first, unordered fields last.
     const ordered = sortByFieldOrder(group, (f) => f.field_key, orderFor);
     return (
-      <ul className="divide-y divide-gray-100">
+      <ul className="divide-y divide-border">
         {ordered.map((f) => (
           <FieldRow
             key={f.field_key}
@@ -115,7 +115,7 @@ export default function FieldsPage() {
     <div className="space-y-5 max-w-3xl">
       <div>
         <h1 className="text-2xl font-bold">{t("page.fields_title", "ניהול שדות")}</h1>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted-foreground">
           {t(
             "page.fields_intro",
             "בחר אילו שדות יופיעו בכרטיס איש הקשר, בטופס וברשימה. שדות שיוסתרו לא יוצגו בשום מקום במערכת.",
@@ -124,16 +124,16 @@ export default function FieldsPage() {
       </div>
 
       {/* fixes40 round 2 §3.1: tab bar — identical pattern to dashboard/picklists. */}
-      <div className="flex flex-wrap gap-2 border-b border-gray-200">
+      <div className="flex flex-wrap gap-2 border-b border-border">
         {TABS.map((tb) => (
           <button
             key={tb.key}
             type="button"
             onClick={() => setTab(tb.key)}
-            className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+            className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
               tab === tb.key
-                ? "border-status-magenta text-status-magenta"
-                : "border-transparent text-gray-500 hover:text-gray-700"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
             <span aria-hidden>{tb.icon}</span>
@@ -142,8 +142,8 @@ export default function FieldsPage() {
         ))}
       </div>
 
-      <section className="bg-white rounded-xl shadow-sm">
-        <div className="px-4 py-1.5 flex items-center justify-end border-b border-gray-100 text-[11px] font-medium text-gray-400">
+      <section className="bg-card rounded-xl shadow-sm">
+        <div className="px-4 py-1.5 flex items-center justify-end border-b border-border text-[11px] font-medium text-muted-foreground">
           {t("fields.order_header", "סדר תצוגה")}
         </div>
         {entities.length > 1
@@ -153,7 +153,7 @@ export default function FieldsPage() {
               const meta = ENTITY_LABELS[entity];
               return (
                 <div key={entity}>
-                  <h2 className="px-4 py-2 bg-gray-50 text-xs font-medium text-gray-500 border-b border-gray-100">
+                  <h2 className="px-4 py-2 bg-background text-xs font-medium text-muted-foreground border-b border-border">
                     {t(meta.labelKey, meta.fallback)}
                   </h2>
                   {renderRows(group)}
@@ -162,7 +162,7 @@ export default function FieldsPage() {
             })
           : renderRows(tabFields)}
         {tabFields.length === 0 && (
-          <p className="px-4 py-6 text-center text-gray-400">
+          <p className="px-4 py-6 text-center text-muted-foreground">
             {t("cf.none", "אין שדות עדיין.")}
           </p>
         )}
@@ -233,7 +233,7 @@ function FieldRow({
 
   return (
     <li className="px-4 py-2 flex items-center justify-between gap-3">
-      <span className={`text-sm ${field.is_visible ? "" : "text-gray-400"}`}>{label}</span>
+      <span className={`text-sm ${field.is_visible ? "" : "text-muted-foreground"}`}>{label}</span>
       <div className="flex items-center gap-3">
         <div className="flex flex-col items-center gap-0.5">
           <div className="flex items-center gap-1">
@@ -243,8 +243,8 @@ function FieldRow({
               aria-label={t("fields.order_header", "סדר תצוגה")}
               className={`w-14 rounded-md border px-1.5 py-0.5 text-xs text-center ${
                 duplicate
-                  ? "border-status-darkred text-status-darkred bg-red-50"
-                  : "border-gray-300"
+                  ? "border-status-darkred text-status-darkred bg-status-darkred/10"
+                  : "border-input"
               }`}
               placeholder="—"
               value={orderDraft}
@@ -275,11 +275,11 @@ function FieldRow({
             </span>
           )}
         </div>
-        <label className="inline-flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
+        <label className="inline-flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
           {field.is_visible ? t("fields.shown", "מוצג") : t("fields.hidden", "מוסתר")}
           <input
             type="checkbox"
-            className="h-4 w-4 accent-status-magenta"
+            className="h-4 w-4 accent-primary"
             checked={field.is_visible}
             onChange={(e) => onToggle(field.field_key, e.target.checked)}
           />

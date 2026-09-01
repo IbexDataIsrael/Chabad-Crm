@@ -13,7 +13,7 @@ export default function RegisterRedirect() {
     router.replace("/signup");
   }, [router]);
   return (
-    <div className="p-8 text-center text-gray-400">
+    <div className="p-8 text-center text-muted-foreground">
       {t("msg.redirecting", "מעביר…")}
     </div>
   );

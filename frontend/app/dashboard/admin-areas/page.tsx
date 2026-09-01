@@ -1,7 +1,10 @@
 "use client";
 
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
@@ -11,9 +14,9 @@ import { type AdminArea } from "@/lib/types";
 import { useConfirm } from "@/lib/confirm";
 
 const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 const toolbarSelectClass =
-  "rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none";
+  "rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none";
 
 type SortKey = "name" | "created";
 
@@ -54,7 +57,7 @@ export default function AdminAreasPage() {
     success(t("msg.deleted", "נמחק בהצלחה"));
   }
 
-  if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
 
   // Client-side filter → sort → page (small per-org list).
   const filtered = items.filter(
@@ -83,12 +86,9 @@ export default function AdminAreasPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{t("page.admin_areas_title", "אזורי מנהל")}</h1>
         {isAdmin && !adding && !editing && (
-          <button
-            onClick={() => setAdding(true)}
-            className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
-          >
-            + {t("page.add_admin_area", "אזור מנהל חדש")}
-          </button>
+          <Button onClick={() => setAdding(true)}>
+            <Plus className="h-4 w-4" /> {t("page.add_admin_area", "אזור מנהל חדש")}
+          </Button>
         )}
       </div>
 
@@ -119,7 +119,7 @@ export default function AdminAreasPage() {
             setPage(1);
           }}
         />
-        <span className="flex items-center gap-2 text-gray-500">
+        <span className="flex items-center gap-2 text-muted-foreground">
           {t("sort.label", "מיון:")}
           <select
             className={toolbarSelectClass}
@@ -132,19 +132,20 @@ export default function AdminAreasPage() {
             <option value="name">{t("sort.by_name", "שם")}</option>
             <option value="created">{t("sort.created", "תאריך יצירה")}</option>
           </select>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="icon"
             onClick={() => {
               setDir(dir === "asc" ? "desc" : "asc");
               setPage(1);
             }}
-            className="rounded-md border border-gray-300 px-3 py-2 hover:bg-gray-50"
             title={dir === "asc" ? t("sort.asc", "עולה") : t("sort.desc", "יורד")}
           >
-            {dir === "asc" ? "↑" : "↓"}
-          </button>
+            {dir === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+          </Button>
         </span>
-        <span className="ms-auto flex items-center gap-2 text-gray-500">
+        <span className="ms-auto flex items-center gap-2 text-muted-foreground">
           {t("pager.page_size", "בעמוד:")}
           <select
             className={toolbarSelectClass}
@@ -163,11 +164,11 @@ export default function AdminAreasPage() {
         </span>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
+      <Card className="divide-y divide-border shadow-sm">
         {busy ? (
-          <p className="px-4 py-6 text-center text-gray-400">{t("action.loading", "טוען…")}</p>
+          <p className="px-4 py-6 text-center text-muted-foreground">{t("action.loading", "טוען…")}</p>
         ) : sorted.length === 0 ? (
-          <p className="px-4 py-6 text-center text-gray-400">
+          <p className="px-4 py-6 text-center text-muted-foreground">
             {t("page.no_admin_areas", "אין אזורי מנהל להצגה.")}
           </p>
         ) : (
@@ -176,53 +177,58 @@ export default function AdminAreasPage() {
               <div className="min-w-[10rem]">
                 <span className="font-medium">{aa.name}</span>
                 {aa.comments && (
-                  <div className="text-sm text-gray-500">{aa.comments}</div>
+                  <div className="text-sm text-muted-foreground">{aa.comments}</div>
                 )}
               </div>
               {isAdmin && (
                 <div className="flex items-center gap-2 ms-auto">
-                  <button
+                  <Button
+                    size="sm"
+                    variant="secondary"
                     onClick={() => {
                       setAdding(false);
                       setEditing(aa);
                     }}
-                    className="rounded-md bg-gray-800 text-white px-3 py-1 text-xs hover:opacity-90"
                   >
-                    {t("action.edit", "ערוך")}
-                  </button>
-                  <button
+                    <Pencil className="h-3.5 w-3.5" /> {t("action.edit", "ערוך")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-status-darkred/40 text-status-darkred hover:bg-status-darkred/10"
                     onClick={() => remove(aa)}
-                    className="rounded-md border border-status-darkred/40 text-status-darkred px-2 py-1 text-xs hover:bg-red-50"
                   >
-                    {t("action.delete", "מחק")}
-                  </button>
+                    <Trash2 className="h-3.5 w-3.5" /> {t("action.delete", "מחק")}
+                  </Button>
                 </div>
               )}
             </div>
           ))
         )}
-      </div>
+      </Card>
 
       {/* Client-side pager (fixes15 §6). */}
       {!busy && sorted.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             disabled={safePage <= 1}
             onClick={() => setPage(safePage - 1)}
-            className="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {t("pager.prev", "→ הקודם")}
-          </button>
-          <span className="text-gray-500">{rangeText}</span>
-          <button
+            <ChevronRight className="h-4 w-4" /> {t("pager.prev", "הקודם")}
+          </Button>
+          <span className="text-muted-foreground">{rangeText}</span>
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             disabled={safePage >= lastPage}
             onClick={() => setPage(safePage + 1)}
-            className="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {t("pager.next", "הבא ←")}
-          </button>
+            {t("pager.next", "הבא")} <ChevronLeft className="h-4 w-4" />
+          </Button>
         </div>
       )}
     </div>
@@ -264,7 +270,7 @@ function AdminAreaForm({
   }
 
   return (
-    <form onSubmit={save} className="bg-white rounded-xl shadow-sm p-4 space-y-3">
+    <form onSubmit={save} className="bg-card border border-border rounded-xl shadow-sm p-4 space-y-3">
       <h3 className="font-medium">
         {item
           ? t("page.edit_admin_area", "עריכת אזור מנהל")
@@ -293,20 +299,12 @@ function AdminAreaForm({
       </div>
       {error && <p className="text-sm text-status-darkred">{error}</p>}
       <div className="flex items-center gap-2">
-        <button
-          type="submit"
-          disabled={busy}
-          className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-        >
+        <Button type="submit" disabled={busy}>
           {busy ? t("action.saving", "שומר…") : t("action.save", "שמור")}
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
-        >
+        </Button>
+        <Button type="button" variant="outline" onClick={onClose}>
           {t("action.cancel", "ביטול")}
-        </button>
+        </Button>
       </div>
     </form>
   );

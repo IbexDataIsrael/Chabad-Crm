@@ -105,16 +105,16 @@ export function AreasMap({ areas }: { areas: Area[] }) {
 
   if (!mapsKey) {
     return (
-      <p className="text-sm text-gray-400">
+      <p className="text-sm text-muted-foreground">
         {t("map.set_key", "להצגת מפה הגדר מפתח Google Maps.")}
       </p>
     );
   }
   if (zones.length === 0) {
     return (
-      <p className="text-sm text-gray-400">{t("page.area_no_boundary", "ללא תחום")}</p>
+      <p className="text-sm text-muted-foreground">{t("page.area_no_boundary", "ללא תחום")}</p>
     );
   }
 
-  return <div ref={ref} className="w-full h-96 rounded-md border border-gray-200" />;
+  return <div ref={ref} className="w-full h-96 rounded-md border border-border" />;
 }

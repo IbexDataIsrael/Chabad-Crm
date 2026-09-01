@@ -27,3 +27,6 @@ backups/
 
 .vercel
 .env*
+
+# Reference-only project used for design extraction — not part of this repo.
+/fleet-flow-zippy-pro1/

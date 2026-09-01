@@ -104,18 +104,18 @@ export function BuildingsMap({
 
   if (!mapsKey) {
     return (
-      <p className="text-sm text-gray-400">
+      <p className="text-sm text-muted-foreground">
         {t("map.set_key", "להצגת מפה הגדר מפתח Google Maps.")}
       </p>
     );
   }
   if (located.length === 0) {
     return (
-      <p className="text-sm text-gray-400">
+      <p className="text-sm text-muted-foreground">
         {t("buildings.none_located", "אין בניינים עם קואורדינטות להצגה על המפה.")}
       </p>
     );
   }
 
-  return <div ref={ref} className="w-full h-96 rounded-md border border-gray-200" />;
+  return <div ref={ref} className="w-full h-96 rounded-md border border-border" />;
 }

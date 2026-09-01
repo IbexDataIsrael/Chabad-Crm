@@ -5,6 +5,9 @@ import { useEffect, useState } from "react";
 
 import { DatePicker } from "@/components/DatePicker";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
@@ -31,7 +34,7 @@ function currentWeekRange(lang: string): [string, string] {
 }
 
 const dateInputClass =
-  "rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-status-magenta focus:outline-none";
+  "rounded-md border border-input px-3 py-1.5 text-sm focus:border-status-magenta focus:outline-none";
 
 /** fixes38 §1.2/§1.3: "Summary of Visits" report + per-contact Visit Summary
  *  section — same component, `contactId` scopes it to one contact and hides
@@ -107,7 +110,7 @@ export function VisitSummary({ contactId }: { contactId?: number }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-gray-500">{t("visits.date_range", "טווח תאריכי ביקור")}:</span>
+        <span className="text-sm text-muted-foreground">{t("visits.date_range", "טווח תאריכי ביקור")}:</span>
         <DatePicker
           value={dateFrom}
           onChange={setDateFrom}
@@ -125,23 +128,20 @@ export function VisitSummary({ contactId }: { contactId?: number }) {
         {/* fixes50 §3.1: prominent standing action to view every visitor
             regardless of the date range — the pickers above stay disabled
             (but keep their value) while it's on. */}
-        <button
+        <Button
           type="button"
+          variant={allDates ? "default" : "outline"}
+          size="sm"
           onClick={() => setAllDates((v) => !v)}
-          className={`rounded-md border px-3 py-1.5 text-sm font-medium ${
-            allDates
-              ? "border-status-magenta bg-status-magenta text-white"
-              : "border-gray-300 hover:bg-gray-50"
-          }`}
         >
           {t("visitsummary.all_dates", "הצג את כל התאריכים")}
-        </button>
+        </Button>
         {/* fixes40 §3: "Filter by contact owner" — same permission/search
             logic as the Contacts page (fixes40 §2). Picking a specific
             owner supersedes the org-wide toggle below (same priority the
             backend applies), so that toggle is disabled while one is set. */}
         {showOwnerFilter && ownerOptions.length > 0 && (
-          <span className="flex items-center gap-2 text-sm text-gray-500">
+          <span className="flex items-center gap-2 text-sm text-muted-foreground">
             {t("filter.by_assigned", "משויך ל:")}
             <SearchableSelect
               className="w-48"
@@ -154,13 +154,9 @@ export function VisitSummary({ contactId }: { contactId?: number }) {
             {/* fixes42 §1: a standing, one-click way back to the unfiltered
                 list — not just the hidden "clear" row inside the combobox. */}
             {assignedFilter && (
-              <button
-                type="button"
-                onClick={() => setAssignedFilter("")}
-                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
-              >
+              <Button type="button" variant="outline" size="sm" onClick={() => setAssignedFilter("")}>
                 {t("filter.show_all_records", "הצג את כל הרשומות")}
-              </button>
+              </Button>
             )}
           </span>
         )}
@@ -174,7 +170,7 @@ export function VisitSummary({ contactId }: { contactId?: number }) {
         {contactId == null && !isShliach && (
           <label
             className={`inline-flex items-center gap-1.5 text-sm ${
-              assignedFilter ? "text-gray-400" : "cursor-pointer"
+              assignedFilter ? "text-muted-foreground" : "cursor-pointer"
             }`}
           >
             <input
@@ -190,28 +186,26 @@ export function VisitSummary({ contactId }: { contactId?: number }) {
       </div>
 
       {data === null ? (
-        <p className="text-sm text-gray-400">{t("action.loading", "טוען…")}</p>
+        <p className="text-sm text-muted-foreground">{t("action.loading", "טוען…")}</p>
       ) : (
         <>
           <p className="text-sm font-medium">
             {t("visitsummary.total", "סה\"כ ביקורים: {n}").replace("{n}", String(data.total))}
           </p>
           {categories.length === 0 ? (
-            <p className="text-sm text-gray-400">{t("visitsummary.none", "אין ביקורים בטווח שנבחר.")}</p>
+            <p className="text-sm text-muted-foreground">{t("visitsummary.none", "אין ביקורים בטווח שנבחר.")}</p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {categories.map((cat) => (
-                <div key={cat.key} className="rounded-md border border-gray-200 p-3">
+                <Card key={cat.key} className="p-3">
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-sm font-medium">
                       {(lang === "en" ? cat.english_label : null) || cat.hebrew_label}
                     </span>
-                    <span className="rounded-full bg-status-magenta/10 text-status-magenta px-2 py-0.5 text-xs">
-                      {cat.count}
-                    </span>
+                    <Badge className="rounded-full">{cat.count}</Badge>
                   </div>
                   {cat.items.length === 0 ? (
-                    <p className="text-xs text-gray-400">{t("visitsummary.category_empty", "אין רשומות")}</p>
+                    <p className="text-xs text-muted-foreground">{t("visitsummary.category_empty", "אין רשומות")}</p>
                   ) : (
                     <ul className="space-y-1">
                       {cat.items.map((item) => (
@@ -223,12 +217,12 @@ export function VisitSummary({ contactId }: { contactId?: number }) {
                           >
                             {item.contact_name || `#${item.contact_id}`}
                           </Link>
-                          <span className="text-gray-400"> — {item.visit_date.slice(0, 10)}</span>
+                          <span className="text-muted-foreground"> — {item.visit_date.slice(0, 10)}</span>
                         </li>
                       ))}
                     </ul>
                   )}
-                </div>
+                </Card>
               ))}
             </div>
           )}

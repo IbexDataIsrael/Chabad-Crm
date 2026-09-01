@@ -42,5 +42,5 @@ export function ContactMap({ lat, lng }: { lat: number; lng: number }) {
     );
   }
 
-  return <div ref={ref} className="w-full h-56 rounded-md border border-gray-200" />;
+  return <div ref={ref} className="w-full h-56 rounded-md border border-border" />;
 }

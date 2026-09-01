@@ -94,7 +94,7 @@ export function MultiSelectSearchFilter<Id extends number | string>({
         className={`w-full rounded-md border px-3 py-2 text-sm text-start ${
           value.length > 0
             ? "border-status-magenta text-status-magenta bg-status-magenta/5"
-            : "border-gray-300 text-gray-700 hover:bg-gray-50"
+            : "border-input text-foreground hover:bg-accent"
         } ${buttonClassName}`}
       >
         <span className="truncate">{selectedLabel}</span>{" "}
@@ -102,7 +102,7 @@ export function MultiSelectSearchFilter<Id extends number | string>({
       </button>
       {open && (
         <div
-          className="absolute z-30 mt-1 min-w-[14rem] rounded-md border border-gray-200 bg-white shadow-lg p-2 text-sm"
+          className="absolute z-30 mt-1 min-w-[14rem] rounded-xl border border-border bg-card shadow-lg p-2 text-sm"
           onKeyDown={(e) => {
             if (e.key === "Escape") setOpen(false);
           }}
@@ -111,13 +111,13 @@ export function MultiSelectSearchFilter<Id extends number | string>({
             ref={searchRef}
             type="text"
             aria-label={searchPlaceholder ?? t("select.search_ph", "הקלד לחיפוש…")}
-            className="w-full rounded-md border border-gray-300 px-2 py-1.5 focus:border-status-magenta focus:outline-none"
+            className="w-full rounded-md border border-input px-2 py-1.5 focus:border-status-magenta focus:outline-none"
             placeholder={searchPlaceholder ?? t("select.search_ph", "הקלד לחיפוש…")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
           {/* Bulk affordances for high-volume lists. */}
-          <div className="flex items-center justify-between px-1 pt-2 pb-1 text-xs text-gray-500">
+          <div className="flex items-center justify-between px-1 pt-2 pb-1 text-xs text-muted-foreground">
             <span>
               {t("filter.n_of_total", "{n}/{total}")
                 .replace("{n}", String(visible.length))
@@ -152,9 +152,9 @@ export function MultiSelectSearchFilter<Id extends number | string>({
             className="max-h-64 overflow-y-auto space-y-0.5"
           >
             {options.length === 0 ? (
-              <li className="px-2 py-1 text-gray-400">{emptyLabel}</li>
+              <li className="px-2 py-1 text-muted-foreground">{emptyLabel}</li>
             ) : visible.length === 0 ? (
-              <li className="px-2 py-1 text-gray-400">
+              <li className="px-2 py-1 text-muted-foreground">
                 {t("select.no_matches", "אין תוצאות")}
               </li>
             ) : (
@@ -162,7 +162,7 @@ export function MultiSelectSearchFilter<Id extends number | string>({
                 const checked = value.includes(o.id);
                 return (
                   <li key={String(o.id)} role="option" aria-selected={checked}>
-                    <label className="flex items-center gap-2 rounded px-2 py-1 cursor-pointer hover:bg-gray-50">
+                    <label className="flex items-center gap-2 rounded px-2 py-1 cursor-pointer hover:bg-accent">
                       <input
                         type="checkbox"
                         className="accent-status-magenta"

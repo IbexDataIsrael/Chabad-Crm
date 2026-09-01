@@ -2,9 +2,13 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 
+import { Plus } from "lucide-react";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useConfirm } from "@/lib/confirm";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -221,7 +225,7 @@ export default function ShliachConfigPage() {
   }
 
   if (loading || !loaded) {
-    return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+    return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   }
   if (!isAdmin) {
     return (
@@ -237,7 +241,7 @@ export default function ShliachConfigPage() {
         <h1 className="text-2xl font-bold">
           {t("shliach_config.title", "הגדרות לתצוגת פעילים")}
         </h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           {t(
             "shliach_config.intro",
             "שולט על תצוגת הדירות שרואים משתמשי פעיל — עריכה, סינון ועמודות ברירת מחדל.",
@@ -245,7 +249,7 @@ export default function ShliachConfigPage() {
         </p>
       </div>
 
-      <form onSubmit={save} className="bg-white rounded-xl shadow-sm p-6 space-y-6">
+      <form onSubmit={save} className="bg-card rounded-xl shadow-sm p-6 space-y-6">
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -267,11 +271,11 @@ export default function ShliachConfigPage() {
         {/* fixes53 §7/§8: field-level locks for a shliach's own "עריכת המידע
             שלך" self-edit — Email/Areas/Report Numbers are always locked
             (never listed here); anything else is opt-in per org. */}
-        <div className="border-t border-gray-100 pt-4 space-y-3">
+        <div className="border-t border-border pt-4 space-y-3">
           <span className="block text-sm font-medium">
             {t("shliach_config.self_edit_locks", "נעילת שדות לעריכה עצמית")}
           </span>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-muted-foreground">
             {t(
               "shliach_config.self_edit_locks_hint",
               "אימייל, אזורים ומספרי דוח נעולים תמיד בעריכה עצמית. סמן שדות נוספים לנעילה.",
@@ -319,11 +323,11 @@ export default function ShliachConfigPage() {
           </div>
         </div>
 
-        <div className="border-t border-gray-100 pt-4 space-y-3">
+        <div className="border-t border-border pt-4 space-y-3">
           <span className="block text-sm font-medium">
             {t("shliach_config.default_filters", "סינון ברירת מחדל")}
           </span>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-muted-foreground">
             {t(
               "shliach_config.default_filters_hint",
               "הסינון שבו תיפתח תצוגת הדירות עבור פעילים.",
@@ -365,7 +369,7 @@ export default function ShliachConfigPage() {
           </div>
         </div>
 
-        <div className="border-t border-gray-100 pt-4 space-y-3">
+        <div className="border-t border-border pt-4 space-y-3">
           <label className="flex items-center gap-2 text-sm font-medium">
             <input
               type="checkbox"
@@ -374,7 +378,7 @@ export default function ShliachConfigPage() {
             />
             {t("shliach_config.default_columns", "עמודות ברירת מחדל")}
           </label>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-muted-foreground">
             {t(
               "shliach_config.default_columns_hint",
               "כאשר כבוי, פעילים מתחילים מברירת המחדל הכללית של המערכת. פעיל יכול תמיד להתאים אישית את העמודות שלו דרך \"התאמת שדות\" בעמוד הדירות.",
@@ -397,26 +401,22 @@ export default function ShliachConfigPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-md bg-status-magenta text-white px-5 py-2 font-medium hover:opacity-90 disabled:opacity-50"
-          >
+          <Button type="submit" disabled={busy}>
             {busy ? t("action.saving", "שומר…") : t("action.save", "שמור")}
-          </button>
-          {saved && <span className="text-sm text-status-green">{t("action.saved", "נשמר ✓")}</span>}
+          </Button>
+          {saved && <span className="text-sm text-success">{t("action.saved", "נשמר ✓")}</span>}
         </div>
       </form>
 
       {/* fixes54 §5: announcements for the activist landing page's feed —
           WYSIWYG-authored HTML messages, full CRUD. */}
-      <div className="bg-white rounded-xl shadow-sm p-6 space-y-4">
+      <div className="bg-card rounded-xl shadow-sm p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold">
               {t("shliach_config.announcements_title", "הודעות לפעילים")}
             </h2>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-muted-foreground">
               {t(
                 "shliach_config.announcements_hint",
                 "הודעות אלו מוצגות לפעילים בעמוד הבית שלהם, כאשר הן פעילות.",
@@ -424,13 +424,9 @@ export default function ShliachConfigPage() {
             </p>
           </div>
           {editingAnnouncement === null && (
-            <button
-              type="button"
-              onClick={() => setEditingAnnouncement("new")}
-              className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
-            >
-              + {t("shliach_config.announcement_add", "הודעה חדשה")}
-            </button>
+            <Button type="button" size="sm" onClick={() => setEditingAnnouncement("new")}>
+              <Plus className="h-4 w-4" /> {t("shliach_config.announcement_add", "הודעה חדשה")}
+            </Button>
           )}
         </div>
 
@@ -446,11 +442,11 @@ export default function ShliachConfigPage() {
           />
         )}
 
-        <div className="rounded-lg border border-gray-100 divide-y divide-gray-100">
+        <div className="rounded-lg border border-border divide-y divide-border">
           {announcementsLoading ? (
-            <p className="px-4 py-6 text-center text-gray-400">{t("action.loading", "טוען…")}</p>
+            <p className="px-4 py-6 text-center text-muted-foreground">{t("action.loading", "טוען…")}</p>
           ) : announcements.length === 0 ? (
-            <p className="px-4 py-6 text-center text-gray-400">
+            <p className="px-4 py-6 text-center text-muted-foreground">
               {t("shliach_config.announcements_none", "אין הודעות עדיין.")}
             </p>
           ) : (
@@ -459,37 +455,29 @@ export default function ShliachConfigPage() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium truncate">{a.message_title}</span>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs ${
-                        a.is_visible
-                          ? "bg-status-green/10 text-status-green"
-                          : "bg-gray-100 text-gray-500"
-                      }`}
-                    >
+                    <Badge variant={a.is_visible ? "success" : "secondary"}>
                       {a.is_visible
                         ? t("shliach_config.announcement_visible", "מוצגת")
                         : t("shliach_config.announcement_hidden", "מוסתרת")}
-                    </span>
+                    </Badge>
                   </div>
-                  <span className="text-xs text-gray-400" dir="ltr">
+                  <span className="text-xs text-muted-foreground" dir="ltr">
                     {new Date(a.updated_at).toLocaleString()}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setEditingAnnouncement(a)}
-                    className="rounded-md bg-gray-800 text-white px-3 py-1 text-xs hover:opacity-90"
-                  >
+                  <Button type="button" size="sm" variant="secondary" onClick={() => setEditingAnnouncement(a)}>
                     {t("action.edit", "ערוך")}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    size="sm"
+                    variant="outline"
+                    className="border-destructive text-destructive hover:bg-destructive/10"
                     onClick={() => deleteAnnouncement(a)}
-                    className="rounded-md border border-status-darkred/40 text-status-darkred px-2 py-1 text-xs hover:bg-red-50"
                   >
                     {t("action.delete", "מחק")}
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))
@@ -553,13 +541,12 @@ function AnnouncementForm({
   }
 
   return (
-    <form onSubmit={save} className="rounded-lg border border-gray-200 p-4 space-y-3">
+    <form onSubmit={save} className="rounded-lg border border-border p-4 space-y-3">
       <label className="block space-y-1">
         <span className="block text-sm font-medium">
           {t("shliach_config.announcement_title_field", "כותרת ההודעה")}
         </span>
-        <input
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
+        <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           required
@@ -579,22 +566,14 @@ function AnnouncementForm({
         />
         {t("shliach_config.announcement_visible_toggle", "מוצגת לפעילים")}
       </label>
-      {error && <p className="text-sm text-status-darkred">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex items-center gap-2">
-        <button
-          type="submit"
-          disabled={busy}
-          className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-        >
+        <Button type="submit" disabled={busy}>
           {busy ? t("action.saving", "שומר…") : t("action.save", "שמור")}
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
-        >
+        </Button>
+        <Button type="button" variant="outline" onClick={onClose}>
           {t("action.cancel", "ביטול")}
-        </button>
+        </Button>
       </div>
     </form>
   );

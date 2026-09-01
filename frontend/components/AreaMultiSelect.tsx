@@ -56,7 +56,7 @@ export function AreaMultiSelect({
   }
 
   if (areas.length === 0) {
-    return <p className="text-sm text-gray-500">{t("page.no_areas", "אין אזורים עדיין.")}</p>;
+    return <p className="text-sm text-muted-foreground">{t("page.no_areas", "אין אזורים עדיין.")}</p>;
   }
 
   return (

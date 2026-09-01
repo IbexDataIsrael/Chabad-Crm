@@ -11,6 +11,7 @@ import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 import type { CustomFieldDefinition, PicklistField, PicklistValue } from "@/lib/types";
+import { Badge } from "@/components/ui/badge";
 
 // fixes33 §4 / fixes37: which admin tab a picklist is managed from. Driven
 // by the real entity_type column now, not a prefix guess.
@@ -77,7 +78,7 @@ export default function PicklistsPage() {
       ? f.english_label || t(`picklist_def.${f.field_key}`, "") || f.label
       : f.label || t(`picklist_def.${f.field_key}`, "")) || f.field_key;
 
-  if (loading || !loaded) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading || !loaded) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!isAdmin) {
     return (
       <p className="text-status-darkred">
@@ -106,7 +107,7 @@ export default function PicklistsPage() {
       <section key={f.field_key} className="space-y-2">
         <h3 className="text-lg font-semibold">{defLabel(f)}</h3>
         <DefinitionEditor def={f} onChanged={loadAll} onDeleted={loadAll} />
-        <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
+        <div className="bg-card rounded-xl shadow-sm divide-y divide-border">
           {options.map((opt, i) => (
             <OptionRow
               key={opt.id}
@@ -119,7 +120,7 @@ export default function PicklistsPage() {
             />
           ))}
           {options.length === 0 && (
-            <p className="px-4 py-6 text-center text-gray-400">{t("pl.no_values", "אין ערכים.")}</p>
+            <p className="px-4 py-6 text-center text-muted-foreground">{t("pl.no_values", "אין ערכים.")}</p>
           )}
         </div>
         <AddOption fieldKey={f.field_key} onAdded={loadAll} />
@@ -150,18 +151,18 @@ export default function PicklistsPage() {
   function renderCustomFieldsSection(t2: PicklistTab) {
     const defs = nonSelectCustomFieldDefs.filter((d) => tabFor(d.entity_type) === t2);
     return (
-      <section className="space-y-2 border-t border-gray-200 pt-5">
+      <section className="space-y-2 border-t border-border pt-5">
         <h3 className="text-lg font-semibold">
           {t("pl.custom_fields_section", "שדות (לא רשימת בחירה)")}
         </h3>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted-foreground">
           {t(
             "pl.custom_fields_hint",
             "שדות אלו (תיבת סימון, טקסט, מספר או תאריך — למשל \"קשר לרבי\") אינם רשימת ערכים אלא שדה בודד; מוצגים כאן לניהול מרוכז. הוספת שדה חדש מתבצעת בדף שדות מותאמים אישית.",
           )}
         </p>
         {defs.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
+          <div className="bg-card rounded-xl shadow-sm divide-y divide-border">
             {defs.map((d) => (
               <CustomFieldRow key={d.id} def={d} onSaved={loadAll} />
             ))}
@@ -169,7 +170,7 @@ export default function PicklistsPage() {
         )}
         <Link
           href="/dashboard/custom-fields"
-          className="inline-block text-sm text-status-magenta hover:underline"
+          className="inline-block text-sm text-primary hover:underline"
         >
           {t("pl.go_to_custom_fields", "מעבר לדף שדות מותאמים אישית ←")}
         </Link>
@@ -188,22 +189,22 @@ export default function PicklistsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">{t("pl.editor_title", "עריכת תיבת בחירה")}</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           {t("pl.editor_intro", "ערוך תוויות בעברית ובאנגלית, סדר, צבע, והוסף רשימות חדשות.")}
         </p>
       </div>
 
       {/* fixes33 §4: tab bar — replaces the previous always-stacked sections. */}
-      <div className="flex flex-wrap gap-2 border-b border-gray-200">
+      <div className="flex flex-wrap gap-2 border-b border-border">
         {TABS.map((tb) => (
           <button
             key={tb.key}
             type="button"
             onClick={() => setTab(tb.key)}
-            className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+            className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
               tab === tb.key
-                ? "border-status-magenta text-status-magenta"
-                : "border-transparent text-gray-500 hover:text-gray-700"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
             <span aria-hidden>{tb.icon}</span>
@@ -213,7 +214,7 @@ export default function PicklistsPage() {
       </div>
 
       {tab === "contacts" && (
-        <section className="space-y-6 rounded-2xl border border-gray-200 bg-white p-5">
+        <section className="space-y-6 rounded-2xl border border-border bg-card p-5">
           {contactDefs.map(renderDefinition)}
           <AddPicklist
             heading={t("pl.add_list_contact", "הוספת רשימת בחירה לאיש קשר")}
@@ -226,7 +227,7 @@ export default function PicklistsPage() {
       )}
 
       {tab === "visit" && (
-        <section className="space-y-6 rounded-2xl border border-gray-200 bg-white p-5">
+        <section className="space-y-6 rounded-2xl border border-border bg-card p-5">
           {visitDefs.map(renderDefinition)}
           <AddPicklist
             heading={t("pl.add_list_visit", "הוספת רשימת בחירה לביקור")}
@@ -252,7 +253,7 @@ export default function PicklistsPage() {
       )}
 
       {tab === "shliach" && (
-        <section className="space-y-6 rounded-2xl border border-gray-200 bg-white p-5">
+        <section className="space-y-6 rounded-2xl border border-border bg-card p-5">
           {shliachDefs.map(renderDefinition)}
           <AddPicklist
             heading={t("pl.add_list_shliach", "הוספת רשימת בחירה לפעיל")}
@@ -314,35 +315,33 @@ function DefinitionEditor({
     await onDeleted();
   }
 
-  const input = "rounded-md border border-gray-300 px-2 py-1 text-sm";
+  const input = "rounded-md border border-input px-2 py-1 text-sm";
 
   return (
-    <div className="bg-white rounded-xl shadow-sm p-4 flex flex-wrap items-end gap-3">
-      <code className="text-xs text-gray-400" dir="ltr">
+    <div className="bg-card rounded-xl shadow-sm p-4 flex flex-wrap items-end gap-3">
+      <code className="text-xs text-muted-foreground" dir="ltr">
         {def.field_key}
       </code>
       <label className="space-y-1">
-        <span className="block text-xs text-gray-500">
+        <span className="block text-xs text-muted-foreground">
           {t("common.hebrew_label", "עברית")}
         </span>
         <input dir="rtl" className={input} value={he} onChange={(e) => setHe(e.target.value)} />
       </label>
       <label className="space-y-1">
-        <span className="block text-xs text-gray-500">
+        <span className="block text-xs text-muted-foreground">
           {t("common.english_label", "English")}
         </span>
         <input dir="ltr" className={input} value={en} onChange={(e) => setEn(e.target.value)} />
       </label>
       <button
         onClick={save}
-        className="rounded-md bg-gray-800 text-white px-3 py-1.5 text-xs hover:opacity-90"
+        className="rounded-md bg-foreground text-white px-3 py-1.5 text-xs hover:opacity-90"
       >
         {t("action.save", "שמור")}
       </button>
       {def.is_system ? (
-        <span className="rounded bg-gray-100 text-gray-500 text-xs px-2 py-0.5">
-          {t("pl.system_list", "רשימת מערכת")}
-        </span>
+        <Badge variant="secondary">{t("pl.system_list", "רשימת מערכת")}</Badge>
       ) : (
         <button
           onClick={remove}
@@ -402,14 +401,14 @@ function AddPicklist({
     }
   }
 
-  const input = "rounded-md border border-gray-300 px-2 py-1 text-sm";
+  const input = "rounded-md border border-input px-2 py-1 text-sm";
 
   return (
-    <form onSubmit={add} className="bg-white rounded-xl shadow-sm p-4 space-y-2">
+    <form onSubmit={add} className="bg-card rounded-xl shadow-sm p-4 space-y-2">
       <h3 className="font-medium text-sm">{heading}</h3>
       <div className="flex flex-wrap items-center gap-2">
         {prefix && (
-          <code className="text-xs text-gray-400" dir="ltr">
+          <code className="text-xs text-muted-foreground" dir="ltr">
             {prefix}
           </code>
         )}
@@ -521,7 +520,7 @@ function OptionRow({
     }
   }
 
-  const input = "rounded-md border border-gray-300 px-2 py-1 text-sm";
+  const input = "rounded-md border border-input px-2 py-1 text-sm";
 
   return (
     <div
@@ -529,7 +528,7 @@ function OptionRow({
         option.is_active ? "" : "opacity-60"
       }`}
     >
-      <code className="text-xs text-gray-400 w-28 shrink-0" dir="ltr">
+      <code className="text-xs text-muted-foreground w-28 shrink-0" dir="ltr">
         {option.value}
       </code>
       <input
@@ -553,16 +552,12 @@ function OptionRow({
         onChange={(e) => setColor(e.target.value)}
         dir="ltr"
       />
-      {!option.is_active && (
-        <span className="rounded bg-gray-200 text-gray-600 text-xs px-2 py-0.5">
-          {t("cf.disabled", "מושבת")}
-        </span>
-      )}
+      {!option.is_active && <Badge variant="secondary">{t("cf.disabled", "מושבת")}</Badge>}
       <div className="flex items-center gap-1 ms-auto">
         <button
           onClick={onMoveUp}
           disabled={isFirst}
-          className="px-2 text-gray-500 disabled:opacity-30"
+          className="px-2 text-muted-foreground disabled:opacity-30"
           title={t("pl.move_up", "הזז למעלה")}
         >
           ↑
@@ -570,21 +565,21 @@ function OptionRow({
         <button
           onClick={onMoveDown}
           disabled={isLast}
-          className="px-2 text-gray-500 disabled:opacity-30"
+          className="px-2 text-muted-foreground disabled:opacity-30"
           title={t("pl.move_down", "הזז למטה")}
         >
           ↓
         </button>
         <button
           onClick={save}
-          className="rounded-md bg-gray-800 text-white px-3 py-1 text-xs hover:opacity-90"
+          className="rounded-md bg-foreground text-white px-3 py-1 text-xs hover:opacity-90"
         >
           {t("action.save", "שמור")}
         </button>
         {option.is_active ? (
           <button
             onClick={deactivate}
-            className="rounded-md border border-status-darkred/40 text-status-darkred px-2 py-1 text-xs hover:bg-red-50"
+            className="rounded-md border border-status-darkred/40 text-status-darkred px-2 py-1 text-xs hover:bg-status-darkred/10"
             title={t("pl.deactivate_title", "הסר מהרשימה (השבתה)")}
           >
             {t("action.delete", "מחק")}
@@ -593,7 +588,7 @@ function OptionRow({
           <>
             <button
               onClick={reactivate}
-              className="rounded-md border border-status-green/40 text-status-green px-2 py-1 text-xs hover:bg-green-50"
+              className="rounded-md border border-status-green/40 text-status-green px-2 py-1 text-xs hover:bg-status-green/10"
             >
               {t("cf.activate", "הפעל")}
             </button>
@@ -647,10 +642,10 @@ function AddOption({
     }
   }
 
-  const input = "rounded-md border border-gray-300 px-2 py-1 text-sm";
+  const input = "rounded-md border border-input px-2 py-1 text-sm";
 
   return (
-    <form onSubmit={add} className="bg-white rounded-xl shadow-sm p-4 space-y-2">
+    <form onSubmit={add} className="bg-card rounded-xl shadow-sm p-4 space-y-2">
       <h3 className="font-medium text-sm">{t("pl.add_value", "הוספת ערך")}</h3>
       <div className="flex flex-wrap gap-2">
         <input
@@ -761,7 +756,7 @@ function CustomFieldRow({
     }
   }
 
-  const input = "rounded-md border border-gray-300 px-2 py-1 text-sm";
+  const input = "rounded-md border border-input px-2 py-1 text-sm";
   const typeMeta = CF_TYPE_LABELS[def.field_type];
 
   return (
@@ -770,14 +765,10 @@ function CustomFieldRow({
         def.is_active ? "" : "opacity-60"
       }`}
     >
-      <code className="text-xs text-gray-400 w-28 shrink-0" dir="ltr">
+      <code className="text-xs text-muted-foreground w-28 shrink-0" dir="ltr">
         {def.field_key}
       </code>
-      {typeMeta && (
-        <span className="rounded bg-gray-100 text-gray-500 text-xs px-2 py-0.5 shrink-0">
-          {t(typeMeta.labelKey, typeMeta.fallback)}
-        </span>
-      )}
+      {typeMeta && <Badge variant="secondary" className="shrink-0">{t(typeMeta.labelKey, typeMeta.fallback)}</Badge>}
       <input
         className={`${input} flex-1 min-w-[7rem]`}
         placeholder={t("cf.label_placeholder", "תווית בעברית")}
@@ -792,22 +783,18 @@ function CustomFieldRow({
         value={english}
         onChange={(e) => setEnglish(e.target.value)}
       />
-      {!def.is_active && (
-        <span className="rounded bg-gray-200 text-gray-600 text-xs px-2 py-0.5">
-          {t("cf.disabled", "מושבת")}
-        </span>
-      )}
+      {!def.is_active && <Badge variant="secondary">{t("cf.disabled", "מושבת")}</Badge>}
       <div className="flex items-center gap-1 ms-auto">
         <button
           onClick={save}
-          className="rounded-md bg-gray-800 text-white px-3 py-1 text-xs hover:opacity-90"
+          className="rounded-md bg-foreground text-white px-3 py-1 text-xs hover:opacity-90"
         >
           {t("action.save", "שמור")}
         </button>
         {def.is_active ? (
           <button
             onClick={deactivate}
-            className="rounded-md border border-status-darkred/40 text-status-darkred px-2 py-1 text-xs hover:bg-red-50"
+            className="rounded-md border border-status-darkred/40 text-status-darkred px-2 py-1 text-xs hover:bg-status-darkred/10"
           >
             {t("action.delete", "מחק")}
           </button>
@@ -815,7 +802,7 @@ function CustomFieldRow({
           <>
             <button
               onClick={reactivate}
-              className="rounded-md border border-status-green/40 text-status-green px-2 py-1 text-xs hover:bg-green-50"
+              className="rounded-md border border-status-green/40 text-status-green px-2 py-1 text-xs hover:bg-status-green/10"
             >
               {t("cf.activate", "הפעל")}
             </button>

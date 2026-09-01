@@ -9,6 +9,7 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
+import { Input } from "@/components/ui/input";
 
 // Friendly section headings per entity_type — fallback values for the
 // t(`loc.entity.${entity}`, ...) calls below. Unknown types fall back to the raw key.
@@ -71,7 +72,7 @@ export default function LocalizationPage() {
     });
   }, [filtered]);
 
-  if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!isAdmin) {
     return (
       <p className="text-status-darkred">
@@ -84,16 +85,16 @@ export default function LocalizationPage() {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold">{t("page.localization_title", "תרגומים")}</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           {t("page.localization_intro", "ערוך את טקסטי הממשק בעברית ובאנגלית.")}
         </p>
       </div>
 
-      <input
+      <Input
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
         placeholder="🔍"
-        className="w-full max-w-sm rounded-md border border-gray-300 px-3 py-2 text-sm"
+        className="max-w-sm"
       />
 
       <div className="space-y-6">
@@ -101,11 +102,11 @@ export default function LocalizationPage() {
           <section key={entity}>
             <h2 className="text-sm font-semibold mb-2">
               {t(`loc.entity.${entity}`, ENTITY_LABELS[entity] ?? entity)}{" "}
-              <span className="text-gray-400 font-normal">({entityRows.length})</span>
+              <span className="text-muted-foreground font-normal">({entityRows.length})</span>
             </h2>
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-card rounded-xl shadow-sm overflow-hidden">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-gray-500 text-xs">
+                <thead className="bg-background text-muted-foreground text-xs">
                   <tr>
                     <th className="text-start px-3 py-2 font-medium">key</th>
                     <th className="text-start px-3 py-2 font-medium">
@@ -133,7 +134,7 @@ export default function LocalizationPage() {
           </section>
         ))}
       </div>
-      <p className="text-xs text-gray-400">
+      <p className="text-xs text-muted-foreground">
         {t(
           "page.localization_reload_hint",
           "שינויים ייכנסו לתוקף בכל המערכת לאחר רענון הדף.",
@@ -174,12 +175,12 @@ function LocalizationRowEditor({
   }
 
   const cell =
-    "w-full rounded-md border border-gray-300 px-2 py-1 focus:border-status-magenta focus:outline-none";
+    "w-full rounded-md border border-input px-2 py-1 focus:border-status-magenta focus:outline-none";
 
   return (
-    <tr className="border-t border-gray-100">
+    <tr className="border-t border-border">
       <td className="px-3 py-2 align-top">
-        <code className="text-xs text-gray-500" dir="ltr">
+        <code className="text-xs text-muted-foreground" dir="ltr">
           {row.technical_name}
         </code>
       </td>

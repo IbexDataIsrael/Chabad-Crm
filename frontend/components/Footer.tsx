@@ -4,8 +4,8 @@
  */
 export function Footer() {
   return (
-    <footer className="border-t border-gray-200 bg-white">
-      <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-center gap-2 text-sm text-gray-500">
+    <footer className="border-t border-border bg-card">
+      <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-center gap-2 text-sm text-muted-foreground">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo.png" alt="" className="h-6 w-6 rounded object-contain" />
         <span>

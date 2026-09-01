@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { ArrowRight, Plus, X } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useFieldSettings } from "@/lib/fieldSettings";
@@ -24,7 +27,7 @@ import {
 } from "@/lib/types";
 
 const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 /** Dedicated building-edit page (fixes12 §3.4): full building fields + floors
  *  + the building's apartments (add/edit route to the standalone apartment
@@ -63,14 +66,14 @@ export default function EditBuildingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildingId, loading]);
 
-  if (loading || !loaded) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading || !loaded) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (error || !building) {
     return (
       <div className="space-y-3">
-        <Link href="/dashboard/buildings" className="text-sm text-status-magenta hover:underline">
-          {t("page.back_to_buildings", "← חזרה לבניינים")}
+        <Link href="/dashboard/buildings" className="flex items-center gap-1 text-sm text-primary hover:underline">
+          {t("page.back_to_buildings", "חזרה לבניינים")} <ArrowRight className="h-4 w-4" />
         </Link>
-        <p className="text-status-darkred">
+        <p className="text-destructive">
           {error || t("page.building_not_found", "הבניין לא נמצא.")}
         </p>
       </div>
@@ -85,9 +88,9 @@ export default function EditBuildingPage() {
         </h1>
         <Link
           href={`/dashboard/buildings/${building.id}`}
-          className="text-sm text-status-magenta hover:underline"
+          className="flex items-center gap-1 text-sm text-primary hover:underline"
         >
-          {t("page.back_to_building", "← חזרה לבניין")}
+          {t("page.back_to_building", "חזרה לבניין")} <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
 
@@ -187,7 +190,8 @@ function BuildingEditForm({
   }
 
   return (
-    <form onSubmit={save} className="bg-white rounded-xl shadow-sm p-4 space-y-3">
+    <Card className="p-4">
+    <form onSubmit={save} className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block space-y-1">
           <span className="block text-sm font-medium">{t("buildings.area_id", "אזור")}</span>
@@ -247,7 +251,7 @@ function BuildingEditForm({
             value={coords}
             onChange={(e) => onCoordsChange(e.target.value)}
           />
-          <span className="block text-xs text-gray-400">
+          <span className="block text-xs text-muted-foreground">
             {t("buildings.coords_hint", "פורמט: longitude,latitude — לדוגמה 35.2137,31.7683")}
           </span>
         </label>
@@ -256,38 +260,33 @@ function BuildingEditForm({
       <FloorsEditor buildingId={building.id} />
 
       {geoWarning && (
-        <div className="rounded-md border-2 border-status-darkred bg-red-50 p-3 space-y-2">
-          <p className="text-sm font-bold text-status-darkred">
+        <div className="rounded-md border-2 border-destructive bg-destructive/10 p-3 space-y-2">
+          <p className="text-sm font-bold text-destructive">
             ⚠ {t("geo.outside_area_warning", "אזהרה: הכתובת שנבחרה נמצאת מחוץ לתחום האזור שנבחר!")}
           </p>
-          <p className="text-xs text-status-darkred">{t("geo.check_hint", "בדוק את הכתובת או בחר אזור אחר.")}</p>
-          <button
+          <p className="text-xs text-destructive">{t("geo.check_hint", "בדוק את הכתובת או בחר אזור אחר.")}</p>
+          <Button
             type="button"
+            size="sm"
+            variant="outline"
+            className="border-destructive text-destructive hover:bg-destructive/10"
             onClick={(e) => save(e as unknown as FormEvent, true)}
-            className="rounded-md border border-status-darkred text-status-darkred px-3 py-1 text-xs font-medium hover:bg-red-100"
           >
             {t("geo.save_anyway", "שמור בכל זאת")}
-          </button>
+          </Button>
         </div>
       )}
-      {error && <p className="text-sm text-status-darkred">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex items-center gap-2">
-        <button
-          type="submit"
-          disabled={busy}
-          className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-        >
+        <Button type="submit" disabled={busy}>
           {busy ? t("action.saving", "שומר…") : t("action.save", "שמור")}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
-        >
+        </Button>
+        <Button type="button" variant="outline" onClick={onCancel}>
           {t("action.cancel", "ביטול")}
-        </button>
+        </Button>
       </div>
     </form>
+    </Card>
   );
 }
 
@@ -349,13 +348,13 @@ function FloorsEditor({ buildingId }: { buildingId: number }) {
   }
 
   const chip =
-    "inline-flex items-center gap-1 rounded-full bg-gray-100 text-gray-700 px-3 py-1 text-sm";
+    "inline-flex items-center gap-1 rounded-full bg-muted text-foreground px-3 py-1 text-sm";
 
   return (
-    <div className="border-t border-gray-100 pt-3 space-y-2">
+    <div className="border-t border-border pt-3 space-y-2">
       <span className="block text-sm font-medium">{t("buildings.floors", "קומות")}</span>
       {floors.length === 0 ? (
-        <p className="text-sm text-gray-400">{t("floors.none", "אין קומות בבניין זה.")}</p>
+        <p className="text-sm text-muted-foreground">{t("floors.none", "אין קומות בבניין זה.")}</p>
       ) : (
         <ul className="flex flex-wrap gap-2">
           {floors.map((f) => (
@@ -371,10 +370,10 @@ function FloorsEditor({ buildingId }: { buildingId: number }) {
               <button
                 type="button"
                 onClick={() => remove(f)}
-                className="text-gray-400 hover:text-status-darkred"
+                className="text-muted-foreground hover:text-destructive"
                 aria-label={t("action.delete", "מחק")}
               >
-                ✕
+                <X className="h-3 w-3" />
               </button>
             </li>
           ))}
@@ -382,7 +381,7 @@ function FloorsEditor({ buildingId }: { buildingId: number }) {
       )}
       <div className="flex items-center gap-2">
         <input
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm w-36 focus:border-status-magenta focus:outline-none"
+          className="rounded-md border border-input px-3 py-1.5 text-sm w-36 focus:border-status-magenta focus:outline-none"
           placeholder={t("floors.name", "שם קומה")}
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
@@ -393,13 +392,9 @@ function FloorsEditor({ buildingId }: { buildingId: number }) {
             }
           }}
         />
-        <button
-          type="button"
-          onClick={add}
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
-        >
-          + {t("floors.add", "הוסף קומה")}
-        </button>
+        <Button type="button" size="sm" variant="outline" onClick={add}>
+          <Plus className="h-4 w-4" /> {t("floors.add", "הוסף קומה")}
+        </Button>
       </div>
     </div>
   );
@@ -432,14 +427,14 @@ function BuildingApartmentsSection({ building }: { building: Building }) {
   }
 
   return (
-    <section className="bg-white rounded-xl shadow-sm p-5 space-y-2">
+    <section className="bg-card border border-border rounded-xl shadow-sm p-5 space-y-2">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-500">{t("apartments", "דירות")}</h2>
+        <h2 className="text-sm font-semibold text-muted-foreground">{t("apartments", "דירות")}</h2>
         <Link
           href={`/dashboard/apartments/add?building=${building.id}&return=${returnTo}`}
-          className="text-sm text-status-magenta hover:underline"
+          className="flex items-center gap-1 text-sm text-primary hover:underline"
         >
-          + {t("apt.add_apartment", "הוסף דירה")}
+          <Plus className="h-3.5 w-3.5" /> {t("apt.add_apartment", "הוסף דירה")}
         </Link>
       </div>
 
@@ -453,11 +448,11 @@ function BuildingApartmentsSection({ building }: { building: Building }) {
       )}
 
       {apts === null ? (
-        <p className="text-sm text-gray-400">{t("action.loading", "טוען…")}</p>
+        <p className="text-sm text-muted-foreground">{t("action.loading", "טוען…")}</p>
       ) : apts.length === 0 ? (
-        <p className="text-sm text-gray-400">{t("apt.no_apartments_building", "אין דירות בבניין זה.")}</p>
+        <p className="text-sm text-muted-foreground">{t("apt.no_apartments_building", "אין דירות בבניין זה.")}</p>
       ) : (
-        <ul className="divide-y divide-gray-100">
+        <ul className="divide-y divide-border">
           {apts.map((a) => (
             <li key={a.id} className="py-2 flex items-center gap-2">
               <Link
@@ -466,20 +461,20 @@ function BuildingApartmentsSection({ building }: { building: Building }) {
               >
                 {apartmentTitle(a)}
               </Link>
-              {a.name && <span className="text-sm text-gray-600">{a.name}</span>}
+              {a.name && <span className="text-sm text-muted-foreground">{a.name}</span>}
               {a.apartment_notes && (
-                <span className="text-sm text-gray-500">— {a.apartment_notes}</span>
+                <span className="text-sm text-muted-foreground">— {a.apartment_notes}</span>
               )}
               <span className="ms-auto flex items-center gap-2">
                 <Link
                   href={`/dashboard/apartments/edit/${a.id}?return=${returnTo}`}
-                  className="text-xs text-gray-600 hover:underline"
+                  className="text-xs text-muted-foreground hover:underline"
                 >
                   {t("action.edit", "ערוך")}
                 </Link>
                 <button
                   onClick={() => setDeleting(a)}
-                  className="text-xs text-status-darkred hover:underline"
+                  className="text-xs text-destructive hover:underline"
                 >
                   {t("action.delete", "מחק")}
                 </button>

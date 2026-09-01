@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { ArrowRight, Pencil, Plus } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { AreaPolygonView } from "@/components/AreaPolygonView";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { mapsHref } from "@/lib/contactActions";
@@ -97,14 +100,14 @@ export default function AreaDetailPage() {
     }
   }
 
-  if (loading || !loaded) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading || !loaded) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (error || !area) {
     return (
       <div className="space-y-3">
-        <Link href="/dashboard/areas" className="text-sm text-status-magenta hover:underline">
-          {t("page.back_to_areas", "← חזרה לאזורים")}
+        <Link href="/dashboard/areas" className="flex items-center gap-1 text-sm text-primary hover:underline">
+          {t("page.back_to_areas", "חזרה לאזורים")} <ArrowRight className="h-4 w-4" />
         </Link>
-        <p className="text-status-darkred">{error || t("page.area_not_found", "האזור לא נמצא.")}</p>
+        <p className="text-destructive">{error || t("page.area_not_found", "האזור לא נמצא.")}</p>
       </div>
     );
   }
@@ -117,75 +120,70 @@ export default function AreaDetailPage() {
   return (
     <div className="space-y-5 max-w-3xl">
       <div className="flex items-center justify-between">
-        <Link href="/dashboard/areas" className="text-sm text-status-magenta hover:underline">
-          {t("page.back_to_areas", "← חזרה לאזורים")}
+        <Link href="/dashboard/areas" className="flex items-center gap-1 text-sm text-primary hover:underline">
+          {t("page.back_to_areas", "חזרה לאזורים")} <ArrowRight className="h-4 w-4" />
         </Link>
         {isAdmin && (
-          <Link
-            href={`/dashboard/areas/${area.id}/edit`}
-            className="rounded-md bg-gray-800 text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
-          >
-            {t("action.edit", "ערוך")}
-          </Link>
+          <Button asChild variant="secondary">
+            <Link href={`/dashboard/areas/${area.id}/edit`}>
+              <Pencil className="h-4 w-4" /> {t("action.edit", "ערוך")}
+            </Link>
+          </Button>
         )}
       </div>
 
       {/* Area data — renders regardless of whether Google Maps works. */}
-      <div className="bg-white rounded-xl shadow-sm p-5 space-y-3">
+      <div className="bg-card border border-border rounded-xl shadow-sm p-5 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-bold">{area.area_name}</h1>
           {area.area_polygon ? (
-            <span className="rounded bg-status-green/10 text-status-green text-xs px-2 py-0.5">
-              {t("page.area_has_boundary", "תחום מוגדר")}
-            </span>
+            <Badge variant="success">{t("page.area_has_boundary", "תחום מוגדר")}</Badge>
           ) : (
-            <span className="rounded bg-gray-100 text-gray-500 text-xs px-2 py-0.5">
-              {t("page.area_no_boundary", "ללא תחום")}
-            </span>
+            <Badge variant="secondary">{t("page.area_no_boundary", "ללא תחום")}</Badge>
           )}
         </div>
         <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
           <div>
-            <dt className="text-gray-500">{t("areas.area_notes", "הערות")}</dt>
+            <dt className="text-muted-foreground">{t("areas.area_notes", "הערות")}</dt>
             <dd className="font-medium">{area.area_notes || "—"}</dd>
           </div>
           <div>
-            <dt className="text-gray-500">{t("buildings", "בניינים")}</dt>
+            <dt className="text-muted-foreground">{t("buildings", "בניינים")}</dt>
             <dd className="font-medium">{buildings.length}</dd>
           </div>
           <div>
-            <dt className="text-gray-500">{t("page.shluchim", "פעילים")}</dt>
+            <dt className="text-muted-foreground">{t("page.shluchim", "פעילים")}</dt>
             <dd className="font-medium">{shluchim.length}</dd>
           </div>
         </dl>
       </div>
 
       {/* Buildings in this area. */}
-      <section className="bg-white rounded-xl shadow-sm p-5 space-y-2">
+      <section className="bg-card border border-border rounded-xl shadow-sm p-5 space-y-2">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-500">{t("buildings", "בניינים")}</h2>
+          <h2 className="text-sm font-semibold text-muted-foreground">{t("buildings", "בניינים")}</h2>
           {isAdmin && (
             <button
               type="button"
               onClick={() => setPickBuildingOpen((v) => !v)}
-              className="text-sm font-medium text-status-magenta hover:underline"
+              className="flex items-center gap-1 text-sm font-medium text-primary hover:underline"
             >
-              {t("page.add_building", "הוסף בניין")}
+              <Plus className="h-3.5 w-3.5" /> {t("page.add_building", "הוסף בניין")}
             </button>
           )}
         </div>
         {/* fixes18 §4.3: only buildings inside the area's polygon are offered. */}
         {isAdmin && pickBuildingOpen && (
-          <div className="space-y-2 rounded-md border border-gray-100 p-3">
+          <div className="space-y-2 rounded-md border border-border p-3">
             {!area.area_polygon ? (
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-muted-foreground">
                 {t(
                   "areas.no_polygon_for_buildings",
                   "לאזור אין תחום מוגדר — הגדר תחום כדי לבחור בניינים לפי מיקום.",
                 )}
               </p>
             ) : eligibleBuildings.length === 0 ? (
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-muted-foreground">
                 {t("areas.no_eligible_buildings", "אין בניינים בתוך תחום האזור.")}
               </p>
             ) : (
@@ -202,21 +200,21 @@ export default function AreaDetailPage() {
             )}
             <Link
               href={`/dashboard/buildings/add?area=${area.id}`}
-              className="block text-sm text-status-magenta hover:underline"
+              className="block text-sm text-primary hover:underline"
             >
               {t("areas.create_new_building", "או צור בניין חדש »")}
             </Link>
           </div>
         )}
         {buildings.length === 0 ? (
-          <p className="text-sm text-gray-400">{t("page.no_buildings", "אין בניינים להצגה.")}</p>
+          <p className="text-sm text-muted-foreground">{t("page.no_buildings", "אין בניינים להצגה.")}</p>
         ) : (
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-border">
             {buildings.map((b) => (
               <li key={b.id} className="py-2">
                 <Link
                   href={`/dashboard/buildings/${b.id}`}
-                  className="font-medium text-status-magenta hover:underline"
+                  className="font-medium text-primary hover:underline"
                 >
                   {buildingDisplayName(b)}
                 </Link>
@@ -229,13 +227,13 @@ export default function AreaDetailPage() {
                         target="_blank"
                         rel="noopener noreferrer"
                         title={t("apt.navigate", "ניווט בגוגל מפות")}
-                        className="text-status-magenta hover:underline"
+                        className="text-primary hover:underline"
                       >
                         📍 {b.building_address}
                       </a>
                     </div>
                   ) : (
-                    <div className="text-sm text-gray-500">{b.building_address}</div>
+                    <div className="text-sm text-muted-foreground">{b.building_address}</div>
                   ))}
               </li>
             ))}
@@ -244,22 +242,22 @@ export default function AreaDetailPage() {
       </section>
 
       {/* Active members (שלוחים/פעילים) covering this area. */}
-      <section className="bg-white rounded-xl shadow-sm p-5 space-y-2">
+      <section className="bg-card border border-border rounded-xl shadow-sm p-5 space-y-2">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-500">{t("page.shluchim", "פעילים")}</h2>
+          <h2 className="text-sm font-semibold text-muted-foreground">{t("page.shluchim", "פעילים")}</h2>
           {isAdmin && (
             <button
               type="button"
               onClick={() => setPickShliachOpen((v) => !v)}
-              className="text-sm font-medium text-status-magenta hover:underline"
+              className="flex items-center gap-1 text-sm font-medium text-primary hover:underline"
             >
-              {t("page.add_shliach", "הוסף פעיל")}
+              <Plus className="h-3.5 w-3.5" /> {t("page.add_shliach", "הוסף פעיל")}
             </button>
           )}
         </div>
         {/* fixes18 §4.2: pick from the org's existing activists. */}
         {isAdmin && pickShliachOpen && (
-          <div className="space-y-2 rounded-md border border-gray-100 p-3">
+          <div className="space-y-2 rounded-md border border-border p-3">
             <SearchableSelect
               value={null}
               onChange={addShliach}
@@ -269,14 +267,14 @@ export default function AreaDetailPage() {
             />
             <Link
               href="/dashboard/contacts/new-shliach"
-              className="block text-sm text-status-magenta hover:underline"
+              className="block text-sm text-primary hover:underline"
             >
               {t("areas.create_new_shliach", "או צור פעיל חדש »")}
             </Link>
           </div>
         )}
         {shluchim.length === 0 ? (
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-muted-foreground">
             {t("page.no_shluchim_area", "אין פעילים המכסים אזור זה.")}
           </p>
         ) : (
@@ -285,7 +283,7 @@ export default function AreaDetailPage() {
               <li key={c.id}>
                 <Link
                   href={`/dashboard/contacts/${c.id}`}
-                  className="rounded-full bg-status-magenta/10 text-status-magenta px-3 py-1 text-sm hover:bg-status-magenta/20"
+                  className="rounded-full bg-primary/10 text-primary px-3 py-1 text-sm hover:bg-primary/20"
                 >
                   {contactFullName(c)}
                 </Link>
@@ -296,8 +294,8 @@ export default function AreaDetailPage() {
       </section>
 
       {/* The map is last and optional — area data above is fully usable without it. */}
-      <section className="bg-white rounded-xl shadow-sm p-5 space-y-2">
-        <h2 className="text-sm font-semibold text-gray-500">{t("areas.area_polygon", "תחום פוליגון")}</h2>
+      <section className="bg-card border border-border rounded-xl shadow-sm p-5 space-y-2">
+        <h2 className="text-sm font-semibold text-muted-foreground">{t("areas.area_polygon", "תחום פוליגון")}</h2>
         <AreaPolygonView polygon={area.area_polygon} />
       </section>
     </div>

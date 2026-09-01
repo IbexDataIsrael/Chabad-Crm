@@ -131,14 +131,14 @@ export function MapPointPicker({
 
   if (!mapsKey) {
     return (
-      <p className="text-xs text-gray-400">
+      <p className="text-xs text-muted-foreground">
         {t("settings.map_no_key", "להגדרת מרכז המפה בלחיצה, הגדר מפתח Google Maps.")}
       </p>
     );
   }
   if (loadError) {
     return (
-      <p className="text-xs text-gray-400">
+      <p className="text-xs text-muted-foreground">
         {t("settings.map_load_failed", "טעינת מפת Google נכשלה — בדוק את מפתח ה-API.")}
       </p>
     );
@@ -146,15 +146,15 @@ export function MapPointPicker({
 
   return (
     <div className="space-y-1">
-      <div className="relative w-full h-72 rounded-md border border-gray-200 bg-gray-100 overflow-hidden">
+      <div className="relative w-full h-72 rounded-md border border-border bg-muted overflow-hidden">
         <div ref={ref} className="absolute inset-0" style={{ minHeight: 288 }} />
         {status === "loading" && (
-          <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-400 pointer-events-none">
+          <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground pointer-events-none">
             {t("apm.loading_map", "טוען מפה…")}
           </div>
         )}
       </div>
-      <p className="text-xs text-gray-400">
+      <p className="text-xs text-muted-foreground">
         {t(
           "settings.map_pick_hint",
           "לחץ על המפה כדי לבחור את מרכז ברירת המחדל, או גרור את הסמן לכוונון.",

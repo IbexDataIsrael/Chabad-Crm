@@ -115,11 +115,11 @@ export function DatePicker({
         onClick={() => !disabled && setOpen((o) => !o)}
       />
       {open && (
-        <div className="absolute z-30 mt-1 w-72 rounded-lg border border-gray-200 bg-white p-3 shadow-lg">
+        <div className="absolute z-30 mt-1 w-72 rounded-xl border border-border bg-card p-3 shadow-lg">
           <div className="flex items-center justify-between mb-2 gap-1">
             <button
               type="button"
-              className="px-2 py-1 rounded hover:bg-gray-100"
+              className="px-2 py-1 rounded hover:bg-accent"
               onClick={() => setView(new Date(year, month - 1, 1))}
             >
               ›
@@ -127,7 +127,7 @@ export function DatePicker({
             {/* Month + year dropdowns — change the year in one click instead of paging. */}
             <div className="flex items-center gap-1">
               <select
-                className="rounded-md border border-gray-300 px-1 py-1 text-sm focus:border-status-magenta focus:outline-none"
+                className="rounded-md border border-input px-1 py-1 text-sm focus:border-status-magenta focus:outline-none"
                 value={month}
                 onChange={(e) => setView(new Date(year, Number(e.target.value), 1))}
               >
@@ -139,7 +139,7 @@ export function DatePicker({
               </select>
               <select
                 dir="ltr"
-                className="rounded-md border border-gray-300 px-1 py-1 text-sm focus:border-status-magenta focus:outline-none"
+                className="rounded-md border border-input px-1 py-1 text-sm focus:border-status-magenta focus:outline-none"
                 value={year}
                 onChange={(e) => setView(new Date(Number(e.target.value), month, 1))}
               >
@@ -152,13 +152,13 @@ export function DatePicker({
             </div>
             <button
               type="button"
-              className="px-2 py-1 rounded hover:bg-gray-100"
+              className="px-2 py-1 rounded hover:bg-accent"
               onClick={() => setView(new Date(year, month + 1, 1))}
             >
               ‹
             </button>
           </div>
-          <div className="grid grid-cols-7 gap-1 text-center text-xs text-gray-400 mb-1">
+          <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground mb-1">
             {WEEKDAYS.map((w) => (
               <span key={w}>{w}</span>
             ))}
@@ -201,7 +201,7 @@ export function DatePicker({
               <input
                 type="time"
                 dir="ltr"
-                className="flex-1 rounded-md border border-gray-300 px-2 py-1 text-sm"
+                className="flex-1 rounded-md border border-input px-2 py-1 text-sm"
                 value={time || "09:00"}
                 onChange={(e) => selected && emit(selected, e.target.value)}
               />
@@ -210,7 +210,7 @@ export function DatePicker({
           <div className="mt-3 flex justify-between">
             <button
               type="button"
-              className="text-xs text-gray-500 hover:underline"
+              className="text-xs text-muted-foreground hover:underline"
               onClick={() => {
                 onChange(null);
                 setOpen(false);
@@ -220,7 +220,7 @@ export function DatePicker({
             </button>
             <button
               type="button"
-              className="text-xs text-status-magenta hover:underline"
+              className="text-xs text-primary hover:underline"
               onClick={() => setOpen(false)}
             >
               {t("action.close", "סגור")}

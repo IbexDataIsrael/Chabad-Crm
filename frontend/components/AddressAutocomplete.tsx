@@ -133,14 +133,14 @@ export function AddressAutocomplete({
         autoComplete="off"
       />
       {open && suggestions.length > 0 && (
-        <ul className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-56 overflow-auto text-sm">
+        <ul className="absolute z-20 mt-1 w-full bg-card border border-border rounded-md shadow-lg max-h-56 overflow-auto text-sm">
           {suggestions.map((s) => (
             <li key={s.id}>
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => select(s)}
-                className="w-full text-right px-3 py-2 hover:bg-gray-50"
+                className="w-full text-right px-3 py-2 hover:bg-accent"
               >
                 {s.label}
               </button>

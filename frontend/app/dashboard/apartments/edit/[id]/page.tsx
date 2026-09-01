@@ -15,7 +15,7 @@ import { apartmentTitle, type Apartment } from "@/lib/types";
  *  user back to the caller (apartment detail, building edit …) after save. */
 export default function EditApartmentPage() {
   return (
-    <Suspense fallback={<p className="text-gray-400">…</p>}>
+    <Suspense fallback={<p className="text-muted-foreground">…</p>}>
       <EditApartmentInner />
     </Suspense>
   );
@@ -49,14 +49,14 @@ function EditApartmentInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apartmentId, loading]);
 
-  if (loading || !loaded) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading || !loaded) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (error || !apt) {
     return (
       <div className="space-y-3">
-        <Link href="/dashboard/apartments" className="text-sm text-status-magenta hover:underline">
+        <Link href="/dashboard/apartments" className="text-sm text-primary hover:underline">
           {t("page.back_to_apartments", "← חזרה לדירות")}
         </Link>
-        <p className="text-status-darkred">
+        <p className="text-destructive">
           {error || t("page.apartment_not_found", "הדירה לא נמצאה.")}
         </p>
       </div>
@@ -69,11 +69,11 @@ function EditApartmentInner() {
         <h1 className="text-2xl font-bold">
           {t("apt.edit_apartment", "עריכת דירה")} — {apartmentTitle(apt)}
         </h1>
-        <Link href={returnTo} className="text-sm text-status-magenta hover:underline">
+        <Link href={returnTo} className="text-sm text-primary hover:underline">
           {t("action.cancel", "ביטול")}
         </Link>
       </div>
-      <div className="bg-white rounded-xl shadow-sm p-4">
+      <div className="bg-card border border-border rounded-xl shadow-sm p-4">
         <ApartmentEditor
           apt={apt}
           onClose={() => router.push(returnTo)}

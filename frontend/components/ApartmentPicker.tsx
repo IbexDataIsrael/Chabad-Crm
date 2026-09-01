@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { Plus } from "lucide-react";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
@@ -15,7 +17,7 @@ import {
 } from "@/lib/types";
 
 const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 /**
  * Picks a mekurav's apartment by first choosing a building, then an apartment
@@ -108,7 +110,7 @@ export function ApartmentPicker({
     // Flat, coverage-scoped select — no building navigation (fixes11 §1.2).
     if (apartments.length === 0) {
       return (
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted-foreground">
           {t("apt.none_covered", "אין דירות משויכות אליך.")}
         </p>
       );
@@ -125,7 +127,7 @@ export function ApartmentPicker({
 
   if (buildings.length === 0) {
     return (
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-muted-foreground">
         {t("apt.no_buildings", "אין בניינים עדיין.")}{" "}
         <Link href="/dashboard/buildings" className="text-status-magenta hover:underline">
           {t("page.add_building", "הוסף בניין")}
@@ -160,7 +162,7 @@ export function ApartmentPicker({
 
       {buildingId !== "" &&
         (adding ? (
-          <div className="rounded-md border border-gray-200 p-3 space-y-2">
+          <div className="rounded-md border border-border p-3 space-y-2">
             <input
               className={inputClass}
               placeholder={t("apt.name", "שם דירה")}
@@ -173,19 +175,15 @@ export function ApartmentPicker({
               value={newNotes}
               onChange={(e) => setNewNotes(e.target.value)}
             />
-            {error && <p className="text-sm text-status-darkred">{error}</p>}
+            {error && <p className="text-sm text-destructive">{error}</p>}
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={createApartment}
-                className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
-              >
+              <Button type="button" size="sm" onClick={createApartment}>
                 {t("apt.save_apartment", "שמור דירה")}
-              </button>
+              </Button>
               <button
                 type="button"
                 onClick={() => setAdding(false)}
-                className="text-sm text-gray-500 hover:underline"
+                className="text-sm text-muted-foreground hover:underline"
               >
                 {t("action.cancel", "ביטול")}
               </button>
@@ -195,9 +193,9 @@ export function ApartmentPicker({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="text-sm text-status-magenta hover:underline"
+            className="flex items-center gap-1 text-sm text-primary hover:underline"
           >
-            + {t("apt.add_apartment", "הוסף דירה")}
+            <Plus className="h-3.5 w-3.5" /> {t("apt.add_apartment", "הוסף דירה")}
           </button>
         ))}
     </div>

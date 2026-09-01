@@ -14,7 +14,7 @@ import { safeInternalPath } from "@/lib/nav";
  *  the caller (e.g. a building's edit page) after save/cancel. */
 export default function AddApartmentPage() {
   return (
-    <Suspense fallback={<p className="text-gray-400">…</p>}>
+    <Suspense fallback={<p className="text-muted-foreground">…</p>}>
       <AddApartmentInner />
     </Suspense>
   );
@@ -30,17 +30,17 @@ function AddApartmentInner() {
   const preselect = Number(searchParams.get("building"));
   const initialBuildingId = Number.isFinite(preselect) && preselect > 0 ? preselect : undefined;
 
-  if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
 
   return (
     <div className="space-y-5 max-w-3xl">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{t("apt.new_apartment_title", "דירה חדשה")}</h1>
-        <Link href={returnTo} className="text-sm text-status-magenta hover:underline">
+        <Link href={returnTo} className="text-sm text-primary hover:underline">
           {t("action.cancel", "ביטול")}
         </Link>
       </div>
-      <div className="bg-white rounded-xl shadow-sm p-4">
+      <div className="bg-card border border-border rounded-xl shadow-sm p-4">
         <ApartmentEditor
           initialBuildingId={initialBuildingId}
           onClose={() => router.push(returnTo)}

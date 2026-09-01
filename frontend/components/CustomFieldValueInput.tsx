@@ -2,9 +2,9 @@
 
 import type { CustomFieldType } from "@/lib/types";
 import { DatePicker } from "./DatePicker";
+import { Input } from "@/components/ui/input";
 
-const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+const inputClass = "w-full";
 
 /** fixes35: the raw editor for one non-select custom field value — branches
  *  on `field_type` (select-type fields never reach here; they use
@@ -26,7 +26,7 @@ export function CustomFieldValueInput({
     return (
       <input
         type="checkbox"
-        className="h-4 w-4 accent-status-magenta"
+        className="h-4 w-4 accent-primary"
         checked={!!value}
         onChange={(e) => onChange(e.target.checked)}
       />
@@ -34,7 +34,7 @@ export function CustomFieldValueInput({
   }
   if (fieldType === "number") {
     return (
-      <input
+      <Input
         type="number"
         className={cls}
         value={value == null ? "" : String(value)}
@@ -53,7 +53,7 @@ export function CustomFieldValueInput({
   }
   // text
   return (
-    <input
+    <Input
       className={cls}
       value={(value as string) ?? ""}
       onChange={(e) => onChange(e.target.value || null)}

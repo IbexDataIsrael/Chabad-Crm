@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { CheckCircle2, Mail, XCircle } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 
 import { resendVerification, verifyEmail } from "@/lib/api";
 import { useLocalization } from "@/lib/localization";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 type State = "verifying" | "success" | "error";
 
@@ -39,20 +42,37 @@ function VerifyInner() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-sm bg-white rounded-xl shadow-md p-8 space-y-4 text-center">
+      <div className="w-full max-w-sm bg-card rounded-xl shadow-md p-8 space-y-4 text-center">
+        <div
+          className={`mx-auto flex h-12 w-12 items-center justify-center rounded-xl ${
+            state === "success"
+              ? "bg-success/10 text-success"
+              : state === "error"
+                ? "bg-destructive/10 text-destructive"
+                : "bg-primary/10 text-primary"
+          }`}
+        >
+          {state === "success" ? (
+            <CheckCircle2 className="h-6 w-6" />
+          ) : state === "error" ? (
+            <XCircle className="h-6 w-6" />
+          ) : (
+            <Mail className="h-6 w-6" />
+          )}
+        </div>
         <h1 className="text-2xl font-bold">{t("verify.title", "אימות אימייל")}</h1>
 
         {state === "verifying" && (
-          <p className="text-gray-500">{t("verify.verifying", "מאמת…")}</p>
+          <p className="text-muted-foreground">{t("verify.verifying", "מאמת…")}</p>
         )}
 
         {state === "success" && (
           <>
-            <p className="text-status-green">{t("verify.success", "החשבון אומת בהצלחה! ✓")}</p>
-            <p className="text-sm text-gray-500">
+            <p className="text-success">{t("verify.success", "החשבון אומת בהצלחה! ✓")}</p>
+            <p className="text-sm text-muted-foreground">
               {t("verify.redirecting_login", "מעבירים אותך להתחברות…")}
             </p>
-            <Link href="/" className="text-status-magenta hover:underline text-sm">
+            <Link href="/" className="text-primary hover:underline text-sm">
               {t("verify.login_now", "להתחברות עכשיו")}
             </Link>
           </>
@@ -60,24 +80,23 @@ function VerifyInner() {
 
         {state === "error" && (
           <>
-            <p className="text-status-darkred">{message}</p>
+            <p className="text-destructive">{message}</p>
             <div className="space-y-2 pt-2">
-              <input
+              <Input
                 type="email"
                 dir="ltr"
                 placeholder={t("auth.your_email", "האימייל שלך")}
                 value={resendEmail}
                 onChange={(e) => setResendEmail(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
               />
-              <button
+              <Button
+                className="w-full"
                 onClick={() => resendEmail && resendVerification(resendEmail)}
-                className="w-full rounded-md bg-status-magenta text-white py-2 text-sm font-medium hover:opacity-90"
               >
                 {t("verify.resend_new", "שליחת קישור אימות חדש")}
-              </button>
+              </Button>
             </div>
-            <Link href="/" className="text-gray-500 hover:underline text-sm">
+            <Link href="/" className="text-muted-foreground hover:underline text-sm">
               {t("verify.back_to_login", "חזרה להתחברות")}
             </Link>
           </>
@@ -89,7 +108,7 @@ function VerifyInner() {
 
 export default function VerifyPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-gray-400">…</div>}>
+    <Suspense fallback={<div className="p-8 text-center text-muted-foreground">…</div>}>
       <VerifyInner />
     </Suspense>
   );

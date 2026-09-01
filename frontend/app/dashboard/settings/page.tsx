@@ -11,6 +11,10 @@ import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
 import type { OrgDetails } from "@/lib/types";
 import { isMediumPassword, PASSWORD_HINT } from "@/lib/validation";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 // fixes40 §4: global field-label text styling options.
 const LABEL_FONT_SIZES = [10, 11, 12, 13, 14, 16, 18, 20, 24];
@@ -98,21 +102,18 @@ export default function SettingsPage() {
     }
   }
 
-  if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
-
-  const inputClass =
-    "w-full rounded-md border border-gray-300 px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
 
   return (
     <div className="space-y-5 max-w-lg">
       <h1 className="text-2xl font-bold">{t("nav.settings", "הגדרות")}</h1>
 
       {isAdmin && (
-      <form onSubmit={save} className="bg-white rounded-xl shadow-sm p-6 space-y-4">
+      <Card className="p-0">
+      <form onSubmit={save} className="p-6 space-y-4">
         <label className="block space-y-1">
-          <span className="block text-sm font-medium">{t("signup.org_name", "שם הארגון")}</span>
-          <input
-            className={inputClass}
+          <Label className="block text-sm font-medium">{t("signup.org_name", "שם הארגון")}</Label>
+          <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
@@ -136,7 +137,7 @@ export default function SettingsPage() {
           />
           {t("page.map_in_english", "השלמת כתובות במפה באנגלית")}
         </label>
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-muted-foreground">
           {t("page.map_in_english_hint", "כאשר מסומן, הצעות הכתובת מ-Google יוחזרו באנגלית במקום בעברית.")}
         </p>
 
@@ -149,7 +150,7 @@ export default function SettingsPage() {
           />
           {t("page.shliach_view_contacts", "פעילים רשאים לצפות באנשי קשר")}
         </label>
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-muted-foreground">
           {t(
             "page.shliach_view_contacts_hint",
             "כאשר כבוי (ברירת המחדל), משתמשי פעיל אינם רואים את רשימת אנשי הקשר.",
@@ -158,11 +159,11 @@ export default function SettingsPage() {
 
         {/* fixes40 §4: global field-label text styling — applies across the
             system; each property is independent and optional. */}
-        <div className="border-t border-gray-100 pt-4 space-y-3">
+        <div className="border-t border-border pt-4 space-y-3">
           <span className="block text-sm font-medium">
             {t("page.label_styling", "עיצוב טקסט תוויות שדות")}
           </span>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-muted-foreground">
             {t(
               "page.label_styling_hint",
               "משפיע על תוויות השדות בכל המערכת. השאירו ריק לשימוש בעיצוב ברירת המחדל.",
@@ -170,11 +171,11 @@ export default function SettingsPage() {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label className="space-y-1">
-              <span className="block text-xs text-gray-500">
+              <span className="block text-xs text-muted-foreground">
                 {t("page.label_font_size", "גודל גופן")}
               </span>
               <select
-                className={inputClass}
+                className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
                 value={labelFontSize}
                 onChange={(e) => setLabelFontSize(e.target.value)}
               >
@@ -187,13 +188,13 @@ export default function SettingsPage() {
               </select>
             </label>
             <label className="space-y-1">
-              <span className="block text-xs text-gray-500">
+              <span className="block text-xs text-muted-foreground">
                 {t("page.label_color", "צבע")}
               </span>
               <div className="flex items-center gap-2">
                 <input
                   type="color"
-                  className="h-9 w-12 rounded-md border border-gray-300 p-0.5"
+                  className="h-9 w-12 rounded-md border border-input p-0.5"
                   value={labelColor || DEFAULT_LABEL_COLOR}
                   onChange={(e) => setLabelColor(e.target.value)}
                 />
@@ -201,7 +202,7 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={() => setLabelColor("")}
-                    className="text-xs text-status-magenta hover:underline"
+                    className="text-xs text-primary hover:underline"
                   >
                     {t("page.label_reset", "איפוס")}
                   </button>
@@ -209,11 +210,11 @@ export default function SettingsPage() {
               </div>
             </label>
             <label className="space-y-1">
-              <span className="block text-xs text-gray-500">
+              <span className="block text-xs text-muted-foreground">
                 {t("page.label_font_family", "גופן")}
               </span>
               <select
-                className={inputClass}
+                className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
                 value={labelFontFamily}
                 onChange={(e) => setLabelFontFamily(e.target.value)}
               >
@@ -228,11 +229,11 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <div className="border-t border-gray-100 pt-4 space-y-2">
+        <div className="border-t border-border pt-4 space-y-2">
           <span className="block text-sm font-medium">
             {t("page.map_default_center", "מרכז ברירת מחדל למפה")}
           </span>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-muted-foreground">
             {t("page.map_center_hint", "נקודת ההתחלה של מפת האזורים (קו רוחב, קו אורך, מרחק תצוגה).")}
           </p>
           <MapPointPicker
@@ -246,23 +247,20 @@ export default function SettingsPage() {
             onZoomChange={(z) => setZoom(String(z))}
           />
           <div className="grid grid-cols-3 gap-2">
-            <input
-              className={inputClass}
+            <Input
               dir="ltr"
               placeholder={t("contacts.latitude", "קו רוחב")}
               value={lat}
               onChange={(e) => setLat(e.target.value)}
             />
-            <input
-              className={inputClass}
+            <Input
               dir="ltr"
               placeholder={t("contacts.longitude", "קו אורך")}
               value={lng}
               onChange={(e) => setLng(e.target.value)}
             />
-            <input
+            <Input
               type="number"
-              className={inputClass}
               dir="ltr"
               placeholder="zoom"
               value={zoom}
@@ -271,23 +269,20 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {error && <p className="text-sm text-status-darkred">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
         <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={busy || logoUploading}
-            className="rounded-md bg-status-magenta text-white px-5 py-2 font-medium hover:opacity-90 disabled:opacity-50"
-          >
+          <Button type="submit" disabled={busy || logoUploading}>
             {busy
               ? t("action.saving", "שומר…")
               : logoUploading
                 ? t("logo.uploading", "מעלה לוגו…")
                 : t("action.save", "שמור")}
-          </button>
-          {saved && <span className="text-sm text-status-green">{t("action.saved", "נשמר ✓")}</span>}
+          </Button>
+          {saved && <span className="text-sm text-success">{t("action.saved", "נשמר ✓")}</span>}
         </div>
       </form>
+      </Card>
       )}
 
       {/* fixes16: backup & restore points (admin-only). */}
@@ -306,9 +301,6 @@ function ChangePasswordCard() {
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-
-  const inputClass =
-    "w-full rounded-md border border-gray-300 px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -338,13 +330,13 @@ function ChangePasswordCard() {
   }
 
   return (
-    <form onSubmit={submit} className="bg-white rounded-xl shadow-sm p-6 space-y-4">
+    <Card className="p-0">
+    <form onSubmit={submit} className="p-6 space-y-4">
       <h2 className="text-lg font-semibold">{t("settings.change_password", "שינוי סיסמה")}</h2>
       <label className="block space-y-1">
-        <span className="block text-sm font-medium">{t("settings.current_password", "סיסמה נוכחית")}</span>
-        <input
+        <Label className="block text-sm font-medium">{t("settings.current_password", "סיסמה נוכחית")}</Label>
+        <Input
           type="password"
-          className={inputClass}
           value={current}
           onChange={(e) => setCurrent(e.target.value)}
           autoComplete="current-password"
@@ -352,10 +344,9 @@ function ChangePasswordCard() {
         />
       </label>
       <label className="block space-y-1">
-        <span className="block text-sm font-medium">{t("settings.new_password", "סיסמה חדשה")}</span>
-        <input
+        <Label className="block text-sm font-medium">{t("settings.new_password", "סיסמה חדשה")}</Label>
+        <Input
           type="password"
-          className={inputClass}
           value={next}
           onChange={(e) => setNext(e.target.value)}
           autoComplete="new-password"
@@ -363,25 +354,21 @@ function ChangePasswordCard() {
         />
       </label>
       <label className="block space-y-1">
-        <span className="block text-sm font-medium">{t("signup.verify_password", "אימות סיסמה")}</span>
-        <input
+        <Label className="block text-sm font-medium">{t("signup.verify_password", "אימות סיסמה")}</Label>
+        <Input
           type="password"
-          className={inputClass}
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
           autoComplete="new-password"
           required
         />
       </label>
-      <p className="text-xs text-gray-400">{t("validation.password_hint", PASSWORD_HINT)}</p>
-      {error && <p className="text-sm text-status-darkred">{error}</p>}
-      <button
-        type="submit"
-        disabled={busy}
-        className="rounded-md bg-status-magenta text-white px-5 py-2 font-medium hover:opacity-90 disabled:opacity-50"
-      >
+      <p className="text-xs text-muted-foreground">{t("validation.password_hint", PASSWORD_HINT)}</p>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <Button type="submit" disabled={busy}>
         {busy ? t("action.saving", "שומר…") : t("settings.change_password", "שינוי סיסמה")}
-      </button>
+      </Button>
     </form>
+    </Card>
   );
 }

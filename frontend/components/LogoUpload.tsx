@@ -1,5 +1,6 @@
 "use client";
 
+import { Upload, X } from "lucide-react";
 import { useEffect, useState, type ChangeEvent } from "react";
 
 import { uploadLogo } from "@/lib/api";
@@ -55,15 +56,16 @@ export function LogoUpload({
           <img
             src={value}
             alt={t("logo.alt", "לוגו הארגון")}
-            className="h-12 w-12 rounded object-contain border border-gray-200 bg-white"
+            className="h-12 w-12 rounded object-contain border border-border bg-card"
           />
         ) : (
-          <div className="h-12 w-12 rounded border border-dashed border-gray-300 flex items-center justify-center text-gray-300 text-xl">
+          <div className="h-12 w-12 rounded border border-dashed border-input flex items-center justify-center text-muted-foreground text-xl">
             🏢
           </div>
         )}
 
-        <label className="cursor-pointer rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50">
+        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-sm hover:bg-accent">
+          <Upload className="h-4 w-4" />
           {busy
             ? t("action.saving", "מעלה…")
             : value
@@ -82,9 +84,9 @@ export function LogoUpload({
           <button
             type="button"
             onClick={() => onChange(null)}
-            className="text-xs text-status-darkred hover:underline"
+            className="inline-flex items-center gap-1 text-xs text-status-darkred hover:underline"
           >
-            {t("action.clear", "הסר")}
+            <X className="h-3.5 w-3.5" /> {t("action.clear", "הסר")}
           </button>
         )}
       </div>

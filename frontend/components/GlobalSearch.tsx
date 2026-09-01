@@ -100,7 +100,7 @@ export function GlobalSearch() {
 
   return (
     <div ref={ref} className="relative w-full max-w-xs">
-      <span className="pointer-events-none absolute inset-y-0 start-2.5 flex items-center text-gray-400">
+      <span className="pointer-events-none absolute inset-y-0 start-2.5 flex items-center text-muted-foreground">
         <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" className="h-4 w-4">
           <path
             fillRule="evenodd"
@@ -118,18 +118,18 @@ export function GlobalSearch() {
         }}
         onFocus={() => setOpen(true)}
         placeholder={t("search.placeholder", "חיפוש כללי: אזור, בניין, דירה, איש קשר…")}
-        className="w-full rounded-md border border-gray-300 bg-gray-50 py-1.5 ps-8 pe-3 text-sm focus:border-status-magenta focus:bg-white focus:outline-none"
+        className="w-full rounded-md border border-input bg-background py-1.5 ps-8 pe-3 text-sm focus:border-primary focus:bg-card focus:outline-none"
       />
 
       {showDropdown && (
-        <div className="absolute top-full start-0 z-50 mt-1 max-h-96 w-full min-w-64 overflow-y-auto rounded-lg border border-gray-200 bg-white p-1 shadow-lg shadow-gray-900/5">
+        <div className="absolute top-full start-0 z-50 mt-1 max-h-96 w-full min-w-64 overflow-y-auto rounded-xl border border-border bg-card p-1 shadow-lg">
           {loading && (
-            <div className="px-3 py-2 text-sm text-gray-500">
+            <div className="px-3 py-2 text-sm text-muted-foreground">
               {t("search.searching", "מחפש…")}
             </div>
           )}
           {!loading && hits.length === 0 && (
-            <div className="px-3 py-2 text-sm text-gray-500">
+            <div className="px-3 py-2 text-sm text-muted-foreground">
               {t("search.no_results", "לא נמצאו תוצאות")}
             </div>
           )}
@@ -139,7 +139,7 @@ export function GlobalSearch() {
               if (group.length === 0) return null;
               return (
                 <div key={type}>
-                  <div className="px-3 pt-2 pb-1 text-xs font-medium text-gray-400">
+                  <div className="px-3 pt-2 pb-1 text-xs font-medium text-muted-foreground">
                     {groupLabel[type]}
                   </div>
                   {group.map((h) => (
@@ -147,19 +147,19 @@ export function GlobalSearch() {
                       key={`${h.type}-${h.id}`}
                       href={`${DETAIL_PATH[h.type]}/${h.id}`}
                       onClick={() => setOpen(false)}
-                      className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100"
+                      className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
                     >
                       <span aria-hidden="true">{TYPE_ICON[h.type]}</span>
                       <span className="truncate font-medium">{h.title}</span>
                       {h.type === "contact" && h.contact_type && (
-                        <span className="shrink-0 rounded bg-status-magenta/10 px-1.5 py-0.5 text-xs text-status-magenta">
+                        <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">
                           {h.contact_type === "shliach"
                             ? t("contact_shliach", "פעיל")
                             : t("contact_mekurav", "מקורב")}
                         </span>
                       )}
                       {h.subtitle && (
-                        <span className="ms-auto shrink-0 text-xs text-gray-400">
+                        <span className="ms-auto shrink-0 text-xs text-muted-foreground">
                           {h.subtitle}
                         </span>
                       )}

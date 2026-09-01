@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Building2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { googleSignup, signup } from "@/lib/api";
@@ -9,6 +10,8 @@ import { EmailInput } from "@/components/EmailInput";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { LogoUpload } from "@/components/LogoUpload";
 import { PhoneInput } from "@/components/PhoneInput";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   checkPassword,
   isMediumPassword,
@@ -17,9 +20,6 @@ import {
   PASSWORD_HINT,
   PHONE_HINT,
 } from "@/lib/validation";
-
-const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 type Method = null | "password" | "google";
 
@@ -102,17 +102,17 @@ export default function SignupPage() {
   if (done) {
     return (
       <main className="min-h-screen flex items-center justify-center p-6">
-        <div className="w-full max-w-sm bg-white rounded-xl shadow-md p-8 space-y-4 text-center">
+        <div className="w-full max-w-sm bg-card rounded-xl shadow-md p-8 space-y-4 text-center">
           <div className="text-4xl">📨</div>
           <h1 className="text-2xl font-bold">{t("signup.received_title", "בקשתך התקבלה")}</h1>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-muted-foreground">
             {t(
               "signup.received_body",
               "בקשתך נשלחה והיא נבחנת. אנו נחזור אליך בהקדם האפשרי.",
             )}
           </p>
-          <p className="text-sm text-gray-500">
-            <Link href="/" className="text-status-magenta hover:underline">
+          <p className="text-sm text-muted-foreground">
+            <Link href="/" className="text-primary hover:underline">
               {t("signup.back_to_login", "חזרה להתחברות")}
             </Link>
           </p>
@@ -125,22 +125,21 @@ export default function SignupPage() {
   if (!method) {
     return (
       <main className="min-h-screen flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-white rounded-xl shadow-md p-8 space-y-5">
+        <div className="w-full max-w-md bg-card rounded-xl shadow-md p-8 space-y-5">
           <div className="text-center">
+            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Building2 className="h-6 w-6" />
+            </div>
             <h1 className="text-2xl font-bold">{t("signup.title", "פתיחת חשבון ארגון")}</h1>
-            <p className="mt-1 text-sm text-gray-500">{t("signup.choose_method", "בחר דרך הרשמה")}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t("signup.choose_method", "בחר דרך הרשמה")}</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setMethod("password")}
-            className="w-full rounded-md bg-status-magenta text-white py-2.5 font-medium hover:opacity-90"
-          >
+          <Button type="button" className="w-full h-11 font-medium" onClick={() => setMethod("password")}>
             {t("signup.with_password", "הרשמה עם אימייל וסיסמה")}
-          </button>
-          <div className="flex items-center gap-3 text-xs text-gray-400">
-            <span className="h-px flex-1 bg-gray-200" />
+          </Button>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
             {t("common.or", "או")}
-            <span className="h-px flex-1 bg-gray-200" />
+            <span className="h-px flex-1 bg-border" />
           </div>
           <GoogleSignInButton
             onCredential={(cred) => {
@@ -150,11 +149,11 @@ export default function SignupPage() {
             onError={setError}
           />
           {error && (
-            <p className="text-sm text-status-darkred bg-red-50 rounded-md px-3 py-2">{error}</p>
+            <p className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">{error}</p>
           )}
-          <p className="text-center text-sm text-gray-500">
+          <p className="text-center text-sm text-muted-foreground">
             {t("auth.have_account", "כבר יש לך חשבון?")}{" "}
-            <Link href="/" className="text-status-magenta hover:underline">
+            <Link href="/" className="text-primary hover:underline">
               {t("auth.login_link", "התחברות")}
             </Link>
           </p>
@@ -167,16 +166,15 @@ export default function SignupPage() {
   if (method === "google") {
     return (
       <main className="min-h-screen flex items-center justify-center p-6">
-        <form onSubmit={onGoogleFinish} className="w-full max-w-md bg-white rounded-xl shadow-md p-8 space-y-4">
+        <form onSubmit={onGoogleFinish} className="w-full max-w-md bg-card rounded-xl shadow-md p-8 space-y-4">
           <div className="text-center">
             <h1 className="text-2xl font-bold">{t("signup.almost_done", "כמעט סיימנו")}</h1>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-muted-foreground">
               {t("signup.google_verified_fill", "התחברת עם Google. השלם את פרטי הארגון:")}
             </p>
           </div>
           <Field label={t("signup.org_name", "שם הארגון")}>
-            <input
-              className={inputClass}
+            <Input
               value={form.organization_name}
               onChange={(e) => set("organization_name", e.target.value)}
               required
@@ -187,18 +185,14 @@ export default function SignupPage() {
             <LogoUpload value={logoUrl} onChange={setLogoUrl} onUploadingChange={setLogoUploading} />
           </Field>
           {error && (
-            <p className="text-sm text-status-darkred bg-red-50 rounded-md px-3 py-2">{error}</p>
+            <p className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">{error}</p>
           )}
-          <button
-            type="submit"
-            disabled={busy || logoUploading}
-            className="w-full rounded-md bg-status-magenta text-white py-2 font-medium hover:opacity-90 disabled:opacity-50"
-          >
+          <Button type="submit" disabled={busy || logoUploading} className="w-full font-medium">
             {busy ? t("signup.creating", "שולח…") : t("signup.submit_request", "שלח בקשה")}
-          </button>
-          <button type="button" onClick={reset} className="w-full text-center text-sm text-gray-500 hover:underline">
+          </Button>
+          <Button type="button" variant="ghost" onClick={reset} className="w-full text-muted-foreground">
             {t("action.back", "← חזרה")}
-          </button>
+          </Button>
         </form>
       </main>
     );
@@ -207,14 +201,13 @@ export default function SignupPage() {
   // --- Email + password path ---------------------------------------------
   return (
     <main className="min-h-screen flex items-center justify-center p-6">
-      <form onSubmit={onSubmit} className="w-full max-w-md bg-white rounded-xl shadow-md p-8 space-y-4">
+      <form onSubmit={onSubmit} className="w-full max-w-md bg-card rounded-xl shadow-md p-8 space-y-4">
         <div className="text-center">
           <h1 className="text-2xl font-bold">{t("signup.title", "פתיחת חשבון ארגון")}</h1>
-          <p className="mt-1 text-sm text-gray-500">{t("signup.subtitle", "צור ארגון חדש ב-CRM")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t("signup.subtitle", "צור ארגון חדש ב-CRM")}</p>
         </div>
         <Field label={t("signup.org_name", "שם הארגון")}>
-          <input
-            className={inputClass}
+          <Input
             value={form.organization_name}
             onChange={(e) => set("organization_name", e.target.value)}
             required
@@ -225,10 +218,10 @@ export default function SignupPage() {
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label={t("contacts.name", "שם פרטי")}>
-            <input className={inputClass} value={form.first_name} onChange={(e) => set("first_name", e.target.value)} required />
+            <Input value={form.first_name} onChange={(e) => set("first_name", e.target.value)} required />
           </Field>
           <Field label={t("contacts.last_name", "שם משפחה")}>
-            <input className={inputClass} value={form.last_name} onChange={(e) => set("last_name", e.target.value)} required />
+            <Input value={form.last_name} onChange={(e) => set("last_name", e.target.value)} required />
           </Field>
         </div>
         <Field label={t("contacts.email", "אימייל")}>
@@ -238,30 +231,26 @@ export default function SignupPage() {
           <PhoneInput value={form.phone} onChange={(v) => set("phone", v)} required />
         </Field>
         <Field label={t("auth.username", "שם משתמש")}>
-          <input className={inputClass} value={form.username} onChange={(e) => set("username", e.target.value)} autoComplete="username" required />
+          <Input value={form.username} onChange={(e) => set("username", e.target.value)} autoComplete="username" required />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label={t("auth.password", "סיסמה")}>
-            <input type="password" className={inputClass} value={form.password} onChange={(e) => set("password", e.target.value)} autoComplete="new-password" required />
+            <Input type="password" value={form.password} onChange={(e) => set("password", e.target.value)} autoComplete="new-password" required />
           </Field>
           <Field label={t("signup.verify_password", "אימות סיסמה")}>
-            <input type="password" className={inputClass} value={form.verify_password} onChange={(e) => set("verify_password", e.target.value)} autoComplete="new-password" required />
+            <Input type="password" value={form.verify_password} onChange={(e) => set("verify_password", e.target.value)} autoComplete="new-password" required />
           </Field>
         </div>
         <PasswordRequirements password={form.password} />
         {error && (
-          <p className="text-sm text-status-darkred bg-red-50 rounded-md px-3 py-2">{error}</p>
+          <p className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">{error}</p>
         )}
-        <button
-          type="submit"
-          disabled={busy || logoUploading}
-          className="w-full rounded-md bg-status-magenta text-white py-2 font-medium hover:opacity-90 disabled:opacity-50"
-        >
+        <Button type="submit" disabled={busy || logoUploading} className="w-full font-medium">
           {busy ? t("signup.creating", "שולח…") : t("signup.submit_request", "שלח בקשה")}
-        </button>
-        <button type="button" onClick={reset} className="w-full text-center text-sm text-gray-500 hover:underline">
+        </Button>
+        <Button type="button" variant="ghost" onClick={reset} className="w-full text-muted-foreground">
           {t("action.back", "← חזרה")}
-        </button>
+        </Button>
       </form>
     </main>
   );
@@ -288,7 +277,7 @@ function PasswordRequirements({ password }: { password: string }) {
   return (
     <ul className="text-xs space-y-0.5">
       {rules.map(([ok, label]) => (
-        <li key={label} className={ok ? "text-status-green" : "text-gray-400"}>
+        <li key={label} className={ok ? "text-success" : "text-muted-foreground"}>
           {ok ? "✓" : "○"} {label}
         </li>
       ))}

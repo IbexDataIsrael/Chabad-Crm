@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
+import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCustomFieldDefs } from "@/lib/customFields";
@@ -73,7 +74,7 @@ export interface ContactFormValues {
 }
 
 const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 export function ContactForm({
   initial,
@@ -363,7 +364,7 @@ export function ContactForm({
                 {/* Read-only, minimal x,y — coords come from the address picker / geocoding. */}
                 <span
                   dir="ltr"
-                  className="block rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600"
+                  className="block rounded-md border border-border bg-background px-3 py-2 text-sm text-muted-foreground"
                 >
                   {formatCoords(values.latitude, values.longitude) || "—"}
                 </span>
@@ -561,7 +562,7 @@ export function ContactForm({
               onChange={(e) => setShliach("password", e.target.value || null)}
               autoComplete="new-password"
             />
-            <span className="mt-1 block text-xs text-gray-400">
+            <span className="mt-1 block text-xs text-muted-foreground">
               {t(
                 "contact_shliach.password_hint",
                 "עם סיסמה הפעיל מתחבר עם האימייל והסיסמה; ללא סיסמה — עם Google בלבד. שדה ריק לא משנה סיסמה קיימת.",
@@ -622,19 +623,15 @@ export function ContactForm({
       {extra && <div className="sm:col-span-2">{extra}</div>}
 
       {error && (
-        <p className="sm:col-span-2 text-sm text-status-darkred bg-red-50 rounded-md px-3 py-2">
+        <p className="sm:col-span-2 text-sm text-status-darkred bg-status-darkred/10 rounded-md px-3 py-2">
           {error}
         </p>
       )}
 
       <div className="sm:col-span-2">
-        <button
-          type="submit"
-          disabled={busy}
-          className="w-full sm:w-auto rounded-md bg-status-magenta text-white px-5 py-2 font-medium hover:opacity-90 disabled:opacity-50"
-        >
+        <Button type="submit" disabled={busy} size="lg" className="w-full sm:w-auto">
           {busy ? t("action.saving", "שומר…") : submitLabel}
-        </button>
+        </Button>
       </div>
     </form>
   );

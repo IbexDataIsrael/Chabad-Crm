@@ -1,10 +1,13 @@
 "use client";
 
+import { Send } from "lucide-react";
 import { useState } from "react";
 
 import { aiQuery, type AiQueryResponse } from "@/lib/api";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 /**
  * Natural-language -> data grid. Single-shot (no conversation history): one
@@ -37,7 +40,7 @@ export default function AiQueryPage() {
     <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-5xl flex-col">
       <div className="mb-4">
         <h1 className="text-2xl font-bold">{t("ai_query.title", "שאילתת AI")}</h1>
-        <p className="mt-1 text-sm text-gray-600">
+        <p className="mt-1 text-sm text-muted-foreground">
           {t(
             "ai_query.intro",
             "כתבו בקשה בשפה חופשית וקבלו טבלה — למשל \"אנשי קשר בברוקלין עם סטטוס פייבליין X\".",
@@ -45,26 +48,26 @@ export default function AiQueryPage() {
         </p>
       </div>
 
-      <div className="flex-1 overflow-y-auto rounded-lg border border-gray-200 bg-white p-4">
+      <div className="flex-1 overflow-y-auto rounded-lg border border-border bg-card p-4">
         {!result && !loading && (
-          <p className="py-10 text-center text-sm text-gray-400">
+          <p className="py-10 text-center text-sm text-muted-foreground">
             {t("ai_query.empty", "עדיין אין תוצאות. כתבו בקשה כדי להתחיל.")}
           </p>
         )}
         {loading && (
-          <p className="py-10 text-center text-sm text-gray-400">
+          <p className="py-10 text-center text-sm text-muted-foreground">
             {t("ai_query.loading", "מריץ שאילתה…")}
           </p>
         )}
         {!loading && result && (
           <div>
             <h2 className="text-lg font-semibold">{result.table_title}</h2>
-            <p className="mb-2 text-sm text-gray-500">
+            <p className="mb-2 text-sm text-muted-foreground">
               {result.row_count} {t("ai_query.results", "תוצאות")}
             </p>
-            <div className="overflow-x-auto rounded-xl border border-gray-100">
+            <div className="overflow-x-auto rounded-xl border border-border">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-right text-gray-600">
+                <thead className="bg-background text-right text-muted-foreground">
                   <tr>
                     {result.columns.map((col) => (
                       <th key={col.key} className="w-px whitespace-nowrap px-3 py-1.5 font-medium">
@@ -78,14 +81,14 @@ export default function AiQueryPage() {
                     <tr>
                       <td
                         colSpan={result.columns.length}
-                        className="px-4 py-6 text-center text-gray-400"
+                        className="px-4 py-6 text-center text-muted-foreground"
                       >
                         {t("ai_query.no_rows", "לא נמצאו תוצאות")}
                       </td>
                     </tr>
                   ) : (
                     result.rows.map((row, i) => (
-                      <tr key={i} className={i % 2 === 1 ? "bg-gray-50/50" : undefined}>
+                      <tr key={i} className={i % 2 === 1 ? "bg-background/50" : undefined}>
                         {result.columns.map((col) => (
                           <td key={col.key} className="whitespace-nowrap px-3 py-1.5">
                             {row[col.key] === null || row[col.key] === undefined
@@ -100,7 +103,7 @@ export default function AiQueryPage() {
               </table>
             </div>
             {result.truncated && (
-              <p className="mt-2 text-xs text-gray-400">
+              <p className="mt-2 text-xs text-muted-foreground">
                 {t("ai_query.truncated", "מוצגות 200 התוצאות הראשונות בלבד")}
               </p>
             )}
@@ -115,20 +118,16 @@ export default function AiQueryPage() {
         }}
         className="mt-3 flex gap-2"
       >
-        <input
+        <Input
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           placeholder={t("ai_query.placeholder", "מה תרצה לעשות?")}
           disabled={loading}
-          className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none disabled:bg-gray-50"
+          className="flex-1"
         />
-        <button
-          type="submit"
-          disabled={loading || !prompt.trim()}
-          className="rounded-md bg-status-magenta px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-status-magenta/90 disabled:opacity-50"
-        >
-          {t("ai_query.send", "שלח")}
-        </button>
+        <Button type="submit" disabled={loading || !prompt.trim()}>
+          <Send className="h-4 w-4" /> {t("ai_query.send", "שלח")}
+        </Button>
       </form>
     </div>
   );

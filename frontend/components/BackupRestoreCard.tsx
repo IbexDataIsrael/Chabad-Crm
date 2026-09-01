@@ -1,14 +1,17 @@
 "use client";
 
+import { Download, HardDriveDownload, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { apiDownload, apiFetch } from "@/lib/api";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
 import type { OrgBackup } from "@/lib/types";
 
 const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 /**
  * Backup & restore card on the org settings page (fixes16, admin-only).
@@ -86,10 +89,10 @@ export function BackupRestoreCard() {
     });
 
   return (
-    <div className="bg-white rounded-xl shadow-sm p-6 space-y-4">
+    <Card className="p-6 space-y-4">
       <div>
         <h2 className="text-lg font-semibold">{t("backup.title", "גיבוי ושחזור")}</h2>
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-muted-foreground">
           {t(
             "backup.intro",
             "צור נקודת שחזור של נתוני הארגון, ושחזר אליה אם משהו השתבש. נשמרות עד 10 נקודות; חשבונות המשתמשים אינם חלק מהגיבוי.",
@@ -105,22 +108,18 @@ export function BackupRestoreCard() {
           onChange={(e) => setNote(e.target.value)}
           maxLength={300}
         />
-        <button
-          type="button"
-          onClick={create}
-          disabled={busy}
-          className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-        >
+        <Button type="button" onClick={create} disabled={busy}>
+          <HardDriveDownload className="h-4 w-4" />
           {busy ? t("action.saving", "שומר…") : t("backup.create", "צור גיבוי")}
-        </button>
+        </Button>
       </div>
 
       {backups === null ? (
-        <p className="text-sm text-gray-400">{t("action.loading", "טוען…")}</p>
+        <p className="text-sm text-muted-foreground">{t("action.loading", "טוען…")}</p>
       ) : backups.length === 0 ? (
-        <p className="text-sm text-gray-400">{t("backup.none", "אין נקודות שחזור עדיין.")}</p>
+        <p className="text-sm text-muted-foreground">{t("backup.none", "אין נקודות שחזור עדיין.")}</p>
       ) : (
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-border">
           {backups.map((b) => (
             <div key={b.id} className="py-2.5 flex flex-wrap items-center gap-2 text-sm">
               <div className="min-w-[11rem]">
@@ -128,11 +127,11 @@ export function BackupRestoreCard() {
                   {when(b.created_at)}
                 </span>
                 {b.kind === "auto" && (
-                  <span className="ms-2 rounded bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5">
+                  <span className="ms-2 rounded bg-muted text-muted-foreground text-xs px-1.5 py-0.5">
                     {t("backup.kind_auto", "אוטומטי")}
                   </span>
                 )}
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-muted-foreground">
                   {[
                     b.note,
                     b.created_by_name,
@@ -146,21 +145,25 @@ export function BackupRestoreCard() {
                 </div>
               </div>
               <span className="ms-auto flex items-center gap-2">
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => download(b)}
-                  className="text-xs text-gray-600 hover:underline"
+                  className="text-muted-foreground"
                 >
-                  ⬇ {t("backup.download", "הורדה")}
-                </button>
-                <button
+                  <Download className="h-3.5 w-3.5" /> {t("backup.download", "הורדה")}
+                </Button>
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
                   disabled={busy}
                   onClick={() => setRestoring(b)}
-                  className="rounded-md border border-status-magenta text-status-magenta px-3 py-1 text-xs font-medium hover:bg-status-magenta/10 disabled:opacity-50"
+                  className="border-primary text-primary hover:bg-primary/10"
                 >
-                  {t("backup.restore", "שחזר")}
-                </button>
+                  <RotateCcw className="h-3.5 w-3.5" /> {t("backup.restore", "שחזר")}
+                </Button>
               </span>
             </div>
           ))}
@@ -169,7 +172,7 @@ export function BackupRestoreCard() {
 
       {restoring && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md bg-white rounded-xl shadow-xl p-5 space-y-4">
+          <div className="w-full max-w-md bg-card rounded-xl shadow-xl p-5 space-y-4">
             <h3 className="text-lg font-bold text-status-darkred">
               {t("backup.restore_title", "שחזור נתונים")}
             </h3>
@@ -177,7 +180,7 @@ export function BackupRestoreCard() {
               {when(restoring.created_at)}
               {restoring.note ? ` · ${restoring.note}` : ""}
             </p>
-            <p className="text-sm text-gray-700">
+            <p className="text-sm text-foreground">
               {t(
                 "backup.restore_warning",
                 "כל נתוני הארגון הנוכחיים יוחלפו בנתוני נקודת השחזור הזו. נקודת שחזור אוטומטית של המצב הנוכחי תיווצר לפני השחזור, כך שניתן לבטל.",
@@ -185,24 +188,20 @@ export function BackupRestoreCard() {
             </p>
             <p className="text-sm font-semibold">{t("admin.confirm_sure", "בטוח ?")}</p>
             <div className="flex items-center gap-2 pt-1">
-              <button
+              <Button
                 type="button"
                 onClick={() => restore(restoring)}
-                className="rounded-md bg-status-darkred text-white px-4 py-2 text-sm font-medium hover:opacity-90"
+                className="bg-status-darkred hover:bg-status-darkred/90"
               >
                 {t("backup.restore", "שחזר")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setRestoring(null)}
-                className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
-              >
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setRestoring(null)}>
                 {t("action.cancel", "ביטול")}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </Card>
   );
 }

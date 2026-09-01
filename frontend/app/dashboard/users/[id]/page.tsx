@@ -2,11 +2,14 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { ArrowRight, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { AreaMultiSelect } from "@/components/AreaMultiSelect";
 import { EmailInput } from "@/components/EmailInput";
 import { ReportNumberMultiSelect } from "@/components/ReportNumberMultiSelect";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { InlineEdit } from "@/components/ui/InlineEdit";
 import { MultiSelectEditor } from "@/components/ui/MultiSelectEditor";
 import { apiFetch } from "@/lib/api";
@@ -19,7 +22,7 @@ import { EMAIL_HINT, PHONE_HINT, isValidEmail, isValidPhone } from "@/lib/valida
 import type { OrgUser } from "../page";
 
 const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 /** fixes47: a dedicated per-user page — mirrors dashboard/contacts/{id}'s
  *  role (single-record view, per-field autosave, audit history) for the
@@ -130,9 +133,9 @@ export default function UserDetailPage() {
     }
   }
 
-  if (loading || !isAdmin) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
-  if (notFound) return <p className="text-gray-500">{t("users.not_found", "המשתמש לא נמצא.")}</p>;
-  if (!user) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading || !isAdmin) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
+  if (notFound) return <p className="text-muted-foreground">{t("users.not_found", "המשתמש לא נמצא.")}</p>;
+  if (!user) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
 
   const isSelf = me?.id === user.id;
   const isShliachAccount = user.role === "shliach";
@@ -157,38 +160,43 @@ export default function UserDetailPage() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link href="/dashboard/users" className="text-sm text-gray-500 hover:underline">
-          {t("page.back_to_shluchim", "← חזרה לפעילים")}
+        <Link
+          href="/dashboard/users"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:underline"
+        >
+          <ArrowRight className="h-4 w-4" /> {t("page.back_to_shluchim", "חזרה לפעילים")}
         </Link>
         {!isSelf && (
-          <button
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-status-darkred/30 text-status-darkred hover:bg-status-darkred/10"
             onClick={remove}
-            className="text-sm text-status-darkred border border-status-darkred/30 rounded-md px-3 py-1 hover:bg-red-50"
           >
-            {t("action.delete", "מחק")}
-          </button>
+            <Trash2 className="h-4 w-4" /> {t("action.delete", "מחק")}
+          </Button>
         )}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-bold">{user.full_name}</h1>
-        <span className="rounded px-2 py-0.5 text-xs bg-gray-100 text-gray-600">{roleLabel}</span>
+        <Badge variant="secondary">{roleLabel}</Badge>
         {isSelf && (
-          <span className="text-xs text-gray-400">({t("users.you", "אני")})</span>
+          <span className="text-xs text-muted-foreground">({t("users.you", "אני")})</span>
         )}
       </div>
 
       {!user.is_active && (
-        <div className="rounded-md border border-status-darkred/40 bg-red-50 px-4 py-3 text-sm font-medium text-status-darkred">
+        <div className="rounded-md border border-status-darkred/40 bg-status-darkred/10 px-4 py-3 text-sm font-medium text-status-darkred">
           {t("users.login_suspended", "הכניסה למערכת הושעתה")}
         </div>
       )}
 
-      <section className="bg-white rounded-xl shadow-sm p-6 space-y-4">
+      <section className="bg-card border border-border rounded-xl shadow-sm p-6 space-y-4">
         <h2 className="font-semibold">{t("page.shliach_details", "פרטי פעיל")}</h2>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
           <div className="flex flex-col">
-            <dt className="text-xs text-gray-500">{t("users.full_name", "שם מלא")}</dt>
+            <dt className="text-xs text-muted-foreground">{t("users.full_name", "שם מלא")}</dt>
             <dd className="text-sm">
               <InlineEdit<string>
                 value={user.full_name}
@@ -202,7 +210,7 @@ export default function UserDetailPage() {
             </dd>
           </div>
           <div className="flex flex-col">
-            <dt className="text-xs text-gray-500">{t("contacts.email", "אימייל")}</dt>
+            <dt className="text-xs text-muted-foreground">{t("contacts.email", "אימייל")}</dt>
             <dd className="text-sm">
               <InlineEdit<string>
                 value={user.email ?? ""}
@@ -216,7 +224,7 @@ export default function UserDetailPage() {
             </dd>
           </div>
           <div className="flex flex-col">
-            <dt className="text-xs text-gray-500">{t("contacts.phone", "טלפון")}</dt>
+            <dt className="text-xs text-muted-foreground">{t("contacts.phone", "טלפון")}</dt>
             <dd className="text-sm">
               <InlineEdit<string>
                 value={user.phone ?? ""}
@@ -232,13 +240,13 @@ export default function UserDetailPage() {
             </dd>
           </div>
           <div className="flex flex-col">
-            <dt className="text-xs text-gray-500">{t("users.role_label", "תפקיד")}</dt>
+            <dt className="text-xs text-muted-foreground">{t("users.role_label", "תפקיד")}</dt>
             <dd className="text-sm">
               {isShliachAccount ? (
                 roleLabel
               ) : (
                 <select
-                  className="rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-status-magenta focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
+                  className="rounded-md border border-input px-2 py-1 text-xs focus:border-status-magenta focus:outline-none disabled:bg-background disabled:text-muted-foreground"
                   value={user.role}
                   disabled={isSelf}
                   onChange={(e) =>
@@ -254,7 +262,7 @@ export default function UserDetailPage() {
             </dd>
           </div>
           <div className="flex flex-col">
-            <dt className="text-xs text-gray-500">
+            <dt className="text-xs text-muted-foreground">
               {t("users.password_optional", "סיסמה (לא חובה)")}
             </dt>
             <dd className="text-sm flex items-center gap-2">
@@ -265,22 +273,23 @@ export default function UserDetailPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="new-password"
               />
-              <button
+              <Button
                 type="button"
+                size="sm"
                 onClick={setNewPassword}
                 disabled={passwordBusy || !password.trim()}
-                className="rounded-md bg-status-magenta text-white px-3 py-2 text-xs font-medium hover:opacity-90 disabled:opacity-50 whitespace-nowrap"
+                className="whitespace-nowrap"
               >
                 {passwordBusy ? t("action.saving", "שומר…") : t("action.save", "שמור")}
-              </button>
+              </Button>
             </dd>
           </div>
         </dl>
 
         {user.shliach && (
-          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 border-t border-gray-100 pt-4">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 border-t border-border pt-4">
             <div className="flex flex-col sm:col-span-2">
-              <dt className="text-xs text-gray-500">
+              <dt className="text-xs text-muted-foreground">
                 {t("contact_shliach.areas", "אזורים באחריות הפעיל")}
               </dt>
               <dd className="text-sm">
@@ -301,7 +310,7 @@ export default function UserDetailPage() {
               </dd>
             </div>
             <div className="flex flex-col sm:col-span-2">
-              <dt className="text-xs text-gray-500">
+              <dt className="text-xs text-muted-foreground">
                 {t("contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל")}
               </dt>
               <dd className="text-sm">
@@ -326,7 +335,7 @@ export default function UserDetailPage() {
               </dd>
             </div>
             <div className="flex flex-col sm:col-span-2">
-              <dt className="text-xs text-gray-500">{t("contact_shliach.notes", "הערות")}</dt>
+              <dt className="text-xs text-muted-foreground">{t("contact_shliach.notes", "הערות")}</dt>
               <dd className="text-sm">
                 <InlineEdit<string>
                   value={user.shliach.notes ?? ""}
@@ -370,14 +379,14 @@ export default function UserDetailPage() {
           section — pick a previous version to preview a read-only snapshot,
           then restore individual fields back to it, instead of just a flat
           read-only list. */}
-      <section className="bg-white rounded-xl shadow-sm p-6 space-y-3">
+      <section className="bg-card border border-border rounded-xl shadow-sm p-6 space-y-3">
         <h2 className="font-semibold">{t("contact_shliach.history", "היסטוריית שינויים")}</h2>
         {history.length === 0 ? (
-          <p className="text-sm text-gray-400">{t("apt.history_none", "אין גרסאות קודמות.")}</p>
+          <p className="text-sm text-muted-foreground">{t("apt.history_none", "אין גרסאות קודמות.")}</p>
         ) : (
           <>
             <select
-              className="w-full sm:w-auto rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+              className="w-full sm:w-auto rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
               value={snapshot?.id ?? ""}
               onChange={(e) => {
                 const id = Number(e.target.value);
@@ -394,9 +403,9 @@ export default function UserDetailPage() {
               ))}
             </select>
             {snapshot && (
-              <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 space-y-3">
+              <div className="rounded-lg border border-dashed border-input bg-background p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-medium text-gray-500">
+                  <p className="text-xs font-medium text-muted-foreground">
                     {t("apt.history_snapshot", "תצוגת גרסה היסטורית (לקריאה בלבד)")}
                   </p>
                   <button
@@ -406,7 +415,7 @@ export default function UserDetailPage() {
                     {t("apt.history_back_current", "חזרה לגרסה הנוכחית")}
                   </button>
                 </div>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-muted-foreground">
                   {t("apt.restore_hint", "לחץ \"שחזר\" ליד שדה כדי להחזיר את ערכו לגרסה זו.")}
                 </p>
                 <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
@@ -495,7 +504,7 @@ function SnapRow({
   }
   return (
     <div>
-      <dt className="text-gray-500 flex items-center justify-between gap-2">
+      <dt className="text-muted-foreground flex items-center justify-between gap-2">
         <span>{label}</span>
         <button
           type="button"

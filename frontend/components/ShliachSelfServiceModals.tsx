@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
@@ -49,7 +50,7 @@ export function ReportCompletionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm bg-white rounded-xl shadow-xl p-5 space-y-4">
+      <div className="w-full max-w-sm bg-card rounded-xl shadow-xl p-5 space-y-4">
         <h2 className="text-lg font-bold">
           {t("shliach_msg.report_completed_btn", "דיווח על השלמת הדוח")}
         </h2>
@@ -57,7 +58,7 @@ export function ReportCompletionModal({
           {choices.map((c) => (
             <label
               key={c.value}
-              className="flex items-center gap-2 text-sm rounded-md border border-gray-200 px-3 py-2 cursor-pointer hover:bg-gray-50"
+              className="flex items-center gap-2 text-sm rounded-md border border-border px-3 py-2 cursor-pointer hover:bg-accent"
             >
               <input
                 type="radio"
@@ -74,28 +75,19 @@ export function ReportCompletionModal({
             {t("shliach_msg.comments", "הערות")}
           </span>
           <textarea
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
+            className="w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
             rows={3}
             value={comments}
             onChange={(e) => setComments(e.target.value)}
           />
         </label>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled={!status || busy}
-            onClick={submit}
-            className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-          >
+          <Button type="button" disabled={!status || busy} onClick={submit}>
             {busy ? t("action.saving", "שומר…") : t("action.submit", "שלח")}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
-          >
+          </Button>
+          <Button type="button" variant="outline" onClick={onClose}>
             {t("action.cancel", "ביטול")}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -133,33 +125,24 @@ export function SystemCommentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm bg-white rounded-xl shadow-xl p-5 space-y-4">
+      <div className="w-full max-w-sm bg-card rounded-xl shadow-xl p-5 space-y-4">
         <h2 className="text-lg font-bold">
           {t("shliach_msg.system_comment_btn", "הערות על המערכת")}
         </h2>
         <textarea
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
+          className="w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
           rows={4}
           value={comment}
           onChange={(e) => setComment(e.target.value)}
           placeholder={t("shliach_msg.comment_ph", "מה תרצה לספר לנו?")}
         />
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled={!comment.trim() || busy}
-            onClick={submit}
-            className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-          >
+          <Button type="button" disabled={!comment.trim() || busy} onClick={submit}>
             {busy ? t("action.saving", "שומר…") : t("action.submit", "שלח")}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
-          >
+          </Button>
+          <Button type="button" variant="outline" onClick={onClose}>
             {t("action.cancel", "ביטול")}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

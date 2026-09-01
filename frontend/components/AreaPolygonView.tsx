@@ -75,14 +75,14 @@ export function AreaPolygonView({ polygon }: { polygon: string | null }) {
 
   if (!path || path.length < 3) {
     return (
-      <p className="text-sm text-gray-400">
+      <p className="text-sm text-muted-foreground">
         {t("page.area_no_boundary", "ללא תחום")}
       </p>
     );
   }
   if (!mapsKey || loadError) {
     return (
-      <p className="text-xs text-gray-400">
+      <p className="text-xs text-muted-foreground">
         {t("apm.no_key_hint", "לציור פוליגון אינטראקטיבי הגדר מפתח Google Maps.")}
       </p>
     );
@@ -90,7 +90,7 @@ export function AreaPolygonView({ polygon }: { polygon: string | null }) {
   return (
     <div
       ref={ref}
-      className="w-full h-64 rounded-md border border-gray-200 bg-gray-100"
+      className="w-full h-64 rounded-md border border-border bg-muted"
       style={{ minHeight: 256 }}
     />
   );

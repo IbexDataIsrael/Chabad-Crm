@@ -1,5 +1,6 @@
 "use client";
 
+import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
@@ -21,9 +22,13 @@ import { CustomFieldValueInput } from "./CustomFieldValueInput";
 import { DatePicker } from "./DatePicker";
 import { PicklistSelect } from "./PicklistSelect";
 import { SearchableSelect } from "./SearchableSelect";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 
 const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 export interface VisitPayload {
   contact_id: number | null;
@@ -181,39 +186,39 @@ export function VisitForm({
   }
 
   return (
-    <div className="rounded-md border border-gray-200 p-3 space-y-4">
+    <div className="rounded-md border border-border p-3 space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {lockedContactId === undefined && (
-          <label className="block space-y-1">
-            <span className="block text-sm font-medium">{t("visit.contact", "איש קשר")}</span>
+          <div className="space-y-1">
+            <Label>{t("visit.contact", "איש קשר")}</Label>
             <SearchableSelect
               value={contactSel === "" ? null : contactSel}
               onChange={(id) => setContactSel(id ?? "")}
               options={contacts.map((c) => ({ id: c.id, label: contactFullName(c) }))}
               placeholder={t("visit.no_contact", "ללא איש קשר")}
             />
-          </label>
+          </div>
         )}
-        <label className="block space-y-1">
-          <span className="block text-sm font-medium">{t("visit.date", "תאריך")}</span>
+        <div className="space-y-1">
+          <Label>{t("visit.date", "תאריך")}</Label>
           <DatePicker value={date} onChange={setDate} className={inputClass} />
-        </label>
+        </div>
         {vis("visits.visit_type") && (
-          <label className="block space-y-1">
-            <span className="block text-sm font-medium">{t("visit.type", "סוג ביקור")}</span>
+          <div className="space-y-1">
+            <Label>{t("visit.type", "סוג ביקור")}</Label>
             <PicklistSelect fieldKey="visit.type" value={type} onChange={setType} />
-          </label>
+          </div>
         )}
         {vis("visits.location") && (
-          <label className="block space-y-1">
-            <span className="block text-sm font-medium">{t("visit.location", "מיקום")}</span>
-            <input className={inputClass} value={location} onChange={(e) => setLocation(e.target.value)} />
-          </label>
+          <div className="space-y-1">
+            <Label>{t("visit.location", "מיקום")}</Label>
+            <Input value={location} onChange={(e) => setLocation(e.target.value)} />
+          </div>
         )}
-        <label className="block space-y-1 sm:col-span-2">
-          <span className="block text-sm font-medium">{t("visit.notes", "הערות")}</span>
-          <input className={inputClass} value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </label>
+        <div className="space-y-1 sm:col-span-2">
+          <Label>{t("visit.notes", "הערות")}</Label>
+          <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </div>
       </div>
 
       {/* fixes25 §4: Mivtzoim flags logged on the visit. fixes27 §2/§4: the
@@ -236,20 +241,18 @@ export function VisitForm({
           return null;
         }
         return (
-          <section className="space-y-2 border-t border-gray-100 pt-3">
+          <section className="space-y-2 border-t border-border pt-3">
             <h4 className="text-sm font-semibold">{t("visits.mivtzoim", "מבצעים")}</h4>
             {showTorah && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label className="block space-y-1">
-                  <span className="block text-sm font-medium">
-                    {t("visits.torah_thought", "דבר תורה")}
-                  </span>
+                <div className="space-y-1">
+                  <Label>{t("visits.torah_thought", "דבר תורה")}</Label>
                   <PicklistSelect
                     fieldKey="checklist.torah_thought"
                     value={torahThought}
                     onChange={setTorahThought}
                   />
-                </label>
+                </div>
               </div>
             )}
             {customFields.length > 0 && (
@@ -257,8 +260,8 @@ export function VisitForm({
             )}
             {/* fixes35 §5: any admin-added visit-scoped select custom field. */}
             {visitPicklistDefs.map((d) => (
-              <label key={d.field_key} className="block space-y-1">
-                <span className="block text-sm font-medium">{d.hebrew_label}</span>
+              <div key={d.field_key} className="space-y-1">
+                <Label>{d.hebrew_label}</Label>
                 <PicklistSelect
                   fieldKey={`checklist.${d.field_key}`}
                   value={picklistValues[`checklist.${d.field_key}`] ?? null}
@@ -269,12 +272,12 @@ export function VisitForm({
                     }))
                   }
                 />
-              </label>
+              </div>
             ))}
             {/* fixes35: any non-boolean, non-select visit custom field. */}
             {visitCustomFieldDefs.map((d) => (
-              <label key={d.field_key} className="block space-y-1">
-                <span className="block text-sm font-medium">{d.hebrew_label}</span>
+              <div key={d.field_key} className="space-y-1">
+                <Label>{d.hebrew_label}</Label>
                 <CustomFieldValueInput
                   fieldType={d.field_type}
                   value={customFieldValues[d.field_key] ?? null}
@@ -282,7 +285,7 @@ export function VisitForm({
                     setCustomFieldValues((prev) => ({ ...prev, [d.field_key]: v }))
                   }
                 />
-              </label>
+              </div>
             ))}
           </section>
         );
@@ -291,19 +294,14 @@ export function VisitForm({
       {/* fixes25 §4: the interaction log lives on the visit. */}
       <InteractionsFields value={interactions} onChange={setInteractions} />
 
-      {error && <p className="text-sm text-status-darkred">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={save}
-          disabled={busy}
-          className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-        >
+        <Button type="button" onClick={save} disabled={busy}>
           {busy ? t("action.saving", "שומר…") : t("action.save", "שמור")}
-        </button>
-        <button type="button" onClick={onCancel} className="text-sm text-gray-500 hover:underline">
+        </Button>
+        <Button type="button" variant="ghost" onClick={onCancel}>
           {t("action.cancel", "ביטול")}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -334,10 +332,10 @@ export function InteractionsFields({
   }
 
   return (
-    <section className="space-y-2 border-t border-gray-100 pt-3">
+    <section className="space-y-2 border-t border-border pt-3">
       <h4 className="text-sm font-semibold">{t("visits.interactions", "אינטראקציות")}</h4>
       {value.length === 0 ? (
-        <p className="text-sm text-gray-400">
+        <p className="text-sm text-muted-foreground">
           {t("visits.no_interactions", "אין אינטראקציות עדיין.")}
         </p>
       ) : (
@@ -345,25 +343,29 @@ export function InteractionsFields({
           {value.map((it, i) => (
             <li
               key={`${it.category}-${i}`}
-              className="flex items-start justify-between gap-3 rounded-md border border-gray-100 px-3 py-2"
+              className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2"
             >
               <div>
-                <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600 me-2">
+                <Badge variant="secondary" className="me-2">
                   {labelFor(it.category)}
-                </span>
+                </Badge>
                 <span className="text-sm whitespace-pre-wrap">{it.note}</span>
                 {it.author_name && (
-                  <span className="ms-2 text-xs text-gray-400">— {it.author_name}</span>
+                  <span className="ms-2 text-xs text-muted-foreground">— {it.author_name}</span>
                 )}
               </div>
               {!readOnly && (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon"
+                  title={t("action.delete", "מחק")}
+                  aria-label={t("action.delete", "מחק")}
+                  className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
                   onClick={() => onChange(value.filter((_, j) => j !== i))}
-                  className="text-xs text-status-darkred hover:underline shrink-0"
                 >
-                  {t("action.delete", "מחק")}
-                </button>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               )}
             </li>
           ))}
@@ -379,8 +381,8 @@ export function InteractionsFields({
             emptyLabel={t("visits.interaction_category_ph", "קטגוריה…")}
           />
         </div>
-        <input
-          className={`${inputClass} flex-1`}
+        <Input
+          className="flex-1"
           placeholder={t("visits.interaction_note_ph", "הוסף הערה…")}
           value={note}
           onChange={(e) => setNote(e.target.value)}
@@ -391,14 +393,9 @@ export function InteractionsFields({
             }
           }}
         />
-        <button
-          type="button"
-          onClick={add}
-          disabled={!category || !note.trim()}
-          className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-40"
-        >
-          + {t("visits.add_interaction", "הוסף")}
-        </button>
+        <Button type="button" variant="outline" onClick={add} disabled={!category || !note.trim()}>
+          <Plus className="h-4 w-4" /> {t("visits.add_interaction", "הוסף")}
+        </Button>
       </div>
       )}
     </section>

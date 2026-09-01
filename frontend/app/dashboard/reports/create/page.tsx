@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter";
+import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
@@ -115,7 +116,7 @@ const DEFAULT_REPORT_SELECTION: ReportSelection = {
 
 export default function CreateReportsPage() {
   return (
-    <Suspense fallback={<p className="text-gray-400">…</p>}>
+    <Suspense fallback={<p className="text-muted-foreground">…</p>}>
       <CreateReportsInner />
     </Suspense>
   );
@@ -593,7 +594,7 @@ function CreateReportsInner() {
     }
   }
 
-  if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
 
   const nothingSelected =
     mode === "reports"
@@ -610,25 +611,20 @@ function CreateReportsInner() {
           autosave, or on remembering to click Generate PDF first. */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">{t("reports.create_reports", "יצירת דוחות")}</h1>
-        <button
-          type="button"
-          onClick={saveReportPage}
-          disabled={savingReport}
-          className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
+        <Button type="button" size="sm" onClick={saveReportPage} disabled={savingReport}>
           {savingReport ? t("action.saving", "שומר…") : t("action.save", "שמור")}
-        </button>
+        </Button>
       </div>
 
       {/* fixes38 §4.1: report description moved here from the global Settings
           page — admin-only edit, same org-wide report_notes field. */}
       {isAdmin && (
-        <div className="bg-white rounded-xl shadow-sm p-5 space-y-2">
+        <div className="bg-card rounded-xl shadow-sm p-5 space-y-2">
           <span className="block text-sm font-medium">
             {t("settings.report_notes", "הערות לדוח")}
           </span>
           <textarea
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
+            className="w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
             rows={3}
             value={reportNotes}
             onChange={(e) => {
@@ -652,11 +648,11 @@ function CreateReportsInner() {
           (reorder hint, width total, over-100% validation) wrapped around
           the controls, so it gets a light grey background to visually set
           it apart from the other cards on the page. */}
-      <div className="bg-gray-100 rounded-xl shadow-sm p-5 space-y-3">
+      <div className="bg-muted rounded-xl shadow-sm p-5 space-y-3">
         <h2 className="text-sm font-semibold">
           {t("reports.column_config_title", "עמודות הדוח")}
         </h2>
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-muted-foreground">
           {t("columns.reorder_hint", "גרור עמודה פעילה כדי לשנות את סדר ההצגה.")}
         </p>
         <div ref={reportColumnsSortableRef} className="flex flex-wrap gap-2">
@@ -677,7 +673,7 @@ function CreateReportsInner() {
                     disabled={activeIdx === 0}
                     onClick={() => moveActiveReportColumn(k, -1)}
                     title={t("action.move_up", "העלה")}
-                    className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
+                    className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-status-magenta hover:bg-accent active:bg-muted disabled:opacity-20"
                   >
                     ▲
                   </button>
@@ -686,7 +682,7 @@ function CreateReportsInner() {
                     disabled={activeIdx === activeReportColumns.length - 1}
                     onClick={() => moveActiveReportColumn(k, 1)}
                     title={t("action.move_down", "הורד")}
-                    className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
+                    className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-status-magenta hover:bg-accent active:bg-muted disabled:opacity-20"
                   >
                     ▼
                   </button>
@@ -701,7 +697,7 @@ function CreateReportsInner() {
               data-sort-key={k}
               data-sortable-disabled=""
               onClick={() => toggleReportColumn(k)}
-              className="rounded-md border px-3 py-1.5 text-sm border-gray-200 text-gray-600 hover:bg-gray-50"
+              className="rounded-md border px-3 py-1.5 text-sm border-border text-muted-foreground hover:bg-accent"
             >
               {columnLabels[k]}
             </button>
@@ -713,7 +709,7 @@ function CreateReportsInner() {
             concept the Apartments page has no equivalent of. */}
         <div className="overflow-x-auto pt-2">
           <table className="w-full text-sm">
-            <thead className="text-gray-500 text-start">
+            <thead className="text-muted-foreground text-start">
               <tr>
                 <th className="py-1 pe-3 font-medium">{t("columns.title", "עמודות מוצגות")}</th>
                 <th className="py-1 pe-3 font-medium">
@@ -724,12 +720,12 @@ function CreateReportsInner() {
             </thead>
             <tbody>
               {activeReportColumns.map((k) => (
-                <tr key={k} className="border-t border-gray-100">
+                <tr key={k} className="border-t border-border">
                   <td className="py-1.5 pe-3">{columnLabels[k]}</td>
                   <td className="py-1.5 pe-3">
                     <input
                       type="text"
-                      className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+                      className="w-full rounded-md border border-input px-2 py-1 text-sm"
                       value={reportColumns.subheadings[k] ?? ""}
                       onChange={(e) => setReportSubheading(k, e.target.value)}
                     />
@@ -740,7 +736,7 @@ function CreateReportsInner() {
                       dir="ltr"
                       min={0}
                       max={100}
-                      className="w-20 rounded-md border border-gray-300 px-2 py-1 text-sm"
+                      className="w-20 rounded-md border border-input px-2 py-1 text-sm"
                       value={reportColumns.widths[k] ?? 0}
                       onChange={(e) => setReportWidth(k, Number(e.target.value))}
                     />
@@ -749,7 +745,7 @@ function CreateReportsInner() {
               ))}
               {activeReportColumns.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="py-4 text-center text-gray-400">
+                  <td colSpan={3} className="py-4 text-center text-muted-foreground">
                     {t("reports.no_columns_selected", "לא נבחרו עמודות")}
                   </td>
                 </tr>
@@ -757,7 +753,7 @@ function CreateReportsInner() {
             </tbody>
           </table>
         </div>
-        <p className={`text-sm ${widthOverLimit ? "text-status-darkred font-medium" : "text-gray-500"}`}>
+        <p className={`text-sm ${widthOverLimit ? "text-status-darkred font-medium" : "text-muted-foreground"}`}>
           {t("reports.column_width_total", "סך הכל: {n}%").replace("{n}", String(totalReportWidth))}
         </p>
         {/* fixes38 §4.3: bilingual validation message via the usual t() mechanism. */}
@@ -771,12 +767,12 @@ function CreateReportsInner() {
         )}
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm p-5 space-y-4">
+      <div className="bg-card rounded-xl shadow-sm p-5 space-y-4">
         {/* fixes33 §3.2: opened from the Apartments page's filtered list — the
             filters themselves drove navigation here, so there's nothing to
             pick; the reports/apartments radio picker doesn't apply. */}
         {mode === "filters" ? (
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-muted-foreground">
             {t(
               "reports.mode_by_filters",
               "לפי סינון נוכחי",
@@ -801,7 +797,7 @@ function CreateReportsInner() {
               <input
                 type="radio"
                 name="report-mode"
-                className="accent-status-magenta"
+                className="accent-primary"
                 checked={mode === m}
                 onChange={() => {
                   setMode(m);
@@ -836,7 +832,7 @@ function CreateReportsInner() {
               {t("apartments", "דירות")}
             </span>
             {apartmentOptions === null ? (
-              <p className="text-sm text-gray-400">{t("action.loading", "טוען…")}</p>
+              <p className="text-sm text-muted-foreground">{t("action.loading", "טוען…")}</p>
             ) : (
               <MultiSelectSearchFilter
                 className="w-full max-w-sm"
@@ -871,14 +867,13 @@ function CreateReportsInner() {
           </p>
         )}
 
-        <button
+        <Button
           type="button"
           onClick={generatePdf}
           disabled={busy || nothingSelected || activeReportColumns.length === 0 || widthOverLimit}
-          className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {busy ? t("action.loading", "טוען…") : t("reports.generate_pdf", "הפק דוח PDF")}
-        </button>
+        </Button>
       </div>
     </div>
   );

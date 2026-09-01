@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { ArrowRight, RotateCcw, Settings2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { ContactView, type ContactPatch } from "@/components/ContactView";
@@ -11,6 +12,8 @@ import {
   SystemCommentModal,
 } from "@/components/ShliachSelfServiceModals";
 import { SignificantDatesEditor } from "@/components/SignificantDatesEditor";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { VisitHistoryEditor } from "@/components/VisitHistoryEditor";
 import { VisitSummary } from "@/components/VisitSummary";
 import { apiFetch } from "@/lib/api";
@@ -107,8 +110,8 @@ export default function ContactDetailPage() {
   }
 
   if (notFound)
-    return <p className="text-gray-500">{t("page.contact_not_found", "איש הקשר לא נמצא.")}</p>;
-  if (!contact) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+    return <p className="text-muted-foreground">{t("page.contact_not_found", "איש הקשר לא נמצא.")}</p>;
+  if (!contact) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
 
   const loginSuspended =
     contact.contact_type === "shliach" &&
@@ -157,7 +160,7 @@ export default function ContactDetailPage() {
         return (
           <section
             key="main"
-            className="bg-white rounded-xl shadow-sm p-6"
+            className="bg-card border border-border rounded-xl shadow-sm p-6"
           >
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold">
@@ -169,13 +172,9 @@ export default function ContactDetailPage() {
                   button is what turns on inline editing (mandatory-locked
                   fields stay locked even after). */}
               {isOwnShliachProfile && !selfEditActive && (
-                <button
-                  type="button"
-                  onClick={() => setSelfEditActive(true)}
-                  className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
-                >
+                <Button type="button" size="sm" onClick={() => setSelfEditActive(true)}>
                   {t("contact.edit_your_data", "עריכת המידע שלך")}
-                </button>
+                </Button>
               )}
             </div>
             {/* fixes26 §2: inline editing replaces the edit-mode form — click a
@@ -190,21 +189,19 @@ export default function ContactDetailPage() {
             {/* fixes53 §7: report-completion + system-feedback — independent
                 of the profile-edit toggle above, always available. */}
             {isOwnShliachProfile && (
-              <div className="mt-5 pt-4 border-t border-gray-100 flex flex-wrap gap-2">
-                <button
+              <div className="mt-5 pt-4 border-t border-border flex flex-wrap gap-2">
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-primary text-primary hover:bg-primary/10"
                   onClick={() => setCompletionModalOpen(true)}
-                  className="rounded-md border border-status-magenta text-status-magenta px-4 py-1.5 text-sm font-medium hover:bg-status-magenta/10"
                 >
                   {t("shliach_msg.report_completed_btn", "דיווח על השלמת הדוח")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCommentModalOpen(true)}
-                  className="rounded-md border border-gray-300 text-gray-600 px-4 py-1.5 text-sm font-medium hover:bg-gray-50"
-                >
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setCommentModalOpen(true)}>
                   {t("shliach_msg.system_comment_btn", "הערות על המערכת")}
-                </button>
+                </Button>
               </div>
             )}
           </section>
@@ -215,7 +212,7 @@ export default function ContactDetailPage() {
         return (
           <section
             key="visits"
-            className="bg-white rounded-xl shadow-sm p-6"
+            className="bg-card border border-border rounded-xl shadow-sm p-6"
           >
             <h2 className="font-semibold mb-4">{t("visit.history", "היסטורית ביקורים")}</h2>
             <VisitHistoryEditor contactId={contact!.id} />
@@ -227,7 +224,7 @@ export default function ContactDetailPage() {
         return (
           <section
             key="visitSummary"
-            className="bg-white rounded-xl shadow-sm p-6"
+            className="bg-card border border-border rounded-xl shadow-sm p-6"
           >
             <h2 className="font-semibold mb-4">{t("nav.visit_summary", "סיכום ביקורים")}</h2>
             <VisitSummary contactId={contact!.id} />
@@ -238,7 +235,7 @@ export default function ContactDetailPage() {
         return (
           <section
             key="dates"
-            className="bg-white rounded-xl shadow-sm p-6"
+            className="bg-card border border-border rounded-xl shadow-sm p-6"
           >
             <h2 className="font-semibold mb-4">{t("significant_dates", "תאריכים חשובים")}</h2>
             <SignificantDatesEditor contactId={contact!.id} />
@@ -250,7 +247,7 @@ export default function ContactDetailPage() {
         return (
           <section
             key="donations"
-            className="bg-white rounded-xl shadow-sm p-6"
+            className="bg-card border border-border rounded-xl shadow-sm p-6"
           >
             <h2 className="font-semibold mb-4">{t("donation.history", "היסטורית תרומות")}</h2>
             <DonationsEditor contactId={contact!.id} />
@@ -268,36 +265,38 @@ export default function ContactDetailPage() {
             it pointed at an admin-only page that would just bounce them.
             A non-shliach contact still gets its "back to contacts" link. */}
         {contact.contact_type !== "shliach" ? (
-          <Link href="/dashboard/contacts" className="text-sm text-gray-500 hover:underline">
-            {t("page.back_to_contacts", "← חזרה לאנשי קשר")}
+          <Link
+            href="/dashboard/contacts"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:underline"
+          >
+            <ArrowRight className="h-4 w-4" /> {t("page.back_to_contacts", "חזרה לאנשי קשר")}
           </Link>
         ) : (
           <span />
         )}
         <div className="flex items-center gap-2">
           {/* fixes30 §2b: open the segment-order configuration. */}
-          <button
-            onClick={() => setOrderOpen((v) => !v)}
-            className="text-sm text-gray-600 border border-gray-300 rounded-md px-3 py-1 hover:bg-gray-50"
-          >
-            ⚙ {t("contact.display_order", "סדר תצוגה")}
-          </button>
-          <button
+          <Button variant="outline" size="sm" onClick={() => setOrderOpen((v) => !v)}>
+            <Settings2 className="h-4 w-4" /> {t("contact.display_order", "סדר תצוגה")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-status-darkred/30 text-status-darkred hover:bg-status-darkred/10"
             onClick={remove}
-            className="text-sm text-status-darkred border border-status-darkred/30 rounded-md px-3 py-1 hover:bg-red-50"
           >
-            {t("action.delete", "מחק")}
-          </button>
+            <Trash2 className="h-4 w-4" /> {t("action.delete", "מחק")}
+          </Button>
         </div>
       </div>
 
       {/* fixes30 §2b: reorder the page segments; saved to the account. */}
       {orderOpen && (
-        <div className="bg-white rounded-xl shadow-sm p-4 space-y-2">
+        <div className="bg-card border border-border rounded-xl shadow-sm p-4 space-y-2">
           <h3 className="text-sm font-semibold">
             {t("contact.display_order", "סדר תצוגה")}
           </h3>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-muted-foreground">
             {t(
               "contact.display_order_hint",
               "קבע את סדר הקטעים בכרטיס איש הקשר. ההעדפה נשמרת בחשבון שלך.",
@@ -307,10 +306,10 @@ export default function ContactDetailPage() {
             {order.map((k, i) => (
               <li
                 key={k}
-                className="flex items-center justify-between gap-2 rounded-md border border-gray-100 px-3 py-1.5 text-sm"
+                className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-1.5 text-sm"
               >
                 <span>
-                  <span className="text-gray-400 me-2">{i + 1}.</span>
+                  <span className="text-muted-foreground me-2">{i + 1}.</span>
                   {segmentLabels[k]}
                 </span>
                 <span className="flex items-center gap-1">
@@ -319,7 +318,7 @@ export default function ContactDetailPage() {
                     disabled={i === 0}
                     onClick={() => moveSegment(k, -1)}
                     title={t("action.move_up", "העלה")}
-                    className="rounded border border-gray-200 px-2 py-0.5 hover:bg-gray-50 disabled:opacity-30"
+                    className="rounded border border-border px-2 py-0.5 hover:bg-accent disabled:opacity-30"
                   >
                     ↑
                   </button>
@@ -328,7 +327,7 @@ export default function ContactDetailPage() {
                     disabled={i === order.length - 1}
                     onClick={() => moveSegment(k, 1)}
                     title={t("action.move_down", "הורד")}
-                    className="rounded border border-gray-200 px-2 py-0.5 hover:bg-gray-50 disabled:opacity-30"
+                    className="rounded border border-border px-2 py-0.5 hover:bg-accent disabled:opacity-30"
                   >
                     ↓
                   </button>
@@ -342,21 +341,23 @@ export default function ContactDetailPage() {
       {/* fixes26 §4: a shliach whose login was deleted or disabled gets a
           prominent notice + one-click recovery (admins only). */}
       {loginSuspended && (
-        <div className="flex flex-wrap items-center gap-3 rounded-md border border-status-darkred/40 bg-red-50 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-status-darkred/40 bg-status-darkred/10 px-4 py-3">
           <span className="text-sm font-medium text-status-darkred">
             {t("users.login_suspended", "הכניסה למערכת הושעתה")}
           </span>
           {isAdmin && contact.email && (
-            <button
+            <Button
               type="button"
+              size="sm"
+              className="bg-status-darkred hover:bg-status-darkred/90"
               onClick={recreateLogin}
               disabled={recreating}
-              className="rounded-md bg-status-darkred text-white px-3 py-1 text-sm font-medium hover:opacity-90 disabled:opacity-50"
             >
+              <RotateCcw className="h-3.5 w-3.5" />
               {recreating
                 ? t("action.saving", "שומר…")
                 : t("users.recreate_user", "צור משתמש מחדש")}
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -370,7 +371,7 @@ export default function ContactDetailPage() {
             <a
               href={telHref(contact.phone)}
               title={t("action.call", "חיוג")}
-              className="rounded-full border border-gray-200 px-2.5 py-1.5 text-sm leading-none hover:bg-status-green/10"
+              className="rounded-full border border-border px-2.5 py-1.5 text-sm leading-none hover:bg-status-green/10"
             >
               📞 {t("action.call", "חיוג")}
             </a>
@@ -381,7 +382,7 @@ export default function ContactDetailPage() {
               target="_blank"
               rel="noopener noreferrer"
               title={t("action.whatsapp", "וואטסאפ")}
-              className="rounded-full border border-gray-200 px-2.5 py-1.5 text-sm leading-none hover:bg-status-green/10"
+              className="rounded-full border border-border px-2.5 py-1.5 text-sm leading-none hover:bg-status-green/10"
             >
               💬 {t("action.whatsapp", "וואטסאפ")}
             </a>
@@ -390,7 +391,7 @@ export default function ContactDetailPage() {
             <a
               href={`mailto:${contact.email}`}
               title={t("action.send_email", "שליחת מייל")}
-              className="rounded-full border border-gray-200 px-2.5 py-1.5 text-sm leading-none hover:bg-status-magenta/10"
+              className="rounded-full border border-border px-2.5 py-1.5 text-sm leading-none hover:bg-status-magenta/10"
             >
               ✉ {t("action.send_email", "שליחת מייל")}
             </a>

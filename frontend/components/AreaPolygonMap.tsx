@@ -261,12 +261,12 @@ export function AreaPolygonMap({
         <textarea
           dir="ltr"
           rows={3}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-xs"
+          className="w-full rounded-md border border-input px-3 py-2 font-mono text-xs"
           placeholder='{"type":"Polygon","coordinates":[[[lng,lat],…]]}'
           value={value ?? ""}
           onChange={(e) => onChange(e.target.value || null)}
         />
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-muted-foreground">
           {loadError
             ? t(
                 "apm.load_failed_hint",
@@ -280,17 +280,17 @@ export function AreaPolygonMap({
 
   return (
     <div className="space-y-2">
-      <div className="relative w-full h-80 rounded-md border border-gray-200 bg-gray-100 overflow-hidden">
+      <div className="relative w-full h-80 rounded-md border border-border bg-muted overflow-hidden">
         <div ref={ref} className="absolute inset-0" style={{ minHeight: 320 }} />
         {status === "loading" && (
-          <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-400 pointer-events-none">
+          <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground pointer-events-none">
             {t("apm.loading_map", "טוען מפה…")}
           </div>
         )}
       </div>
 
       {mode === "drawing" ? (
-        <p className="text-xs text-gray-500 leading-relaxed">
+        <p className="text-xs text-muted-foreground leading-relaxed">
           {t("apm.draw_click", "לחץ על המפה כדי להוסיף נקודות")} ({draftCount}).{" "}
           {t(
             "apm.draw_close",
@@ -298,7 +298,7 @@ export function AreaPolygonMap({
           )}
         </p>
       ) : (
-        <p className="text-xs text-gray-500 leading-relaxed">
+        <p className="text-xs text-muted-foreground leading-relaxed">
           {hasPolygon
             ? t(
                 "apm.defined_hint",
@@ -312,7 +312,7 @@ export function AreaPolygonMap({
       )}
 
       <div className="flex items-center justify-between text-sm">
-        <span className={hasPolygon ? "text-status-green" : "text-gray-500"}>
+        <span className={hasPolygon ? "text-status-green" : "text-muted-foreground"}>
           {hasPolygon
             ? `✓ ${t("apm.boundary_set", "תחום מוגדר")}`
             : mode === "drawing"
@@ -326,14 +326,14 @@ export function AreaPolygonMap({
                 type="button"
                 onClick={finishDrawing}
                 disabled={draftCount < 3}
-                className="text-status-magenta hover:underline disabled:text-gray-300 disabled:no-underline"
+                className="text-primary hover:underline disabled:text-muted-foreground disabled:no-underline"
               >
                 {t("apm.finish", "סיום")}
               </button>
               <button
                 type="button"
                 onClick={clear}
-                className="text-status-darkred hover:underline"
+                className="text-destructive hover:underline"
               >
                 {t("action.cancel", "ביטול")}
               </button>
@@ -343,7 +343,7 @@ export function AreaPolygonMap({
               <button
                 type="button"
                 onClick={startDrawing}
-                className="text-status-magenta hover:underline"
+                className="text-primary hover:underline"
               >
                 {hasPolygon
                   ? t("apm.redraw", "צייר תחום מחדש")
@@ -353,7 +353,7 @@ export function AreaPolygonMap({
                 <button
                   type="button"
                   onClick={clear}
-                  className="text-status-darkred hover:underline"
+                  className="text-destructive hover:underline"
                 >
                   {t("apm.clear_boundary", "נקה תחום")}
                 </button>

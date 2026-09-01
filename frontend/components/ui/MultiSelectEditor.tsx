@@ -49,7 +49,7 @@ export function MultiSelectEditor({
         }}
         // relative z-50: higher than the picker's own open-dropdown panel
         // (position:absolute z-30), which renders in this same spot.
-        className="relative z-50 w-full rounded-md bg-status-magenta text-white px-3 py-1.5 text-xs font-medium hover:opacity-90"
+        className="relative z-50 w-full rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium hover:bg-primary/90"
       >
         ✓ {t("action.save", "שמור")}
       </button>

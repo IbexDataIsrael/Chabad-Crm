@@ -3,7 +3,45 @@
 @tailwind utilities;
 
 :root {
-  --font-sans: system-ui, "Segoe UI", "Arial Hebrew", "David", sans-serif;
+  --font-sans: var(--font-heebo), system-ui, "Segoe UI", "Arial Hebrew", "David", sans-serif;
+
+  /* Design tokens ported from fleet-flow-zippy-pro1 (design/fleet-flow-port).
+     Semantic colors are derived from the CLAUDE.md status palette so the two
+     vocabularies stay pixel-consistent: primary=magenta, success=green,
+     warning=yellow, destructive=darkred (see tailwind.config.js `status.*`
+     for the source hex values). */
+  --background: 220 20% 97%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --primary: 329 100% 42%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
+  --accent: 210 40% 96%;
+  --accent-foreground: 222 47% 11%;
+  --destructive: 0 100% 27%;
+  --destructive-foreground: 0 0% 98%;
+  --success: 109 100% 33%;
+  --success-foreground: 0 0% 100%;
+  --warning: 48 100% 47%;
+  --warning-foreground: 222 47% 11%;
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 329 100% 42%;
+  --radius: 0.75rem;
+  --sidebar-background: 0 0% 98%;
+  --sidebar-foreground: 240 5.3% 26.1%;
+  --sidebar-primary: 329 100% 42%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 240 4.8% 95.9%;
+  --sidebar-accent-foreground: 240 5.9% 10%;
+  --sidebar-border: 220 13% 91%;
+  --sidebar-ring: 329 100% 42%;
 }
 
 body {

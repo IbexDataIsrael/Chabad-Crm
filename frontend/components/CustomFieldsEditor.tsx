@@ -3,6 +3,7 @@
 import { COLOR_HEX } from "@/lib/colors";
 import { useLocalization } from "@/lib/localization";
 import type { ContactCustomField } from "@/lib/types";
+import { Input } from "@/components/ui/input";
 
 // fixes44 §3: Mivtzoim items cycle through the app's 5 status colors (no
 // per-item color is stored anywhere — these are CustomFieldDefinition rows,
@@ -51,8 +52,8 @@ export function CustomFieldsEditor({
               />
               <span className="truncate font-medium">{it.hebrew_label}</span>
             </label>
-            <input
-              className="flex-1 rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+            <Input
+              className="flex-1"
               placeholder={t("field.note_placeholder", "הערה…")}
               value={it.note ?? ""}
               onChange={(e) => update(i, { note: e.target.value || null })}

@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { ArrowRight, Pencil } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { InlineEdit } from "@/components/ui/InlineEdit";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useFieldSettings } from "@/lib/fieldSettings";
@@ -20,7 +22,7 @@ import {
 } from "@/lib/types";
 
 const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 export default function BuildingDetailPage() {
   const { isAdmin, loading } = useAuth();
@@ -80,14 +82,14 @@ export default function BuildingDetailPage() {
     }
   }
 
-  if (loading || !loaded) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading || !loaded) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (error || !building) {
     return (
       <div className="space-y-3">
-        <Link href="/dashboard/buildings" className="text-sm text-status-magenta hover:underline">
-          {t("page.back_to_buildings", "← חזרה לבניינים")}
+        <Link href="/dashboard/buildings" className="flex items-center gap-1 text-sm text-primary hover:underline">
+          {t("page.back_to_buildings", "חזרה לבניינים")} <ArrowRight className="h-4 w-4" />
         </Link>
-        <p className="text-status-darkred">
+        <p className="text-destructive">
           {error || t("page.building_not_found", "הבניין לא נמצא.")}
         </p>
       </div>
@@ -99,33 +101,32 @@ export default function BuildingDetailPage() {
   return (
     <div className="space-y-5 max-w-3xl">
       <div className="flex items-center justify-between">
-        <Link href="/dashboard/buildings" className="text-sm text-status-magenta hover:underline">
-          {t("page.back_to_buildings", "← חזרה לבניינים")}
+        <Link href="/dashboard/buildings" className="flex items-center gap-1 text-sm text-primary hover:underline">
+          {t("page.back_to_buildings", "חזרה לבניינים")} <ArrowRight className="h-4 w-4" />
         </Link>
         {/* fixes12 §3.2: prominent edit entry point (admins manage buildings). */}
         {isAdmin && (
-          <Link
-            href={`/dashboard/buildings/edit/${building.id}`}
-            className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
-          >
-            {t("page.edit_building", "עריכת בניין")}
-          </Link>
+          <Button asChild>
+            <Link href={`/dashboard/buildings/edit/${building.id}`}>
+              <Pencil className="h-4 w-4" /> {t("page.edit_building", "עריכת בניין")}
+            </Link>
+          </Button>
         )}
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm p-5 space-y-3">
+      <div className="bg-card border border-border rounded-xl shadow-sm p-5 space-y-3">
         <h1 className="text-2xl font-bold">{display}</h1>
         {/* fixes30 §3: name / address / area edit in place for admins (the
             backend PUT is admin-only); everyone else sees the plain values.
             Floors, coordinates and the map stay on the edit page. */}
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <div>
-            <dt className="text-gray-500">{t("buildings.area_id", "אזור")}</dt>
+            <dt className="text-muted-foreground">{t("buildings.area_id", "אזור")}</dt>
             <dd className="font-medium flex items-baseline gap-2">
               {area ? (
                 <Link
                   href={`/dashboard/areas/${area.id}`}
-                  className="text-status-magenta hover:underline"
+                  className="text-primary hover:underline"
                 >
                   {area.area_name}
                 </Link>
@@ -138,7 +139,7 @@ export default function BuildingDetailPage() {
                 <InlineEdit<number | null>
                   value={building.area_id}
                   display={
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-muted-foreground">
                       {t("action.edit", "ערוך")}
                     </span>
                   }
@@ -157,13 +158,13 @@ export default function BuildingDetailPage() {
             </dd>
           </div>
           <div>
-            <dt className="text-gray-500">{t("apartments", "דירות")}</dt>
+            <dt className="text-muted-foreground">{t("apartments", "דירות")}</dt>
             <dd className="font-medium">{apartments.length}</dd>
           </div>
           {isFieldVisible("buildings.building_name") &&
             (building.building_name || isAdmin) && (
               <div>
-                <dt className="text-gray-500">{t("buildings.building_name", "שם בניין")}</dt>
+                <dt className="text-muted-foreground">{t("buildings.building_name", "שם בניין")}</dt>
                 <dd className="font-medium">
                   <InlineEdit<string>
                     value={building.building_name ?? ""}
@@ -184,7 +185,7 @@ export default function BuildingDetailPage() {
               </div>
             )}
           <div className="sm:col-span-2">
-            <dt className="text-gray-500">{t("buildings.building_address", "כתובת בניין")}</dt>
+            <dt className="text-muted-foreground">{t("buildings.building_address", "כתובת בניין")}</dt>
             <dd className="font-medium">
               <InlineEdit<string>
                 value={building.building_address ?? ""}
@@ -209,7 +210,7 @@ export default function BuildingDetailPage() {
           </div>
           {(building.floors?.length ?? 0) > 0 && (
             <div className="sm:col-span-2">
-              <dt className="text-gray-500">{t("buildings.floors", "קומות")}</dt>
+              <dt className="text-muted-foreground">{t("buildings.floors", "קומות")}</dt>
               <dd className="font-medium">
                 {building.floors!.map((f) => f.name).join(", ")}
               </dd>
@@ -217,7 +218,7 @@ export default function BuildingDetailPage() {
           )}
           {building.latitude != null && building.longitude != null && (
             <div className="sm:col-span-2">
-              <dt className="text-gray-500">{t("buildings.coords", "קואורדינטות")}</dt>
+              <dt className="text-muted-foreground">{t("buildings.coords", "קואורדינטות")}</dt>
               <dd className="font-medium" dir="ltr">
                 {formatCoords(building.latitude, building.longitude)}
               </dd>
@@ -227,25 +228,25 @@ export default function BuildingDetailPage() {
       </div>
 
       {/* Apartments in this building — each title links to its detail page. */}
-      <section className="bg-white rounded-xl shadow-sm p-5 space-y-2">
-        <h2 className="text-sm font-semibold text-gray-500">{t("apartments", "דירות")}</h2>
+      <section className="bg-card border border-border rounded-xl shadow-sm p-5 space-y-2">
+        <h2 className="text-sm font-semibold text-muted-foreground">{t("apartments", "דירות")}</h2>
         {apartments.length === 0 ? (
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-muted-foreground">
             {t("apt.no_apartments_building", "אין דירות בבניין זה.")}
           </p>
         ) : (
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-border">
             {apartments.map((a) => (
               <li key={a.id} className="py-2">
                 <Link
                   href={`/dashboard/apartments/${a.id}`}
-                  className="font-medium text-status-magenta hover:underline"
+                  className="font-medium text-primary hover:underline"
                 >
                   {apartmentTitle(a)}
                 </Link>
-                {a.name && <span className="text-sm text-gray-600"> · {a.name}</span>}
+                {a.name && <span className="text-sm text-muted-foreground"> · {a.name}</span>}
                 {a.apartment_notes && (
-                  <span className="text-sm text-gray-500"> — {a.apartment_notes}</span>
+                  <span className="text-sm text-muted-foreground"> — {a.apartment_notes}</span>
                 )}
               </li>
             ))}

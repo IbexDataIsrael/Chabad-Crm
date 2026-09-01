@@ -11,6 +11,7 @@ import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 import type { CustomFieldDefinition, CustomFieldEntityType, CustomFieldType } from "@/lib/types";
+import { Badge } from "@/components/ui/badge";
 
 // fixes35 §2: every entity a custom field can attach to, matching
 // dashboard/fields's own ENTITY_GROUPS labels for consistency.
@@ -61,7 +62,7 @@ export default function CustomFieldsPage() {
     reload().catch(() => {});
   }, []);
 
-  if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!isAdmin) {
     return (
       <p className="text-status-darkred">
@@ -81,19 +82,19 @@ export default function CustomFieldsPage() {
       const showHeading = entityTypes.length > 1;
       if (group.length === 0 && !showHeading) return null;
       return (
-        <section key={value} className="bg-white rounded-xl shadow-sm">
+        <section key={value} className="bg-card rounded-xl shadow-sm">
           {showHeading && (
-            <h2 className="px-4 py-2 border-b border-gray-100 text-sm font-semibold">
+            <h2 className="px-4 py-2 border-b border-border text-sm font-semibold">
               {t(meta.labelKey, meta.fallback)}
             </h2>
           )}
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-border">
             {group.map((d) => (
               <DefRow key={d.id} def={d} onChanged={reload} />
             ))}
           </div>
           {group.length === 0 && (
-            <p className="px-4 py-6 text-center text-gray-400">
+            <p className="px-4 py-6 text-center text-muted-foreground">
               {t("cf.none", "אין שדות מותאמים עדיין.")}
             </p>
           )}
@@ -106,7 +107,7 @@ export default function CustomFieldsPage() {
     <div className="space-y-5 max-w-3xl">
       <div>
         <h1 className="text-2xl font-bold">{t("cf.title", "שדות מותאמים אישית")}</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           {t(
             "cf.intro",
             "הגדירו שדה מותאם אישית עבור אנשי קשר, פעילים, ביקורים או דירות — מכל סוג: טקסט, מספר, תיבת סימון, תאריך או רשימת בחירה.",
@@ -115,16 +116,16 @@ export default function CustomFieldsPage() {
       </div>
 
       {/* fixes40 §1: tab bar — identical pattern to dashboard/picklists. */}
-      <div className="flex flex-wrap gap-2 border-b border-gray-200">
+      <div className="flex flex-wrap gap-2 border-b border-border">
         {TABS.map((tb) => (
           <button
             key={tb.key}
             type="button"
             onClick={() => setTab(tb.key)}
-            className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+            className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
               tab === tb.key
-                ? "border-status-magenta text-status-magenta"
-                : "border-transparent text-gray-500 hover:text-gray-700"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
             <span aria-hidden>{tb.icon}</span>
@@ -134,7 +135,7 @@ export default function CustomFieldsPage() {
       </div>
 
       {tab === "contacts" && (
-        <section className="space-y-6 rounded-2xl border border-gray-200 bg-white p-5">
+        <section className="space-y-6 rounded-2xl border border-border bg-card p-5">
           {renderGroups(["contact_mekurav", "contact_shliach"])}
           <AddDef
             entityOptions={ENTITY_TYPES.filter(
@@ -146,7 +147,7 @@ export default function CustomFieldsPage() {
       )}
 
       {tab === "visit" && (
-        <section className="space-y-6 rounded-2xl border border-gray-200 bg-white p-5">
+        <section className="space-y-6 rounded-2xl border border-border bg-card p-5">
           {renderGroups(["visit"])}
           <AddDef
             entityOptions={ENTITY_TYPES.filter((e) => e.value === "visit")}
@@ -170,7 +171,7 @@ export default function CustomFieldsPage() {
           toggle UI on this page too. */}
       <Link
         href="/dashboard/fields"
-        className="inline-block text-sm text-status-magenta hover:underline"
+        className="inline-block text-sm text-primary hover:underline"
       >
         {t("cf.manage_visibility", "לניהול הצגה/הסתרה של שדות →")}
       </Link>
@@ -250,7 +251,7 @@ function DefRow({
     }
   }
 
-  const input = "rounded-md border border-gray-300 px-2 py-1 text-sm";
+  const input = "rounded-md border border-input px-2 py-1 text-sm";
   const fieldTypeLabel =
     FIELD_TYPES.find((f) => f.value === def.field_type) &&
     t(
@@ -264,12 +265,10 @@ function DefRow({
         def.is_active ? "" : "opacity-60"
       }`}
     >
-      <code className="text-xs text-gray-400 w-32 shrink-0" dir="ltr">
+      <code className="text-xs text-muted-foreground w-32 shrink-0" dir="ltr">
         {def.field_key}
       </code>
-      <span className="rounded bg-gray-100 text-gray-500 text-xs px-2 py-0.5 shrink-0">
-        {fieldTypeLabel}
-      </span>
+      <Badge variant="secondary" className="shrink-0">{fieldTypeLabel}</Badge>
       <input
         className={`${input} flex-1 min-w-[7rem]`}
         placeholder={t("cf.label_placeholder", "תווית בעברית")}
@@ -283,20 +282,18 @@ function DefRow({
         value={englishLabel}
         onChange={(e) => setEnglishLabel(e.target.value)}
       />
-      {!def.is_active && (
-        <span className="rounded bg-gray-200 text-gray-600 text-xs px-2 py-0.5">{t("cf.disabled", "מושבת")}</span>
-      )}
+      {!def.is_active && <Badge variant="secondary">{t("cf.disabled", "מושבת")}</Badge>}
       <div className="flex items-center gap-1 ms-auto">
         <button
           onClick={save}
-          className="rounded-md bg-gray-800 text-white px-3 py-1 text-xs hover:opacity-90"
+          className="rounded-md bg-foreground text-white px-3 py-1 text-xs hover:opacity-90"
         >
           {t("action.save", "שמור")}
         </button>
         {def.is_active ? (
           <button
             onClick={deactivate}
-            className="rounded-md border border-status-darkred/40 text-status-darkred px-2 py-1 text-xs hover:bg-red-50"
+            className="rounded-md border border-status-darkred/40 text-status-darkred px-2 py-1 text-xs hover:bg-status-darkred/10"
           >
             {t("action.delete", "מחק")}
           </button>
@@ -304,7 +301,7 @@ function DefRow({
           <>
             <button
               onClick={reactivate}
-              className="rounded-md border border-status-green/40 text-status-green px-2 py-1 text-xs hover:bg-green-50"
+              className="rounded-md border border-status-green/40 text-status-green px-2 py-1 text-xs hover:bg-status-green/10"
             >
               {t("cf.activate", "הפעל")}
             </button>
@@ -378,14 +375,14 @@ function AddDef({
     }
   }
 
-  const input = "rounded-md border border-gray-300 px-2 py-1 text-sm";
+  const input = "rounded-md border border-input px-2 py-1 text-sm";
 
   return (
-    <form onSubmit={add} className="bg-white rounded-xl shadow-sm p-4 space-y-2">
+    <form onSubmit={add} className="bg-card rounded-xl shadow-sm p-4 space-y-2">
       <h3 className="font-medium text-sm">{t("cf.add_field", "הוספת שדה")}</h3>
       <div className="flex flex-wrap gap-2">
         {entityOptions.length > 1 ? (
-          <label className="flex flex-col gap-1 text-xs text-gray-500">
+          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
             {t("cf.entity_type", "שייך ל")}
             <select
               className={input}
@@ -400,11 +397,11 @@ function AddDef({
             </select>
           </label>
         ) : (
-          <span className="self-end rounded bg-gray-100 text-gray-500 text-xs px-2 py-1.5">
+          <Badge variant="secondary" className="self-end py-1.5">
             {t(entityOptions[0].labelKey, entityOptions[0].fallback)}
-          </span>
+          </Badge>
         )}
-        <label className="flex flex-col gap-1 text-xs text-gray-500">
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
           {t("cf.field_type", "סוג שדה")}
           <select
             className={input}
@@ -450,7 +447,7 @@ function AddDef({
 
       {fieldType === "select" && (
         <div className="space-y-1 pt-1">
-          <p className="text-xs text-gray-500">{t("cf.options", "אפשרויות (רשימת בחירה)")}</p>
+          <p className="text-xs text-muted-foreground">{t("cf.options", "אפשרויות (רשימת בחירה)")}</p>
           {options.map((opt, i) => (
             <div key={i} className="flex items-center gap-2">
               <input
@@ -475,7 +472,7 @@ function AddDef({
           <button
             type="button"
             onClick={() => setOptions((prev) => [...prev, ""])}
-            className="text-xs text-status-magenta hover:underline"
+            className="text-xs text-primary hover:underline"
           >
             {t("cf.add_option", "+ אפשרות")}
           </button>

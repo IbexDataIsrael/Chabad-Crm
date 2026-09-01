@@ -4,8 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { ArrowRight, CheckCircle2 } from "lucide-react";
+
 import { ContactForm, type ContactFormValues } from "@/components/ContactForm";
 import { SignificantDatesEditor } from "@/components/SignificantDatesEditor";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
@@ -39,35 +43,38 @@ export default function NewContactPage() {
 
   return (
     <div className="space-y-4">
-      <Link href="/dashboard/contacts" className="text-sm text-gray-500 hover:underline">
-        {t("page.back_to_contacts", "← חזרה לאנשי קשר")}
+      <Link
+        href="/dashboard/contacts"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:underline"
+      >
+        <ArrowRight className="h-4 w-4" /> {t("page.back_to_contacts", "חזרה לאנשי קשר")}
       </Link>
       <h1 className="text-2xl font-bold">{t("page.new_contact", "איש קשר חדש")}</h1>
 
       {created ? (
-        <div className="bg-white rounded-xl shadow-sm p-6 space-y-4">
-          <p className="text-status-green text-sm">
+        <Card className="p-6 space-y-4">
+          <p className="flex items-center gap-2 text-status-green text-sm">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
             {t("page.contact_created_add_dates", "איש הקשר נוצר. ניתן להוסיף תאריכים חשובים עכשיו:")}
           </p>
           <section>
             <h3 className="text-sm font-semibold mb-3">{t("significant_dates", "תאריכים חשובים")}</h3>
             <SignificantDatesEditor contactId={created.id} />
           </section>
-          <Link
-            href={`/dashboard/contacts/${created.id}`}
-            className="inline-block rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90"
-          >
-            {t("action.done_to_contact", "סיום — מעבר לכרטיס")}
-          </Link>
-        </div>
+          <Button asChild>
+            <Link href={`/dashboard/contacts/${created.id}`}>
+              {t("action.done_to_contact", "סיום — מעבר לכרטיס")}
+            </Link>
+          </Button>
+        </Card>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm p-6">
+        <Card className="p-6">
           <ContactForm
             users={users}
             onSubmit={create}
             submitLabel={t("action.create_contact", "צור איש קשר")}
           />
-        </div>
+        </Card>
       )}
     </div>
   );

@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Layers, Plus, Settings2, SlidersHorizontal, X } from "lucide-react";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 
+import { Button } from "@/components/ui/button";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { PicklistSelect } from "@/components/PicklistSelect";
 import { SearchableSelect } from "@/components/SearchableSelect";
@@ -41,7 +43,7 @@ import {
 } from "@/lib/types";
 
 const inputClass =
-  "rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 const PAGE_SIZES = [20, 50, 100];
 
@@ -546,7 +548,7 @@ export default function ApartmentsPage() {
     if (groupByBuilding) return null;
     const active = sort === key;
     return (
-      <span className={active ? "text-gray-700" : "text-gray-300"}>
+      <span className={active ? "text-foreground" : "text-muted-foreground"}>
         {" "}
         {active ? (dir === "asc" ? "↑" : "↓") : "⇅"}
       </span>
@@ -891,7 +893,7 @@ export default function ApartmentsPage() {
   // params, computed once for the bulk-edit modal's filter payload below.
   const currentFilterParams = buildFilterParams();
 
-  if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
 
   return (
     <div className="space-y-5">
@@ -909,56 +911,44 @@ export default function ApartmentsPage() {
               {/* fixes32 §6: always reachable while any filter narrows the
                   list — mirrors the Contacts page (fixes29 §1). */}
               {activeFilterCount > 0 && (
-                <button
-                  type="button"
-                  onClick={clearAllFilters}
-                  className="rounded-md border border-gray-300 text-gray-600 px-4 py-2 text-sm font-medium hover:bg-gray-50"
-                >
-                  ✕ {t("filter.clear_all", "נקה את כל הסינונים")}
-                </button>
+                <Button type="button" variant="outline" onClick={clearAllFilters}>
+                  <X className="h-4 w-4" /> {t("filter.clear_all", "נקה את כל הסינונים")}
+                </Button>
               )}
-              <button
-                type="button"
-                onClick={() => setFiltersOpen((v) => !v)}
-                className="rounded-md border border-gray-300 text-gray-600 px-4 py-2 text-sm font-medium hover:bg-gray-50"
-              >
-                {filtersOpen
-                  ? `▴ ${t("filter.hide_filters", "הסתר סינון")}`
-                  : `▾ ${t("filter.show_filters", "הצג סינון")}`}
+              <Button type="button" variant="outline" onClick={() => setFiltersOpen((v) => !v)}>
+                <SlidersHorizontal className="h-4 w-4" />
+                {filtersOpen ? t("filter.hide_filters", "הסתר סינון") : t("filter.show_filters", "הצג סינון")}
                 {!filtersOpen && activeFilterCount > 0 && (
-                  <span className="ms-1.5 inline-flex items-center justify-center rounded-full bg-status-magenta text-white text-xs px-1.5 py-0.5 leading-none">
+                  <span className="ms-1 inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground text-xs px-1.5 py-0.5 leading-none">
                     {activeFilterCount}
                   </span>
                 )}
-              </button>
+              </Button>
             </>
           )}
           {/* fixes38 §2.1: the columns toggle lives outside the filtersOpen
               block so collapsing filters never hides it. */}
-          <button
-            type="button"
-            onClick={() => setFieldsOpen((v) => !v)}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50"
-          >
-            ⚙ {t("columns.fields_configure", "התאמת שדות")}
-          </button>
+          <Button type="button" variant="outline" onClick={() => setFieldsOpen((v) => !v)}>
+            <Settings2 className="h-4 w-4" /> {t("columns.fields_configure", "התאמת שדות")}
+          </Button>
           {!isShliach && (
             <>
               {!batchOpen && (
-                <button
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-primary text-primary hover:bg-primary/10"
                   onClick={() => setBatchOpen(true)}
-                  className="rounded-md border border-status-magenta text-status-magenta px-4 py-2 text-sm font-medium hover:bg-status-magenta/10"
                 >
-                  {t("batch.open", "יצירה מרובה")}
-                </button>
+                  <Layers className="h-4 w-4" /> {t("batch.open", "יצירה מרובה")}
+                </Button>
               )}
               {/* Dedicated add route (fixes12 §2.2). */}
-              <Link
-                href="/dashboard/apartments/add"
-                className="rounded-md bg-status-magenta text-white px-4 py-2 text-sm font-medium hover:opacity-90"
-              >
-                + {t("apt.add_apartment", "הוסף דירה")}
-              </Link>
+              <Button asChild>
+                <Link href="/dashboard/apartments/add">
+                  <Plus className="h-4 w-4" /> {t("apt.add_apartment", "הוסף דירה")}
+                </Link>
+              </Button>
             </>
           )}
         </div>
@@ -967,28 +957,28 @@ export default function ApartmentsPage() {
       {/* fixes38 §2.1: the columns panel is deliberately OUTSIDE the
           filtersOpen fragment below, so collapsing filters never hides it. */}
       {fieldsOpen && (
-        <div className="bg-white rounded-xl shadow-sm p-4 space-y-2">
+        <div className="bg-card border border-border rounded-xl shadow-sm p-4 space-y-2">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">{t("columns.title", "עמודות מוצגות")}</h3>
             <button
               type="button"
               onClick={() => setFields(DEFAULT_FIELDS)}
-              className="text-xs text-status-magenta hover:underline"
+              className="text-xs text-primary hover:underline"
             >
               {t("columns.reset", "איפוס ברירת מחדל")}
             </button>
           </div>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-muted-foreground">
             {t(
               "columns.hint",
               "בחר אילו עמודות יוצגו בטבלה. ההעדפה נשמרת בדפדפן זה.",
             )}
           </p>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-muted-foreground">
             {t("columns.reorder_hint", "גרור עמודה פעילה כדי לשנות את סדר ההצגה.")}
           </p>
           {orgVisibleCustomDefs.length > 0 && (
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-muted-foreground">
               {t(
                 "columns.custom_picklists_hint",
                 "עמודות רשימת בחירה מותאמות אישית — ניתן להסתיר כל אחת בנפרד.",
@@ -1026,7 +1016,7 @@ export default function ApartmentsPage() {
                       disabled={activeIdx === 0}
                       onClick={() => moveActiveField(k, -1)}
                       title={t("action.move_up", "העלה")}
-                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
+                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-status-magenta hover:bg-accent active:bg-muted disabled:opacity-20"
                     >
                       ▲
                     </button>
@@ -1035,7 +1025,7 @@ export default function ApartmentsPage() {
                       disabled={activeIdx === activeFields.length - 1}
                       onClick={() => moveActiveField(k, 1)}
                       title={t("action.move_down", "הורד")}
-                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
+                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-status-magenta hover:bg-accent active:bg-muted disabled:opacity-20"
                     >
                       ▼
                     </button>
@@ -1051,7 +1041,7 @@ export default function ApartmentsPage() {
                   data-sort-key={k}
                   data-sortable-disabled=""
                   onClick={() => toggleField(k)}
-                  className="rounded-md border px-3 py-1.5 text-sm border-gray-200 text-gray-600 hover:bg-gray-50"
+                  className="rounded-md border px-3 py-1.5 text-sm border-border text-muted-foreground hover:bg-accent"
                 >
                   {fieldLabels[k]}
                 </button>
@@ -1071,7 +1061,7 @@ export default function ApartmentsPage() {
                   className={`rounded-md border px-3 py-1.5 text-sm ${
                     active
                       ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
-                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                      : "border-border text-muted-foreground hover:bg-accent"
                   }`}
                 >
                   {active ? "✓ " : ""}
@@ -1092,7 +1082,7 @@ export default function ApartmentsPage() {
                   className={`rounded-md border px-3 py-1.5 text-sm ${
                     active
                       ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
-                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                      : "border-border text-muted-foreground hover:bg-accent"
                   }`}
                 >
                   {active ? "✓ " : ""}
@@ -1109,7 +1099,7 @@ export default function ApartmentsPage() {
               className={`rounded-md border px-3 py-1.5 text-sm ${
                 showContact
                   ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
-                  : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  : "border-border text-muted-foreground hover:bg-accent"
               }`}
             >
               {showContact ? "✓ " : ""}
@@ -1126,7 +1116,7 @@ export default function ApartmentsPage() {
       {/* Dataset filters (fixes8 §2): multi-area (fixes15 §7.1) + building
           bounds, street lookup. */}
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-gray-500">{t("filter.by_area", "סנן לפי אזור:")}</span>
+        <span className="text-muted-foreground">{t("filter.by_area", "סנן לפי אזור:")}</span>
         <MultiSelectFilter
           allLabel={t("filter.all_areas", "כל האזורים")}
           options={areas.map((a) => ({ id: a.id, label: a.area_name }))}
@@ -1246,7 +1236,7 @@ export default function ApartmentsPage() {
                 onChange={(e) => onCustomFieldFilterChange(d.field_key, e.target.value)}
               />
               <label
-                className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer whitespace-nowrap"
+                className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer whitespace-nowrap"
                 title={t("filter.empty_hint", "הצג רק דירות ללא ערך בשדה זה")}
               >
                 <input
@@ -1275,7 +1265,7 @@ export default function ApartmentsPage() {
 
       {/* Sorting (fixes8 §1C) + field config (fixes15 §7.2) + page size. */}
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-gray-500">{t("sort.label", "מיון:")}</span>
+        <span className="text-muted-foreground">{t("sort.label", "מיון:")}</span>
         <select
           className={inputClass}
           value={groupByBuilding ? "building" : sort}
@@ -1302,7 +1292,7 @@ export default function ApartmentsPage() {
         </select>
         {!groupByBuilding && sort === "hierarchy" ? (
           <span
-            className="rounded-md border border-gray-200 px-3 py-2 text-gray-400"
+            className="rounded-md border border-border px-3 py-2 text-muted-foreground"
             title={t("apt.hierarchy_sort_hint", "מיון היררכיה תמיד עולה")}
           >
             ↑ {t("sort.asc", "עולה")}
@@ -1311,7 +1301,7 @@ export default function ApartmentsPage() {
           <button
             type="button"
             onClick={onDirToggle}
-            className="rounded-md border border-gray-300 px-3 py-2 hover:bg-gray-50"
+            className="rounded-md border border-input px-3 py-2 hover:bg-accent"
             title={dir === "asc" ? t("sort.asc", "עולה") : t("sort.desc", "יורד")}
           >
             {dir === "asc" ? "↑" : "↓"} {dir === "asc" ? t("sort.asc", "עולה") : t("sort.desc", "יורד")}
@@ -1324,7 +1314,7 @@ export default function ApartmentsPage() {
           className={`rounded-md border px-3 py-2 ${
             groupByBuilding
               ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
-              : "border-gray-300 hover:bg-gray-50"
+              : "border-input hover:bg-accent"
           }`}
         >
           {groupByBuilding ? "✓ " : ""}
@@ -1352,7 +1342,7 @@ export default function ApartmentsPage() {
         >
           📄 {t("apt.create_report_from_filters", "צור דוח מהתוצאות המסוננות")}
         </button>
-        <span className="ms-auto text-gray-500">{t("pager.page_size", "בעמוד:")}</span>
+        <span className="ms-auto text-muted-foreground">{t("pager.page_size", "בעמוד:")}</span>
         <select
           className={inputClass}
           value={pageSize}
@@ -1413,9 +1403,9 @@ export default function ApartmentsPage() {
           engage; an `overflow-x-auto`-only div never scrolls vertically
           itself, so a sticky child inside it just scrolls away with the page
           instead of sticking. */}
-      <div className="bg-white rounded-xl shadow-sm overflow-x-auto overflow-y-auto max-h-[75vh]">
+      <div className="bg-card border border-border rounded-xl shadow-sm overflow-x-auto overflow-y-auto max-h-[75vh]">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-600 text-right">
+          <thead className="bg-background text-muted-foreground text-right">
             <tr>
               {/* The corner cell needs both stickiness axes, so it sits above
                   the plain header row (z-20 vs. z-10) at their intersection.
@@ -1423,8 +1413,8 @@ export default function ApartmentsPage() {
                   Numbers), inert while grouped by building. */}
               <th
                 onClick={groupByBuilding ? undefined : () => onHeaderSortClick("label")}
-                className={`px-3 py-1.5 font-medium w-px whitespace-nowrap min-w-[150px] sticky top-0 z-20 bg-gray-50 ${firstColStickySide} ${
-                  groupByBuilding ? "" : "cursor-pointer select-none hover:bg-gray-100"
+                className={`px-3 py-1.5 font-medium w-px whitespace-nowrap min-w-[150px] sticky top-0 z-20 bg-background ${firstColStickySide} ${
+                  groupByBuilding ? "" : "cursor-pointer select-none hover:bg-accent"
                 }`}
               >
                 {t("apartments.apartment_name", "מספר דירה")}
@@ -1441,8 +1431,8 @@ export default function ApartmentsPage() {
                   <th
                     key={k}
                     onClick={sortable ? () => onHeaderSortClick(sortKeyForField!) : undefined}
-                    className={`px-3 py-1.5 font-medium w-px whitespace-nowrap sticky top-0 z-10 bg-gray-50 ${fieldMinWidth(k)} ${
-                      sortable ? "cursor-pointer select-none hover:bg-gray-100" : ""
+                    className={`px-3 py-1.5 font-medium w-px whitespace-nowrap sticky top-0 z-10 bg-background ${fieldMinWidth(k)} ${
+                      sortable ? "cursor-pointer select-none hover:bg-accent" : ""
                     }`}
                   >
                     {fieldLabels[k]}
@@ -1455,7 +1445,7 @@ export default function ApartmentsPage() {
               {visibleCustomDefs.map((d) => (
                 <th
                   key={d.field_key}
-                  className="px-3 py-1.5 font-medium w-px whitespace-nowrap min-w-[120px] sticky top-0 z-10 bg-gray-50"
+                  className="px-3 py-1.5 font-medium w-px whitespace-nowrap min-w-[120px] sticky top-0 z-10 bg-background"
                 >
                   {customDefLabel(d)}
                 </th>
@@ -1465,7 +1455,7 @@ export default function ApartmentsPage() {
               {visibleCustomFieldDefs.map((d) => (
                 <th
                   key={d.field_key}
-                  className={`px-3 py-1.5 font-medium w-px whitespace-nowrap sticky top-0 z-10 bg-gray-50 ${
+                  className={`px-3 py-1.5 font-medium w-px whitespace-nowrap sticky top-0 z-10 bg-background ${
                     d.field_type === "text" ? "min-w-[150px]" : "min-w-[120px]"
                   }`}
                 >
@@ -1475,23 +1465,23 @@ export default function ApartmentsPage() {
               ))}
               {/* fixes30 §1b: toggleable via the fields panel. */}
               {showContact && (
-                <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap sticky top-0 z-10 bg-gray-50">
+                <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap sticky top-0 z-10 bg-background">
                   {t("apartments.contact", "איש קשר")}
                 </th>
               )}
-              <th className="w-full sticky top-0 z-10 bg-gray-50"></th>
+              <th className="w-full sticky top-0 z-10 bg-background"></th>
             </tr>
           </thead>
           <tbody>
             {busy ? (
               <tr>
-                <td colSpan={colCount} className="px-4 py-6 text-center text-gray-400">
-                  {t("action.loading", "טוען…")}
+                <td colSpan={colCount} className="px-4 py-10 text-center">
+                  <div className="mx-auto h-6 w-6 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={colCount} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={colCount} className="px-4 py-6 text-center text-muted-foreground">
                   {t("apt.no_apartments_page", "אין דירות להצגה.")}
                 </td>
               </tr>
@@ -1507,7 +1497,7 @@ export default function ApartmentsPage() {
                   {groupByBuilding &&
                     (buildingCounts.get(a.building_id) ?? 0) > 1 &&
                     (i === 0 || items[i - 1].building_id !== a.building_id) && (
-                      <tr className="border-t border-gray-200 bg-gray-50/80">
+                      <tr className="border-t border-border bg-background/80">
                         <td colSpan={colCount} className="px-3 py-2">
                           {/* fixes54 §1.3 BUG FIX: without an isolated bidi
                               context, adjacent spans that each end/start with
@@ -1528,7 +1518,7 @@ export default function ApartmentsPage() {
                           </span>
                           {a.area_name && (
                             <span
-                              className="ms-2 text-gray-500"
+                              className="ms-2 text-muted-foreground"
                               style={{ unicodeBidi: "isolate" }}
                             >
                               {a.area_name}
@@ -1548,9 +1538,9 @@ export default function ApartmentsPage() {
                         </td>
                       </tr>
                     )}
-                  <tr className="border-t border-gray-100">
+                  <tr className="border-t border-border">
                     <td
-                      className={`px-3 py-2 w-px whitespace-nowrap min-w-[150px] sticky z-10 bg-white ${firstColStickySide}`}
+                      className={`px-3 py-2 w-px whitespace-nowrap min-w-[150px] sticky z-10 bg-card ${firstColStickySide}`}
                     >
                       <ApartmentNameCell
                         a={a}
@@ -1648,7 +1638,7 @@ export default function ApartmentsPage() {
                             {a.contact_name}
                           </Link>
                         ) : (
-                          <span className="text-gray-400">{t("apt.no_contact", "ללא איש קשר")}</span>
+                          <span className="text-muted-foreground">{t("apt.no_contact", "ללא איש קשר")}</span>
                         )}
                       </td>
                     )}
@@ -1668,16 +1658,16 @@ export default function ApartmentsPage() {
             type="button"
             disabled={page <= 1}
             onClick={() => goToPage(page - 1)}
-            className="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="rounded-md border border-input px-3 py-1.5 hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {t("pager.prev", "→ הקודם")}
           </button>
-          <span className="text-gray-500">{rangeText}</span>
+          <span className="text-muted-foreground">{rangeText}</span>
           <button
             type="button"
             disabled={page >= lastPage}
             onClick={() => goToPage(page + 1)}
-            className="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="rounded-md border border-input px-3 py-1.5 hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {t("pager.next", "הבא ←")}
           </button>
@@ -1764,7 +1754,7 @@ function ApartmentNameCell({
           setEditing(true);
         }}
         title={t("inline.click_to_edit", "לחץ לעריכה")}
-        className="text-xs text-gray-300 opacity-0 group-hover:opacity-100 hover:text-status-magenta"
+        className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-status-magenta"
       >
         ✎
       </button>
@@ -1866,10 +1856,10 @@ function BatchModal({
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg bg-white rounded-xl shadow-xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div className="w-full max-w-lg bg-card rounded-xl shadow-xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
         <div>
           <h2 className="text-lg font-bold">{t("batch.title", "יצירת דירות מרובות")}</h2>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             {t(
               "batch.intro",
               "בחר בניין, קומות ותוויות דירה — כל השילובים ייווצרו בבת אחת.",
@@ -1902,7 +1892,7 @@ function BatchModal({
               )}
             </div>
             {floors.length === 0 ? (
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-muted-foreground">
                 {t("batch.no_floors", "לבניין זה אין קומות. הוסף קומות בעריכת הבניין.")}
               </p>
             ) : (
@@ -1913,7 +1903,7 @@ function BatchModal({
                     className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm cursor-pointer ${
                       selectedFloors.includes(f.id)
                         ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
-                        : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                        : "border-border text-muted-foreground hover:bg-accent"
                     }`}
                   >
                     <input
@@ -1971,7 +1961,7 @@ function BatchModal({
             <button
               type="button"
               onClick={addLabel}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
+              className="rounded-md border border-input px-3 py-1.5 text-sm hover:bg-accent"
             >
               + {t("batch.add_label", "הוסף")}
             </button>
@@ -1991,7 +1981,7 @@ function BatchModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+            className="rounded-md border border-input px-4 py-2 text-sm hover:bg-accent"
           >
             {t("action.cancel", "ביטול")}
           </button>
@@ -2110,7 +2100,7 @@ function BulkEditModal({
               options={reportNumbers.map((rn) => ({ id: rn.id, label: rn.name }))}
               placeholder={t("bulkedit.choose_report", "בחר מספר דוח…")}
             />
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-muted-foreground">
               {t("bulkedit.clear_hint", "השאר ריק כדי להסיר את מספר הדוח מהדירות.")}
             </p>
           </div>
@@ -2218,7 +2208,7 @@ function BulkEditModal({
   function FieldRow({ fieldKey, label }: { fieldKey: string; label: string }) {
     const on = !!enabled[fieldKey];
     return (
-      <div className="space-y-1 rounded-lg border border-gray-200 p-3">
+      <div className="space-y-1 rounded-lg border border-border p-3">
         <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
           <input
             type="checkbox"
@@ -2262,12 +2252,12 @@ function BulkEditModal({
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg bg-white rounded-xl shadow-xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div className="w-full max-w-lg bg-card rounded-xl shadow-xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
         <div>
           <h2 className="text-lg font-bold">
             {t("bulkedit.title", "עריכה מרובה של דירות")}
           </h2>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             {t(
               "bulkedit.intro",
               "השינויים יחולו על כל {total} הדירות התואמות לסינון הנוכחי.",
@@ -2308,7 +2298,7 @@ function BulkEditModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+            className="rounded-md border border-input px-4 py-2 text-sm hover:bg-accent"
           >
             {t("action.cancel", "ביטול")}
           </button>

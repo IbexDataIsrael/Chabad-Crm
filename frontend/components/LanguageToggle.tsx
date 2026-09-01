@@ -13,7 +13,7 @@ export function LanguageToggle({ className = "" }: { className?: string }) {
       type="button"
       onClick={toggleLang}
       aria-label="Toggle language"
-      className={`rounded-md border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50 ${className}`}
+      className={`min-h-[44px] rounded-md border border-input px-2 py-1 text-xs hover:bg-accent ${className}`}
     >
       {t("lang.toggle", "English")}
     </button>

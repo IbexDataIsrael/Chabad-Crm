@@ -16,13 +16,13 @@ export default function DonationsPage() {
     if (!loading && !isAdmin) router.replace("/dashboard");
   }, [loading, isAdmin, router]);
 
-  if (loading || !isAdmin) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading || !isAdmin) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">{t("nav.donations", "תרומות")}</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           {t("page.donations_intro", "היסטורית תרומות. ניתן לשייך תרומה לאיש קשר או להשאיר ללא שיוך.")}
         </p>
       </div>

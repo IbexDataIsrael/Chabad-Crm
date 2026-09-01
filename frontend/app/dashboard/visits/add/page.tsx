@@ -27,14 +27,14 @@ export default function AddVisitPage() {
       .catch(() => {});
   }, []);
 
-  if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!isAdmin) return null;
 
   return (
     <div className="space-y-5 max-w-3xl">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{t("page.add_visit", "ביקור חדש")}</h1>
-        <Link href="/dashboard/visits" className="text-sm text-status-magenta hover:underline">
+        <Link href="/dashboard/visits" className="text-sm text-primary hover:underline">
           {t("page.back_to_visits", "← חזרה לביקורים")}
         </Link>
       </div>

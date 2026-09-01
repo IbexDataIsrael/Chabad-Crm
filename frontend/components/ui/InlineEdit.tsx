@@ -114,12 +114,12 @@ export function InlineEdit<T>({
           if (e.key === "Enter") open();
         }}
         title={t("inline.click_to_edit", "לחץ לעריכה")}
-        className="group inline-flex max-w-full items-baseline gap-1 rounded px-1 -mx-1 cursor-pointer hover:bg-gray-100"
+        className="group inline-flex max-w-full items-baseline gap-1 rounded px-1 -mx-1 cursor-pointer hover:bg-accent"
       >
         <span className="min-w-0">{display}</span>
         <span
           aria-hidden
-          className="text-xs text-gray-300 opacity-0 group-hover:opacity-100"
+          className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100"
         >
           ✎
         </span>

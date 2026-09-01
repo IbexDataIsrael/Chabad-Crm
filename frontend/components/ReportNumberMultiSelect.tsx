@@ -60,7 +60,7 @@ export function ReportNumberMultiSelect({
 
   if (reportNumbers.length === 0) {
     return (
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-muted-foreground">
         {t("report.none", "אין מספרי דוח עדיין.")}
       </p>
     );

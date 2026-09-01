@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useFieldSettings } from "@/lib/fieldSettings";
@@ -13,13 +16,13 @@ import { useLocalization } from "@/lib/localization";
 import { roundCoord, type Area } from "@/lib/types";
 
 const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 /** Standalone add-building page (mirrors /dashboard/areas/add). Accepts
  *  ?area=<id> to preselect the area (used by the "add building" links). */
 export default function AddBuildingPage() {
   return (
-    <Suspense fallback={<p className="text-gray-400">…</p>}>
+    <Suspense fallback={<p className="text-muted-foreground">…</p>}>
       <AddBuildingInner />
     </Suspense>
   );
@@ -125,26 +128,27 @@ function AddBuildingInner() {
     }
   }
 
-  if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
 
   return (
     <div className="space-y-5 max-w-3xl">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{t("page.new_building", "בניין חדש")}</h1>
-        <Link href="/dashboard/buildings" className="text-sm text-status-magenta hover:underline">
-          {t("page.back_to_buildings", "← חזרה לבניינים")}
+        <Link href="/dashboard/buildings" className="flex items-center gap-1 text-sm text-primary hover:underline">
+          {t("page.back_to_buildings", "חזרה לבניינים")} <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
 
       {areas.length === 0 ? (
-        <p className="text-sm text-status-darkred">
+        <p className="text-sm text-destructive">
           {t("page.need_area_first", "יש להגדיר אזור אחד לפחות לפני הוספת בניין.")}{" "}
-          <Link href="/dashboard/areas/add" className="font-medium underline hover:text-status-magenta">
+          <Link href="/dashboard/areas/add" className="font-medium underline hover:text-primary">
             {t("page.add_area", "אזור חדש")}
           </Link>
         </p>
       ) : (
-        <form onSubmit={save} className="bg-white rounded-xl shadow-sm p-4 space-y-3">
+        <Card className="p-4">
+        <form onSubmit={save} className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block space-y-1">
               <span className="block text-sm font-medium">{t("buildings.area_id", "אזור")}</span>
@@ -203,7 +207,7 @@ function AddBuildingInner() {
                 value={coords}
                 onChange={(e) => onCoordsChange(e.target.value)}
               />
-              <span className="block text-xs text-gray-400">
+              <span className="block text-xs text-muted-foreground">
                 {t("buildings.coords_hint", "פורמט: longitude,latitude — לדוגמה 35.2137,31.7683")}
               </span>
             </label>
@@ -217,7 +221,7 @@ function AddBuildingInner() {
               {t("buildings.is_town_house", "בית פרטי")}
             </label>
             {isTownHouse ? (
-              <p className="text-xs text-gray-400 sm:col-span-2">
+              <p className="text-xs text-muted-foreground sm:col-span-2">
                 {t(
                   "buildings.town_house_hint",
                   "בבית פרטי לא נוצרות קומות — נוצרת דירה אחת אוטומטית.",
@@ -234,7 +238,7 @@ function AddBuildingInner() {
                   value={numFloors}
                   onChange={(e) => setNumFloors(e.target.value)}
                 />
-                <span className="block text-xs text-gray-400">
+                <span className="block text-xs text-muted-foreground">
                   {t(
                     "buildings.num_floors_hint",
                     "בעת יצירת הבניין ייווצרו קומות 1 עד המספר שנבחר.",
@@ -245,39 +249,35 @@ function AddBuildingInner() {
           </div>
 
           {geoWarning && (
-            <div className="rounded-md border-2 border-status-darkred bg-red-50 p-3 space-y-2">
-              <p className="text-sm font-bold text-status-darkred">
+            <div className="rounded-md border-2 border-destructive bg-destructive/10 p-3 space-y-2">
+              <p className="text-sm font-bold text-destructive">
                 ⚠ {t("geo.outside_area_warning", "אזהרה: הכתובת שנבחרה נמצאת מחוץ לתחום האזור שנבחר!")}
               </p>
-              <p className="text-xs text-status-darkred">
+              <p className="text-xs text-destructive">
                 {t("geo.check_hint", "בדוק את הכתובת או בחר אזור אחר.")}
               </p>
-              <button
+              <Button
                 type="button"
+                size="sm"
+                variant="outline"
+                className="border-destructive text-destructive hover:bg-destructive/10"
                 onClick={(e) => save(e as unknown as FormEvent, true)}
-                className="rounded-md border border-status-darkred text-status-darkred px-3 py-1 text-xs font-medium hover:bg-red-100"
               >
                 {t("geo.save_anyway", "שמור בכל זאת")}
-              </button>
+              </Button>
             </div>
           )}
-          {error && <p className="text-sm text-status-darkred">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex items-center gap-2">
-            <button
-              type="submit"
-              disabled={busy}
-              className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-            >
+            <Button type="submit" disabled={busy}>
               {busy ? t("action.saving", "שומר…") : t("action.save", "שמור")}
-            </button>
-            <Link
-              href="/dashboard/buildings"
-              className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
-            >
-              {t("action.cancel", "ביטול")}
-            </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/dashboard/buildings">{t("action.cancel", "ביטול")}</Link>
+            </Button>
           </div>
         </form>
+        </Card>
       )}
     </div>
   );

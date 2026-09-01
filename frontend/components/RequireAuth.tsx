@@ -21,7 +21,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   }, [loading, user, router]);
 
   if (loading || !user) {
-    return <div className="p-8 text-center text-gray-500">{t("action.loading", "טוען…")}</div>;
+    return <div className="p-8 text-center text-muted-foreground">{t("action.loading", "טוען…")}</div>;
   }
   return <>{children}</>;
 }

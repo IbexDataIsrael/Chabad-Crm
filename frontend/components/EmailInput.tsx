@@ -48,7 +48,7 @@ export function EmailInput({
         className={`${baseClass} ${
           invalid
             ? "border-status-darkred focus:border-status-darkred focus:ring-status-darkred"
-            : "border-gray-300 focus:border-status-magenta focus:ring-status-magenta"
+            : "border-input focus:border-status-magenta focus:ring-status-magenta"
         }`}
       />
       {invalid && (

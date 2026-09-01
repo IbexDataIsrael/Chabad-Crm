@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   contactFullName,
   type ReportCompletion,
@@ -73,7 +75,7 @@ export default function MessagesFromActivistsPage() {
       .finally(() => setBusy(false));
   }, [loading, isAdmin]);
 
-  if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!isAdmin) {
     return (
       <p className="text-status-darkred">
@@ -113,7 +115,7 @@ export default function MessagesFromActivistsPage() {
         <h1 className="text-2xl font-bold">
           {t("nav.messages_from_activists", "הודעות מהפעילים")}
         </h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           {t(
             "messages_from_activists.intro",
             "דיווחי השלמת דוחות והערות על המערכת שנשלחו על ידי פעילים.",
@@ -122,8 +124,8 @@ export default function MessagesFromActivistsPage() {
       </div>
 
       {/* fixes54 §4: a single search bar queries both lists at once. */}
-      <input
-        className="w-full max-w-sm rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
+      <Input
+        className="max-w-sm"
         placeholder={t("messages_from_activists.search_ph", "חיפוש לפי שם פעיל, סטטוס או תוכן…")}
         value={query}
         onChange={(e) => {
@@ -137,11 +139,11 @@ export default function MessagesFromActivistsPage() {
         <h2 className="font-semibold">
           {t("shliach_msg.report_completed_btn", "דיווח על השלמת הדוח")}
         </h2>
-        <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
+        <div className="bg-card rounded-xl shadow-sm divide-y divide-border">
           {busy ? (
-            <p className="px-4 py-6 text-center text-gray-400">{t("action.loading", "טוען…")}</p>
+            <p className="px-4 py-6 text-center text-muted-foreground">{t("action.loading", "טוען…")}</p>
           ) : filteredCompletions.length === 0 ? (
-            <p className="px-4 py-6 text-center text-gray-400">
+            <p className="px-4 py-6 text-center text-muted-foreground">
               {completions.length === 0
                 ? t("messages_from_activists.no_completions", "אין דיווחי השלמה עדיין.")
                 : t("messages_from_activists.no_results", "לא נמצאו תוצאות התואמות לחיפוש.")}
@@ -152,16 +154,16 @@ export default function MessagesFromActivistsPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
                     href={`/dashboard/contacts/${c.activist.id}`}
-                    className="font-medium text-status-magenta hover:underline"
+                    className="font-medium text-primary hover:underline"
                   >
                     {contactFullName(c.activist)}
                   </Link>
                   <StatusBadge status={c.status} />
-                  <span className="ms-auto text-xs text-gray-400" dir="ltr">
+                  <span className="ms-auto text-xs text-muted-foreground" dir="ltr">
                     {new Date(c.created_at).toLocaleString()}
                   </span>
                 </div>
-                {c.comments && <p className="text-sm text-gray-600">{c.comments}</p>}
+                {c.comments && <p className="text-sm text-muted-foreground">{c.comments}</p>}
               </div>
             ))
           )}
@@ -175,11 +177,11 @@ export default function MessagesFromActivistsPage() {
         <h2 className="font-semibold">
           {t("shliach_msg.system_comment_btn", "הערות על המערכת")}
         </h2>
-        <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
+        <div className="bg-card rounded-xl shadow-sm divide-y divide-border">
           {busy ? (
-            <p className="px-4 py-6 text-center text-gray-400">{t("action.loading", "טוען…")}</p>
+            <p className="px-4 py-6 text-center text-muted-foreground">{t("action.loading", "טוען…")}</p>
           ) : filteredComments.length === 0 ? (
-            <p className="px-4 py-6 text-center text-gray-400">
+            <p className="px-4 py-6 text-center text-muted-foreground">
               {comments.length === 0
                 ? t("messages_from_activists.no_comments", "אין הערות על המערכת עדיין.")
                 : t("messages_from_activists.no_results", "לא נמצאו תוצאות התואמות לחיפוש.")}
@@ -190,15 +192,15 @@ export default function MessagesFromActivistsPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
                     href={`/dashboard/contacts/${c.activist.id}`}
-                    className="font-medium text-status-magenta hover:underline"
+                    className="font-medium text-primary hover:underline"
                   >
                     {contactFullName(c.activist)}
                   </Link>
-                  <span className="ms-auto text-xs text-gray-400" dir="ltr">
+                  <span className="ms-auto text-xs text-muted-foreground" dir="ltr">
                     {new Date(c.created_at).toLocaleString()}
                   </span>
                 </div>
-                <p className="text-sm text-gray-600 whitespace-pre-wrap">{c.comment}</p>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{c.comment}</p>
               </div>
             ))
           )}
@@ -226,27 +228,17 @@ function Pager({
   const { t } = useLocalization();
   return (
     <div className="flex items-center justify-between gap-2 text-sm">
-      <button
-        type="button"
-        disabled={page <= 1}
-        onClick={() => onChange(page - 1)}
-        className="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-      >
+      <Button type="button" variant="outline" size="sm" disabled={page <= 1} onClick={() => onChange(page - 1)}>
         {t("pager.prev", "→ הקודם")}
-      </button>
-      <span className="text-gray-500">
+      </Button>
+      <span className="text-muted-foreground">
         {t("pager.page_of", "עמוד {page} מתוך {total}")
           .replace("{page}", String(page))
           .replace("{total}", String(lastPage))}
       </span>
-      <button
-        type="button"
-        disabled={page >= lastPage}
-        onClick={() => onChange(page + 1)}
-        className="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-      >
+      <Button type="button" variant="outline" size="sm" disabled={page >= lastPage} onClick={() => onChange(page + 1)}>
         {t("pager.next", "הבא ←")}
-      </button>
+      </Button>
     </div>
   );
 }

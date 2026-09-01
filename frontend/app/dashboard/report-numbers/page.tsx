@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 
+import { Plus } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useConfirm } from "@/lib/confirm";
@@ -11,15 +12,14 @@ import { naturalCompare } from "@/lib/naturalSort";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 import { useSortableList } from "@/lib/useSortableList";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   contactFullName,
   type JewishCounts,
   type ReportNumber,
   type ShliachSummary,
 } from "@/lib/types";
-
-const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 // fixes53 §3: the grid's optional (toggleable) columns — name + actions
 // always show.
@@ -147,7 +147,7 @@ export default function ReportNumbersPage() {
     }
   }
 
-  if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!isAdmin) {
     return (
       <p className="text-status-darkred">
@@ -198,11 +198,11 @@ export default function ReportNumbersPage() {
     const active = sortKey === column;
     return (
       <th
-        className="px-3 py-2 text-start font-medium cursor-pointer select-none hover:bg-gray-100"
+        className="px-3 py-2 text-start font-medium cursor-pointer select-none hover:bg-accent"
         onClick={() => onSortClick(column)}
       >
         {label}{" "}
-        <span className={active ? "text-gray-700" : "text-gray-300"}>
+        <span className={active ? "text-foreground" : "text-muted-foreground"}>
           {active ? (sortDir === "asc" ? "↑" : "↓") : "⇅"}
         </span>
       </th>
@@ -214,15 +214,12 @@ export default function ReportNumbersPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{t("page.report_numbers", "מספרי דוח")}</h1>
         {!adding && !editing && (
-          <button
-            onClick={() => setAdding(true)}
-            className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
-          >
-            + {t("report.add", "מספר דוח חדש")}
-          </button>
+          <Button size="sm" onClick={() => setAdding(true)}>
+            <Plus className="h-4 w-4" /> {t("report.add", "מספר דוח חדש")}
+          </Button>
         )}
       </div>
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-muted-foreground">
         {t(
           "page.report_numbers_intro",
           "ניהול מספרי הדוח של הארגון — משמשים לשיוך דירות ופעילים.",
@@ -246,31 +243,28 @@ export default function ReportNumbersPage() {
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <input
-          className={`${inputClass} max-w-xs`}
+        <Input
+          className="max-w-xs"
           placeholder={t("filter.search_name", "חיפוש לפי שם…")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <button
+        <Button
           type="button"
+          variant="outline"
+          className={fieldsOpen ? "border-primary bg-primary/10 text-primary" : undefined}
           onClick={() => setFieldsOpen(!fieldsOpen)}
-          className={`rounded-md border px-3 py-2 text-sm ${
-            fieldsOpen
-              ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
-              : "border-gray-300 hover:bg-gray-50"
-          }`}
         >
           {t("columns.title", "עמודות מוצגות")}
-        </button>
+        </Button>
       </div>
 
       {/* fixes54 §2: "Customize Columns" parity with Contacts — toggle
           visibility (click) + reorder (drag, or the ▲/▼ fallback) in one
           panel instead of a plain toggle-only list. */}
       {fieldsOpen && (
-        <div className="bg-white rounded-xl shadow-sm p-4 space-y-2">
-          <p className="text-xs text-gray-400">
+        <div className="bg-card rounded-xl shadow-sm p-4 space-y-2">
+          <p className="text-xs text-muted-foreground">
             {t("columns.reorder_hint", "גרור עמודה פעילה כדי לשנות את סדר ההצגה.")}
           </p>
           <div ref={fieldsSortableRef} className="flex flex-wrap gap-2">
@@ -289,7 +283,7 @@ export default function ReportNumbersPage() {
                     disabled={activeIdx === 0}
                     onClick={() => moveActiveField(f, -1)}
                     title={t("action.move_up", "העלה")}
-                    className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
+                    className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-status-magenta hover:bg-accent active:bg-muted disabled:opacity-20"
                   >
                     ▲
                   </button>
@@ -298,7 +292,7 @@ export default function ReportNumbersPage() {
                     disabled={activeIdx === orderedActiveFields.length - 1}
                     onClick={() => moveActiveField(f, 1)}
                     title={t("action.move_down", "הורד")}
-                    className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-gray-400 hover:text-status-magenta hover:bg-gray-50 active:bg-gray-100 disabled:opacity-20"
+                    className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-status-magenta hover:bg-accent active:bg-muted disabled:opacity-20"
                   >
                     ▼
                   </button>
@@ -312,7 +306,7 @@ export default function ReportNumbersPage() {
                 data-sort-key={f}
                 data-sortable-disabled=""
                 onClick={() => toggleField(f)}
-                className="rounded-md border px-3 py-1.5 text-sm border-gray-200 text-gray-600 hover:bg-gray-50"
+                className="rounded-md border px-3 py-1.5 text-sm border-border text-muted-foreground hover:bg-accent"
               >
                 {columnLabels[f]}
               </button>
@@ -321,16 +315,16 @@ export default function ReportNumbersPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+      <div className="bg-card rounded-xl shadow-sm overflow-x-auto">
         {busy ? (
-          <p className="px-4 py-6 text-center text-gray-400">{t("action.loading", "טוען…")}</p>
+          <p className="px-4 py-6 text-center text-muted-foreground">{t("action.loading", "טוען…")}</p>
         ) : rows.length === 0 ? (
-          <p className="px-4 py-6 text-center text-gray-400">
+          <p className="px-4 py-6 text-center text-muted-foreground">
             {t("report.none", "אין מספרי דוח עדיין.")}
           </p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500">
+            <thead className="bg-background text-muted-foreground">
               <tr>
                 <SortHeader column="name" label={t("report_number.name", "שם")} />
                 {orderedActiveFields.map((f) => (
@@ -341,7 +335,7 @@ export default function ReportNumbersPage() {
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-border">
               {rows.map(({ rn, jews, engaged, activists }) => (
                 <tr key={rn.id}>
                   <td className="px-3 py-2 font-medium">{rn.name}</td>
@@ -353,7 +347,7 @@ export default function ReportNumbersPage() {
                         (rn.created_at ? new Date(rn.created_at).toLocaleDateString() : "—")}
                       {f === "activist" &&
                         (activists.length === 0 ? (
-                          <span className="text-gray-400">
+                          <span className="text-muted-foreground">
                             {t("report.no_activist", "אין פעיל משויך")}
                           </span>
                         ) : (
@@ -362,7 +356,7 @@ export default function ReportNumbersPage() {
                               <span key={a.id}>
                                 <Link
                                   href={`/dashboard/contacts/${a.id}`}
-                                  className="text-status-magenta hover:underline"
+                                  className="text-primary hover:underline"
                                 >
                                   {contactFullName(a)}
                                 </Link>
@@ -376,27 +370,29 @@ export default function ReportNumbersPage() {
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
                       {/* fixes53 §3: deep link to this report number's apartments. */}
-                      <Link
-                        href={`/dashboard/apartments?report_number_ids=${rn.id}`}
-                        className="rounded-md border border-status-magenta text-status-magenta px-2 py-1 text-xs hover:bg-status-magenta/10"
-                      >
-                        {t("report.view_apartments", "הצג דירות")}
-                      </Link>
-                      <button
+                      <Button asChild size="sm" variant="outline" className="border-primary text-primary hover:bg-primary/10">
+                        <Link href={`/dashboard/apartments?report_number_ids=${rn.id}`}>
+                          {t("report.view_apartments", "הצג דירות")}
+                        </Link>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
                         onClick={() => {
                           setAdding(false);
                           setEditing(rn);
                         }}
-                        className="rounded-md bg-gray-800 text-white px-3 py-1 text-xs hover:opacity-90"
                       >
                         {t("action.edit", "ערוך")}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-destructive text-destructive hover:bg-destructive/10"
                         onClick={() => remove(rn)}
-                        className="rounded-md border border-status-darkred/40 text-status-darkred px-2 py-1 text-xs hover:bg-red-50"
                       >
                         {t("action.delete", "מחק")}
-                      </button>
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -443,36 +439,27 @@ function ReportNumberForm({
   }
 
   return (
-    <form onSubmit={save} className="bg-white rounded-xl shadow-sm p-4 space-y-3">
+    <form onSubmit={save} className="bg-card rounded-xl shadow-sm p-4 space-y-3">
       <h3 className="font-medium">
         {item ? t("action.edit", "ערוך") : t("report.add", "מספר דוח חדש")}
       </h3>
       <label className="block space-y-1 max-w-sm">
         <span className="block text-sm font-medium">{t("report_number.name", "שם")}</span>
-        <input
-          className={inputClass}
+        <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder={t("report.name_ph", "שם / מספר…")}
           required
         />
       </label>
-      {error && <p className="text-sm text-status-darkred">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex items-center gap-2">
-        <button
-          type="submit"
-          disabled={busy}
-          className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-        >
+        <Button type="submit" disabled={busy}>
           {busy ? t("action.saving", "שומר…") : t("action.save", "שמור")}
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
-        >
+        </Button>
+        <Button type="button" variant="outline" onClick={onClose}>
           {t("action.cancel", "ביטול")}
-        </button>
+        </Button>
       </div>
     </form>
   );

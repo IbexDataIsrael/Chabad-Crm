@@ -24,8 +24,14 @@ import {
   type AdminUser,
   type AdminUserDependencies,
 } from "@/lib/api";
+import { Plus } from "lucide-react";
+
 import { EmailTemplatesCard } from "@/components/EmailTemplatesCard";
 import { SystemSettingsCard } from "@/components/SystemSettingsCard";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
@@ -213,7 +219,7 @@ export default function SystemAdminPage() {
   }
 
 
-  if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!isSuperadmin) {
     return (
       <p className="text-status-darkred">
@@ -227,97 +233,90 @@ export default function SystemAdminPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold">{t("admin.title", "ניהול מערכת")}</h1>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             {t("admin.subtitle", "כל הארגונים והמשתמשים במערכת.")}
           </p>
         </div>
-        <button
-          onClick={() => setShowCreate((v) => !v)}
-          className="rounded-md bg-status-magenta text-white px-4 py-2 text-sm font-medium hover:opacity-90"
-        >
-          {showCreate ? t("action.cancel", "ביטול") : t("admin.new_org", "+ ארגון חדש")}
-        </button>
+        <Button onClick={() => setShowCreate((v) => !v)}>
+          {showCreate ? (
+            t("action.cancel", "ביטול")
+          ) : (
+            <>
+              <Plus className="h-4 w-4" /> {t("admin.new_org", "ארגון חדש")}
+            </>
+          )}
+        </Button>
       </div>
 
       {/* Create an org + admin directly — no email/Google, immediately active. */}
       {showCreate && (
-        <form onSubmit={onCreateOrg} className="bg-white rounded-xl shadow-sm p-4 grid gap-3 sm:grid-cols-2">
-          <input
+        <form onSubmit={onCreateOrg} className="bg-card border border-border rounded-xl shadow-sm p-4 grid gap-3 sm:grid-cols-2">
+          <Input
             required
             value={newOrg.organization_name}
             onChange={(e) => setNewOrg({ ...newOrg, organization_name: e.target.value })}
             placeholder={t("signup.org_name", "שם הארגון")}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
           />
-          <input
+          <Input
             required
             value={newOrg.admin_full_name}
             onChange={(e) => setNewOrg({ ...newOrg, admin_full_name: e.target.value })}
             placeholder={t("admin.admin_name", "שם המנהל")}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
           />
-          <input
+          <Input
             required
             dir="ltr"
             type="email"
             value={newOrg.admin_email}
             onChange={(e) => setNewOrg({ ...newOrg, admin_email: e.target.value })}
             placeholder={t("contacts.email", "אימייל")}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
           />
-          <input
+          <Input
             required
             dir="ltr"
             value={newOrg.admin_username}
             onChange={(e) => setNewOrg({ ...newOrg, admin_username: e.target.value })}
             placeholder={t("auth.username", "שם משתמש")}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
           />
-          <input
+          <Input
             required
             dir="ltr"
             type="text"
             value={newOrg.admin_password}
             onChange={(e) => setNewOrg({ ...newOrg, admin_password: e.target.value })}
             placeholder={t("auth.password", "סיסמה")}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
           />
           <div className="sm:col-span-2">
-            <button
-              type="submit"
-              disabled={busy}
-              className="rounded-md bg-status-magenta text-white px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-            >
+            <Button type="submit" disabled={busy}>
               {t("admin.create_org", "צור ארגון")}
-            </button>
+            </Button>
           </div>
         </form>
       )}
 
       {/* Find a user by email/name across every organization. */}
-      <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
-        <input
+      <Card className="p-4 space-y-3">
+        <Input
           dir="ltr"
           value={userQuery}
           onChange={(e) => setUserQuery(e.target.value)}
           placeholder={t("admin.find_user", "חיפוש משתמש לפי אימייל או שם…")}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
         />
         {userQuery.trim() && (
           <div className="text-sm">
             {userMatches.length === 0 ? (
-              <p className="text-gray-400">{t("admin.no_user_matches", "לא נמצאו משתמשים.")}</p>
+              <p className="text-muted-foreground">{t("admin.no_user_matches", "לא נמצאו משתמשים.")}</p>
             ) : (
               <table className="w-full">
                 <tbody>
                   {userMatches.map((u) => (
-                    <tr key={u.id} className="border-b border-gray-100 last:border-0">
+                    <tr key={u.id} className="border-b border-border last:border-0">
                       <td className="py-2 pe-2">
                         <span className="font-medium">{u.full_name}</span>
-                        <span className="text-gray-500 ms-2" dir="ltr">
+                        <span className="text-muted-foreground ms-2" dir="ltr">
                           {u.email ?? u.username}
                         </span>
-                        <span className="text-gray-400 ms-2 text-xs">
+                        <span className="text-muted-foreground ms-2 text-xs">
                           {u.role} · {orgNameById(u.organization_id)}
                         </span>
                       </td>
@@ -337,42 +336,42 @@ export default function SystemAdminPage() {
             )}
           </div>
         )}
-      </div>
+      </Card>
 
       {orgs === null ? (
-        <p className="text-gray-400">{t("action.loading", "טוען…")}</p>
+        <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>
       ) : orgs.length === 0 ? (
-        <p className="text-gray-400">{t("admin.no_orgs", "אין ארגונים.")}</p>
+        <p className="text-muted-foreground">{t("admin.no_orgs", "אין ארגונים.")}</p>
       ) : (
         <div className="space-y-3">
           {orgs.map((org) => (
-            <div key={org.id} className="bg-white rounded-xl shadow-sm overflow-hidden">
+            <div key={org.id} className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
               <div className="flex flex-wrap items-center justify-between gap-3 p-4">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold">{org.name}</span>
                     {org.approval_status === "pending" ? (
-                      <span className="rounded bg-status-orange/10 text-status-orange px-2 py-0.5 text-xs">
+                      <Badge variant="warning">
                         {t("admin.pending", "ממתין לאישור")}
-                      </span>
+                      </Badge>
                     ) : org.is_active ? (
-                      <span className="rounded bg-status-green/10 text-status-green px-2 py-0.5 text-xs">
+                      <Badge variant="success">
                         {t("admin.active", "פעיל")}
-                      </span>
+                      </Badge>
                     ) : (
-                      <span className="rounded bg-status-darkred/10 text-status-darkred px-2 py-0.5 text-xs">
+                      <Badge variant="destructive">
                         {t("admin.disabled", "מושבת")}
-                      </span>
+                      </Badge>
                     )}
                   </div>
-                  <div className="text-xs text-gray-500 mt-0.5" dir="ltr">
+                  <div className="text-xs text-muted-foreground mt-0.5" dir="ltr">
                     {org.admin_email ?? "—"} · {org.user_count} {t("admin.users", "משתמשים")}
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <button
                     onClick={() => toggleUsers(org.id)}
-                    className="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50"
+                    className="rounded-md border border-input px-3 py-1 hover:bg-accent"
                   >
                     {expanded === org.id
                       ? t("admin.hide_users", "הסתר משתמשים")
@@ -390,7 +389,7 @@ export default function SystemAdminPage() {
                       <button
                         disabled={busy}
                         onClick={() => onRejectOrg(org)}
-                        className="rounded-md border border-status-darkred/30 text-status-darkred px-3 py-1 hover:bg-red-50 disabled:opacity-50"
+                        className="rounded-md border border-status-darkred/30 text-status-darkred px-3 py-1 hover:bg-status-darkred/10 disabled:opacity-50"
                       >
                         {t("admin.reject", "דחה")}
                       </button>
@@ -400,14 +399,14 @@ export default function SystemAdminPage() {
                       <button
                         disabled={busy}
                         onClick={() => onImpersonate(org)}
-                        className="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50 disabled:opacity-50"
+                        className="rounded-md border border-input px-3 py-1 hover:bg-accent disabled:opacity-50"
                       >
                         {t("admin.impersonate", "התחבר כארגון")}
                       </button>
                       <button
                         disabled={busy}
                         onClick={() => setOrgToClone(org)}
-                        className="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50 disabled:opacity-50"
+                        className="rounded-md border border-input px-3 py-1 hover:bg-accent disabled:opacity-50"
                       >
                         {t("admin.clone", "שכפל")}
                       </button>
@@ -420,7 +419,7 @@ export default function SystemAdminPage() {
                               await loadOrgs();
                             }, t("admin.org_disabled", "הארגון הושבת"))
                           }
-                          className="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50 disabled:opacity-50"
+                          className="rounded-md border border-input px-3 py-1 hover:bg-accent disabled:opacity-50"
                         >
                           {t("admin.deactivate", "השבת")}
                         </button>
@@ -433,7 +432,7 @@ export default function SystemAdminPage() {
                               await loadOrgs();
                             }, t("admin.org_enabled", "הארגון הופעל"))
                           }
-                          className="rounded-md border border-gray-300 px-3 py-1 hover:bg-gray-50 disabled:opacity-50"
+                          className="rounded-md border border-input px-3 py-1 hover:bg-accent disabled:opacity-50"
                         >
                           {t("admin.activate", "הפעל")}
                         </button>
@@ -441,7 +440,7 @@ export default function SystemAdminPage() {
                       <button
                         disabled={busy}
                         onClick={() => setOrgToDelete(org)}
-                        className="rounded-md border border-status-darkred/30 text-status-darkred px-3 py-1 hover:bg-red-50 disabled:opacity-50"
+                        className="rounded-md border border-status-darkred/30 text-status-darkred px-3 py-1 hover:bg-status-darkred/10 disabled:opacity-50"
                       >
                         {t("action.delete", "מחק")}
                       </button>
@@ -451,22 +450,22 @@ export default function SystemAdminPage() {
               </div>
 
               {expanded === org.id && (
-                <div className="border-t border-gray-100 bg-gray-50/60 p-4">
+                <div className="border-t border-border bg-background/60 p-4">
                   {!orgUsers[org.id] ? (
-                    <p className="text-sm text-gray-400">{t("action.loading", "טוען…")}</p>
+                    <p className="text-sm text-muted-foreground">{t("action.loading", "טוען…")}</p>
                   ) : orgUsers[org.id].length === 0 ? (
-                    <p className="text-sm text-gray-400">{t("admin.no_users", "אין משתמשים.")}</p>
+                    <p className="text-sm text-muted-foreground">{t("admin.no_users", "אין משתמשים.")}</p>
                   ) : (
                     <table className="w-full text-sm">
                       <tbody>
                         {orgUsers[org.id].map((u) => (
-                          <tr key={u.id} className="border-b border-gray-100 last:border-0">
+                          <tr key={u.id} className="border-b border-border last:border-0">
                             <td className="py-2 pe-2">
                               <span className="font-medium">{u.full_name}</span>
-                              <span className="text-gray-500 ms-2" dir="ltr">
+                              <span className="text-muted-foreground ms-2" dir="ltr">
                                 {u.email ?? u.username}
                               </span>
-                              <span className="text-gray-400 ms-2 text-xs">{u.role}</span>
+                              <span className="text-muted-foreground ms-2 text-xs">{u.role}</span>
                               {!u.email_verified && (
                                 <span className="ms-2 rounded bg-status-orange/10 text-status-orange px-1.5 py-0.5 text-xs">
                                   {t("admin.unverified", "לא מאומת")}
@@ -502,7 +501,7 @@ export default function SystemAdminPage() {
                                       await refreshUsers(org.id);
                                     }, t("admin.user_disabled", "המשתמש הושבת"))
                                   }
-                                  className="text-gray-600 hover:underline me-3 disabled:opacity-50"
+                                  className="text-muted-foreground hover:underline me-3 disabled:opacity-50"
                                 >
                                   {t("admin.deactivate", "השבת")}
                                 </button>
@@ -515,7 +514,7 @@ export default function SystemAdminPage() {
                                       await refreshUsers(org.id);
                                     }, t("admin.user_enabled", "המשתמש הופעל"))
                                   }
-                                  className="text-gray-600 hover:underline me-3 disabled:opacity-50"
+                                  className="text-muted-foreground hover:underline me-3 disabled:opacity-50"
                                 >
                                   {t("admin.activate", "הפעל")}
                                 </button>
@@ -624,7 +623,7 @@ function DeleteUserModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md bg-white rounded-xl shadow-xl p-5 space-y-4">
+      <div className="w-full max-w-md bg-card rounded-xl shadow-xl p-5 space-y-4">
         <h2 className="text-lg font-bold text-status-darkred">
           {t("admin.delete_user_title", "מחיקת משתמש")}
         </h2>
@@ -634,18 +633,18 @@ function DeleteUserModal({
 
         {/* fixes15 §2.2: the connected-data report. */}
         {deps === null && !failed ? (
-          <p className="text-sm text-gray-400">{t("action.loading", "טוען…")}</p>
+          <p className="text-sm text-muted-foreground">{t("action.loading", "טוען…")}</p>
         ) : deps?.has_dependencies ? (
           <div className="space-y-1.5">
-            <p className="text-sm text-gray-700">
+            <p className="text-sm text-foreground">
               {t("admin.deps_intro", "למשתמש זה קיימים נתונים מקושרים במערכת:")}
             </p>
-            <ul className="list-disc ps-5 text-sm text-gray-700 space-y-0.5">
+            <ul className="list-disc ps-5 text-sm text-foreground space-y-0.5">
               {ties.map((line) => (
                 <li key={line}>{line}</li>
               ))}
             </ul>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted-foreground">
               {t(
                 "admin.deps_note",
                 "בעת המחיקה השיוכים יוסרו והנתונים יישארו ללא משתמש מקושר.",
@@ -653,27 +652,19 @@ function DeleteUserModal({
             </p>
           </div>
         ) : (
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             {t("admin.deps_none", "אין נתונים מקושרים למשתמש זה.")}
           </p>
         )}
 
         <p className="text-sm font-semibold">{t("admin.confirm_sure", "בטוח ?")}</p>
         <div className="flex items-center gap-2 pt-1">
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="rounded-md bg-status-darkred text-white px-4 py-2 text-sm font-medium hover:opacity-90"
-          >
+          <Button type="button" className="bg-status-darkred hover:bg-status-darkred/90" onClick={onConfirm}>
             {t("action.delete", "מחק")}
-          </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
-          >
+          </Button>
+          <Button type="button" variant="outline" onClick={onCancel}>
             {t("action.cancel", "ביטול")}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -704,9 +695,9 @@ function CloneOrgModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md bg-white rounded-xl shadow-xl p-5 space-y-4">
+      <div className="w-full max-w-md bg-card rounded-xl shadow-xl p-5 space-y-4">
         <h2 className="text-lg font-bold">{t("admin.clone_org_title", "שכפול ארגון")}</h2>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-muted-foreground">
           {t(
             "admin.clone_org_intro",
             "יוצר ארגון חדש עם עותק מלא של כל הנתונים — אנשי קשר, ביקורים, דירות, בניינים, רשימות בחירה ועוד. הארגון המקורי לא ישתנה.",
@@ -719,61 +710,48 @@ function CloneOrgModal({
           }}
           className="space-y-3"
         >
-          <input
+          <Input
             required
             value={form.organization_name}
             onChange={(e) => setForm({ ...form, organization_name: e.target.value })}
             placeholder={t("signup.org_name", "שם הארגון")}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
           />
-          <input
+          <Input
             required
             value={form.admin_full_name}
             onChange={(e) => setForm({ ...form, admin_full_name: e.target.value })}
             placeholder={t("admin.admin_name", "שם המנהל")}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
           />
-          <input
+          <Input
             required
             dir="ltr"
             type="email"
             value={form.admin_email}
             onChange={(e) => setForm({ ...form, admin_email: e.target.value })}
             placeholder={t("contacts.email", "אימייל")}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
           />
-          <input
+          <Input
             required
             dir="ltr"
             value={form.admin_username}
             onChange={(e) => setForm({ ...form, admin_username: e.target.value })}
             placeholder={t("auth.username", "שם משתמש")}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
           />
-          <input
+          <Input
             required
             dir="ltr"
             type="text"
             value={form.admin_password}
             onChange={(e) => setForm({ ...form, admin_password: e.target.value })}
             placeholder={t("auth.password", "סיסמה")}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
           />
           <div className="flex items-center gap-2 pt-1">
-            <button
-              type="submit"
-              disabled={busy}
-              className="rounded-md bg-status-magenta text-white px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-            >
+            <Button type="submit" disabled={busy}>
               {t("admin.clone_org_confirm", "שכפל ארגון")}
-            </button>
-            <button
-              type="button"
-              onClick={onCancel}
-              className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
-            >
+            </Button>
+            <Button type="button" variant="outline" onClick={onCancel}>
               {t("action.cancel", "ביטול")}
-            </button>
+            </Button>
           </div>
         </form>
       </div>
@@ -799,11 +777,11 @@ function DeleteOrgModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md bg-white rounded-xl shadow-xl p-5 space-y-4">
+      <div className="w-full max-w-md bg-card rounded-xl shadow-xl p-5 space-y-4">
         <h2 className="text-lg font-bold text-status-darkred">
           {t("admin.delete_org_title", "מחיקת ארגון")}
         </h2>
-        <p className="text-sm text-gray-700">
+        <p className="text-sm text-foreground">
           {t(
             "admin.delete_org_warning",
             "האם אתה בטוח שברצונך למחוק את הארגון וכל הנתונים שלו? פעולה זו אינה הפיכה.",
@@ -811,35 +789,31 @@ function DeleteOrgModal({
         </p>
         <p className="text-sm font-medium">{org.name}</p>
         <label className="block space-y-1">
-          <span className="block text-xs text-gray-500">
+          <span className="block text-xs text-muted-foreground">
             {t(
               "admin.delete_org_type_to_confirm",
               "לאישור, הקלד את שם הארגון במדויק (או DELETE):",
             )}
           </span>
-          <input
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-darkred focus:outline-none focus:ring-1 focus:ring-status-darkred"
+          <Input
+            className="focus-visible:ring-status-darkred"
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             autoFocus
           />
         </label>
         <div className="flex items-center gap-2 pt-1">
-          <button
+          <Button
             type="button"
             disabled={!armed}
+            className="bg-status-darkred hover:bg-status-darkred/90"
             onClick={onConfirm}
-            className="rounded-md bg-status-darkred text-white px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {t("admin.delete_org_confirm", "מחק לצמיתות")}
-          </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
-          >
+          </Button>
+          <Button type="button" variant="outline" onClick={onCancel}>
             {t("action.cancel", "ביטול")}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

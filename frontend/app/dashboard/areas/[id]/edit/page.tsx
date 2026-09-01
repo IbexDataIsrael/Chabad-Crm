@@ -1,17 +1,21 @@
 "use client";
 
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { AreaPolygonMap } from "@/components/AreaPolygonMap";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import type { Area } from "@/lib/types";
 
 const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 export default function EditAreaPage() {
   const { isAdmin, loading } = useAuth();
@@ -69,7 +73,7 @@ export default function EditAreaPage() {
     }
   }
 
-  if (loading || !loaded) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading || !loaded) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
 
   return (
     <div className="space-y-5 max-w-3xl">
@@ -77,52 +81,47 @@ export default function EditAreaPage() {
         <h1 className="text-2xl font-bold">{t("page.edit_area", "עריכת אזור")}</h1>
         <Link
           href="/dashboard/areas"
-          className="text-sm text-status-magenta hover:underline"
+          className="flex items-center gap-1 text-sm text-primary hover:underline"
         >
-          {t("page.back_to_areas", "← חזרה לאזורים")}
+          {t("page.back_to_areas", "חזרה לאזורים")} <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
 
-      <form onSubmit={save} className="bg-white rounded-xl shadow-sm p-4 space-y-3">
-        <label className="block space-y-1">
-          <span className="block text-sm font-medium">{t("areas.area_name", "כותרת")}</span>
+      <Card className="p-4">
+        <form onSubmit={save} className="space-y-3">
+        <div className="space-y-1">
+          <Label>{t("areas.area_name", "כותרת")}</Label>
           <input
             className={inputClass}
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
           />
-        </label>
-        <label className="block space-y-1">
-          <span className="block text-sm font-medium">{t("areas.area_notes", "הערות")}</span>
+        </div>
+        <div className="space-y-1">
+          <Label>{t("areas.area_notes", "הערות")}</Label>
           <textarea
             className={inputClass}
             rows={2}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
-        </label>
+        </div>
         <div className="space-y-1">
-          <span className="block text-sm font-medium">{t("areas.area_polygon", "תחום פוליגון")}</span>
+          <Label>{t("areas.area_polygon", "תחום פוליגון")}</Label>
           <AreaPolygonMap value={polygon} onChange={setPolygon} />
         </div>
-        {error && <p className="text-sm text-status-darkred">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <div className="flex items-center gap-2">
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-          >
+          <Button type="submit" disabled={busy}>
             {busy ? t("action.saving", "שומר…") : t("action.save", "שמור")}
-          </button>
-          <Link
-            href="/dashboard/areas"
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
-          >
-            {t("action.cancel", "ביטול")}
-          </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/dashboard/areas">{t("action.cancel", "ביטול")}</Link>
+          </Button>
         </div>
-      </form>
+        </form>
+      </Card>
     </div>
   );
 }

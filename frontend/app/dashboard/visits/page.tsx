@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { Eye, Pencil, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { VisitDetails } from "@/components/VisitDetails";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
@@ -66,7 +69,7 @@ export default function VisitsPage() {
     .replace("{to}", String(Math.min(safePage * pageSize, shown.length)))
     .replace("{total}", String(shown.length));
 
-  if (loading) return <p className="text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!isAdmin) {
     return (
       <p className="text-status-darkred">
@@ -81,28 +84,22 @@ export default function VisitsPage() {
         <h1 className="text-2xl font-bold">{t("page.visits", "ביקורים")}</h1>
         <div className="flex items-center gap-2">
           {/* fixes29 §1: show/hide the search/paging filter row below. */}
-          <button
-            type="button"
-            onClick={() => setFiltersOpen((v) => !v)}
-            className="rounded-md border border-gray-300 text-gray-600 px-4 py-1.5 text-sm font-medium hover:bg-gray-50"
-          >
-            {filtersOpen
-              ? `▴ ${t("filter.hide_filters", "הסתר סינון")}`
-              : `▾ ${t("filter.show_filters", "הצג סינון")}`}
-          </button>
-          <Link
-            href="/dashboard/visits/add"
-            className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
-          >
-            {t("visit.add", "הוסף ביקור")}
-          </Link>
+          <Button type="button" variant="outline" size="sm" onClick={() => setFiltersOpen((v) => !v)}>
+            <SlidersHorizontal className="h-4 w-4" />
+            {filtersOpen ? t("filter.hide_filters", "הסתר סינון") : t("filter.show_filters", "הצג סינון")}
+          </Button>
+          <Button asChild size="sm">
+            <Link href="/dashboard/visits/add">
+              <Plus className="h-4 w-4" /> {t("visit.add", "הוסף ביקור")}
+            </Link>
+          </Button>
         </div>
       </div>
 
       {filtersOpen && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <input
-            className="w-full max-w-sm rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
+          <Input
+            className="w-full max-w-sm"
             placeholder={t("visit.search_ph", "חיפוש לפי איש קשר או הערות…")}
             value={query}
             onChange={(e) => {
@@ -110,10 +107,10 @@ export default function VisitsPage() {
               setPage(1);
             }}
           />
-          <span className="ms-auto flex items-center gap-2 text-gray-500">
+          <span className="ms-auto flex items-center gap-2 text-muted-foreground">
             {t("pager.page_size", "בעמוד:")}
             <select
-              className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+              className="rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
               value={pageSize}
               onChange={(e) => {
                 setPageSize(Number(e.target.value));
@@ -130,9 +127,9 @@ export default function VisitsPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+      <div className="bg-card rounded-xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm min-w-[720px]">
-          <thead className="bg-gray-50 text-gray-600 text-xs">
+          <thead className="bg-background text-muted-foreground text-xs">
             <tr>
               <th className="px-3 py-2 text-start font-medium">{t("visit.contact", "איש קשר")}</th>
               <th className="px-3 py-2 text-start font-medium">{t("visit.date", "תאריך")}</th>
@@ -145,14 +142,14 @@ export default function VisitsPage() {
           <tbody>
             {!loaded ? null : shown.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-gray-400">
+                <td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">
                   {t("visit.none", "אין ביקורים עדיין.")}
                 </td>
               </tr>
             ) : (
               visible.map((v) =>
                 expanded?.id === v.id ? (
-                  <tr key={v.id} className="border-t border-gray-100">
+                  <tr key={v.id} className="border-t border-border">
                     <td colSpan={6} className="p-3">
                       <VisitDetails
                         visit={v}
@@ -169,7 +166,7 @@ export default function VisitsPage() {
                     </td>
                   </tr>
                 ) : (
-                  <tr key={v.id} className="border-t border-gray-100">
+                  <tr key={v.id} className="border-t border-border">
                     <td className="px-3 py-2">
                       {v.contact_id ? (
                         <Link
@@ -179,7 +176,7 @@ export default function VisitsPage() {
                           {v.contact_name}
                         </Link>
                       ) : (
-                        <span className="text-gray-400">—</span>
+                        <span className="text-muted-foreground">—</span>
                       )}
                     </td>
                     <td className="px-3 py-2" dir="ltr">
@@ -189,24 +186,36 @@ export default function VisitsPage() {
                     <td className="px-3 py-2">{v.location}</td>
                     <td className="px-3 py-2">{v.notes}</td>
                     <td className="px-3 py-2 text-end whitespace-nowrap">
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title={t("action.view", "הצג")}
+                        aria-label={t("action.view", "הצג")}
+                        className="h-8 w-8 text-primary hover:text-primary"
                         onClick={() => setExpanded({ id: v.id, mode: "view" })}
-                        className="text-sm text-status-magenta hover:underline me-2"
                       >
-                        {t("action.view", "הצג")}
-                      </button>
-                      <button
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title={t("action.edit", "ערוך")}
+                        aria-label={t("action.edit", "ערוך")}
+                        className="h-8 w-8 text-primary hover:text-primary"
                         onClick={() => setExpanded({ id: v.id, mode: "edit" })}
-                        className="text-sm text-status-magenta hover:underline me-2"
                       >
-                        {t("action.edit", "ערוך")}
-                      </button>
-                      <button
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title={t("action.delete", "מחק")}
+                        aria-label={t("action.delete", "מחק")}
+                        className="h-8 w-8 text-destructive hover:text-destructive"
                         onClick={() => remove(v.id)}
-                        className="text-sm text-status-darkred hover:underline"
                       >
-                        {t("action.delete", "מחק")}
-                      </button>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </td>
                   </tr>
                 ),
@@ -218,23 +227,25 @@ export default function VisitsPage() {
 
       {loaded && shown.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             disabled={safePage <= 1}
             onClick={() => setPage(safePage - 1)}
-            className="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {t("pager.prev", "→ הקודם")}
-          </button>
-          <span className="text-gray-500">{rangeText}</span>
-          <button
+          </Button>
+          <span className="text-muted-foreground">{rangeText}</span>
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             disabled={safePage >= lastPage}
             onClick={() => setPage(safePage + 1)}
-            className="rounded-md border border-gray-300 px-3 py-1.5 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {t("pager.next", "הבא ←")}
-          </button>
+          </Button>
         </div>
       )}
     </div>

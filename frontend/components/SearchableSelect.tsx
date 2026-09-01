@@ -99,22 +99,22 @@ export function SearchableSelect<Id extends number | string>({
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className={`w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-start focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta disabled:bg-gray-50 disabled:text-gray-400 ${
-          selected ? "text-gray-900" : "text-gray-500"
+        className={`w-full rounded-md border border-input px-3 py-2 text-sm text-start focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta disabled:bg-background disabled:text-muted-foreground ${
+          selected ? "text-foreground" : "text-muted-foreground"
         }`}
       >
         <span className="flex items-center justify-between gap-2">
           <span className="truncate">{selected ? selected.label : placeholder}</span>
-          <span className="text-xs text-gray-400">▾</span>
+          <span className="text-xs text-muted-foreground">▾</span>
         </span>
       </button>
 
       {open && (
-        <div className="absolute z-30 mt-1 w-full min-w-[12rem] rounded-md border border-gray-200 bg-white shadow-lg text-sm">
-          <div className="p-2 border-b border-gray-100">
+        <div className="absolute z-30 mt-1 w-full min-w-[12rem] rounded-xl border border-border bg-card shadow-lg text-sm">
+          <div className="p-2 border-b border-border">
             <input
               ref={searchRef}
-              className="w-full rounded-md border border-gray-300 px-2 py-1.5 focus:border-status-magenta focus:outline-none"
+              className="w-full rounded-md border border-input px-2 py-1.5 focus:border-status-magenta focus:outline-none"
               placeholder={t("select.search_ph", "הקלד לחיפוש…")}
               value={query}
               onChange={(e) => {
@@ -130,14 +130,14 @@ export function SearchableSelect<Id extends number | string>({
                 <button
                   type="button"
                   onClick={() => pick(null)}
-                  className="w-full text-start rounded px-2 py-1.5 text-gray-500 hover:bg-gray-50"
+                  className="w-full text-start rounded px-2 py-1.5 text-muted-foreground hover:bg-accent"
                 >
                   {emptyLabel ?? placeholder}
                 </button>
               </li>
             )}
             {filtered.length === 0 ? (
-              <li className="px-2 py-1.5 text-gray-400">
+              <li className="px-2 py-1.5 text-muted-foreground">
                 {t("select.no_matches", "אין תוצאות")}
               </li>
             ) : (
@@ -153,8 +153,8 @@ export function SearchableSelect<Id extends number | string>({
                       o.id === value
                         ? "bg-status-magenta/10 text-status-magenta font-medium"
                         : i === active
-                          ? "bg-gray-100 text-gray-800"
-                          : "text-gray-700 hover:bg-gray-50"
+                          ? "bg-muted text-foreground"
+                          : "text-foreground hover:bg-accent"
                     }`}
                   >
                     {o.label}

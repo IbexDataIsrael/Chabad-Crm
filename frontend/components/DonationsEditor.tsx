@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/lib/api";
@@ -9,9 +10,12 @@ import { contactFullName, type Contact, type Donation } from "@/lib/types";
 import { useConfirm } from "@/lib/confirm";
 import { DatePicker } from "./DatePicker";
 import { SearchableSelect } from "./SearchableSelect";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 
 const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 /**
  * Donation history (admin). With `contactId` it's the per-contact section (contact
@@ -53,13 +57,13 @@ export function DonationsEditor({ contactId }: { contactId?: number }) {
   const editingDonation =
     editing && editing.id != null ? donations.find((d) => d.id === editing.id) : undefined;
 
-  if (loading) return <p className="text-sm text-gray-400">{t("action.loading", "טוען…")}</p>;
+  if (loading) return <p className="text-sm text-muted-foreground">{t("action.loading", "טוען…")}</p>;
 
   return (
     <div className="space-y-3">
-      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+      <div className="bg-card rounded-xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm min-w-[640px]">
-          <thead className="bg-gray-50 text-gray-600 text-xs">
+          <thead className="bg-background text-muted-foreground text-xs">
             <tr>
               {!contactId && (
                 <th className="px-3 py-2 text-start font-medium">{t("donation.contact", "איש קשר")}</th>
@@ -75,13 +79,13 @@ export function DonationsEditor({ contactId }: { contactId?: number }) {
           <tbody>
             {donations.length === 0 ? (
               <tr>
-                <td colSpan={contactId ? 6 : 7} className="px-3 py-6 text-center text-gray-400">
+                <td colSpan={contactId ? 6 : 7} className="px-3 py-6 text-center text-muted-foreground">
                   {t("donation.none", "אין תרומות עדיין.")}
                 </td>
               </tr>
             ) : (
               donations.map((d) => (
-                <tr key={d.id} className="border-t border-gray-100">
+                <tr key={d.id} className="border-t border-border">
                   {!contactId && (
                     <td className="px-3 py-2">
                       {d.contact_id ? (
@@ -92,7 +96,7 @@ export function DonationsEditor({ contactId }: { contactId?: number }) {
                           {d.contact_name}
                         </Link>
                       ) : (
-                        <span className="text-gray-400">—</span>
+                        <span className="text-muted-foreground">—</span>
                       )}
                     </td>
                   )}
@@ -104,18 +108,26 @@ export function DonationsEditor({ contactId }: { contactId?: number }) {
                   <td className="px-3 py-2" dir="ltr">{d.number_of_payments ?? ""}</td>
                   <td className="px-3 py-2">{d.notes}</td>
                   <td className="px-3 py-2 text-end whitespace-nowrap">
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title={t("action.edit", "ערוך")}
+                      aria-label={t("action.edit", "ערוך")}
+                      className="h-8 w-8 text-primary hover:text-primary"
                       onClick={() => setEditing({ id: d.id })}
-                      className="text-sm text-status-magenta hover:underline me-2"
                     >
-                      {t("action.edit", "ערוך")}
-                    </button>
-                    <button
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title={t("action.delete", "מחק")}
+                      aria-label={t("action.delete", "מחק")}
+                      className="h-8 w-8 text-destructive hover:text-destructive"
                       onClick={() => remove(d.id)}
-                      className="text-sm text-status-darkred hover:underline"
                     >
-                      {t("action.delete", "מחק")}
-                    </button>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </td>
                 </tr>
               ))
@@ -148,13 +160,9 @@ export function DonationsEditor({ contactId }: { contactId?: number }) {
           }}
         />
       ) : (
-        <button
-          type="button"
-          onClick={() => setEditing({ id: null })}
-          className="text-sm text-status-magenta hover:underline"
-        >
-          + {t("donation.add", "הוסף תרומה")}
-        </button>
+        <Button type="button" variant="outline" size="sm" onClick={() => setEditing({ id: null })}>
+          <Plus className="h-4 w-4" /> {t("donation.add", "הוסף תרומה")}
+        </Button>
       )}
     </div>
   );
@@ -211,65 +219,48 @@ function DonationForm({
   }
 
   return (
-    <div className="rounded-md border border-gray-200 p-3 space-y-3">
+    <div className="rounded-md border border-border p-3 space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {lockedContactId === undefined && (
-          <label className="block space-y-1">
-            <span className="block text-sm font-medium">{t("donation.contact", "איש קשר")}</span>
+          <div className="space-y-1">
+            <Label>{t("donation.contact", "איש קשר")}</Label>
             <SearchableSelect
               value={contactSel === "" ? null : contactSel}
               onChange={(id) => setContactSel(id ?? "")}
               options={contacts.map((c) => ({ id: c.id, label: contactFullName(c) }))}
               placeholder={t("donation.no_contact", "ללא איש קשר")}
             />
-          </label>
+          </div>
         )}
-        <label className="block space-y-1">
-          <span className="block text-sm font-medium">{t("donation.date", "תאריך")}</span>
+        <div className="space-y-1">
+          <Label>{t("donation.date", "תאריך")}</Label>
           <DatePicker value={date} onChange={setDate} className={inputClass} />
-        </label>
-        <label className="block space-y-1">
-          <span className="block text-sm font-medium">{t("donation.amount", "סכום")}</span>
-          <input
-            type="number"
-            dir="ltr"
-            className={inputClass}
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-        </label>
-        <label className="block space-y-1">
-          <span className="block text-sm font-medium">{t("donation.payments", "מספר תשלומים")}</span>
-          <input
-            type="number"
-            dir="ltr"
-            className={inputClass}
-            value={payments}
-            onChange={(e) => setPayments(e.target.value)}
-          />
-        </label>
+        </div>
+        <div className="space-y-1">
+          <Label>{t("donation.amount", "סכום")}</Label>
+          <Input type="number" dir="ltr" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label>{t("donation.payments", "מספר תשלומים")}</Label>
+          <Input type="number" dir="ltr" value={payments} onChange={(e) => setPayments(e.target.value)} />
+        </div>
         <label className="flex items-center gap-2 text-sm sm:col-span-2">
           <input type="checkbox" checked={ongoing} onChange={(e) => setOngoing(e.target.checked)} />
           {t("donation.ongoing", "האם הוראת קבע")}
         </label>
-        <label className="block space-y-1 sm:col-span-2">
-          <span className="block text-sm font-medium">{t("donation.notes", "הערות")}</span>
-          <input className={inputClass} value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </label>
+        <div className="space-y-1 sm:col-span-2">
+          <Label>{t("donation.notes", "הערות")}</Label>
+          <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </div>
       </div>
-      {error && <p className="text-sm text-status-darkred">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={save}
-          disabled={busy}
-          className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-        >
+        <Button type="button" onClick={save} disabled={busy}>
           {busy ? t("action.saving", "שומר…") : t("action.save", "שמור")}
-        </button>
-        <button type="button" onClick={onCancel} className="text-sm text-gray-500 hover:underline">
+        </Button>
+        <Button type="button" variant="ghost" onClick={onCancel}>
           {t("action.cancel", "ביטול")}
-        </button>
+        </Button>
       </div>
     </div>
   );

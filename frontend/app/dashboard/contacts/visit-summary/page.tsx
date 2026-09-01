@@ -1,6 +1,7 @@
 "use client";
 
 import { VisitSummary } from "@/components/VisitSummary";
+import { Card } from "@/components/ui/card";
 import { useLocalization } from "@/lib/localization";
 
 /** fixes38 §1.2: "Summary of Visits" report — a standalone page under the
@@ -11,9 +12,9 @@ export default function VisitSummaryPage() {
   return (
     <div className="space-y-4 max-w-4xl">
       <h1 className="text-2xl font-bold">{t("nav.visit_summary", "סיכום ביקורים")}</h1>
-      <div className="bg-white rounded-xl shadow-sm p-5">
+      <Card className="p-5">
         <VisitSummary />
-      </div>
+      </Card>
     </div>
   );
 }

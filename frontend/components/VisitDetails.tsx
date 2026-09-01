@@ -18,16 +18,18 @@ import { CustomFieldValueDisplay, CustomFieldValueInput } from "./CustomFieldVal
 import { DatePicker } from "./DatePicker";
 import { PicklistSelect } from "./PicklistSelect";
 import { InteractionsFields } from "./VisitForm";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 import { InlineEdit } from "./ui/InlineEdit";
 
 const inputClass =
-  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
 
 // fixes50 §2.1: same label pill as ContactView.tsx — this card renders
 // inline on the contact page's "visits" segment, so it should match.
 // Background/text color are inline styles (see ContactView.tsx's dtStyle
-// comment) — a production report showed the Tailwind bg-gray-100/
-// text-gray-500 classes only taking effect on hover.
+// comment) — a production report showed the Tailwind bg-muted/
+// text-muted-foreground classes only taking effect on hover.
 const dtClass = "inline-block w-fit rounded px-1.5 py-0.5 text-xs font-medium";
 const dtStyle: CSSProperties = { backgroundColor: "#f4f4f5", color: "#71717a" };
 
@@ -156,11 +158,7 @@ export function VisitDetails({
               onChange={(e) => setDraft(e.target.value)}
             />
           ) : (
-            <input
-              className={inputClass}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-            />
+            <Input value={draft} onChange={(e) => setDraft(e.target.value)} />
           )
         }
       />
@@ -216,7 +214,7 @@ export function VisitDetails({
   );
 
   return (
-    <div className="rounded-md border border-gray-200 p-3 space-y-4">
+    <div className="rounded-md border border-border p-3 space-y-4">
       <div className="flex items-start justify-between gap-3">
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 flex-1">
           {visit.contact_name && (
@@ -246,13 +244,9 @@ export function VisitDetails({
             <dd className="text-sm">{inlineText("notes")}</dd>
           </div>
         </dl>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-sm text-gray-500 hover:underline shrink-0"
-        >
+        <Button type="button" variant="ghost" size="sm" onClick={onClose} className="shrink-0">
           {t("action.close", "סגור")}
-        </button>
+        </Button>
       </div>
 
       {/* fixes25 §4: Mivtzoim flags logged on the visit. fixes27 §2/§4: the
@@ -266,7 +260,7 @@ export function VisitDetails({
         customFields.length > 0 ||
         visitCustomFieldDefs.length > 0 ||
         visitPicklistDefs.length > 0) && (
-        <section className="space-y-2 border-t border-gray-100 pt-3">
+        <section className="space-y-2 border-t border-border pt-3">
           <h4 className="text-sm font-semibold">{t("visits.mivtzoim", "מבצעים")}</h4>
           {showTorah && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -294,7 +288,7 @@ export function VisitDetails({
                     <li key={it.definition_id} className="flex items-center gap-2 text-sm">
                       <span>{it.checked ? "✓" : "—"}</span>
                       <span>{it.hebrew_label}</span>
-                      {it.note && <span className="text-gray-500">— {it.note}</span>}
+                      {it.note && <span className="text-muted-foreground">— {it.note}</span>}
                     </li>
                   ))}
                 </ul>
