@@ -103,7 +103,7 @@ export function Sidebar({
         )}
       >
         <div className="flex select-none items-center justify-between border-b border-sidebar-border p-4">
-          <Link href="/dashboard" className="flex items-center gap-2.5 overflow-hidden" onClick={onClose}>
+          <Link href="/dashboard" className="flex min-w-0 flex-1 items-center gap-2.5" onClick={onClose}>
             {logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -116,10 +116,10 @@ export function Sidebar({
                 🏢
               </span>
             )}
-            <span className="truncate text-sm font-bold leading-tight text-sidebar-foreground">
+            <span className="min-w-0 flex-1 truncate text-sm font-bold leading-tight text-sidebar-foreground">
               {orgName}
               {shliachSuffix && (
-                <span className="block text-xs font-medium text-muted-foreground">
+                <span className="block truncate text-xs font-medium text-muted-foreground">
                   {shliachSuffix}
                 </span>
               )}
