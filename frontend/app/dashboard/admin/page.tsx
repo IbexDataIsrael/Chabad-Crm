@@ -12,10 +12,12 @@ import {
   adminDeactivateUser,
   adminDeleteOrg,
   adminDeleteUser,
+  adminGetOrgPrefs,
   adminImpersonateOrg,
   adminListOrgUsers,
   adminListOrganizations,
   adminListUsers,
+  adminUpdateOrgPrefs,
   adminUserDependencies,
   adminVerifyUser,
   setToken,
@@ -23,6 +25,8 @@ import {
   type AdminOrganization,
   type AdminUser,
   type AdminUserDependencies,
+  type OrgPrefs,
+  type OrgPrefsUpdate,
 } from "@/lib/api";
 import { Plus } from "lucide-react";
 
@@ -46,6 +50,11 @@ export default function SystemAdminPage() {
   const [orgs, setOrgs] = useState<AdminOrganization[] | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [orgUsers, setOrgUsers] = useState<Record<number, AdminUser[]>>({});
+  // fixes54 §8: per-org feature toggles — loaded lazily, same "expand ->
+  // fetch once" pattern as orgUsers above.
+  const [featuresExpanded, setFeaturesExpanded] = useState<number | null>(null);
+  const [orgPrefs, setOrgPrefs] = useState<Record<number, OrgPrefs>>({});
+  const [prefsBusy, setPrefsBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [allUsers, setAllUsers] = useState<AdminUser[]>([]);
   const [userQuery, setUserQuery] = useState("");
@@ -119,6 +128,37 @@ export default function SystemAdminPage() {
       setOrgUsers((prev) => ({ ...prev, [orgId]: users }));
     } catch {
       /* ignore */
+    }
+  }
+
+  // fixes54 §8: expand/collapse the feature-toggles panel, loading its
+  // current state once per org (same lazy-load pattern as toggleUsers).
+  async function toggleFeatures(orgId: number) {
+    if (featuresExpanded === orgId) {
+      setFeaturesExpanded(null);
+      return;
+    }
+    setFeaturesExpanded(orgId);
+    if (!orgPrefs[orgId]) {
+      try {
+        const prefs = await adminGetOrgPrefs(orgId);
+        setOrgPrefs((prev) => ({ ...prev, [orgId]: prefs }));
+      } catch (e) {
+        error(e instanceof Error ? e.message : "Failed to load feature toggles");
+      }
+    }
+  }
+
+  async function updateOrgPref(orgId: number, updates: OrgPrefsUpdate) {
+    setPrefsBusy(true);
+    try {
+      const prefs = await adminUpdateOrgPrefs(orgId, updates);
+      setOrgPrefs((prev) => ({ ...prev, [orgId]: prefs }));
+      success(t("msg.saved", "נשמר בהצלחה"));
+    } catch (e) {
+      error(e instanceof Error ? e.message : "Failed to update feature toggles");
+    } finally {
+      setPrefsBusy(false);
     }
   }
 
@@ -377,6 +417,15 @@ export default function SystemAdminPage() {
                       ? t("admin.hide_users", "הסתר משתמשים")
                       : t("admin.manage_users", "משתמשים")}
                   </button>
+                  {/* fixes54 §8: per-org feature toggles. */}
+                  <button
+                    onClick={() => toggleFeatures(org.id)}
+                    className="rounded-md border border-input px-3 py-1 hover:bg-accent"
+                  >
+                    {featuresExpanded === org.id
+                      ? t("admin.hide_features", "הסתר תכונות")
+                      : t("admin.manage_features", "תכונות")}
+                  </button>
                   {org.approval_status === "pending" ? (
                     <>
                       <button
@@ -531,6 +580,22 @@ export default function SystemAdminPage() {
                         ))}
                       </tbody>
                     </table>
+                  )}
+                </div>
+              )}
+
+              {/* fixes54 §8: cascading module toggles (Area -> Building ->
+                  Apartment -> Activist) + the standalone AI query toggle. */}
+              {featuresExpanded === org.id && (
+                <div className="border-t border-border bg-background/60 p-4">
+                  {!orgPrefs[org.id] ? (
+                    <p className="text-sm text-muted-foreground">{t("action.loading", "טוען…")}</p>
+                  ) : (
+                    <OrgFeatureToggles
+                      prefs={orgPrefs[org.id]}
+                      busy={prefsBusy}
+                      onChange={(updates) => updateOrgPref(org.id, updates)}
+                    />
                   )}
                 </div>
               )}
@@ -815,6 +880,78 @@ function DeleteOrgModal({
             {t("action.cancel", "ביטול")}
           </Button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** fixes54 §8: one org's feature toggles — Area/Building/Apartment/Activist
+ *  cascade (each forced off when its parent is off, regardless of its own
+ *  stored value) plus the standalone AI query switch. Each checkbox reflects
+ *  the *raw* stored value (so a superadmin can pre-configure a child while
+ *  its parent is off, ready for when the parent turns back on) — a small
+ *  note explains when `effective` disagrees with `raw` because of a
+ *  disabled ancestor. */
+function OrgFeatureToggles({
+  prefs,
+  busy,
+  onChange,
+}: {
+  prefs: OrgPrefs;
+  busy: boolean;
+  onChange: (updates: OrgPrefsUpdate) => void;
+}) {
+  const { t } = useLocalization();
+
+  const cascadeRows: { key: keyof OrgPrefsUpdate; label: string }[] = [
+    { key: "area_display_enabled", label: t("admin.feature_area_display", "תצוגת אזורים") },
+    { key: "building_display_enabled", label: t("admin.feature_building_display", "תצוגת בניינים") },
+    { key: "apartment_display_enabled", label: t("admin.feature_apartment_display", "תצוגת דירות") },
+    { key: "activist_system_enabled", label: t("admin.feature_activist_system", "מערכת פעילים") },
+  ];
+
+  return (
+    <div className="space-y-3 max-w-md">
+      <div>
+        <p className="text-xs font-medium text-muted-foreground mb-1.5">
+          {t("admin.feature_cascade_hint", "כיבוי תכונה מכבה אוטומטית את כל התכונות שתחתיה.")}
+        </p>
+        <div className="space-y-1.5">
+          {cascadeRows.map((row, i) => {
+            const raw = prefs.raw[row.key] ?? true;
+            const effective = prefs.effective[row.key] ?? true;
+            const overridden = raw && !effective;
+            return (
+              <div key={row.key} style={{ paddingInlineStart: `${i * 1.25}rem` }}>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    disabled={busy}
+                    checked={raw}
+                    onChange={(e) => onChange({ [row.key]: e.target.checked })}
+                  />
+                  {row.label}
+                </label>
+                {overridden && (
+                  <p className="text-xs text-status-darkred ms-6">
+                    {t("admin.feature_overridden", "כבוי בפועל — תכונת אב כבויה")}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className="border-t border-border pt-3">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            disabled={busy}
+            checked={prefs.raw.ai_query_enabled ?? true}
+            onChange={(e) => onChange({ ai_query_enabled: e.target.checked })}
+          />
+          {t("admin.feature_ai_query", "שאילתת AI")}
+        </label>
       </div>
     </div>
   );

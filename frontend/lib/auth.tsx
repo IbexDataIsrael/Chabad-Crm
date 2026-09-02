@@ -39,6 +39,23 @@ export interface Organization {
   label_font_family?: string | null;
   /** fixes51 §4: the Shliach Role Configuration Panel's settings blob. */
   shliach_view_config?: ShliachViewConfig | null;
+  /** fixes54 §8: this org's cascaded feature-toggle flags, set by the
+   *  superadmin (/dashboard/admin) — area_display_enabled/
+   *  building_display_enabled/apartment_display_enabled/
+   *  activist_system_enabled/ai_query_enabled. A key absent here (e.g. a
+   *  cached session from before this shipped) should read as enabled. */
+  feature_flags?: Record<string, boolean>;
+}
+
+/** fixes54 §8: reads one of `Organization.feature_flags` — missing/absent
+ *  (an older cached session, or a key added after this shipped) reads as
+ *  enabled, only an explicit `false` disables. Shared by the sidebar nav
+ *  and every module's own page-level guard so they can never disagree. */
+export function isFeatureEnabled(
+  org: Organization | null | undefined,
+  key: string,
+): boolean {
+  return org?.feature_flags?.[key] !== false;
 }
 
 /** fixes51 §4: org-wide config for the Shliach role's Apartments experience —
@@ -54,6 +71,14 @@ export interface ShliachViewConfig {
    *  set from /dashboard/shliach-config, consumed by ContactView's
    *  "Edit your data" self-edit mode. */
   self_edit_locked_fields?: string[];
+  /** fixes54 §6: Apartment field keys (FIELD_KEYS on the Apartments page)
+   *  an activist can't inline-edit — the "Edit Lock" section on
+   *  /dashboard/shliach-config. Distinct from self_edit_locked_fields above,
+   *  which locks the activist's own contact profile, not apartment data. */
+  apartment_edit_locked_fields?: string[];
+  /** fixes54 §6: hides the Apartments page's "Customize fields" column
+   *  picker entirely from activists. */
+  customize_fields_locked?: boolean;
 }
 
 export interface User {

@@ -21,6 +21,7 @@ from app import custom_field_utils, models, picklist_utils
 from app.core.display import building_display_name
 from app.core.email import send_shliach_welcome
 from app.core.geocode import geocode_address
+from app.core import org_prefs
 from app.core.natural_sort import natural_sort_keys
 from app.core.security import hash_password
 from app.core.shliach import (
@@ -1170,6 +1171,16 @@ def create_contact(
                 "A shliach cannot create shliach contacts",
             )
         data["assigned_user_id"] = current_user.guid
+    # fixes54 §8: the superadmin "Activist system" toggle — off blocks
+    # provisioning new activist logins for this org (existing ones are
+    # untouched; see org_prefs.effective_flags for the cascade this lives in).
+    if data.get("contact_type") == "shliach" and not org_prefs.effective_flags(
+        db, org_id
+    )["activist_system_enabled"]:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "The activist system is disabled for this organization",
+        )
     # fixes10 §2.2: every new contact is owned by its creator unless the
     # payload explicitly assigns someone else.
     elif not data.get("assigned_user_id"):

@@ -1,9 +1,11 @@
 "use client";
 
 import { Send } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { aiQuery, type AiQueryResponse } from "@/lib/api";
+import { isFeatureEnabled, useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
@@ -18,9 +20,24 @@ import { Input } from "@/components/ui/input";
 export default function AiQueryPage() {
   const { t, lang } = useLocalization();
   const toast = useToast();
+  const router = useRouter();
+  // fixes54 §7: the sidebar link is already hidden for the Activist role
+  // (dashboard/layout.tsx), but that alone doesn't stop a direct URL visit —
+  // the backend itself also rejects a shliach's request (routers/ai_query.py),
+  // this redirect just keeps a shliach from ever seeing the page render.
+  const { user: me, isShliach, loading: authLoading } = useAuth();
+  // fixes54 §8: the superadmin-managed org-wide AI toggle — same redirect,
+  // the backend rejects the request either way.
+  const aiDisabledForOrg = !isFeatureEnabled(me?.organization, "ai_query_enabled");
+  useEffect(() => {
+    if (authLoading || (!isShliach && !aiDisabledForOrg)) return;
+    router.replace(me?.shliach?.contact_id ? "/dashboard/activist" : "/dashboard");
+  }, [authLoading, isShliach, aiDisabledForOrg, me, router]);
   const [prompt, setPrompt] = useState("");
   const [result, setResult] = useState<AiQueryResponse | null>(null);
   const [loading, setLoading] = useState(false);
+
+  if (authLoading || isShliach || aiDisabledForOrg) return null;
 
   async function send() {
     const value = prompt.trim();

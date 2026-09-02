@@ -391,7 +391,7 @@ export default function ContactDetailPage() {
             <a
               href={`mailto:${contact.email}`}
               title={t("action.send_email", "שליחת מייל")}
-              className="rounded-full border border-border px-2.5 py-1.5 text-sm leading-none hover:bg-status-magenta/10"
+              className="rounded-full border border-border px-2.5 py-1.5 text-sm leading-none hover:bg-primary/10"
             >
               ✉ {t("action.send_email", "שליחת מייל")}
             </a>

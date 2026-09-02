@@ -127,7 +127,7 @@ export function DatePicker({
             {/* Month + year dropdowns — change the year in one click instead of paging. */}
             <div className="flex items-center gap-1">
               <select
-                className="rounded-md border border-input px-1 py-1 text-sm focus:border-status-magenta focus:outline-none"
+                className="rounded-md border border-input px-1 py-1 text-sm focus:border-primary focus:outline-none"
                 value={month}
                 onChange={(e) => setView(new Date(year, Number(e.target.value), 1))}
               >
@@ -139,7 +139,7 @@ export function DatePicker({
               </select>
               <select
                 dir="ltr"
-                className="rounded-md border border-input px-1 py-1 text-sm focus:border-status-magenta focus:outline-none"
+                className="rounded-md border border-input px-1 py-1 text-sm focus:border-primary focus:outline-none"
                 value={year}
                 onChange={(e) => setView(new Date(Number(e.target.value), month, 1))}
               >
@@ -183,11 +183,11 @@ export function DatePicker({
                     emit(new Date(year, month, day), time);
                     if (!withTime) setOpen(false);
                   }}
-                  className={`h-8 rounded text-sm hover:bg-status-magenta/10 ${
+                  className={`h-8 rounded text-sm hover:bg-primary/10 ${
                     isSel
-                      ? "bg-status-magenta text-white hover:bg-status-magenta"
+                      ? "bg-primary text-white hover:bg-primary"
                       : isToday
-                        ? "ring-1 ring-status-magenta text-status-magenta font-semibold"
+                        ? "ring-1 ring-primary text-primary font-semibold"
                         : ""
                   }`}
                 >

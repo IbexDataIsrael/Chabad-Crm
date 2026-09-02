@@ -263,7 +263,7 @@ function FieldRow({
                 title={t("action.save", "שמור")}
                 disabled={saving}
                 onClick={commitOrder}
-                className="rounded-md bg-status-magenta text-white w-5 h-5 flex items-center justify-center text-xs leading-none disabled:opacity-50"
+                className="rounded-md bg-primary text-white w-5 h-5 flex items-center justify-center text-xs leading-none disabled:opacity-50"
               >
                 {saving ? "…" : "✓"}
               </button>

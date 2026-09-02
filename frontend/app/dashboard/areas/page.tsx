@@ -9,7 +9,7 @@ import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ApiError, apiFetch } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
+import { isFeatureEnabled, useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { naturalCompare } from "@/lib/naturalSort";
 import { usePersistentState } from "@/lib/persist";
@@ -30,7 +30,7 @@ interface Row {
 }
 
 export default function AreasPage() {
-  const { isAdmin, loading } = useAuth();
+  const { isAdmin, loading, user } = useAuth();
   const { t } = useLocalization();
   const [areas, setAreas] = useState<Area[]>([]);
   const [jewishCounts, setJewishCounts] = useState<Record<number, JewishCounts>>({});
@@ -80,6 +80,16 @@ export default function AreasPage() {
   }
 
   if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
+  // fixes54 §8: the superadmin "Area display" toggle — off hides this
+  // module for everyone in the org (defense in depth alongside the nav
+  // link, which is already gone — see dashboard/layout.tsx).
+  if (!isFeatureEnabled(user?.organization, "area_display_enabled")) {
+    return (
+      <p className="text-status-darkred">
+        {t("page.module_disabled", "התכונה הזו כבויה עבור הארגון שלך.")}
+      </p>
+    );
+  }
 
   const filtered =
     areaIds.length === 0 ? areas : areas.filter((a) => areaIds.includes(a.id));
@@ -115,7 +125,7 @@ export default function AreasPage() {
     .replace("{total}", String(rows.length));
 
   const inputClass =
-    "rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none";
+    "rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none";
 
   const columnLabels: Record<OptionalColumn, string> = {
     boundary: t("page.area_boundary_col", "תחום"),
@@ -200,7 +210,7 @@ export default function AreasPage() {
                 onClick={() => toggleField(f)}
                 className={`rounded-md border px-3 py-1.5 text-sm ${
                   active
-                    ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
+                    ? "border-primary bg-primary/10 text-primary"
                     : "border-border text-muted-foreground hover:bg-accent"
                 }`}
               >
@@ -348,7 +358,7 @@ function AreaRow({
       <td className="px-3 py-2">
         <Link
           href={`/dashboard/areas/${area.id}`}
-          className="font-medium text-status-magenta hover:underline"
+          className="font-medium text-primary hover:underline"
         >
           {area.area_name}
         </Link>
@@ -372,7 +382,7 @@ function AreaRow({
                   <span key={a.id}>
                     <Link
                       href={`/dashboard/contacts/${a.id}`}
-                      className="text-status-magenta hover:underline"
+                      className="text-primary hover:underline"
                     >
                       {contactFullName(a)}
                     </Link>
@@ -387,7 +397,7 @@ function AreaRow({
         <div className="flex items-center gap-2">
           <Link
             href={`/dashboard/areas/${area.id}`}
-            className="text-status-magenta hover:underline"
+            className="text-primary hover:underline"
           >
             {t("page.show_area", "הצג אזור »")}
           </Link>

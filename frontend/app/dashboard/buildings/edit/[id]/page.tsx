@@ -27,7 +27,7 @@ import {
 } from "@/lib/types";
 
 const inputClass =
-  "w-full rounded-md border border-input px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
 /** Dedicated building-edit page (fixes12 §3.4): full building fields + floors
  *  + the building's apartments (add/edit route to the standalone apartment
@@ -381,7 +381,7 @@ function FloorsEditor({ buildingId }: { buildingId: number }) {
       )}
       <div className="flex items-center gap-2">
         <input
-          className="rounded-md border border-input px-3 py-1.5 text-sm w-36 focus:border-status-magenta focus:outline-none"
+          className="rounded-md border border-input px-3 py-1.5 text-sm w-36 focus:border-primary focus:outline-none"
           placeholder={t("floors.name", "שם קומה")}
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
@@ -457,7 +457,7 @@ function BuildingApartmentsSection({ building }: { building: Building }) {
             <li key={a.id} className="py-2 flex items-center gap-2">
               <Link
                 href={`/dashboard/apartments/${a.id}`}
-                className="font-medium text-status-magenta hover:underline"
+                className="font-medium text-primary hover:underline"
               >
                 {apartmentTitle(a)}
               </Link>

@@ -22,7 +22,7 @@ import { EMAIL_HINT, PHONE_HINT, isValidEmail, isValidPhone } from "@/lib/valida
 import type { OrgUser } from "../page";
 
 const inputClass =
-  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
 /** fixes47: a dedicated per-user page — mirrors dashboard/contacts/{id}'s
  *  role (single-record view, per-field autosave, audit history) for the
@@ -246,7 +246,7 @@ export default function UserDetailPage() {
                 roleLabel
               ) : (
                 <select
-                  className="rounded-md border border-input px-2 py-1 text-xs focus:border-status-magenta focus:outline-none disabled:bg-background disabled:text-muted-foreground"
+                  className="rounded-md border border-input px-2 py-1 text-xs focus:border-primary focus:outline-none disabled:bg-background disabled:text-muted-foreground"
                   value={user.role}
                   disabled={isSelf}
                   onChange={(e) =>
@@ -259,6 +259,30 @@ export default function UserDetailPage() {
                   <option value="admin">{t("users.role_admin", "מנהל מערכת")}</option>
                 </select>
               )}
+            </dd>
+          </div>
+          {/* fixes54 §1: is_active was already a settable OrgUserUpdate field
+              (the list page's "login suspended" badge only ever showed the
+              read-only banner above) — no way to actually flip it back from
+              this page without the separate shliach-only "recreate" flow. */}
+          <div className="flex flex-col">
+            <dt className="text-xs text-muted-foreground">{t("users.login_status", "סטטוס כניסה")}</dt>
+            <dd className="text-sm">
+              <label className="flex items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  disabled={isSelf}
+                  checked={user.is_active}
+                  onChange={(e) =>
+                    patchUser({ is_active: e.target.checked }).catch((err) =>
+                      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה")),
+                    )
+                  }
+                />
+                {user.is_active
+                  ? t("admin.active", "פעיל")
+                  : t("users.login_suspended", "הכניסה למערכת הושעתה")}
+              </label>
             </dd>
           </div>
           <div className="flex flex-col">
@@ -363,7 +387,7 @@ export default function UserDetailPage() {
               <div className="sm:col-span-2">
                 <Link
                   href={`/dashboard/contacts/${contactId}`}
-                  className="text-sm text-status-magenta hover:underline"
+                  className="text-sm text-primary hover:underline"
                 >
                   {t("users.view_contact", "צפייה באיש הקשר ›")}
                 </Link>
@@ -386,7 +410,7 @@ export default function UserDetailPage() {
         ) : (
           <>
             <select
-              className="w-full sm:w-auto rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+              className="w-full sm:w-auto rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none"
               value={snapshot?.id ?? ""}
               onChange={(e) => {
                 const id = Number(e.target.value);
@@ -410,7 +434,7 @@ export default function UserDetailPage() {
                   </p>
                   <button
                     onClick={() => setSnapshot(null)}
-                    className="text-xs text-status-magenta hover:underline"
+                    className="text-xs text-primary hover:underline"
                   >
                     {t("apt.history_back_current", "חזרה לגרסה הנוכחית")}
                   </button>
@@ -510,7 +534,7 @@ function SnapRow({
           type="button"
           onClick={restore}
           disabled={busy}
-          className="text-[11px] text-status-magenta hover:underline disabled:opacity-50"
+          className="text-[11px] text-primary hover:underline disabled:opacity-50"
         >
           {busy ? "…" : t("apt.restore", "שחזר")}
         </button>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 
-import { Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useConfirm } from "@/lib/confirm";
@@ -93,6 +93,14 @@ export default function ReportNumbersPage() {
   const [sortDir, setSortDir] = usePersistentState<"asc" | "desc">(
     "crm.reportNumbers.sortDir", "asc",
   );
+  // fixes54 §4: this grid had no pagination at all — every report number
+  // rendered in one table (640+ rows in production). Client-side (not a new
+  // paginated backend endpoint) because the full list + its per-row
+  // jewish-counts/assignments were already fetched and sorted in one shot
+  // above; slicing that in memory is simplest and matches the "standard
+  // pagination controls" ask without re-plumbing three bulk endpoints.
+  const [page, setPage] = usePersistentState("crm.reportNumbers.page", 1);
+  const [pageSize, setPageSize] = usePersistentState("crm.reportNumbers.pageSize", 20);
 
   async function reload() {
     const [rns, counts, links] = await Promise.all([
@@ -145,6 +153,7 @@ export default function ReportNumbersPage() {
       setSortKey(key);
       setSortDir("asc");
     }
+    setPage(1);
   }
 
   if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
@@ -180,6 +189,15 @@ export default function ReportNumbersPage() {
         return sign * naturalCompare(a.rn.name, b.rn.name);
     }
   });
+
+  // fixes54 §4: paginate the already-sorted/filtered set.
+  const lastPage = Math.max(1, Math.ceil(rows.length / pageSize));
+  const safePage = Math.min(page, lastPage);
+  const visibleRows = rows.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const rangeText = t("pager.range", "{from}–{to} מתוך {total}")
+    .replace("{from}", String(rows.length === 0 ? 0 : (safePage - 1) * pageSize + 1))
+    .replace("{to}", String(Math.min(safePage * pageSize, rows.length)))
+    .replace("{total}", String(rows.length));
 
   const columnLabels: Record<OptionalColumn, string> = {
     jews: t("report.jews_count", "מספר יהודים"),
@@ -247,7 +265,10 @@ export default function ReportNumbersPage() {
           className="max-w-xs"
           placeholder={t("filter.search_name", "חיפוש לפי שם…")}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setPage(1);
+          }}
         />
         <Button
           type="button"
@@ -257,6 +278,23 @@ export default function ReportNumbersPage() {
         >
           {t("columns.title", "עמודות מוצגות")}
         </Button>
+        <span className="ms-auto flex items-center gap-2 text-sm text-muted-foreground">
+          {t("pager.page_size", "בעמוד:")}
+          <select
+            className="rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              setPage(1);
+            }}
+          >
+            {[20, 50, 100].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </span>
       </div>
 
       {/* fixes54 §2: "Customize Columns" parity with Contacts — toggle
@@ -273,7 +311,7 @@ export default function ReportNumbersPage() {
                 <button
                   type="button"
                   onClick={withClickGuard(() => toggleField(f))}
-                  className="rounded-md border px-3 py-1.5 text-sm border-status-magenta bg-status-magenta/10 text-status-magenta cursor-grab active:cursor-grabbing"
+                  className="rounded-md border px-3 py-1.5 text-sm border-primary bg-primary/10 text-primary cursor-grab active:cursor-grabbing"
                 >
                   ⠿ {columnLabels[f]}
                 </button>
@@ -283,7 +321,7 @@ export default function ReportNumbersPage() {
                     disabled={activeIdx === 0}
                     onClick={() => moveActiveField(f, -1)}
                     title={t("action.move_up", "העלה")}
-                    className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-status-magenta hover:bg-accent active:bg-muted disabled:opacity-20"
+                    className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-primary hover:bg-accent active:bg-muted disabled:opacity-20"
                   >
                     ▲
                   </button>
@@ -292,7 +330,7 @@ export default function ReportNumbersPage() {
                     disabled={activeIdx === orderedActiveFields.length - 1}
                     onClick={() => moveActiveField(f, 1)}
                     title={t("action.move_down", "הורד")}
-                    className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-status-magenta hover:bg-accent active:bg-muted disabled:opacity-20"
+                    className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-primary hover:bg-accent active:bg-muted disabled:opacity-20"
                   >
                     ▼
                   </button>
@@ -336,7 +374,7 @@ export default function ReportNumbersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {rows.map(({ rn, jews, engaged, activists }) => (
+              {visibleRows.map(({ rn, jews, engaged, activists }) => (
                 <tr key={rn.id}>
                   <td className="px-3 py-2 font-medium">{rn.name}</td>
                   {orderedActiveFields.map((f) => (
@@ -401,6 +439,30 @@ export default function ReportNumbersPage() {
           </table>
         )}
       </div>
+
+      {!busy && rows.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={safePage <= 1}
+            onClick={() => setPage(safePage - 1)}
+          >
+            <ChevronRight className="h-4 w-4" /> {t("pager.prev", "הקודם")}
+          </Button>
+          <span className="text-muted-foreground">{rangeText}</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={safePage >= lastPage}
+            onClick={() => setPage(safePage + 1)}
+          >
+            {t("pager.next", "הבא")} <ChevronLeft className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

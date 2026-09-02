@@ -258,26 +258,26 @@ def test_query_tenant_scoping_enforced(client, admin_headers, monkeypatch):
     assert "OtherOrg" not in names
 
 
-def test_query_shliach_scoping_contacts(client, admin_headers, shliach_headers, monkeypatch):
-    client.post("/api/contacts", json={"name": "NotMine", "phone": "050-7220011"}, headers=admin_headers)
-    client.post("/api/contacts", json={"name": "MineShliach", "phone": "050-7220022"}, headers=shliach_headers)
-
+def test_query_shliach_forbidden(client, admin_headers, shliach_headers, monkeypatch):
+    """fixes54 §7: the Activist role lost AI query access entirely — was
+    previously allowed through with shliach-scoped results (see git history
+    for the scoping behavior this replaced); now rejected before the LLM is
+    ever called, same require_staff_or_admin gate every other org-tooling
+    endpoint uses to block shliach."""
     monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
     _fake_anthropic(monkeypatch, _ok("contacts"))
 
     r = _query(client, shliach_headers, "show my contacts")
-    assert r.status_code == 200
-    names = [row["name"] for row in r.json()["rows"]]
-    assert "MineShliach" in names
-    assert "NotMine" not in names
+    assert r.status_code == 403
 
 
-def test_query_shliach_scoping_apartments(client, admin_headers, monkeypatch):
+def test_query_shliach_contact_forbidden(client, admin_headers, monkeypatch):
+    """Same as above, for a shliach whose login comes from a contact record
+    (mirrors the apartments-scoping test's setup) rather than a plain user."""
     area = _mk_area(client, admin_headers)
     building = _mk_building(client, admin_headers, area["id"])
     rn = _mk_report_number(client, admin_headers)
     _mk_apartment(client, admin_headers, building["id"], apartment_name="COVERED", report_number_id=rn["id"])
-    _mk_apartment(client, admin_headers, building["id"], apartment_name="HIDDEN")
 
     _mk_shliach_contact(client, admin_headers, "aiquery.shliach@example.com", report_number_ids=[rn["id"]])
     shliach_headers = _shliach_contact_login(client, "aiquery.shliach@example.com")
@@ -286,9 +286,7 @@ def test_query_shliach_scoping_apartments(client, admin_headers, monkeypatch):
     _fake_anthropic(monkeypatch, _ok("apartments"))
 
     r = _query(client, shliach_headers, "show apartments")
-    assert r.status_code == 200
-    names = [row["apartment_name"] for row in r.json()["rows"]]
-    assert names == ["COVERED"]
+    assert r.status_code == 403
 
 
 def test_query_row_cap_enforced(client, admin_headers, db_session, monkeypatch):

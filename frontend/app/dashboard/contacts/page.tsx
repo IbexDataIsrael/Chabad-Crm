@@ -48,7 +48,7 @@ import {
 } from "@/lib/types";
 
 const inputClass =
-  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
 type SortKey = "created" | "name";
 
@@ -894,7 +894,7 @@ export default function ContactsPage() {
     .replace("{total}", String(total));
 
   const selectClass =
-    "rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none";
+    "rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none";
 
   return (
     <div className="space-y-4">
@@ -999,7 +999,7 @@ export default function ContactsPage() {
                   <button
                     type="button"
                     onClick={withClickGuard(() => toggleGridColumn(entry))}
-                    className="rounded-md border px-3 py-1.5 text-sm border-status-magenta bg-status-magenta/10 text-status-magenta cursor-grab active:cursor-grabbing"
+                    className="rounded-md border px-3 py-1.5 text-sm border-primary bg-primary/10 text-primary cursor-grab active:cursor-grabbing"
                   >
                     ⠿ {gridColumnLabel(entry)}
                   </button>
@@ -1012,7 +1012,7 @@ export default function ContactsPage() {
                       disabled={activeIdx === 0}
                       onClick={() => moveActiveColumn(entry, -1)}
                       title={t("action.move_up", "העלה")}
-                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-status-magenta hover:bg-accent active:bg-muted disabled:opacity-20"
+                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-primary hover:bg-accent active:bg-muted disabled:opacity-20"
                     >
                       ▲
                     </button>
@@ -1021,7 +1021,7 @@ export default function ContactsPage() {
                       disabled={activeIdx === orderedActiveColumns.length - 1}
                       onClick={() => moveActiveColumn(entry, 1)}
                       title={t("action.move_down", "הורד")}
-                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-status-magenta hover:bg-accent active:bg-muted disabled:opacity-20"
+                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-primary hover:bg-accent active:bg-muted disabled:opacity-20"
                     >
                       ▼
                     </button>
@@ -1209,7 +1209,7 @@ export default function ContactsPage() {
                 setVisitTo(null);
                 setPage(1);
               }}
-              className="text-status-magenta hover:underline"
+              className="text-primary hover:underline"
             >
               ✕ {t("action.clear", "נקה")}
             </button>
@@ -1495,7 +1495,7 @@ export default function ContactsPage() {
                           href={`mailto:${c.email}`}
                           onClick={(e) => e.stopPropagation()}
                           title={t("action.send_email", "שליחת מייל")}
-                          className="rounded-full border border-border p-1.5 leading-none hover:bg-status-magenta/10"
+                          className="rounded-full border border-border p-1.5 leading-none hover:bg-primary/10"
                         >
                           ✉
                         </a>
@@ -1518,7 +1518,7 @@ export default function ContactsPage() {
                     <Link
                       href={`/dashboard/contacts/${c.id}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="text-sm text-status-magenta hover:underline whitespace-nowrap"
+                      className="text-sm text-primary hover:underline whitespace-nowrap"
                     >
                       {t("action.open_edit", "פתח / עריכה ›")}
                     </Link>
@@ -1601,7 +1601,7 @@ function ContactNameCell({
     return (
       <input
         ref={inputRef}
-        className="rounded-md border border-status-magenta px-1.5 py-0.5 text-sm w-28 focus:outline-none"
+        className="rounded-md border border-primary px-1.5 py-0.5 text-sm w-28 focus:outline-none"
         value={draft}
         disabled={saving}
         onChange={(e) => setDraft(e.target.value)}
@@ -1623,7 +1623,7 @@ function ContactNameCell({
     <span className="group inline-flex items-center gap-1">
       <Link
         href={`/dashboard/contacts/${c.id}`}
-        className="text-status-magenta hover:underline"
+        className="text-primary hover:underline"
       >
         {contactFullName(c)}
       </Link>
@@ -1634,7 +1634,7 @@ function ContactNameCell({
           setEditing(true);
         }}
         title={t("inline.click_to_edit", "לחץ לעריכה")}
-        className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-status-magenta"
+        className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-primary"
       >
         ✎
       </button>
@@ -1755,7 +1755,7 @@ function ContactBulkEditModal({
             type="button"
             onClick={apply}
             disabled={busy || total === 0}
-            className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
+            className="rounded-md bg-primary text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
             {busy ? t("action.saving", "שומר…") : t("bulkedit.apply", "החל שינויים")}
           </button>

@@ -17,7 +17,7 @@ import {
 } from "@/lib/types";
 
 const inputClass =
-  "w-full rounded-md border border-input px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
 /**
  * Picks a mekurav's apartment by first choosing a building, then an apartment
@@ -35,15 +35,21 @@ export function ApartmentPicker({
   // fixes11 §1.2: shliach users get a flat, server-scoped apartment list —
   // no building dropdown, no inline creation.
   const { isShliach } = useAuth();
-  const [buildings, setBuildings] = useState<Building[]>([]);
   const [buildingId, setBuildingId] = useState<number | "">("");
+  // fixes54 §2: only the currently-selected building's own label is loaded
+  // eagerly — the full list used to be fetched unpaginated (see the
+  // `remoteSearch` prop below for the "why" — an org with thousands of
+  // buildings made that unusable).
+  const [buildingLabel, setBuildingLabel] = useState<string | null>(null);
+  // null = not checked yet (render nothing rather than flash the empty state).
+  const [hasAnyBuilding, setHasAnyBuilding] = useState<boolean | null>(null);
   const [apartments, setApartments] = useState<Apartment[]>([]);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [newNotes, setNewNotes] = useState("");
   const [error, setError] = useState("");
 
-  // Load buildings, and resolve the current apartment's building when editing.
+  // Resolve the current apartment's building when editing an existing value.
   useEffect(() => {
     if (isShliach) {
       // Server scopes the plain list to the shliach's covered apartments.
@@ -53,24 +59,45 @@ export function ApartmentPicker({
       return;
     }
     let active = true;
-    (async () => {
-      try {
-        const bs = await apiFetch<Building[]>("/api/buildings");
-        if (!active) return;
-        setBuildings(bs);
-        if (value != null) {
+    // fixes54 §2: a cheap one-page existence check (not the old full-list
+    // fetch) — just enough to tell "no buildings yet" apart from "still
+    // loading" without pulling every building into the browser.
+    apiFetch<{ total: number }>("/api/buildings/list?page=1&page_size=20")
+      .then((res) => {
+        if (active) setHasAnyBuilding(res.total > 0);
+      })
+      .catch(() => {
+        if (active) setHasAnyBuilding(true); // fail open — let the picker try
+      });
+    if (value != null) {
+      (async () => {
+        try {
           const ap = await apiFetch<Apartment>(`/api/apartments/${value}`);
-          if (active) setBuildingId(ap.building_id);
+          if (!active) return;
+          setBuildingId(ap.building_id);
+          const b = await apiFetch<Building>(`/api/buildings/${ap.building_id}`);
+          if (active) setBuildingLabel(buildingDisplayName(b));
+        } catch {
+          /* ignore */
         }
-      } catch {
-        /* ignore */
-      }
-    })();
+      })();
+    }
     return () => {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isShliach]);
+
+  // fixes54 §2: server-side building search backing the picker below —
+  // replaces the old "fetch every building in the org, filter client-side"
+  // approach, which flashed "no buildings yet" while a multi-MB payload was
+  // still loading and then rendered a several-thousand-row dropdown too
+  // sluggish to actually pick from once it landed.
+  async function searchBuildings(query: string): Promise<{ id: number; label: string }[]> {
+    const params = new URLSearchParams({ q: query, page: "1", page_size: "20" });
+    const res = await apiFetch<{ items: Building[] }>(`/api/buildings/list?${params}`);
+    return res.items.map((b) => ({ id: b.id, label: buildingDisplayName(b) }));
+  }
 
   // Load apartments whenever the selected building changes (admin/staff flow).
   useEffect(() => {
@@ -125,11 +152,11 @@ export function ApartmentPicker({
     );
   }
 
-  if (buildings.length === 0) {
+  if (hasAnyBuilding === false) {
     return (
       <p className="text-sm text-muted-foreground">
         {t("apt.no_buildings", "אין בניינים עדיין.")}{" "}
-        <Link href="/dashboard/buildings" className="text-status-magenta hover:underline">
+        <Link href="/dashboard/buildings" className="text-primary hover:underline">
           {t("page.add_building", "הוסף בניין")}
         </Link>{" "}
         {t("apt.to_link_apartment", "כדי לשייך דירה.")}
@@ -140,14 +167,17 @@ export function ApartmentPicker({
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <SearchableSelect
+        <SearchableSelect<number>
           value={buildingId === "" ? null : buildingId}
-          onChange={(id) => {
+          onChange={(id, label) => {
             setBuildingId(id ?? "");
+            setBuildingLabel(label ?? null);
             onChange(null); // building changed → clear apartment
             setAdding(false);
           }}
-          options={buildings.map((b) => ({ id: b.id, label: buildingDisplayName(b) }))}
+          options={[]}
+          remoteSearch={searchBuildings}
+          selectedLabel={buildingLabel}
           placeholder={t("apt.choose_building", "בחר בניין…")}
         />
 

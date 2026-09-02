@@ -75,7 +75,7 @@ export function ReportCompletionModal({
             {t("shliach_msg.comments", "הערות")}
           </span>
           <textarea
-            className="w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
+            className="w-full rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             rows={3}
             value={comments}
             onChange={(e) => setComments(e.target.value)}
@@ -130,7 +130,7 @@ export function SystemCommentModal({
           {t("shliach_msg.system_comment_btn", "הערות על המערכת")}
         </h2>
         <textarea
-          className="w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
+          className="w-full rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           rows={4}
           value={comment}
           onChange={(e) => setComment(e.target.value)}

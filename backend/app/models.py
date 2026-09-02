@@ -1134,6 +1134,32 @@ class UserPreference(Base):
     )
 
 
+class OrganizationPreference(Base):
+    """fixes54 §8: a platform-superadmin-managed feature toggle for one
+    organization — e.g. whether the Area/Building/Apartment/Activist modules
+    or the AI query feature are enabled for that tenant. Same key-value-JSON
+    shape as UserPreference (one row per org+key), scoped to `organization_id`
+    instead of `user_id`. See app/core/org_prefs.py for the toggle keys and
+    the cascading effective-value logic (turning a module off forces every
+    module beneath it off too, regardless of that module's own stored value)."""
+
+    __tablename__ = "organization_prefs"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "key", name="uq_orgpref_org_key"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    key = Column(String(100), nullable=False)  # e.g. 'area_display_enabled'
+    value = Column(Text, nullable=False, default="null")  # JSON-encoded
+    updated_at = Column(
+        DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+
 class OrgBackup(Base):
     """A restore point of one organization's CRM data (fixes16).
 

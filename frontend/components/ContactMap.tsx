@@ -35,7 +35,7 @@ export function ContactMap({ lat, lng }: { lat: number; lng: number }) {
         href={`https://www.google.com/maps?q=${lat},${lng}`}
         target="_blank"
         rel="noreferrer"
-        className="text-sm text-status-magenta hover:underline"
+        className="text-sm text-primary hover:underline"
       >
         {t("map.open_in_google", "הצג מיקום במפות גוגל ›")}
       </a>

@@ -23,7 +23,7 @@ import { Input } from "./ui/input";
 import { InlineEdit } from "./ui/InlineEdit";
 
 const inputClass =
-  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
 // fixes50 §2.1: same label pill as ContactView.tsx — this card renders
 // inline on the contact page's "visits" segment, so it should match.

@@ -49,7 +49,7 @@ export function PhoneInput({
         className={`${baseClass} ${
           invalid
             ? "border-status-darkred focus:border-status-darkred focus:ring-status-darkred"
-            : "border-input focus:border-status-magenta focus:ring-status-magenta"
+            : "border-input focus:border-primary focus:ring-primary"
         }`}
       />
       <span className={`block text-xs ${invalid ? "text-status-darkred" : "text-muted-foreground"}`}>

@@ -183,6 +183,11 @@ export interface Building {
   /** fixes19 §4: a town house gets no floors — one auto "<name>-th" unit. */
   is_town_house?: boolean;
   floors?: Floor[];
+  /** fixes54 §5: server-computed (not the admin-set flag above) — true when
+   *  this building holds exactly one active apartment whose apartment_name
+   *  contains "-th". Only populated by `/api/buildings/list`; always false
+   *  from the plain `/api/buildings` (pickers/filters never show this icon). */
+  is_townhouse?: boolean;
 }
 
 export interface Apartment {

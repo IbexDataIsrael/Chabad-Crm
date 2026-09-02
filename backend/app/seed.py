@@ -90,6 +90,24 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("admin", "admin.users", "משתמשים", "users"),
     ("admin", "admin.manage_users", "משתמשים", "Users"),
     ("admin", "admin.hide_users", "הסתר משתמשים", "Hide users"),
+    # fixes54 §8: superadmin per-org feature toggles.
+    ("admin", "admin.manage_features", "תכונות", "Features"),
+    ("admin", "admin.hide_features", "הסתר תכונות", "Hide features"),
+    (
+        "admin", "admin.feature_cascade_hint",
+        "כיבוי תכונה מכבה אוטומטית את כל התכונות שתחתיה.",
+        "Turning a feature off automatically turns off everything beneath it.",
+    ),
+    ("admin", "admin.feature_area_display", "תצוגת אזורים", "Area display"),
+    ("admin", "admin.feature_building_display", "תצוגת בניינים", "Building display"),
+    ("admin", "admin.feature_apartment_display", "תצוגת דירות", "Apartment display"),
+    ("admin", "admin.feature_activist_system", "מערכת פעילים", "Activist system"),
+    ("admin", "admin.feature_ai_query", "שאילתת AI", "AI query"),
+    (
+        "admin", "admin.feature_overridden",
+        "כבוי בפועל — תכונת אב כבויה",
+        "Effectively off — a parent feature is disabled",
+    ),
     ("admin", "admin.impersonate", "התחבר כארגון", "Sign in as org"),
     ("admin", "admin.activate", "הפעל", "Enable"),
     ("admin", "admin.deactivate", "השבת", "Disable"),
@@ -201,6 +219,10 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("page", "page.localization_intro", "ערוך את טקסטי הממשק בעברית ובאנגלית.", "Edit the interface texts in Hebrew and English."),
     ("page", "page.localization_reload_hint", "שינויים ייכנסו לתוקף בכל המערכת לאחר רענון הדף.", "Changes take effect across the system after refreshing the page."),
     ("page", "page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).", "You don't have permission for this page (admins only)."),
+    # fixes54 §8: superadmin per-org module toggles (Area/Building/Apartment/
+    # Activist) — shown when a direct URL visit hits a module the org's
+    # superadmin has switched off.
+    ("page", "page.module_disabled", "התכונה הזו כבויה עבור הארגון שלך.", "This feature is disabled for your organization."),
     # --- Messages ---
     ("msg", "msg.save_failed", "שמירה נכשלה", "Save failed"),
     ("msg", "msg.saved", "נשמר בהצלחה", "Saved successfully"),
@@ -833,6 +855,8 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("field", "validation.phone_invalid", "מספר טלפון לא תקין", "Invalid phone number"),
     ("shliach", "contact_shliach.password_set", "קבע סיסמה חדשה", "Set a new password"),
     ("users", "users.login_suspended", "הכניסה למערכת הושעתה", "System access is suspended"),
+    # fixes54 §1: is_active toggle on the user detail page.
+    ("users", "users.login_status", "סטטוס כניסה", "Login status"),
     ("users", "users.recreate_user", "צור משתמש מחדש", "Re-create user"),
     ("users", "users.user_recreated", "המשתמש נוצר מחדש", "The user was re-created"),
     # --- fixes27: visit-level contact filters + visit-field visibility ---
@@ -909,7 +933,25 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ),
     ("shliach_config", "shliach_config.disable_edit", "בטל אפשרות עריכה לפעילים", "Disable editing for activists"),
     ("shliach_config", "shliach_config.hide_filters", "הסתר את כל הסינונים מהפעילים", "Hide all filters from activists"),
-    ("shliach_config", "shliach_config.self_edit_locks", "נעילת שדות לעריכה עצמית", "Self-edit field locks"),
+    # fixes54 §6: "Edit Lock" — which Apartment fields an activist can't
+    # inline-edit, separate from the self-profile locks renamed just below.
+    ("shliach_config", "shliach_config.apartment_edit_locks", "נעילת שדות לעריכה (דירות)", "Edit lock (apartment fields)"),
+    (
+        "shliach_config", "shliach_config.apartment_edit_locks_hint",
+        "סמן שדות דירה שפעילים לא יוכלו לערוך בעצמם. ללא סימון — כל השדות ניתנים לעריכה "
+        "(אלא אם \"בטל אפשרות עריכה\" מסומן למעלה).",
+        "Check apartment fields activists may not edit themselves. Unchecked — every field stays "
+        "editable (unless \"Disable editing\" above is checked).",
+    ),
+    (
+        "shliach_config", "shliach_config.customize_fields_locked",
+        "נעל את אפשרות \"התאמת שדות\" — הסתר אותה לגמרי מהפעילים",
+        "Lock \"Customize fields\" — hide it entirely from activists",
+    ),
+    # fixes54 §6: renamed from "נעילת שדות לעריכה עצמית" — that generic label
+    # read as being about the apartment-edit locks above; this section is
+    # actually about the activist's own contact profile (name/phone/notes).
+    ("shliach_config", "shliach_config.self_edit_locks", "נעילת שדות בפרופיל האישי של הפעיל", "Activist's own-profile field locks"),
     (
         "shliach_config", "shliach_config.self_edit_locks_hint",
         "אימייל, אזורים ומספרי דוח נעולים תמיד בעריכה עצמית. סמן שדות נוספים לנעילה.",
@@ -1285,6 +1327,14 @@ LOCALIZATION_RENAMES: dict[str, tuple[set, str, set, str]] = {
     # fixes43 §5.2: "admin" is more precisely "system admin".
     "users.role_admin": (
         {"מנהל"}, "מנהל מערכת", {"Admin"}, "System admin",
+    ),
+    # fixes54 §6: this label used to read as "Edit Lock" for the apartment
+    # fields an activist works with, but actually locked their own contact
+    # profile — the new "apartment_edit_locks" section above takes over that
+    # meaning, so this one is renamed to say what it really does.
+    "shliach_config.self_edit_locks": (
+        {"נעילת שדות לעריכה עצמית"}, "נעילת שדות בפרופיל האישי של הפעיל",
+        {"Self-edit field locks"}, "Activist's own-profile field locks",
     ),
 }
 

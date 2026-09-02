@@ -624,7 +624,7 @@ function CreateReportsInner() {
             {t("settings.report_notes", "הערות לדוח")}
           </span>
           <textarea
-            className="w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta"
+            className="w-full rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             rows={3}
             value={reportNotes}
             onChange={(e) => {
@@ -663,7 +663,7 @@ function CreateReportsInner() {
                 <button
                   type="button"
                   onClick={withColumnClickGuard(() => toggleReportColumn(k))}
-                  className="rounded-md border px-3 py-1.5 text-sm border-status-magenta bg-status-magenta/10 text-status-magenta cursor-grab active:cursor-grabbing"
+                  className="rounded-md border px-3 py-1.5 text-sm border-primary bg-primary/10 text-primary cursor-grab active:cursor-grabbing"
                 >
                   ⠿ {columnLabels[k]}
                 </button>
@@ -673,7 +673,7 @@ function CreateReportsInner() {
                     disabled={activeIdx === 0}
                     onClick={() => moveActiveReportColumn(k, -1)}
                     title={t("action.move_up", "העלה")}
-                    className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-status-magenta hover:bg-accent active:bg-muted disabled:opacity-20"
+                    className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-primary hover:bg-accent active:bg-muted disabled:opacity-20"
                   >
                     ▲
                   </button>
@@ -682,7 +682,7 @@ function CreateReportsInner() {
                     disabled={activeIdx === activeReportColumns.length - 1}
                     onClick={() => moveActiveReportColumn(k, 1)}
                     title={t("action.move_down", "הורד")}
-                    className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-status-magenta hover:bg-accent active:bg-muted disabled:opacity-20"
+                    className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-primary hover:bg-accent active:bg-muted disabled:opacity-20"
                   >
                     ▼
                   </button>

@@ -15,7 +15,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 
 const inputClass =
-  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
 /**
  * Donation history (admin). With `contactId` it's the per-contact section (contact
@@ -91,7 +91,7 @@ export function DonationsEditor({ contactId }: { contactId?: number }) {
                       {d.contact_id ? (
                         <Link
                           href={`/dashboard/contacts/${d.contact_id}`}
-                          className="text-status-magenta hover:underline"
+                          className="text-primary hover:underline"
                         >
                           {d.contact_name}
                         </Link>

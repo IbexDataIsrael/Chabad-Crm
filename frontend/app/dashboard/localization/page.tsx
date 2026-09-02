@@ -175,7 +175,7 @@ function LocalizationRowEditor({
   }
 
   const cell =
-    "w-full rounded-md border border-input px-2 py-1 focus:border-status-magenta focus:outline-none";
+    "w-full rounded-md border border-input px-2 py-1 focus:border-primary focus:outline-none";
 
   return (
     <tr className="border-t border-border">
@@ -198,7 +198,7 @@ function LocalizationRowEditor({
             type="button"
             onClick={save}
             disabled={!dirty || busy}
-            className="rounded-md bg-status-magenta text-white px-3 py-1 text-xs hover:opacity-90 disabled:opacity-30"
+            className="rounded-md bg-primary text-white px-3 py-1 text-xs hover:opacity-90 disabled:opacity-30"
           >
             {t("action.save", "שמור")}
           </button>

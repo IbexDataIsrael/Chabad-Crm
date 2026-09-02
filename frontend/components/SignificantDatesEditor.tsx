@@ -16,7 +16,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 
 const inputClass =
-  "w-full rounded-md border border-input px-3 py-2 focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
 // Android-style "remind me …" presets (minutes before the date). Label via t().
 const OFFSET_PRESETS: { value: number; key: string; he: string }[] = [

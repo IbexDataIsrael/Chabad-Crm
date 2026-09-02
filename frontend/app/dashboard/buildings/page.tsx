@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Building2, Home, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { BuildingsMap } from "@/components/BuildingsMap";
@@ -10,7 +10,7 @@ import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
+import { isFeatureEnabled, useAuth } from "@/lib/auth";
 import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
@@ -29,7 +29,7 @@ import {
 type SortKey = "address" | "name" | "area" | "created";
 
 export default function BuildingsPage() {
-  const { isAdmin, loading } = useAuth();
+  const { isAdmin, loading, user } = useAuth();
   const { t } = useLocalization();
   const [areas, setAreas] = useState<Area[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
@@ -95,9 +95,18 @@ export default function BuildingsPage() {
     .replace("{total}", String(total));
 
   if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
+  // fixes54 §8: the superadmin "Building display" toggle (cascades from
+  // Area) — defense in depth alongside the now-gone nav link.
+  if (!isFeatureEnabled(user?.organization, "building_display_enabled")) {
+    return (
+      <p className="text-status-darkred">
+        {t("page.module_disabled", "התכונה הזו כבויה עבור הארגון שלך.")}
+      </p>
+    );
+  }
 
   const inputClass =
-    "rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+    "rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
   return (
     <div className="space-y-5 max-w-4xl">
@@ -114,7 +123,7 @@ export default function BuildingsPage() {
       {areas.length === 0 ? (
         <p className="text-sm text-status-darkred">
           {t("page.need_area_first", "יש להגדיר אזור אחד לפחות לפני הוספת בניין.")}{" "}
-          <Link href="/dashboard/areas/add" className="font-medium underline hover:text-status-magenta">
+          <Link href="/dashboard/areas/add" className="font-medium underline hover:text-primary">
             {t("page.add_area", "אזור חדש")}
           </Link>
         </p>
@@ -274,8 +283,18 @@ function BuildingRow({
         <div className="min-w-[10rem]">
           <Link
             href={`/dashboard/buildings/${building.id}`}
-            className="font-medium text-status-magenta hover:underline"
+            className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline"
           >
+            {/* fixes54 §5: a small house icon marks a townhouse (exactly one
+                active apartment whose identifier contains "-th") — a
+                standard building icon otherwise. */}
+            {building.is_townhouse ? (
+              <span title={t("buildings.is_town_house", "בית פרטי")}>
+                <Home className="h-4 w-4 shrink-0" />
+              </span>
+            ) : (
+              <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+            )}
             {display}
           </Link>
           {isFieldVisible("buildings.building_name") &&
@@ -350,7 +369,7 @@ function BuildingApartments({ building, isAdmin }: { building: Building; isAdmin
         <h4 className="text-xs font-semibold text-muted-foreground">{t("apartments", "דירות")}</h4>
         <Link
           href={`/dashboard/apartments/add?building=${building.id}&return=${returnTo}`}
-          className="text-xs text-status-magenta hover:underline"
+          className="text-xs text-primary hover:underline"
         >
           + {t("apt.add_apartment", "הוסף דירה")}
         </Link>
@@ -375,7 +394,7 @@ function BuildingApartments({ building, isAdmin }: { building: Building; isAdmin
             <li key={a.id} className="flex items-center gap-2 text-sm">
               <Link
                 href={`/dashboard/apartments/${a.id}`}
-                className="font-medium text-status-magenta hover:underline"
+                className="font-medium text-primary hover:underline"
               >
                 {apartmentTitle(a)}
               </Link>

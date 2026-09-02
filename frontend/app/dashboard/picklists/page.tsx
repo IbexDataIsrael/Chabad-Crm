@@ -240,7 +240,7 @@ export default function PicklistsPage() {
       )}
 
       {tab === "apartment" && (
-        <section className="space-y-6 rounded-2xl border-2 border-status-magenta/30 bg-status-magenta/5 p-5">
+        <section className="space-y-6 rounded-2xl border-2 border-primary/30 bg-primary/5 p-5">
           {apartmentDefs.map(renderDefinition)}
           <AddPicklist
             heading={t("pl.add_list_apartment", "הוספת רשימת בחירה לדירה")}
@@ -437,7 +437,7 @@ function AddPicklist({
         />
         <button
           type="submit"
-          className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
+          className="rounded-md bg-primary text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
         >
           {t("action.add", "הוסף")}
         </button>
@@ -680,7 +680,7 @@ function AddOption({
         />
         <button
           type="submit"
-          className="rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
+          className="rounded-md bg-primary text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
         >
           {t("action.add", "הוסף")}
         </button>

@@ -61,6 +61,19 @@ interface ShliachViewConfigShape {
   };
   default_columns?: string[] | null;
   self_edit_locked_fields?: string[];
+  // fixes54 §6: which Apartment fields an activist can't inline-edit while
+  // doing regular fieldwork — a granular complement to the blanket
+  // `disable_edit` above. Distinct from `self_edit_locked_fields`, which
+  // locks fields on the activist's OWN contact profile (name/phone/notes,
+  // via ContactView's self-edit mode) — a different, working feature that
+  // was easy to mistake for this one since both pages used the same
+  // "עריכה עצמית" (self-edit) wording. This is the "Edit Lock" section now;
+  // customize_fields_locked (below) hides the apartments page's own
+  // "Customize fields" column picker from activists entirely.
+  apartment_edit_locked_fields?: string[];
+  // fixes54 §6: hides the apartments page's "התאמת שדות" (Customize fields)
+  // column picker from the activist interface entirely when true.
+  customize_fields_locked?: boolean;
 }
 
 export default function ShliachConfigPage() {
@@ -92,6 +105,10 @@ export default function ShliachConfigPage() {
   // fixes53 §8: field-level self-edit locks (Email/Areas/Report Numbers are
   // mandatory and never appear here — see ContactView.MANDATORY_SELF_EDIT_LOCKS).
   const [selfEditLockedFields, setSelfEditLockedFields] = useState<string[]>([]);
+  // fixes54 §6: field-level Apartment edit locks — reuses APARTMENT_FIELD_KEYS
+  // (already defined above for the "default columns" section).
+  const [apartmentEditLockedFields, setApartmentEditLockedFields] = useState<string[]>([]);
+  const [customizeFieldsLocked, setCustomizeFieldsLocked] = useState(false);
   const [areaIds, setAreaIds] = useState<number[]>([]);
   const [buildingIds, setBuildingIds] = useState<number[]>([]);
   const [jewishFilter, setJewishFilter] = useState<string[]>([]);
@@ -167,6 +184,8 @@ export default function ShliachConfigPage() {
         setDisableEdit(!!cfg.disable_edit);
         setHideFilters(!!cfg.hide_filters);
         setSelfEditLockedFields(cfg.self_edit_locked_fields ?? []);
+        setApartmentEditLockedFields(cfg.apartment_edit_locked_fields ?? []);
+        setCustomizeFieldsLocked(!!cfg.customize_fields_locked);
         setAreaIds(cfg.default_filters?.area_ids ?? []);
         setBuildingIds(cfg.default_filters?.building_ids ?? []);
         setJewishFilter(cfg.default_filters?.jewish_status ?? []);
@@ -193,6 +212,12 @@ export default function ShliachConfigPage() {
     );
   }
 
+  function toggleApartmentEditLock(key: ApartmentFieldKey) {
+    setApartmentEditLockedFields((prev) =>
+      prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key],
+    );
+  }
+
   async function save(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -201,6 +226,8 @@ export default function ShliachConfigPage() {
         disable_edit: disableEdit,
         hide_filters: hideFilters,
         self_edit_locked_fields: selfEditLockedFields,
+        apartment_edit_locked_fields: apartmentEditLockedFields,
+        customize_fields_locked: customizeFieldsLocked,
         default_filters: {
           area_ids: areaIds,
           building_ids: buildingIds,
@@ -268,12 +295,58 @@ export default function ShliachConfigPage() {
           {t("shliach_config.hide_filters", "הסתר את כל הסינונים מהפעילים")}
         </label>
 
-        {/* fixes53 §7/§8: field-level locks for a shliach's own "עריכת המידע
-            שלך" self-edit — Email/Areas/Report Numbers are always locked
-            (never listed here); anything else is opt-in per org. */}
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={customizeFieldsLocked}
+            onChange={(e) => setCustomizeFieldsLocked(e.target.checked)}
+          />
+          {t(
+            "shliach_config.customize_fields_locked",
+            "נעל את אפשרות \"התאמת שדות\" — הסתר אותה לגמרי מהפעילים",
+          )}
+        </label>
+
+        {/* fixes54 §6: "Edit Lock" — which Apartment fields an activist can't
+            inline-edit while working (a per-field refinement of the blanket
+            "disable_edit" toggle above). This used to be the ONLY field-lock
+            section on this page, but it locked the activist's own CONTACT
+            profile fields (name/last name/phone) instead — genuinely useful
+            (see the renamed section below), just not what "Edit Lock" reads
+            as on a page about the apartments an activist works. */}
         <div className="border-t border-border pt-4 space-y-3">
           <span className="block text-sm font-medium">
-            {t("shliach_config.self_edit_locks", "נעילת שדות לעריכה עצמית")}
+            {t("shliach_config.apartment_edit_locks", "נעילת שדות לעריכה (דירות)")}
+          </span>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              "shliach_config.apartment_edit_locks_hint",
+              "סמן שדות דירה שפעילים לא יוכלו לערוך בעצמם. ללא סימון — כל השדות ניתנים לעריכה (אלא אם \"בטל אפשרות עריכה\" מסומן למעלה).",
+            )}
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {APARTMENT_FIELD_KEYS.map((k) => (
+              <label key={k} className="flex items-center gap-1.5 text-sm">
+                <input
+                  type="checkbox"
+                  checked={apartmentEditLockedFields.includes(k)}
+                  onChange={() => toggleApartmentEditLock(k)}
+                />
+                {fieldLabels[k]}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* fixes53 §7/§8: field-level locks for a shliach's own "עריכת המידע
+            שלך" self-edit — Email/Areas/Report Numbers are always locked
+            (never listed here); anything else is opt-in per org. fixes54 §6:
+            renamed from "נעילת שדות לעריכה עצמית" — that generic label read
+            as being about the same apartment editing as the section above,
+            when it's actually about the activist's own contact profile. */}
+        <div className="border-t border-border pt-4 space-y-3">
+          <span className="block text-sm font-medium">
+            {t("shliach_config.self_edit_locks", "נעילת שדות בפרופיל האישי של הפעיל")}
           </span>
           <p className="text-xs text-muted-foreground">
             {t(

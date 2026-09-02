@@ -113,6 +113,14 @@ entities that matter for orienting yourself:
   independent of any one user's column preferences.
 - **UserPreference** — per-account UI state (column choices/order, filters,
   locale) that follows the account across devices.
+- **OrganizationPreference** (`organization_prefs`, fixes54 §8) — superadmin-
+  managed per-org feature toggles, same key-value-JSON shape as
+  UserPreference. Area→Building→Apartment→Activist display cascades (an
+  ancestor off forces every descendant's *effective* value off regardless of
+  its own stored value — see `app/core/org_prefs.py`); `ai_query_enabled` is
+  a standalone switch. Effective flags ride along on `/api/auth/me` as
+  `organization.feature_flags`, gating the sidebar nav and each module's own
+  page (`isFeatureEnabled` helper in `lib/auth.tsx`).
 - **ShliachReportCompletion / ShliachSystemComment / ShliachAnnouncement** —
   the activist self-service loop: activists submit the first two, admins
   author the third (see §6).
@@ -132,7 +140,10 @@ entities that matter for orienting yourself:
   `{table, filters}` intent that `app/crm_manifest.py` validates against an
   explicit allowlist before turning it into a scoped query. (Earlier
   incarnation was an open-ended "digital twin" chat via OpenRouter — fully
-  replaced by this constrained design.)
+  replaced by this constrained design.) Admin/staff only — the Activist role
+  has no access at all (nav, page, and the endpoint itself all block
+  `shliach`); also gated org-wide by the superadmin `ai_query_enabled`
+  toggle (fixes54 §7/§8).
 - **`/dashboard/contacts`** — the mekurav CRM: filterable/sortable grid,
   customizable + reorderable columns, inline editing, bulk edit, visit
   logging, donations, significant dates, global search.
@@ -149,14 +160,20 @@ entities that matter for orienting yourself:
   links to their own profile edit + apartments, "Report completed"/
   "Comments about the system" actions, admin-announcement feed.
 - **`/dashboard/shliach-config`** — admin panel controlling what activists
-  can see/edit (default filters/columns, self-edit field locks) and the
+  can see/edit: default filters/columns, per-Apartment-field "Edit Lock"
+  (fixes54 §6 — distinct from the self-edit locks below), a "Customize
+  fields" kill switch, self-edit field locks for the activist's *own contact
+  profile* (name/phone/notes — a separate thing from the Apartment edit
+  locks, easy to conflate since both pages use "self-edit" wording), and the
   announcements feed they see.
 - **`/dashboard/picklists`**, **`/dashboard/custom-fields`**,
   **`/dashboard/fields`**, **`/dashboard/localization`** — the admin
   meta-layer: manage dropdown options, custom fields, field visibility, and
   UI translations.
 - **`/dashboard/settings`**, **`/dashboard/admin`** — org settings/branding;
-  platform superadmin tenant management.
+  platform superadmin tenant management, including per-org feature toggles
+  (Area/Building/Apartment/Activist display cascade + AI query — fixes54
+  §8, see OrganizationPreference in §4).
 
 ## 6. The activist ("shliach") experience, end to end
 

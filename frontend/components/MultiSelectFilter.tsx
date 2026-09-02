@@ -64,7 +64,7 @@ export function MultiSelectFilter<Id extends number | string>({
         onClick={() => setOpen((v) => !v)}
         className={`rounded-md border px-3 py-2 text-sm ${
           value.length > 0
-            ? "border-status-magenta text-status-magenta bg-status-magenta/5"
+            ? "border-primary text-primary bg-primary/5"
             : "border-input text-foreground hover:bg-accent"
         }`}
       >
@@ -74,7 +74,7 @@ export function MultiSelectFilter<Id extends number | string>({
         <div className="absolute z-30 mt-1 min-w-[12rem] max-h-64 overflow-y-auto rounded-xl border border-border bg-card shadow-lg p-2 space-y-1 text-sm">
           {searchable && (
             <input
-              className="w-full rounded-md border border-input px-2 py-1.5 focus:border-status-magenta focus:outline-none"
+              className="w-full rounded-md border border-input px-2 py-1.5 focus:border-primary focus:outline-none"
               placeholder={t("select.search_ph", "הקלד לחיפוש…")}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -94,7 +94,7 @@ export function MultiSelectFilter<Id extends number | string>({
               >
                 <input
                   type="checkbox"
-                  className="accent-status-magenta"
+                  className="accent-primary"
                   checked={value.includes(o.id)}
                   onChange={() => toggle(o.id)}
                 />
@@ -106,7 +106,7 @@ export function MultiSelectFilter<Id extends number | string>({
             <button
               type="button"
               onClick={() => onChange([])}
-              className="w-full text-start rounded px-2 py-1 text-status-magenta hover:bg-status-magenta/5"
+              className="w-full text-start rounded px-2 py-1 text-primary hover:bg-primary/5"
             >
               {t("filter.clear", "נקה סינון")}
             </button>

@@ -10,7 +10,7 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Sidebar, type SidebarGroup, type SidebarNavItem } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/lib/auth";
+import { isFeatureEnabled, useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
@@ -61,10 +61,20 @@ function DashboardChrome({ children }: { children: ReactNode }) {
           },
         ]),
   ]);
+  // fixes54 §8: superadmin cascading module toggles (Area -> Building ->
+  // Apartment -> Activist) — each nav entry is gated on its own module's
+  // *effective* (already-cascaded) flag from useAuth's session.
+  const org = user?.organization;
   const placeItems = adminOnly([
-    { href: "/dashboard/areas", label: t("nav.areas", "אזורים") },
-    { href: "/dashboard/buildings", label: t("nav.buildings", "בניינים"), admin: true },
-    { href: "/dashboard/apartments", label: t("nav.apartments", "דירות") },
+    ...(isFeatureEnabled(org, "area_display_enabled")
+      ? [{ href: "/dashboard/areas", label: t("nav.areas", "אזורים") }]
+      : []),
+    ...(isFeatureEnabled(org, "building_display_enabled")
+      ? [{ href: "/dashboard/buildings", label: t("nav.buildings", "בניינים"), admin: true }]
+      : []),
+    ...(isFeatureEnabled(org, "apartment_display_enabled")
+      ? [{ href: "/dashboard/apartments", label: t("nav.apartments", "דירות") }]
+      : []),
   ]);
   // fixes24 §2: dedicated Reports group — PDF generation plus the
   // report-number management page (moved out of Places; still admin-only).
@@ -87,7 +97,13 @@ function DashboardChrome({ children }: { children: ReactNode }) {
         },
       ]);
   const moreItems = adminOnly([
-    { href: "/dashboard/ai/query", label: t("nav.ai_query", "שאילתת AI") },
+    // fixes54 §7: the Activist role never gets AI query — was missing an
+    // `isShliach` guard entirely (only `admin` items were ever stripped for
+    // non-admins, so a shliach user still saw and could open this). fixes54
+    // §8: also gated on the superadmin-managed org-wide ai_query_enabled toggle.
+    ...(isShliach || !isFeatureEnabled(org, "ai_query_enabled")
+      ? []
+      : [{ href: "/dashboard/ai/query", label: t("nav.ai_query", "שאילתת AI") }]),
     { href: "/dashboard/picklists", label: t("nav.picklists", "רשימות בחירה"), admin: true },
     { href: "/dashboard/custom-fields", label: t("nav.custom_fields", "שדות מותאמים"), admin: true },
     { href: "/dashboard/fields", label: t("page.fields_title", "ניהול שדות"), admin: true },

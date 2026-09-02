@@ -15,7 +15,7 @@ import { MultiSelectEditor } from "@/components/ui/MultiSelectEditor";
 import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter";
 import { TruncatedText } from "@/components/ui/TruncatedText";
 import { apiFetch } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
+import { isFeatureEnabled, useAuth } from "@/lib/auth";
 import { mapsHref } from "@/lib/contactActions";
 import { useCustomFieldDefs } from "@/lib/customFields";
 import { useFieldSettings } from "@/lib/fieldSettings";
@@ -43,7 +43,7 @@ import {
 } from "@/lib/types";
 
 const inputClass =
-  "rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
 const PAGE_SIZES = [20, 50, 100];
 
@@ -112,6 +112,21 @@ export default function ApartmentsPage() {
   const shliachViewConfig = user?.organization?.shliach_view_config;
   const shliachEditDisabled = isShliach && !!shliachViewConfig?.disable_edit;
   const shliachFiltersHidden = isShliach && !!shliachViewConfig?.hide_filters;
+  // fixes54 §6: per-field "Edit Lock" (dashboard/shliach-config) — a
+  // narrower complement to the blanket disable_edit above. Only ever
+  // consulted for isShliach users, same as every other shliachViewConfig read
+  // on this page.
+  const apartmentEditLockedFields = new Set(
+    isShliach && Array.isArray(shliachViewConfig?.apartment_edit_locked_fields)
+      ? (shliachViewConfig.apartment_edit_locked_fields as string[])
+      : [],
+  );
+  const fieldEditLocked = (k: FieldKey) =>
+    shliachEditDisabled || apartmentEditLockedFields.has(k);
+  // fixes54 §6: hides the "Customize fields" column picker entirely for an
+  // activist when the admin has locked it — the feature itself (and its
+  // persisted per-user state) is untouched, just not reachable from the UI.
+  const customizeFieldsLocked = isShliach && !!shliachViewConfig?.customize_fields_locked;
   const { t, lang } = useLocalization();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -629,10 +644,32 @@ export default function ApartmentsPage() {
       value={a[field] ?? null}
       display={<TruncatedText text={label || "—"} />}
       commitOnBlur={false}
-      disabled={shliachEditDisabled}
+      disabled={fieldEditLocked(field)}
       onSave={(v) => saveListField(a, { [field]: v })}
       editor={(draft, _setDraft, commit) => (
         <PicklistSelect fieldKey={picklistKey} value={draft} onChange={commit} />
+      )}
+    />
+  );
+
+  // fixes54 §3: report_number_id is a real, directly-settable Apartment
+  // column (ApartmentEditor's own form already edits it via this exact
+  // SearchableSelect) — it just had no inline-grid editor, unlike every
+  // other plain field on this row.
+  const inlineReportNumberCell = (a: ApartmentListItem) => (
+    <InlineEdit<number | null>
+      value={a.report_number_id ?? null}
+      display={<TruncatedText text={a.report_number_name ?? "—"} />}
+      commitOnBlur={false}
+      disabled={fieldEditLocked("report_number")}
+      onSave={(v) => saveListField(a, { report_number_id: v })}
+      editor={(draft, _setDraft, commit) => (
+        <SearchableSelect
+          value={draft}
+          onChange={commit}
+          options={reportNumbers.map((rn) => ({ id: rn.id, label: rn.name }))}
+          placeholder={t("apt.choose_report_number", "בחר מספר דוח…")}
+        />
       )}
     />
   );
@@ -650,7 +687,7 @@ export default function ApartmentsPage() {
         />
       }
       commitOnBlur={false}
-      disabled={shliachEditDisabled}
+      disabled={fieldEditLocked("language")}
       onSave={(vals) => saveListField(a, { language: vals })}
       editor={(draft, setDraft, commit) => (
         <MultiSelectEditor onApply={() => commit(draft)}>
@@ -666,9 +703,16 @@ export default function ApartmentsPage() {
   );
 
   // fixes32 §6: plain-text inline edit for comments/email/phone.
+  // fixes54 §6: maps each model column to its FIELD_KEYS/Edit Lock name.
+  const TEXT_FIELD_LOCK_KEY: Record<"apartment_notes" | "email" | "phone" | "name", FieldKey> = {
+    apartment_notes: "notes",
+    email: "email",
+    phone: "phone",
+    name: "resident",
+  };
   const inlineTextCell = (
     a: ApartmentListItem,
-    field: "apartment_notes" | "email" | "phone",
+    field: "apartment_notes" | "email" | "phone" | "name",
     opts: { dir?: "ltr"; multiline?: boolean; validate?: (v: string) => string | null } = {},
   ) => (
     <InlineEdit<string>
@@ -684,7 +728,7 @@ export default function ApartmentsPage() {
       }
       validate={opts.validate}
       enterCommits={!opts.multiline}
-      disabled={shliachEditDisabled}
+      disabled={fieldEditLocked(TEXT_FIELD_LOCK_KEY[field])}
       onSave={(v) => saveListField(a, { [field]: v.trim() || null })}
       editor={(draft, setDraft) =>
         opts.multiline ? (
@@ -778,8 +822,11 @@ export default function ApartmentsPage() {
 
   function cell(a: ApartmentListItem, k: FieldKey) {
     switch (k) {
+      // fixes54 §3: was plain read-only text — no InlineEdit wrapper at all,
+      // so clicking it never opened an editor (unlike notes/phone/email
+      // right below, which already used inlineTextCell).
       case "resident":
-        return <TruncatedText text={a.name ?? "—"} />;
+        return inlineTextCell(a, "name");
       case "building": {
         const name = buildingDisplayName({
           id: a.building_id,
@@ -794,7 +841,7 @@ export default function ApartmentsPage() {
               target="_blank"
               rel="noopener noreferrer"
               title={t("apt.navigate", "ניווט בגוגל מפות")}
-              className="text-status-magenta hover:underline"
+              className="text-primary hover:underline"
             >
               📍 <TruncatedText text={name} />
             </a>
@@ -805,7 +852,7 @@ export default function ApartmentsPage() {
       case "area":
         return <TruncatedText text={a.area_name ?? "—"} />;
       case "report_number":
-        return <TruncatedText text={a.report_number_name ?? "—"} />;
+        return inlineReportNumberCell(a);
       // fixes32 §6: notes/email/phone edit in place, straight from the list row.
       case "notes":
         return inlineTextCell(a, "apartment_notes", { multiline: true });
@@ -894,6 +941,15 @@ export default function ApartmentsPage() {
   const currentFilterParams = buildFilterParams();
 
   if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
+  // fixes54 §8: the superadmin "Apartment display" toggle (cascades from
+  // Area -> Building) — defense in depth alongside the now-gone nav link.
+  if (!isFeatureEnabled(user?.organization, "apartment_display_enabled")) {
+    return (
+      <p className="text-status-darkred">
+        {t("page.module_disabled", "התכונה הזו כבויה עבור הארגון שלך.")}
+      </p>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -927,10 +983,15 @@ export default function ApartmentsPage() {
             </>
           )}
           {/* fixes38 §2.1: the columns toggle lives outside the filtersOpen
-              block so collapsing filters never hides it. */}
-          <Button type="button" variant="outline" onClick={() => setFieldsOpen((v) => !v)}>
-            <Settings2 className="h-4 w-4" /> {t("columns.fields_configure", "התאמת שדות")}
-          </Button>
+              block so collapsing filters never hides it. fixes54 §6: entirely
+              hidden from activists when an admin locks it — the previously
+              always-reachable "Customize fields" button an admin has no way
+              to turn off. */}
+          {!customizeFieldsLocked && (
+            <Button type="button" variant="outline" onClick={() => setFieldsOpen((v) => !v)}>
+              <Settings2 className="h-4 w-4" /> {t("columns.fields_configure", "התאמת שדות")}
+            </Button>
+          )}
           {!isShliach && (
             <>
               {!batchOpen && (
@@ -955,8 +1016,11 @@ export default function ApartmentsPage() {
       </div>
 
       {/* fixes38 §2.1: the columns panel is deliberately OUTSIDE the
-          filtersOpen fragment below, so collapsing filters never hides it. */}
-      {fieldsOpen && (
+          filtersOpen fragment below, so collapsing filters never hides it.
+          fixes54 §6: also gated on customizeFieldsLocked — fieldsOpen is
+          itself persisted, so a lock flipped on after an activist already had
+          the panel open must still hide it, not just the toggle button. */}
+      {fieldsOpen && !customizeFieldsLocked && (
         <div className="bg-card border border-border rounded-xl shadow-sm p-4 space-y-2">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">{t("columns.title", "עמודות מוצגות")}</h3>
@@ -1003,7 +1067,7 @@ export default function ApartmentsPage() {
                   <button
                     type="button"
                     onClick={withClickGuard(() => toggleField(k))}
-                    className="rounded-md border px-3 py-1.5 text-sm border-status-magenta bg-status-magenta/10 text-status-magenta cursor-grab active:cursor-grabbing"
+                    className="rounded-md border px-3 py-1.5 text-sm border-primary bg-primary/10 text-primary cursor-grab active:cursor-grabbing"
                   >
                     ⠿ {fieldLabels[k]}
                   </button>
@@ -1016,7 +1080,7 @@ export default function ApartmentsPage() {
                       disabled={activeIdx === 0}
                       onClick={() => moveActiveField(k, -1)}
                       title={t("action.move_up", "העלה")}
-                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-status-magenta hover:bg-accent active:bg-muted disabled:opacity-20"
+                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-primary hover:bg-accent active:bg-muted disabled:opacity-20"
                     >
                       ▲
                     </button>
@@ -1025,7 +1089,7 @@ export default function ApartmentsPage() {
                       disabled={activeIdx === activeFields.length - 1}
                       onClick={() => moveActiveField(k, 1)}
                       title={t("action.move_down", "הורד")}
-                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-status-magenta hover:bg-accent active:bg-muted disabled:opacity-20"
+                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-primary hover:bg-accent active:bg-muted disabled:opacity-20"
                     >
                       ▼
                     </button>
@@ -1060,7 +1124,7 @@ export default function ApartmentsPage() {
                   onClick={() => toggleCustomField(d.field_key)}
                   className={`rounded-md border px-3 py-1.5 text-sm ${
                     active
-                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
+                      ? "border-primary bg-primary/10 text-primary"
                       : "border-border text-muted-foreground hover:bg-accent"
                   }`}
                 >
@@ -1081,7 +1145,7 @@ export default function ApartmentsPage() {
                   onClick={() => toggleCustomFieldColumn(d.field_key)}
                   className={`rounded-md border px-3 py-1.5 text-sm ${
                     active
-                      ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
+                      ? "border-primary bg-primary/10 text-primary"
                       : "border-border text-muted-foreground hover:bg-accent"
                   }`}
                 >
@@ -1098,7 +1162,7 @@ export default function ApartmentsPage() {
               onClick={() => setShowContact(!showContact)}
               className={`rounded-md border px-3 py-1.5 text-sm ${
                 showContact
-                  ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
+                  ? "border-primary bg-primary/10 text-primary"
                   : "border-border text-muted-foreground hover:bg-accent"
               }`}
             >
@@ -1241,7 +1305,7 @@ export default function ApartmentsPage() {
               >
                 <input
                   type="checkbox"
-                  className="accent-status-magenta"
+                  className="accent-primary"
                   checked={isEmptyFilter}
                   onChange={(e) =>
                     onCustomFieldFilterChange(
@@ -1313,7 +1377,7 @@ export default function ApartmentsPage() {
           onClick={() => setGroupByBuilding(!groupByBuilding)}
           className={`rounded-md border px-3 py-2 ${
             groupByBuilding
-              ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
+              ? "border-primary bg-primary/10 text-primary"
               : "border-input hover:bg-accent"
           }`}
         >
@@ -1327,7 +1391,7 @@ export default function ApartmentsPage() {
             type="button"
             onClick={() => setBulkOpen(true)}
             disabled={busy || total === 0}
-            className="rounded-md border border-status-magenta text-status-magenta px-3 py-2 font-medium hover:bg-status-magenta/10 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="rounded-md border border-primary text-primary px-3 py-2 font-medium hover:bg-primary/10 disabled:opacity-40 disabled:cursor-not-allowed"
             title={t("bulkedit.open_hint", "עריכה מרובה של כל הדירות המסוננות")}
           >
             ✎ {t("bulkedit.open", "עריכה מרובה")}
@@ -1338,7 +1402,7 @@ export default function ApartmentsPage() {
           type="button"
           onClick={goToFilteredReport}
           disabled={total === 0}
-          className="rounded-md border border-status-magenta text-status-magenta px-3 py-2 font-medium hover:bg-status-magenta/10 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="rounded-md border border-primary text-primary px-3 py-2 font-medium hover:bg-primary/10 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           📄 {t("apt.create_report_from_filters", "צור דוח מהתוצאות המסוננות")}
         </button>
@@ -1526,7 +1590,7 @@ export default function ApartmentsPage() {
                           )}
                           {buildingCounts.has(a.building_id) && (
                             <span
-                              className="ms-2 rounded-full bg-status-magenta/10 text-status-magenta px-2 py-0.5 text-xs"
+                              className="ms-2 rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs"
                               style={{ unicodeBidi: "isolate" }}
                             >
                               {t("apt.group_count", "{n} דירות").replace(
@@ -1633,7 +1697,7 @@ export default function ApartmentsPage() {
                         {a.contact_id ? (
                           <Link
                             href={`/dashboard/contacts/${a.contact_id}`}
-                            className="rounded-full bg-status-magenta/10 text-status-magenta px-3 py-0.5 hover:bg-status-magenta/20"
+                            className="rounded-full bg-primary/10 text-primary px-3 py-0.5 hover:bg-primary/20"
                           >
                             {a.contact_name}
                           </Link>
@@ -1721,7 +1785,7 @@ function ApartmentNameCell({
     return (
       <input
         ref={inputRef}
-        className="rounded-md border border-status-magenta px-1.5 py-0.5 text-sm w-20 focus:outline-none"
+        className="rounded-md border border-primary px-1.5 py-0.5 text-sm w-20 focus:outline-none"
         value={draft}
         disabled={saving}
         onChange={(e) => setDraft(e.target.value)}
@@ -1743,7 +1807,7 @@ function ApartmentNameCell({
     <span className="group inline-flex items-center gap-1">
       <Link
         href={`/dashboard/apartments/${a.id}`}
-        className="font-medium text-status-magenta hover:underline"
+        className="font-medium text-primary hover:underline"
       >
         {apartmentTitle(a)}
       </Link>
@@ -1754,7 +1818,7 @@ function ApartmentNameCell({
           setEditing(true);
         }}
         title={t("inline.click_to_edit", "לחץ לעריכה")}
-        className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-status-magenta"
+        className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-primary"
       >
         ✎
       </button>
@@ -1885,7 +1949,7 @@ function BatchModal({
                 <button
                   type="button"
                   onClick={() => setSelectedFloors(floors.map((f) => f.id))}
-                  className="text-xs text-status-magenta hover:underline"
+                  className="text-xs text-primary hover:underline"
                 >
                   {t("batch.select_all", "בחר הכל")}
                 </button>
@@ -1902,13 +1966,13 @@ function BatchModal({
                     key={f.id}
                     className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm cursor-pointer ${
                       selectedFloors.includes(f.id)
-                        ? "border-status-magenta bg-status-magenta/10 text-status-magenta"
+                        ? "border-primary bg-primary/10 text-primary"
                         : "border-border text-muted-foreground hover:bg-accent"
                     }`}
                   >
                     <input
                       type="checkbox"
-                      className="accent-status-magenta"
+                      className="accent-primary"
                       checked={selectedFloors.includes(f.id)}
                       onChange={() => toggleFloor(f.id)}
                     />
@@ -1929,13 +1993,13 @@ function BatchModal({
               {labels.map((l) => (
                 <li
                   key={l}
-                  className="inline-flex items-center gap-1 rounded-full bg-status-magenta/10 text-status-magenta px-3 py-1 text-sm"
+                  className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-3 py-1 text-sm"
                 >
                   {l}
                   <button
                     type="button"
                     onClick={() => setLabels((prev) => prev.filter((x) => x !== l))}
-                    className="text-status-magenta/70 hover:text-status-darkred"
+                    className="text-primary/70 hover:text-status-darkred"
                     aria-label={t("action.remove", "הסר")}
                   >
                     ✕
@@ -1974,7 +2038,7 @@ function BatchModal({
             type="button"
             onClick={run}
             disabled={busy}
-            className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
+            className="rounded-md bg-primary text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
             {busy ? t("action.saving", "שומר…") : t("batch.create", "צור דירות")}
           </button>
@@ -2212,7 +2276,7 @@ function BulkEditModal({
         <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
           <input
             type="checkbox"
-            className="accent-status-magenta"
+            className="accent-primary"
             checked={on}
             onChange={(e) => setFieldEnabled(fieldKey, e.target.checked)}
           />
@@ -2291,7 +2355,7 @@ function BulkEditModal({
             type="button"
             onClick={apply}
             disabled={busy || total === 0}
-            className="rounded-md bg-status-magenta text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
+            className="rounded-md bg-primary text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
             {busy ? t("action.saving", "שומר…") : t("bulkedit.apply", "החל שינויים")}
           </button>

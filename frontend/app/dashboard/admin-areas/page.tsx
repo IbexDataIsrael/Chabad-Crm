@@ -14,9 +14,9 @@ import { type AdminArea } from "@/lib/types";
 import { useConfirm } from "@/lib/confirm";
 
 const inputClass =
-  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 const toolbarSelectClass =
-  "rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none";
+  "rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none";
 
 type SortKey = "name" | "created";
 

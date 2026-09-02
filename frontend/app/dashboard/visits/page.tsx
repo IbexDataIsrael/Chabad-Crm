@@ -110,7 +110,7 @@ export default function VisitsPage() {
           <span className="ms-auto flex items-center gap-2 text-muted-foreground">
             {t("pager.page_size", "בעמוד:")}
             <select
-              className="rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+              className="rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none"
               value={pageSize}
               onChange={(e) => {
                 setPageSize(Number(e.target.value));
@@ -171,7 +171,7 @@ export default function VisitsPage() {
                       {v.contact_id ? (
                         <Link
                           href={`/dashboard/contacts/${v.contact_id}`}
-                          className="text-status-magenta hover:underline"
+                          className="text-primary hover:underline"
                         >
                           {v.contact_name}
                         </Link>

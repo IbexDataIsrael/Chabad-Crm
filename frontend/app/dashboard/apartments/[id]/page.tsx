@@ -44,7 +44,7 @@ import {
 } from "@/lib/types";
 
 const inputClass =
-  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
 /** Apartment card (fixes30 §2): the fields edit in place, Google-style — the
  *  same InlineEdit flow as the contact page (fixes26 §2). Every save is a
@@ -350,7 +350,7 @@ export default function ApartmentDetailPage() {
                 {building ? (
                   <Link
                     href={`/dashboard/buildings/${building.id}`}
-                    className="text-status-magenta hover:underline"
+                    className="text-primary hover:underline"
                   >
                     {buildingDisplayName(building)}
                   </Link>
@@ -606,7 +606,7 @@ export default function ApartmentDetailPage() {
                       target="_blank"
                       rel="noopener noreferrer"
                       title={t("apt.navigate", "ניווט בגוגל מפות")}
-                      className="text-status-magenta hover:underline"
+                      className="text-primary hover:underline"
                     >
                       📍 {building.building_address}
                     </a>
@@ -633,7 +633,7 @@ export default function ApartmentDetailPage() {
           ) : (
             <>
               <select
-                className="w-full sm:w-auto rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none"
+                className="w-full sm:w-auto rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none"
                 value={snapshot?.id ?? ""}
                 onChange={(e) => {
                   const id = Number(e.target.value);
@@ -657,7 +657,7 @@ export default function ApartmentDetailPage() {
                     </p>
                     <button
                       onClick={() => setSnapshot(null)}
-                      className="text-xs text-status-magenta hover:underline"
+                      className="text-xs text-primary hover:underline"
                     >
                       {t("apt.history_back_current", "חזרה לגרסה הנוכחית")}
                     </button>
@@ -704,7 +704,7 @@ export default function ApartmentDetailPage() {
         {linked ? (
           <Link
             href={`/dashboard/contacts/${linked.id}`}
-            className="inline-block rounded-full bg-status-magenta/10 text-status-magenta px-3 py-1 text-sm hover:bg-status-magenta/20"
+            className="inline-block rounded-full bg-primary/10 text-primary px-3 py-1 text-sm hover:bg-primary/20"
           >
             {linked.name}
           </Link>
@@ -752,7 +752,7 @@ function SnapRow({
             type="button"
             onClick={restore}
             disabled={busy}
-            className="text-[11px] text-status-magenta hover:underline disabled:opacity-50"
+            className="text-[11px] text-primary hover:underline disabled:opacity-50"
           >
             {busy ? "…" : t?.("apt.restore", "שחזר") ?? "Restore"}
           </button>

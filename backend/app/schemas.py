@@ -74,6 +74,12 @@ class OrganizationOut(BaseModel):
     # fixes51 §4: the Shliach Role Configuration Panel's settings blob (null =
     # nothing configured yet).
     shliach_view_config: Optional[dict] = None
+    # fixes54 §8: this org's cascaded feature-toggle flags (see OrgPrefsOut /
+    # app.core.org_prefs) — set explicitly wherever OrganizationOut is built
+    # for a regular (non-superadmin) auth response, since it isn't a stored
+    # column on Organization. Defaults all-True so a session built before this
+    # was wired up (or a code path that never sets it) fails open, not closed.
+    feature_flags: dict[str, bool] = {}
 
 
 class OrganizationUpdate(BaseModel):
@@ -282,6 +288,27 @@ class AdminOrganizationOut(BaseModel):
     user_count: int
     admin_email: Optional[str] = None
     admin_name: Optional[str] = None
+
+
+class OrgPrefsOut(BaseModel):
+    """fixes54 §8: an organization's feature-toggle state — `raw` is exactly
+    what's stored (missing keys default to True); `effective` is `raw` after
+    the Area→Building→Apartment→Activist cascade (a disabled ancestor forces
+    every descendant False regardless of its own stored value)."""
+
+    raw: dict[str, bool]
+    effective: dict[str, bool]
+
+
+class OrgPrefsUpdate(BaseModel):
+    """Partial update — only keys present are changed; unknown keys ignored
+    server-side (see app.core.org_prefs.ALL_KEYS)."""
+
+    area_display_enabled: Optional[bool] = None
+    building_display_enabled: Optional[bool] = None
+    apartment_display_enabled: Optional[bool] = None
+    activist_system_enabled: Optional[bool] = None
+    ai_query_enabled: Optional[bool] = None
 
 
 class EmailTemplateOut(BaseModel):
@@ -686,6 +713,12 @@ class BuildingOut(BaseModel):
     latitude: Optional[float] = None
     is_town_house: bool = False
     floors: list[FloorOut] = []
+    # fixes54 §5: derived — true when this building holds exactly one active
+    # apartment and that apartment's identifier (apartment_name) contains
+    # "-th". Computed per-request in the router (not a stored column, unlike
+    # the admin-set `is_town_house` above); drives the small-house vs.
+    # standard-building icon in the UI.
+    is_townhouse: bool = False
 
 
 class BuildingPageOut(BaseModel):

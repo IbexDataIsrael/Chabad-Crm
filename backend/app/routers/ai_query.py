@@ -16,8 +16,9 @@ from sqlalchemy.orm import Session
 
 from app import crm_manifest, models
 from app.config import settings
+from app.core import org_prefs
 from app.database import get_db
-from app.deps import get_current_user
+from app.deps import require_staff_or_admin
 from app.schemas import AiQueryRequest, AiQueryResponse
 
 logger = logging.getLogger("app.ai_query")
@@ -64,8 +65,21 @@ def _extract_text(response) -> str:
 def query(
     payload: AiQueryRequest,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    # fixes54 §7: was get_current_user (any authenticated role, activist
+    # included) — the frontend hid the nav link and page for the Activist
+    # role, but the API itself never enforced it, so a direct request still
+    # went through. require_staff_or_admin matches every other org-tooling
+    # endpoint's shliach block (see its own docstring).
+    current_user: models.User = Depends(require_staff_or_admin),
 ):
+    # fixes54 §8: the superadmin-managed org-wide AI toggle — off by default
+    # for no org (DEFAULTS is all-True), only when a superadmin explicitly
+    # disables it for this tenant.
+    if not org_prefs.effective_flags(db, current_user.organization_id)["ai_query_enabled"]:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "AI query is disabled for this organization",
+        )
     if not settings.anthropic_api_key:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,

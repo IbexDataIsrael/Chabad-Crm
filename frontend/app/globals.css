@@ -5,18 +5,23 @@
 :root {
   --font-sans: var(--font-heebo), system-ui, "Segoe UI", "Arial Hebrew", "David", sans-serif;
 
-  /* Design tokens ported from fleet-flow-zippy-pro1 (design/fleet-flow-port).
-     Semantic colors are derived from the CLAUDE.md status palette so the two
-     vocabularies stay pixel-consistent: primary=magenta, success=green,
-     warning=yellow, destructive=darkred (see tailwind.config.js `status.*`
-     for the source hex values). */
+  /* Design tokens ported from fleet-flow-zippy-pro1 (design/fleet-flow-port),
+     re-themed to blue (see brand-blue-retheme memory / user request — sampled
+     from a Salesforce Classic reference screenshot: RGB(23,151,192)).
+     `primary`/`ring`/`sidebar-*` are the site's BRAND accent — buttons,
+     links, active nav, focus rings. This is intentionally independent of
+     `status.magenta` in tailwind.config.js, which stays #d6006e per
+     CLAUDE.md's "Core status indicators" requirement (real spreadsheet color
+     markers on data — contact color_tag, report striping, etc.) — the two
+     used to be the same hue by coincidence of the original port's "primary=
+     magenta" decision, not because they're meant to move together. */
   --background: 220 20% 97%;
   --foreground: 222 47% 11%;
   --card: 0 0% 100%;
   --card-foreground: 222 47% 11%;
   --popover: 0 0% 100%;
   --popover-foreground: 222 47% 11%;
-  --primary: 329 100% 42%;
+  --primary: 195 79% 42%;
   --primary-foreground: 0 0% 100%;
   --secondary: 210 40% 96%;
   --secondary-foreground: 222 47% 11%;
@@ -32,16 +37,16 @@
   --warning-foreground: 222 47% 11%;
   --border: 214 32% 91%;
   --input: 214 32% 91%;
-  --ring: 329 100% 42%;
+  --ring: 195 79% 42%;
   --radius: 0.75rem;
   --sidebar-background: 0 0% 98%;
   --sidebar-foreground: 240 5.3% 26.1%;
-  --sidebar-primary: 329 100% 42%;
+  --sidebar-primary: 195 79% 42%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 240 4.8% 95.9%;
   --sidebar-accent-foreground: 240 5.9% 10%;
   --sidebar-border: 220 13% 91%;
-  --sidebar-ring: 329 100% 42%;
+  --sidebar-ring: 195 79% 42%;
 }
 
 body {
@@ -51,10 +56,10 @@ body {
 /* fixes39 §3: SortableJS drag states for the "visible columns/fields"
    chip reorder (lib/useSortableList.ts). */
 .sortable-ghost {
-  @apply opacity-30 border-status-magenta bg-status-magenta/10;
+  @apply opacity-30 border-primary bg-primary/10;
 }
 .sortable-chosen {
-  @apply ring-2 ring-status-magenta;
+  @apply ring-2 ring-primary;
 }
 .sortable-drag {
   @apply opacity-90 shadow-lg;

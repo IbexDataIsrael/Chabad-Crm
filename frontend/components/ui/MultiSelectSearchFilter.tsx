@@ -93,7 +93,7 @@ export function MultiSelectSearchFilter<Id extends number | string>({
         onClick={() => setOpen((v) => !v)}
         className={`w-full rounded-md border px-3 py-2 text-sm text-start ${
           value.length > 0
-            ? "border-status-magenta text-status-magenta bg-status-magenta/5"
+            ? "border-primary text-primary bg-primary/5"
             : "border-input text-foreground hover:bg-accent"
         } ${buttonClassName}`}
       >
@@ -111,7 +111,7 @@ export function MultiSelectSearchFilter<Id extends number | string>({
             ref={searchRef}
             type="text"
             aria-label={searchPlaceholder ?? t("select.search_ph", "הקלד לחיפוש…")}
-            className="w-full rounded-md border border-input px-2 py-1.5 focus:border-status-magenta focus:outline-none"
+            className="w-full rounded-md border border-input px-2 py-1.5 focus:border-primary focus:outline-none"
             placeholder={searchPlaceholder ?? t("select.search_ph", "הקלד לחיפוש…")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -128,7 +128,7 @@ export function MultiSelectSearchFilter<Id extends number | string>({
                 <button
                   type="button"
                   onClick={selectAllVisible}
-                  className="text-status-magenta hover:underline"
+                  className="text-primary hover:underline"
                 >
                   {t("filter.select_all_shown", "בחר את המוצגים")}
                 </button>
@@ -137,7 +137,7 @@ export function MultiSelectSearchFilter<Id extends number | string>({
                 <button
                   type="button"
                   onClick={() => onChange([])}
-                  className="text-status-magenta hover:underline"
+                  className="text-primary hover:underline"
                 >
                   {t("filter.clear", "נקה סינון")}
                 </button>
@@ -165,7 +165,7 @@ export function MultiSelectSearchFilter<Id extends number | string>({
                     <label className="flex items-center gap-2 rounded px-2 py-1 cursor-pointer hover:bg-accent">
                       <input
                         type="checkbox"
-                        className="accent-status-magenta"
+                        className="accent-primary"
                         checked={checked}
                         onChange={() => toggle(o.id)}
                       />

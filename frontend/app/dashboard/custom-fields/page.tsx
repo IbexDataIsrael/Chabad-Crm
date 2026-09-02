@@ -157,7 +157,7 @@ export default function CustomFieldsPage() {
       )}
 
       {tab === "apartment" && (
-        <section className="space-y-6 rounded-2xl border-2 border-status-magenta/30 bg-status-magenta/5 p-5">
+        <section className="space-y-6 rounded-2xl border-2 border-primary/30 bg-primary/5 p-5">
           {renderGroups(["apartment"])}
           <AddDef
             entityOptions={ENTITY_TYPES.filter((e) => e.value === "apartment")}
@@ -439,7 +439,7 @@ function AddDef({
         />
         <button
           type="submit"
-          className="self-end rounded-md bg-status-magenta text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
+          className="self-end rounded-md bg-primary text-white px-4 py-1.5 text-sm font-medium hover:opacity-90"
         >
           {t("action.add", "הוסף")}
         </button>

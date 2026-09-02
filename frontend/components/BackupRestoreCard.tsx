@@ -11,7 +11,7 @@ import { useToast } from "@/lib/toast";
 import type { OrgBackup } from "@/lib/types";
 
 const inputClass =
-  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
 /**
  * Backup & restore card on the org settings page (fixes16, admin-only).

@@ -16,9 +16,15 @@ module.exports = {
         sm: "calc(var(--radius) - 4px)",
       },
       colors: {
-        // Core status indicators matching the source spreadsheet markers —
-        // kept as-is; the semantic tokens below (primary/success/etc.) are
-        // derived from these same hues so both vocabularies stay coherent.
+        // Core status indicators matching the source spreadsheet markers
+        // (CLAUDE.md) — fixed hex values, independent of the brand palette
+        // below (app/globals.css `--primary`/`--ring`/`--sidebar-*`). They
+        // used to share a hue by coincidence of the original fleet-flow
+        // port's "primary=magenta" decision; a later re-theme to blue moved
+        // the brand palette only — these stay put, they're real per-row
+        // data markers (contact color_tag, custom-field badge colors,
+        // Jewish-status chart legend in AdminDashboardHome.tsx), not UI
+        // chrome.
         status: {
           magenta: "#d6006e",
           green: "#1faa00",

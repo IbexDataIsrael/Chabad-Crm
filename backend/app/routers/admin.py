@@ -14,6 +14,7 @@ from app import models
 from app.config import settings
 from app.core.email import send_email, send_org_approved_user
 from app.core.org_clone import clone_organization
+from app.core import org_prefs
 from app.core.security import create_access_token, hash_password
 from app.database import get_db
 from app.deps import require_superadmin
@@ -24,6 +25,8 @@ from app.schemas import (
     AdminUserOut,
     EmailTemplateOut,
     EmailTemplateUpdate,
+    OrgPrefsOut,
+    OrgPrefsUpdate,
     SystemConfigOut,
     SystemConfigUpdate,
     Token,
@@ -248,6 +251,36 @@ def get_organization(
     _: models.User = Depends(require_superadmin),
 ):
     return _org_out(db, _get_org(db, org_id))
+
+
+@router.get("/organizations/{org_id}/prefs", response_model=OrgPrefsOut)
+def get_organization_prefs(
+    org_id: int,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_superadmin),
+):
+    """fixes54 §8: the org's feature-toggle state — see OrgPrefsOut for the
+    raw-vs-effective (cascaded) distinction."""
+    _get_org(db, org_id)
+    return OrgPrefsOut(
+        raw=org_prefs.get_raw_prefs(db, org_id),
+        effective=org_prefs.effective_flags(db, org_id),
+    )
+
+
+@router.put("/organizations/{org_id}/prefs", response_model=OrgPrefsOut)
+def update_organization_prefs(
+    org_id: int,
+    payload: OrgPrefsUpdate,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_superadmin),
+):
+    _get_org(db, org_id)
+    org_prefs.set_prefs(db, org_id, payload.model_dump(exclude_unset=True))
+    return OrgPrefsOut(
+        raw=org_prefs.get_raw_prefs(db, org_id),
+        effective=org_prefs.effective_flags(db, org_id),
+    )
 
 
 @router.get("/organizations/{org_id}/users", response_model=list[AdminUserOut])

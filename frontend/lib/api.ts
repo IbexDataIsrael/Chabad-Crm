@@ -331,6 +331,31 @@ export const adminImpersonateOrg = (orgId: number): Promise<{ access_token: stri
 export const adminApproveOrg = (orgId: number): Promise<AdminOrganization> =>
   apiFetch(`/api/admin/organizations/${orgId}/approve`, { method: "POST" });
 
+// fixes54 §8: superadmin-managed per-org feature toggles.
+export interface OrgPrefs {
+  raw: Record<string, boolean>;
+  effective: Record<string, boolean>;
+}
+export type OrgPrefsUpdate = Partial<{
+  area_display_enabled: boolean;
+  building_display_enabled: boolean;
+  apartment_display_enabled: boolean;
+  activist_system_enabled: boolean;
+  ai_query_enabled: boolean;
+}>;
+
+export const adminGetOrgPrefs = (orgId: number): Promise<OrgPrefs> =>
+  apiFetch(`/api/admin/organizations/${orgId}/prefs`);
+
+export const adminUpdateOrgPrefs = (
+  orgId: number,
+  updates: OrgPrefsUpdate,
+): Promise<OrgPrefs> =>
+  apiFetch(`/api/admin/organizations/${orgId}/prefs`, {
+    method: "PUT",
+    body: JSON.stringify(updates),
+  });
+
 export interface EmailTemplate {
   id: number;
   key: string;

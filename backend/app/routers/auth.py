@@ -23,6 +23,7 @@ from app.core.email import (
     send_org_pending_user,
     send_verification_email,
 )
+from app.core import org_prefs
 from app.core.security import (
     create_access_token,
     create_email_token,
@@ -446,6 +447,13 @@ def me(
     sh = _linked_shliach(db, current_user)
     if sh:
         out.shliach = _shliach_out(sh)
+    # fixes54 §8: the org's cascaded feature-toggle flags — every session
+    # bootstraps from this endpoint (useAuth's `user`), so this is the one
+    # place the frontend's nav/route guards need it set from.
+    if out.organization is not None:
+        out.organization.feature_flags = org_prefs.effective_flags(
+            db, current_user.organization_id
+        )
     return out
 
 

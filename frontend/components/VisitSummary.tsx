@@ -34,7 +34,7 @@ function currentWeekRange(lang: string): [string, string] {
 }
 
 const dateInputClass =
-  "rounded-md border border-input px-3 py-1.5 text-sm focus:border-status-magenta focus:outline-none";
+  "rounded-md border border-input px-3 py-1.5 text-sm focus:border-primary focus:outline-none";
 
 /** fixes38 §1.2/§1.3: "Summary of Visits" report + per-contact Visit Summary
  *  section — same component, `contactId` scopes it to one contact and hides
@@ -175,7 +175,7 @@ export function VisitSummary({ contactId }: { contactId?: number }) {
           >
             <input
               type="checkbox"
-              className="accent-status-magenta"
+              className="accent-primary"
               checked={scopeAll}
               disabled={!!assignedFilter}
               onChange={(e) => setScopeAll(e.target.checked)}
@@ -213,7 +213,7 @@ export function VisitSummary({ contactId }: { contactId?: number }) {
                           {/* fixes38 §1.2.2: clickable link to the contact page. */}
                           <Link
                             href={`/dashboard/contacts/${item.contact_id}`}
-                            className="text-status-magenta hover:underline"
+                            className="text-primary hover:underline"
                           >
                             {item.contact_name || `#${item.contact_id}`}
                           </Link>

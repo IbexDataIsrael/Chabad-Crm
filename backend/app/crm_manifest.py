@@ -25,7 +25,13 @@ from app.routers.contacts import _contacts_query
 ROW_CAP = 200
 MAX_FILTERS = 8
 
-_ALL_ROLES = frozenset({"admin", "staff", "shliach"})
+# fixes54 §7: "shliach" dropped — the Activist role has no AI query access at
+# all now (routers/ai_query.py gates the whole endpoint on require_staff_or_
+# admin). Kept here too, not just at the router, so `run_query`'s own role
+# check independently rejects a shliach request even if the router-level
+# gate is ever loosened by a future change — the name is legacy (every
+# *other* non-admin-only table stays open to both remaining roles).
+_ALL_ROLES = frozenset({"admin", "staff"})
 _ADMIN_ONLY = frozenset({"admin"})
 
 OPS_BY_KIND: dict[str, frozenset[str]] = {

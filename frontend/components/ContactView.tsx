@@ -36,7 +36,7 @@ import { InlineEdit } from "./ui/InlineEdit";
 import { MultiSelectEditor } from "./ui/MultiSelectEditor";
 
 const inputClass =
-  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
 // fixes50 §2.1: a subtle pill so field labels read as distinct from their
 // values instead of blending into the same gray weight. Background/text
@@ -668,7 +668,7 @@ export function ContactView({
           out as a minor detail, not the point. */}
       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {allFields.map(([, label, value]) => (
-          <div key={label} className="flex flex-col gap-1 rounded-lg border-2 border-status-magenta/25 p-3 transition-colors hover:border-status-magenta/50 hover:bg-status-magenta/5">
+          <div key={label} className="flex flex-col gap-1 rounded-lg border-2 border-primary/25 p-3 transition-colors hover:border-primary/50 hover:bg-primary/5">
             <dt className={dtClass} style={dtStyle}>{label}</dt>
             <dd className="text-sm">{value}</dd>
           </div>
@@ -676,7 +676,7 @@ export function ContactView({
         {contact.shliach && (
           <>
             {vis("contact_shliach.areas") && (
-              <div className="flex flex-col gap-1 rounded-lg border-2 border-status-magenta/25 p-3 transition-colors hover:border-status-magenta/50 hover:bg-status-magenta/5">
+              <div className="flex flex-col gap-1 rounded-lg border-2 border-primary/25 p-3 transition-colors hover:border-primary/50 hover:bg-primary/5">
                 <dt className={dtClass} style={dtStyle}>{t("contact_shliach.areas", "אזורים באחריות הפעיל")}</dt>
                 <dd className="text-sm">
                   {onPatch && isLocked("shliach.areas") ? (
@@ -709,7 +709,7 @@ export function ContactView({
             {/* fixes19: shluchim associate with report numbers (the covered
                 apartments grid is gone). */}
             {vis("contact_shliach.report_numbers") && (
-              <div className="flex flex-col gap-1 rounded-lg border-2 border-status-magenta/25 p-3 transition-colors hover:border-status-magenta/50 hover:bg-status-magenta/5">
+              <div className="flex flex-col gap-1 rounded-lg border-2 border-primary/25 p-3 transition-colors hover:border-primary/50 hover:bg-primary/5">
                 <dt className={dtClass} style={dtStyle}>
                   {t("contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל")}
                 </dt>
@@ -739,7 +739,7 @@ export function ContactView({
               </div>
             )}
             {vis("contact_shliach.notes") && (
-              <div className="flex flex-col gap-1 rounded-lg border-2 border-status-magenta/25 p-3 transition-colors hover:border-status-magenta/50 hover:bg-status-magenta/5">
+              <div className="flex flex-col gap-1 rounded-lg border-2 border-primary/25 p-3 transition-colors hover:border-primary/50 hover:bg-primary/5">
                 <dt className={dtClass} style={dtStyle}>{t("contact_shliach.notes", "הערות")}</dt>
                 <dd className="text-sm">
                   {inlineText("notes", contact.shliach.notes, {
@@ -753,7 +753,7 @@ export function ContactView({
             {/* fixes14: without a password the login is Google-only, which can
                 lock the shliach out. Empty input keeps the current password. */}
             {onPatch && (
-              <div className="flex flex-col gap-1 rounded-lg border-2 border-status-magenta/25 p-3 transition-colors hover:border-status-magenta/50 hover:bg-status-magenta/5">
+              <div className="flex flex-col gap-1 rounded-lg border-2 border-primary/25 p-3 transition-colors hover:border-primary/50 hover:bg-primary/5">
                 <dt className={dtClass} style={dtStyle}>
                   {t("contact_shliach.password", "סיסמה למערכת (לא חובה)")}
                 </dt>
@@ -761,7 +761,7 @@ export function ContactView({
                   <InlineEdit<string>
                     value=""
                     display={
-                      <span className="text-status-magenta">
+                      <span className="text-primary">
                         {t("contact_shliach.password_set", "קבע סיסמה חדשה")}
                       </span>
                     }

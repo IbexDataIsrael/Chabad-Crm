@@ -12,7 +12,7 @@ export function Footer() {
           Built by{" "}
           <a
             href="mailto:zvi.naiman@gmail.com"
-            className="font-medium text-status-magenta hover:underline"
+            className="font-medium text-primary hover:underline"
           >
             zvi.naiman@gmail.com
           </a>

@@ -10,14 +10,14 @@ import { ContactForm, type ContactFormValues } from "@/components/ContactForm";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
+import { isFeatureEnabled, useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
 import type { Area, Contact, UserSummary } from "@/lib/types";
 
 export default function NewShliachPage() {
   const router = useRouter();
-  const { isAdmin, loading } = useAuth();
+  const { isAdmin, loading, user } = useAuth();
   const { t } = useLocalization();
   const { success } = useToast();
   const [users, setUsers] = useState<UserSummary[]>([]);
@@ -43,6 +43,16 @@ export default function NewShliachPage() {
     return (
       <p className="text-status-darkred">
         {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
+      </p>
+    );
+  }
+  // fixes54 §8: the superadmin "Activist system" toggle — off blocks
+  // provisioning a new activist login (defense in depth; the backend itself
+  // also rejects contact_type=shliach creation — routers/contacts.py).
+  if (!isFeatureEnabled(user?.organization, "activist_system_enabled")) {
+    return (
+      <p className="text-status-darkred">
+        {t("page.module_disabled", "התכונה הזו כבויה עבור הארגון שלך.")}
       </p>
     );
   }

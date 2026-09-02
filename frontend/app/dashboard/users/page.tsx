@@ -16,7 +16,7 @@ import { InlineEdit } from "@/components/ui/InlineEdit";
 import { MultiSelectEditor } from "@/components/ui/MultiSelectEditor";
 import { TruncatedText } from "@/components/ui/TruncatedText";
 import { apiFetch } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
+import { isFeatureEnabled, useAuth } from "@/lib/auth";
 import { useConfirm } from "@/lib/confirm";
 import { useCustomFieldDefs } from "@/lib/customFields";
 import { useLocalization } from "@/lib/localization";
@@ -125,9 +125,9 @@ function gridColumnMinWidth(entry: GridColumn): string {
 }
 
 const inputClass =
-  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none focus:ring-1 focus:ring-status-magenta";
+  "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 const toolbarSelectClass =
-  "rounded-md border border-input px-3 py-2 text-sm focus:border-status-magenta focus:outline-none";
+  "rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none";
 
 /** Pages through /api/contacts/list (page_size capped at 100 server-side)
  *  until every matching shliach contact is collected — mirrors the same
@@ -416,7 +416,12 @@ export default function UsersPage() {
       v !== "" && shliachCustomFieldDefs.some((d) => d.field_key === k),
     ),
   );
+  // fixes54 §8: the superadmin "Activist system" toggle — off hides
+  // activist rows from this directory entirely (a reversible display gate,
+  // same as Area/Building/Apartment; no data is touched).
+  const activistSystemEnabled = isFeatureEnabled(me?.organization, "activist_system_enabled");
   const allRows: UnifiedRow[] = [...userRows, ...missingRows].filter((r) => {
+    if (r.role === "shliach" && !activistSystemEnabled) return false;
     if (roleFilter.length > 0 && !roleFilter.includes(r.role)) return false;
     if (!showInactive && !r.is_active) return false;
     if (geoFilterActive && r.role === "shliach" && r.kind === "user") {
@@ -869,7 +874,9 @@ export default function UsersPage() {
   const roleOptions: { id: Role; label: string }[] = [
     { id: "admin", label: t("users.role_admin", "מנהל מערכת") },
     { id: "staff", label: t("users.role_staff", "משתמש מוגבל") },
-    { id: "shliach", label: t("users.role_shliach", "פעיל") },
+    ...(activistSystemEnabled
+      ? [{ id: "shliach" as Role, label: t("users.role_shliach", "פעיל") }]
+      : []),
   ];
 
   return (
@@ -900,11 +907,15 @@ export default function UsersPage() {
           >
             {t("users.clear_assignments", "ניקוי שיבוצים")}
           </Button>
-          <Button asChild variant="outline" className="border-primary text-primary hover:bg-primary/10">
-            <Link href="/dashboard/contacts/new-shliach">
-              <Plus className="h-4 w-4" /> {t("page.add_shliach", "הוסף פעיל")}
-            </Link>
-          </Button>
+          {/* fixes54 §8: the superadmin "Activist system" toggle — off
+              hides the ability to add a new one from here. */}
+          {isFeatureEnabled(me?.organization, "activist_system_enabled") && (
+            <Button asChild variant="outline" className="border-primary text-primary hover:bg-primary/10">
+              <Link href="/dashboard/contacts/new-shliach">
+                <Plus className="h-4 w-4" /> {t("page.add_shliach", "הוסף פעיל")}
+              </Link>
+            </Button>
+          )}
           {!adding && (
             <Button onClick={() => setAdding(true)}>
               <Plus className="h-4 w-4" /> {t("users.add_user", "משתמש חדש")}
@@ -953,7 +964,7 @@ export default function UsersPage() {
                   <button
                     type="button"
                     onClick={withClickGuard(() => toggleGridColumn(entry))}
-                    className="rounded-md border px-3 py-1.5 text-sm border-status-magenta bg-status-magenta/10 text-status-magenta cursor-grab active:cursor-grabbing"
+                    className="rounded-md border px-3 py-1.5 text-sm border-primary bg-primary/10 text-primary cursor-grab active:cursor-grabbing"
                   >
                     ⠿ {gridColumnLabel(entry)}
                   </button>
@@ -963,7 +974,7 @@ export default function UsersPage() {
                       disabled={activeIdx === 0}
                       onClick={() => moveActiveColumn(entry, -1)}
                       title={t("action.move_up", "העלה")}
-                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-status-magenta hover:bg-accent active:bg-muted disabled:opacity-20"
+                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-primary hover:bg-accent active:bg-muted disabled:opacity-20"
                     >
                       ▲
                     </button>
@@ -972,7 +983,7 @@ export default function UsersPage() {
                       disabled={activeIdx === orderedActiveColumns.length - 1}
                       onClick={() => moveActiveColumn(entry, 1)}
                       title={t("action.move_down", "הורד")}
-                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-status-magenta hover:bg-accent active:bg-muted disabled:opacity-20"
+                      className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-primary hover:bg-accent active:bg-muted disabled:opacity-20"
                     >
                       ▼
                     </button>
@@ -1097,7 +1108,7 @@ export default function UsersPage() {
         <label className="inline-flex items-center gap-1.5 cursor-pointer text-muted-foreground">
           <input
             type="checkbox"
-            className="accent-status-magenta"
+            className="accent-primary"
             checked={showInactive}
             onChange={(e) => {
               setShowInactive(e.target.checked);
@@ -1234,7 +1245,7 @@ export default function UsersPage() {
                       </span>
                     ) : (
                       <select
-                        className="rounded-md border border-input px-2 py-1 text-xs focus:border-status-magenta focus:outline-none disabled:bg-background disabled:text-muted-foreground"
+                        className="rounded-md border border-input px-2 py-1 text-xs focus:border-primary focus:outline-none disabled:bg-background disabled:text-muted-foreground"
                         value={r.role}
                         disabled={me?.id === r.id}
                         onChange={(e) => changeRole(r, e.target.value as "admin" | "staff")}
@@ -1272,7 +1283,7 @@ export default function UsersPage() {
                       // popup form with no addressable URL and no history).
                       <Link
                         href={`/dashboard/users/${r.id}`}
-                        className="text-sm text-status-magenta hover:underline me-3"
+                        className="text-sm text-primary hover:underline me-3"
                       >
                         {t("action.open_edit", "פתח / עריכה ›")}
                       </Link>
@@ -1280,7 +1291,7 @@ export default function UsersPage() {
                       r.contactId != null && (
                         <Link
                           href={`/dashboard/contacts/${r.contactId}`}
-                          className="text-sm text-status-magenta hover:underline me-3"
+                          className="text-sm text-primary hover:underline me-3"
                         >
                           {t("action.open_edit", "פתח / עריכה ›")}
                         </Link>
