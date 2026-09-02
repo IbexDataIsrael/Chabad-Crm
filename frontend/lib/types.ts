@@ -529,3 +529,48 @@ export function roundCoord(n: number | null | undefined): number | null {
   return n == null ? null : Number(n.toFixed(5));
 }
 
+// --- Admin dashboard summary (GET /api/dashboard/summary) --------------------
+export interface DashboardStat {
+  value: number;
+  previous_value: number;
+}
+
+export interface DashboardTrendPoint {
+  date: string;
+  contacts: number;
+  apartments: number;
+}
+
+export interface DashboardActivistActivity {
+  user_id: number;
+  name: string;
+  edits: number;
+}
+
+export interface DashboardJewishStatusBreakdownItem {
+  value: string | null;
+  count: number;
+}
+
+export interface DashboardJewishStatusChange {
+  apartment_id: number;
+  label: string;
+  building_address: string | null;
+  old_value: string | null;
+  new_value: string | null;
+  changed_at: string;
+  editor_name: string | null;
+}
+
+export interface DashboardSummary {
+  range_days: number;
+  new_contacts: DashboardStat;
+  new_apartments: DashboardStat;
+  activist_edits: DashboardStat;
+  jewish_status_changes: DashboardStat;
+  trend: DashboardTrendPoint[];
+  top_activists: DashboardActivistActivity[];
+  jewish_status_breakdown: DashboardJewishStatusBreakdownItem[];
+  recent_jewish_changes: DashboardJewishStatusChange[];
+}
+

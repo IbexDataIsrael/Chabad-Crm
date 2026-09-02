@@ -1442,3 +1442,48 @@ class AiQueryResponse(BaseModel):
     rows: list[dict]
     row_count: int
     truncated: bool
+
+
+# --- Admin dashboard summary --------------------------------------------------
+class DashboardStat(BaseModel):
+    value: int
+    previous_value: int
+
+
+class DashboardTrendPoint(BaseModel):
+    date: str  # ISO date (YYYY-MM-DD)
+    contacts: int
+    apartments: int
+
+
+class DashboardActivistActivity(BaseModel):
+    user_id: int
+    name: str
+    edits: int
+
+
+class DashboardJewishStatusBreakdownItem(BaseModel):
+    value: Optional[str] = None
+    count: int
+
+
+class DashboardJewishStatusChange(BaseModel):
+    apartment_id: int
+    label: str
+    building_address: Optional[str] = None
+    old_value: Optional[str] = None
+    new_value: Optional[str] = None
+    changed_at: datetime
+    editor_name: Optional[str] = None
+
+
+class DashboardSummaryOut(BaseModel):
+    range_days: int
+    new_contacts: DashboardStat
+    new_apartments: DashboardStat
+    activist_edits: DashboardStat
+    jewish_status_changes: DashboardStat
+    trend: list[DashboardTrendPoint]
+    top_activists: list[DashboardActivistActivity]
+    jewish_status_breakdown: list[DashboardJewishStatusBreakdownItem]
+    recent_jewish_changes: list[DashboardJewishStatusChange]

@@ -87,7 +87,6 @@ function DashboardChrome({ children }: { children: ReactNode }) {
         },
       ]);
   const moreItems = adminOnly([
-    { href: "/dashboard", label: t("nav.home", "בית") },
     { href: "/dashboard/ai/query", label: t("nav.ai_query", "שאילתת AI") },
     { href: "/dashboard/picklists", label: t("nav.picklists", "רשימות בחירה"), admin: true },
     { href: "/dashboard/custom-fields", label: t("nav.custom_fields", "שדות מותאמים"), admin: true },
@@ -103,6 +102,11 @@ function DashboardChrome({ children }: { children: ReactNode }) {
   ]);
 
   const groups: SidebarGroup[] = [
+    // Ungrouped (no section heading) so the Home icon sits first, above every
+    // labeled group — same URL for every role; /dashboard itself renders the
+    // right thing per role (admin/staff dashboard, shliach's activist landing
+    // page, or a redirect for superadmin).
+    { label: "", items: [{ href: "/dashboard", label: t("nav.home", "בית") }] },
     { label: t("nav.group.people", "אנשים"), items: peopleItems },
     { label: t("nav.group.places", "מקומות"), items: placeItems },
     { label: t("reports.menu_title", "דוחות"), items: reportItems },

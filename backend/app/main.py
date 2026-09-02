@@ -53,6 +53,7 @@ from app.routers import (
     buildings,
     contacts,
     custom_fields,
+    dashboard,
     donations,
     field_settings,
     localization,
@@ -117,6 +118,7 @@ app.include_router(picklists.router)
 app.include_router(users.router)
 app.include_router(organizations.router)
 app.include_router(custom_fields.router)
+app.include_router(dashboard.router)
 app.include_router(field_settings.router)
 app.include_router(admin_areas.router)
 app.include_router(report_numbers.router)

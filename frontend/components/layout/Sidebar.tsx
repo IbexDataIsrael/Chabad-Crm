@@ -8,8 +8,8 @@ import {
   FileText,
   Hash,
   Home,
-  Languages,
   LayoutDashboard,
+  Languages,
   ListChecks,
   MapPin,
   MessageSquare,
@@ -137,10 +137,14 @@ export function Sidebar({
           {groups.map((group) => {
             if (group.items.length === 0) return null;
             return (
-              <div key={group.label}>
-                <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {group.label}
-                </p>
+              <div key={group.label || group.items[0].href}>
+                {/* An empty label marks an ungrouped item (e.g. Home) that sits
+                    above the labeled sections without its own heading. */}
+                {group.label && (
+                  <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {group.label}
+                  </p>
+                )}
                 <div className="space-y-1">
                   {group.items.map((item) => {
                     const Icon = ICONS[item.href] ?? LayoutDashboard;

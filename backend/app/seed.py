@@ -825,6 +825,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     # fixes48 §3: boolean custom-field column filter (Users page).
     ("common", "common.yes", "כן", "Yes"),
     ("common", "common.no", "לא", "No"),
+    ("common", "common.none", "ללא", "None"),
     # --- fixes26: inline editing, visit view mode, shliach login recovery ---
     ("action", "action.view", "הצג", "View"),
     ("inline", "inline.click_to_edit", "לחץ לעריכה", "Click to edit"),
@@ -1039,6 +1040,59 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ),
     ("activist_home", "activist_home.announcements", "עדכונים", "Announcements"),
     ("activist_home", "activist_home.no_announcements", "אין עדכונים כרגע.", "No announcements right now."),
+    # Admin dashboard home page (chat-originated, no fixesN spec).
+    ("dashboard", "dashboard.title", "לוח בקרה", "Dashboard"),
+    (
+        "dashboard", "dashboard.subtitle",
+        "סקירה כללית של הפעילות במערכת", "An overview of recent system activity",
+    ),
+    ("dashboard", "dashboard.range_label", "ב-{n} הימים האחרונים", "In the last {n} days"),
+    ("dashboard", "dashboard.stat.new_contacts", "אנשי קשר חדשים", "New contacts"),
+    ("dashboard", "dashboard.stat.new_apartments", "דירות חדשות", "New apartments"),
+    ("dashboard", "dashboard.stat.activist_activity", "פעילות פעילים", "Activist activity"),
+    (
+        "dashboard", "dashboard.stat.jewish_changes",
+        "שינויים בסטטוס יהדות", "Jewish-status changes",
+    ),
+    (
+        "dashboard", "dashboard.stat.vs_previous",
+        "לעומת התקופה הקודמת", "vs. previous period",
+    ),
+    (
+        "dashboard", "dashboard.chart.growth_title",
+        "גידול באנשי קשר ודירות", "Contact & apartment growth",
+    ),
+    (
+        "dashboard", "dashboard.chart.top_activists_title",
+        "פעילים מובילים", "Top activists",
+    ),
+    (
+        "dashboard", "dashboard.chart.top_activists_subtitle",
+        "עדכוני דירות לפי פעיל", "Apartment updates by activist",
+    ),
+    (
+        "dashboard", "dashboard.chart.jewish_breakdown_title",
+        "התפלגות שינויי סטטוס יהדות", "Jewish-status change breakdown",
+    ),
+    (
+        "dashboard", "dashboard.recent_changes_title",
+        "שינויים אחרונים בסטטוס יהדות", "Recent Jewish-status changes",
+    ),
+    (
+        "dashboard", "dashboard.recent_changes_empty",
+        "אין שינויים בטווח התאריכים הזה.", "No changes in this date range.",
+    ),
+    (
+        "dashboard", "dashboard.no_activity",
+        "אין פעילות פעילים בטווח התאריכים הזה.", "No activist activity in this date range.",
+    ),
+    ("dashboard", "dashboard.changed_by", "שונה ע\"י {name}", "Changed by {name}"),
+    ("dashboard", "dashboard.edits_count", "{n} עדכונים", "{n} updates"),
+    ("dashboard", "dashboard.view_all", "צפייה בהכל", "View all"),
+    (
+        "dashboard", "dashboard.coming_soon",
+        "בקרוב: קמפיינים ומשימות", "Coming soon: campaigns & tasks",
+    ),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)
