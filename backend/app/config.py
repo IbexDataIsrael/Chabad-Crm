@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./data/crm.sqlite3"
     secret_key: str = "change-me"
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 480
+    access_token_expire_minutes: int = 43200  # 30 days
 
     # Comma-separated list of allowed CORS origins (the frontend's public URL(s)).
     # Defaults to local dev; production sets CORS_ORIGINS to the deployed domain.

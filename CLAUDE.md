@@ -37,7 +37,7 @@ Ensure your `backend/.env` file contains:
 DATABASE_URL=sqlite:///./data/crm.sqlite3
 SECRET_KEY=your-super-secure-jwt-secret-key-change-it
 ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=480
+ACCESS_TOKEN_EXPIRE_MINUTES=43200
 ```
 
 ### Execution Commands
