@@ -144,9 +144,14 @@ export default function ActivistLandingPage() {
               >
                 <h3 className="font-semibold">{a.message_title}</h3>
                 <div
-                  className="mt-2 text-sm text-foreground"
+                  className="mt-2 min-w-0 overflow-hidden break-words p-[5px] text-sm text-foreground"
                   // fixes54 §5: admin-authored HTML from the shliach-config
                   // WYSIWYG editor — trusted content, admin-only write access.
+                  // break-words: an admin can paste an unbroken long URL (e.g.
+                  // a Google Drive share link) with no natural wrap points —
+                  // without it, that single "word" pushes the card past the
+                  // viewport width on real mobile Chrome (fine in desktop
+                  // responsive mode, which is more forgiving about overflow).
                   dangerouslySetInnerHTML={{ __html: a.message_content }}
                 />
               </Card>
