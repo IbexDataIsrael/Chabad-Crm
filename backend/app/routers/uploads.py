@@ -20,9 +20,11 @@ import time
 import uuid
 
 import requests
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 
+from app import models
 from app.config import settings
+from app.deps import require_admin
 
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 logger = logging.getLogger("app.uploads")
@@ -138,4 +140,142 @@ async def upload_logo(request: Request, file: UploadFile = File(...)) -> dict:
             resp.status_code,
         )
         return {"url": _save_logo_locally(data, content_type, request)}
+    return {"url": resp.json()["secure_url"]}
+
+
+# fixes56 §2: image picker for the announcement WYSIWYG editor
+# (/dashboard/shliach-config). Unlike the logo endpoints above (public,
+# single shared folder — the org isn't known yet at signup time), these are
+# admin-only and strictly scoped to the caller's own organization: each org
+# gets its own Cloudinary folder / local subfolder, so one org can never
+# list or upload into another org's image gallery.
+def _announcement_folder(org_id: int) -> str:
+    return f"orgs/{org_id}/announcements"
+
+
+def _save_announcement_image_locally(
+    data: bytes, content_type: str, request: Request, org_id: int
+) -> str:
+    ext = _IMAGE_EXTENSIONS.get(content_type, "png")
+    folder = os.path.join(settings.upload_dir, "announcements", str(org_id))
+    os.makedirs(folder, exist_ok=True)
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    with open(os.path.join(folder, filename), "wb") as f:
+        f.write(data)
+    return f"{str(request.base_url).rstrip('/')}/uploads/announcements/{org_id}/{filename}"
+
+
+def _list_announcement_images_locally(request: Request, org_id: int) -> list[dict]:
+    folder = os.path.join(settings.upload_dir, "announcements", str(org_id))
+    if not os.path.isdir(folder):
+        return []
+    entries = [
+        (name, os.path.getmtime(os.path.join(folder, name)))
+        for name in os.listdir(folder)
+        if os.path.isfile(os.path.join(folder, name))
+    ]
+    entries.sort(key=lambda e: e[1], reverse=True)
+    base = str(request.base_url).rstrip("/")
+    return [
+        {"url": f"{base}/uploads/announcements/{org_id}/{name}", "public_id": name}
+        for name, _mtime in entries
+    ]
+
+
+@router.get("/announcement-images")
+def list_announcement_images(
+    request: Request, admin: models.User = Depends(require_admin)
+) -> dict:
+    """Gallery of previously-uploaded announcement images, scoped to the
+    caller's own org (via `require_admin` — never trusts a client-supplied
+    org id)."""
+    org_id = admin.organization_id
+    if not settings.cloudinary_configured:
+        return {"images": _list_announcement_images_locally(request, org_id)}
+
+    try:
+        resp = requests.get(
+            f"https://api.cloudinary.com/v1_1/{settings.cloudinary_cloud_name}"
+            "/resources/image/upload",
+            params={
+                "prefix": f"{_announcement_folder(org_id)}/",
+                "type": "upload",
+                "max_results": 100,
+            },
+            auth=(settings.cloudinary_api_key, settings.cloudinary_api_secret),
+            timeout=15,
+        )
+    except requests.RequestException:
+        logger.warning("Cloudinary unreachable — falling back to local announcement images")
+        return {"images": _list_announcement_images_locally(request, org_id)}
+
+    if not resp.ok:
+        logger.warning("Cloudinary list failed (%s)", resp.status_code)
+        return {"images": _list_announcement_images_locally(request, org_id)}
+
+    resources = resp.json().get("resources", [])
+    return {
+        "images": [
+            {
+                "url": r["secure_url"],
+                "public_id": r["public_id"],
+                "created_at": r.get("created_at"),
+            }
+            for r in resources
+        ]
+    }
+
+
+@router.post("/announcement-image")
+async def upload_announcement_image(
+    request: Request,
+    file: UploadFile = File(...),
+    admin: models.User = Depends(require_admin),
+) -> dict:
+    """Upload one image into the caller's own org folder. Admin-only (unlike
+    /logo, this always has an authenticated org to scope to)."""
+    org_id = admin.organization_id
+    content_type = file.content_type or ""
+    if content_type not in _IMAGE_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="File must be an image"
+        )
+    data = await file.read()
+    if len(data) > MAX_LOGO_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Image too large (max 5MB)",
+        )
+
+    if not settings.cloudinary_configured:
+        return {"url": _save_announcement_image_locally(data, content_type, request, org_id)}
+
+    folder = _announcement_folder(org_id)
+    timestamp = int(time.time())
+    signed_params = {"folder": folder, "timestamp": str(timestamp)}
+    signature = _sign(signed_params, settings.cloudinary_api_secret)
+    try:
+        resp = requests.post(
+            f"https://api.cloudinary.com/v1_1/{settings.cloudinary_cloud_name}/image/upload",
+            data={
+                "api_key": settings.cloudinary_api_key,
+                "timestamp": timestamp,
+                "folder": folder,
+                "signature": signature,
+            },
+            files={"file": (file.filename or "image", data, file.content_type)},
+            timeout=30,
+        )
+    except requests.RequestException:
+        logger.warning(
+            "Cloudinary unreachable — falling back to local announcement-image storage"
+        )
+        return {"url": _save_announcement_image_locally(data, content_type, request, org_id)}
+
+    if not resp.ok:
+        logger.warning(
+            "Cloudinary upload failed (%s) — falling back to local announcement-image storage",
+            resp.status_code,
+        )
+        return {"url": _save_announcement_image_locally(data, content_type, request, org_id)}
     return {"url": resp.json()["secure_url"]}

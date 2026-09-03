@@ -648,6 +648,13 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("editor", "editor.link", "קישור", "Link"),
     ("editor", "editor.list", "רשימה", "List"),
     ("editor", "editor.link_prompt", "כתובת הקישור:", "Link URL:"),
+    ("editor", "editor.image", "תמונה", "Image"),
+    # --- fixes56 §2: announcement image picker ---
+    ("image_picker", "image_picker.title", "בחר תמונה", "Choose an image"),
+    ("image_picker", "image_picker.upload_new", "העלה תמונה חדשה", "Upload new image"),
+    ("image_picker", "image_picker.none", "אין עדיין תמונות שמורות — העלה תמונה חדשה.", "No saved images yet — upload one."),
+    ("image_picker", "image_picker.load_failed", "טעינת התמונות נכשלה", "Failed to load images"),
+    ("image_picker", "image_picker.upload_failed", "העלאת התמונה נכשלה", "Image upload failed"),
     # --- fixes16: backup & restore ---
     ("backup", "backup.title", "גיבוי ושחזור", "Backup & restore"),
     ("backup", "backup.intro", "צור נקודת שחזור של נתוני הארגון, ושחזר אליה אם משהו השתבש. נשמרות עד 10 נקודות; חשבונות המשתמשים אינם חלק מהגיבוי.", "Create a restore point of your organization's data and restore to it if something goes wrong. Up to 10 points are kept; user accounts are not part of the backup."),

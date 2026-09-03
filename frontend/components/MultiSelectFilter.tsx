@@ -12,12 +12,19 @@ import { useLocalization } from "@/lib/localization";
  */
 export function MultiSelectFilter<Id extends number | string>({
   allLabel,
+  label,
   options,
   value,
   onChange,
 }: {
   /** Button text while nothing is selected, e.g. "כל האזורים". */
   allLabel: string;
+  /** fixes56 §3: short, persistent filter name (e.g. "אזור") kept visible as
+   *  a prefix once something is checked — otherwise the button text becomes
+   *  just the selected value ("צפון") or a bare count ("2 נבחרו"), losing
+   *  which filter that even is. Omit to keep the old (pre-fixes56) behavior
+   *  for callers that haven't been given a short label yet. */
+  label?: string;
   options: { id: Id; label: string }[];
   value: Id[];
   onChange: (ids: Id[]) => void;
@@ -50,12 +57,12 @@ export function MultiSelectFilter<Id extends number | string>({
     onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
   }
 
+  const selectedText =
+    value.length === 1
+      ? options.find((o) => o.id === value[0])?.label ?? allLabel
+      : t("filter.n_selected", "{n} נבחרו").replace("{n}", String(value.length));
   const summary =
-    value.length === 0
-      ? allLabel
-      : value.length === 1
-        ? options.find((o) => o.id === value[0])?.label ?? allLabel
-        : t("filter.n_selected", "{n} נבחרו").replace("{n}", String(value.length));
+    value.length === 0 ? allLabel : label ? `${label}: ${selectedText}` : selectedText;
 
   return (
     <div ref={rootRef} className="relative inline-block">

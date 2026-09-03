@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { Plus } from "lucide-react";
+import { ImagePickerModal } from "@/components/ImagePickerModal";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter";
@@ -87,15 +88,20 @@ export default function ShliachConfigPage() {
   const mezuzah = usePicklist("apartment.mezuzah_status");
   const language = usePicklist("apartment.language");
   // fixes53 §8: any admin-added shliach.* custom field/picklist is also a
-  // lockable self-edit option, alongside the 4 fixed ones.
+  // lockable self-edit option, alongside the 4 fixed ones. fixes56 §1:
+  // exclude "email" even if an admin created a same-keyed custom
+  // field/picklist — it's one of ContactView's MANDATORY_SELF_EDIT_LOCKS
+  // (always locked) and must never appear here as if it were optional.
   const shliachCustomFieldDefs = useCustomFieldDefs("contact_shliach").filter(
-    (d) => d.field_type !== "select",
+    (d) => d.field_type !== "select" && d.field_key !== "email",
   );
   const [shliachPicklistDefs, setShliachPicklistDefs] = useState<PicklistField[]>([]);
   useEffect(() => {
     apiFetch<PicklistField[]>("/api/picklists")
       .then((defs) =>
-        setShliachPicklistDefs(defs.filter((d) => d.entity_type === "contact_shliach")),
+        setShliachPicklistDefs(
+          defs.filter((d) => d.entity_type === "contact_shliach" && d.field_key !== "email"),
+        ),
       )
       .catch(() => setShliachPicklistDefs([]));
   }, []);
@@ -409,6 +415,7 @@ export default function ShliachConfigPage() {
           <div className="flex flex-wrap gap-2">
             <MultiSelectFilter
               allLabel={t("filter.all_areas", "כל האזורים")}
+              label={fieldLabels.area}
               options={areas.map((a) => ({ id: a.id, label: a.area_name }))}
               value={areaIds}
               onChange={setAreaIds}
@@ -416,6 +423,7 @@ export default function ShliachConfigPage() {
             <MultiSelectSearchFilter
               className="w-56"
               allLabel={t("filter.all_buildings", "כל הבניינים")}
+              label={fieldLabels.building}
               options={buildings.map((b) => ({ id: b.id, label: buildingDisplayName(b) }))}
               value={buildingIds}
               onChange={setBuildingIds}
@@ -423,18 +431,21 @@ export default function ShliachConfigPage() {
             />
             <MultiSelectFilter
               allLabel={t("filter.all_jewish", "כל סטטוסי היהדות")}
+              label={fieldLabels.jewish_status}
               options={jewish.options.map((o) => ({ id: o.value, label: jewish.display(o) }))}
               value={jewishFilter}
               onChange={setJewishFilter}
             />
             <MultiSelectFilter
               allLabel={t("filter.all_mezuzah", "כל סטטוסי המזוזה")}
+              label={fieldLabels.mezuzah_status}
               options={mezuzah.options.map((o) => ({ id: o.value, label: mezuzah.display(o) }))}
               value={mezuzahFilter}
               onChange={setMezuzahFilter}
             />
             <MultiSelectFilter
               allLabel={t("filter.all_languages", "כל השפות")}
+              label={fieldLabels.language}
               options={language.options.map((o) => ({ id: o.value, label: language.display(o) }))}
               value={languageFilter}
               onChange={setLanguageFilter}
@@ -581,6 +592,24 @@ function AnnouncementForm({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // fixes56 §2: the RichTextEditor's image-picker button opens this modal and
+  // awaits a URL (or null on cancel/close) via a pending-promise resolver.
+  const [imagePickerOpen, setImagePickerOpen] = useState(false);
+  const imagePickerResolve = useRef<((url: string | null) => void) | null>(null);
+
+  function openImagePicker(): Promise<string | null> {
+    return new Promise((resolve) => {
+      imagePickerResolve.current = resolve;
+      setImagePickerOpen(true);
+    });
+  }
+
+  function resolveImagePicker(url: string | null) {
+    setImagePickerOpen(false);
+    imagePickerResolve.current?.(url);
+    imagePickerResolve.current = null;
+  }
+
   async function save(e: FormEvent) {
     e.preventDefault();
     setError("");
@@ -629,7 +658,12 @@ function AnnouncementForm({
         <span className="block text-sm font-medium">
           {t("shliach_config.announcement_content", "תוכן ההודעה")}
         </span>
-        <RichTextEditor value={content} onChange={setContent} dir={lang === "en" ? "ltr" : "rtl"} />
+        <RichTextEditor
+          value={content}
+          onChange={setContent}
+          dir={lang === "en" ? "ltr" : "rtl"}
+          imagePicker={openImagePicker}
+        />
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input
@@ -648,6 +682,12 @@ function AnnouncementForm({
           {t("action.cancel", "ביטול")}
         </Button>
       </div>
+      {imagePickerOpen && (
+        <ImagePickerModal
+          onSelect={(url) => resolveImagePicker(url)}
+          onClose={() => resolveImagePicker(null)}
+        />
+      )}
     </form>
   );
 }

@@ -19,6 +19,7 @@ import { useLocalization } from "@/lib/localization";
  */
 export function MultiSelectSearchFilter<Id extends number | string>({
   allLabel,
+  label,
   options,
   value,
   onChange,
@@ -29,6 +30,11 @@ export function MultiSelectSearchFilter<Id extends number | string>({
 }: {
   /** Trigger text while nothing is selected, e.g. "כל הבניינים". */
   allLabel: string;
+  /** fixes56 §3: short, persistent filter name (e.g. "בניין") kept visible as
+   *  a prefix once something is checked, so the trigger doesn't collapse to
+   *  just the selected value or a bare count once active. Omit to keep the
+   *  old (pre-fixes56) behavior. */
+  label?: string;
   options: { id: Id; label: string }[];
   value: Id[];
   onChange: (ids: Id[]) => void;
@@ -77,11 +83,12 @@ export function MultiSelectSearchFilter<Id extends number | string>({
 
   const selectedLabel = useMemo(() => {
     if (value.length === 0) return allLabel;
-    if (value.length === 1) {
-      return options.find((o) => o.id === value[0])?.label ?? allLabel;
-    }
-    return t("filter.n_selected", "{n} נבחרו").replace("{n}", String(value.length));
-  }, [value, options, allLabel, t]);
+    const selectedText =
+      value.length === 1
+        ? options.find((o) => o.id === value[0])?.label ?? allLabel
+        : t("filter.n_selected", "{n} נבחרו").replace("{n}", String(value.length));
+    return label ? `${label}: ${selectedText}` : selectedText;
+  }, [value, options, allLabel, label, t]);
 
   return (
     <div ref={rootRef} className={`relative inline-block ${className}`}>

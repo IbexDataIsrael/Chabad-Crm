@@ -1,5 +1,6 @@
 "use client";
 
+import { Image as ImageIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useLocalization } from "@/lib/localization";
@@ -15,12 +16,20 @@ export function RichTextEditor({
   value,
   onChange,
   dir = "ltr",
+  imagePicker,
 }: {
   value: string;
   onChange: (html: string) => void;
   dir?: "ltr" | "rtl";
+  /** fixes56 §2: when provided, adds an image toolbar button that calls this
+   *  to get a URL (resolving `null` cancels) and inserts it as an <img> at
+   *  the caret. Opt-in per instance — the picker is org-scoped and specific
+   *  to the announcement editor, not something every RichTextEditor caller
+   *  (e.g. the email-template editor) should get for free. */
+  imagePicker?: () => Promise<string | null>;
 }) {
   const { t } = useLocalization();
+  const [pickerBusy, setPickerBusy] = useState(false);
   const isFullDocument = /<html[\s>]|<!doctype/i.test(value);
   const [mode, setMode] = useState<"visual" | "html">(
     isFullDocument ? "html" : "visual",
@@ -44,6 +53,17 @@ export function RichTextEditor({
   function addLink() {
     const url = window.prompt(t("editor.link_prompt", "כתובת הקישור:"), "https://");
     if (url) exec("createLink", url);
+  }
+
+  async function openImagePicker() {
+    if (!imagePicker || pickerBusy) return;
+    setPickerBusy(true);
+    try {
+      const url = await imagePicker();
+      if (url) exec("insertImage", url);
+    } finally {
+      setPickerBusy(false);
+    }
   }
 
   const toolBtn =
@@ -78,6 +98,17 @@ export function RichTextEditor({
             <button type="button" className={toolBtn} title={t("editor.link", "קישור")} onClick={addLink}>
               🔗
             </button>
+            {imagePicker && (
+              <button
+                type="button"
+                className={toolBtn}
+                title={t("editor.image", "תמונה")}
+                disabled={pickerBusy}
+                onClick={openImagePicker}
+              >
+                <ImageIcon className="h-3.5 w-3.5" />
+              </button>
+            )}
           </>
         )}
         <span className="ms-auto flex items-center gap-1">

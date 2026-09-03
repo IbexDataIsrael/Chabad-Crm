@@ -57,6 +57,34 @@ export async function uploadLogo(file: File): Promise<string> {
   return data.url as string;
 }
 
+/** fixes56 §2: upload one image into the caller's org-scoped announcement
+ * gallery (admin-only backend endpoint). Mirrors `uploadLogo` — multipart,
+ * not JSON, so it bypasses apiFetch. */
+export async function uploadAnnouncementImage(file: File): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${API_URL}/api/uploads/announcement-image`, {
+    method: "POST",
+    body: form,
+    headers,
+  });
+  if (!res.ok) {
+    let detail = "Image upload failed";
+    try {
+      const data = await res.json();
+      detail = data.detail || detail;
+    } catch {
+      /* keep default */
+    }
+    throw new ApiError(res.status, detail);
+  }
+  const data = await res.json();
+  return data.url as string;
+}
+
 /** Authenticated file download: fetches `path` with the Bearer token (a plain
  * <a href> can't carry it) and hands the blob to the browser as a download.
  * The filename comes from Content-Disposition, falling back to `fallback`. */
