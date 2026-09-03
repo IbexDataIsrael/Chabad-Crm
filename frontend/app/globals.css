@@ -3,6 +3,11 @@
 @tailwind utilities;
 
 :root {
+  /* Belt-and-suspenders for the <meta name="color-scheme"> in app/layout.tsx
+     (root layout metadata) — themes native form controls/scrollbars and gives
+     browsers the light-only signal even before that meta tag parses. */
+  color-scheme: light;
+
   --font-sans: var(--font-heebo), system-ui, "Segoe UI", "Arial Hebrew", "David", sans-serif;
 
   /* Design tokens ported from fleet-flow-zippy-pro1 (design/fleet-flow-port),

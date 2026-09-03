@@ -1,5 +1,5 @@
 import "./globals.css";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Heebo } from "next/font/google";
 
 import { Footer } from "@/components/Footer";
@@ -30,6 +30,17 @@ export const metadata: Metadata = {
     apple: "/apple-touch-icon.png",
   },
   manifest: "/site.webmanifest",
+};
+
+// The design system (tailwind.config.js tokens, status colors) is light-only —
+// no dark variant exists. Without this, Android Chrome's "force dark for web
+// content" auto-inverts the page on phones in system dark mode, which mangles
+// `backdrop-blur` / fixed-position layers (e.g. the sticky header, the mobile
+// nav drawer) into solid dark boxes. Desktop Chrome and headless/emulated
+// Chromium don't apply that renderer feature, so this only shows on real
+// Android devices — reported as the activist page looking broken.
+export const viewport: Viewport = {
+  colorScheme: "light",
 };
 
 export default function RootLayout({
