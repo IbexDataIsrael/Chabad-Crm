@@ -494,6 +494,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("buildings", "buildings.floors", "קומות", "Floors"),
     ("buildings", "buildings.num_floors", "מספר קומות", "Number of floors"),
     ("buildings", "buildings.num_floors_hint", "בעת יצירת הבניין ייווצרו קומות 1 עד המספר שנבחר.", "Creating the building auto-creates floors 1 through the chosen number."),
+    ("buildings", "buildings.include_lobby", "כלול קומת לובי (L) לפני קומה 1", "Include a lobby floor (L) before floor 1"),
     ("floors", "floors.add", "הוסף קומה", "Add floor"),
     ("floors", "floors.name", "שם קומה", "Floor name"),
     ("floors", "floors.none", "אין קומות בבניין זה.", "No floors in this building."),

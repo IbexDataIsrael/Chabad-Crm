@@ -45,6 +45,11 @@ function AddBuildingInner() {
   const [coords, setCoords] = useState("");
   // fixes8 §1A: new buildings start with 8 floors unless the user overrides.
   const [numFloors, setNumFloors] = useState("8");
+  // fixes57: optionally prepend a lobby floor ("L") ahead of floor 1 — the
+  // backend already sorts an "L" floor ahead of every numbered one when
+  // added via the floors editor (fixes52 §3); this just offers the same
+  // floor at creation time instead of requiring a separate edit-page step.
+  const [includeLobby, setIncludeLobby] = useState(false);
   // fixes19 §4: a town house (בית פרטי) skips floor generation entirely — the
   // server spawns a single "<name>-th" apartment instead.
   const [isTownHouse, setIsTownHouse] = useState(false);
@@ -103,10 +108,14 @@ function AddBuildingInner() {
     setGeoWarning(false);
     setBusy(true);
     const n = Number(numFloors);
-    const floors =
+    const numberedFloors =
       !isTownHouse && Number.isFinite(n) && n > 0
         ? Array.from({ length: Math.min(n, 200) }, (_, i) => String(i + 1))
         : [];
+    // "L" first in the array = sort_order 0 at creation time, ahead of every
+    // numbered floor — same end result as the floors editor's own "L always
+    // sorts first" rule (fixes52 §3), just set up in one step here.
+    const floors = !isTownHouse && includeLobby ? ["L", ...numberedFloors] : numberedFloors;
     try {
       await apiFetch("/api/buildings", {
         method: "POST",
@@ -228,23 +237,33 @@ function AddBuildingInner() {
                 )}
               </p>
             ) : (
-              <label className="block space-y-1">
-                <span className="block text-sm font-medium">{t("buildings.num_floors", "מספר קומות")}</span>
-                <input
-                  type="number"
-                  min="0"
-                  dir="ltr"
-                  className={inputClass}
-                  value={numFloors}
-                  onChange={(e) => setNumFloors(e.target.value)}
-                />
-                <span className="block text-xs text-muted-foreground">
-                  {t(
-                    "buildings.num_floors_hint",
-                    "בעת יצירת הבניין ייווצרו קומות 1 עד המספר שנבחר.",
-                  )}
-                </span>
-              </label>
+              <>
+                <label className="block space-y-1">
+                  <span className="block text-sm font-medium">{t("buildings.num_floors", "מספר קומות")}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    dir="ltr"
+                    className={inputClass}
+                    value={numFloors}
+                    onChange={(e) => setNumFloors(e.target.value)}
+                  />
+                  <span className="block text-xs text-muted-foreground">
+                    {t(
+                      "buildings.num_floors_hint",
+                      "בעת יצירת הבניין ייווצרו קומות 1 עד המספר שנבחר.",
+                    )}
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 text-sm self-end pb-1">
+                  <input
+                    type="checkbox"
+                    checked={includeLobby}
+                    onChange={(e) => setIncludeLobby(e.target.checked)}
+                  />
+                  {t("buildings.include_lobby", "כלול קומת לובי (L) לפני קומה 1")}
+                </label>
+              </>
             )}
           </div>
 
