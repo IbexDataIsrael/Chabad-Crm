@@ -76,6 +76,9 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     # fixes51 §4: admin-only config panel for the Shliach role's Apartments view.
     ("nav", "nav.shliach_config", "הגדרות לתצוגת פעילים", "Configuration for Activist Role"),
     ("nav", "nav.settings", "הגדרות", "Settings"),
+    # fixes57 §4: desktop sidebar collapse toggle.
+    ("nav", "nav.collapse_sidebar", "צמצם תפריט", "Collapse menu"),
+    ("nav", "nav.expand_sidebar", "הצג תפריט", "Expand menu"),
     ("nav", "nav.donations", "תרומות", "Donations"),
     ("nav", "nav.system_admin", "מנהל מערכת", "System admin"),
     # --- System admin (platform superadmin dashboard) ---
@@ -606,6 +609,8 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("filter", "filter.hide_filters", "הסתר סינון", "Hide filters"),
     # fixes29 urgents: one-click reset when active filters empty the list.
     ("filter", "filter.clear_all", "נקה את כל הסינונים", "Clear all filters"),
+    # fixes57 §2: the "-" option offered on filters whose value can be blank.
+    ("filter", "filter.empty_option", "- (ריק)", "- (empty)"),
     (
         "page",
         "page.no_contacts_filtered",

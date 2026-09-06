@@ -78,6 +78,7 @@ export function Sidebar({
   shliachSuffix,
   open,
   onClose,
+  desktopCollapsed = false,
 }: {
   groups: SidebarGroup[];
   orgName: string;
@@ -85,6 +86,10 @@ export function Sidebar({
   shliachSuffix?: string;
   open: boolean;
   onClose: () => void;
+  /** fixes57 §4: desktop-only collapse (mobile keeps its own open/close via
+   *  `open`/`onClose`, untouched) — mirrors the mobile drawer's hide/show but
+   *  toggled from the header's desktop-only button, not swipe/overlay. */
+  desktopCollapsed?: boolean;
 }) {
   const pathname = usePathname();
   const allHrefs = groups.flatMap((g) => g.items.map((it) => it.href));
@@ -98,8 +103,9 @@ export function Sidebar({
       <aside
         dir="rtl"
         className={cn(
-          "fixed top-0 right-0 z-50 flex h-full w-64 flex-col border-l border-sidebar-border bg-sidebar transition-transform duration-300 lg:translate-x-0",
-          open ? "translate-x-0" : "translate-x-full lg:translate-x-0",
+          "fixed top-0 right-0 z-50 flex h-full w-64 flex-col border-l border-sidebar-border bg-sidebar transition-transform duration-300",
+          open ? "translate-x-0" : "translate-x-full",
+          desktopCollapsed ? "lg:translate-x-full" : "lg:translate-x-0",
         )}
       >
         <div className="flex select-none items-center justify-between border-b border-sidebar-border p-4">

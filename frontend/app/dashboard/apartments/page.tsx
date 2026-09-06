@@ -259,6 +259,11 @@ export default function ApartmentsPage() {
   const mezuzah = usePicklist("apartment.mezuzah_status");
   // fixes32 §6: options for every dynamic apartment.* picklist at once.
   const customPicklists = usePicklistsMap(customDefs.map((d) => d.field_key));
+  // fixes57 §2: shared "-" option offered on every filter whose underlying
+  // value can genuinely be blank (not the building filter — building_id is
+  // mandatory on every apartment). Selecting it means "match apartments with
+  // no value at all for this field", ORed with any real values also checked.
+  const emptyOptionLabel = t("filter.empty_option", "- (ריק)");
 
   // fixes33 §5.2: a field an admin hid org-wide can't be searched by even if
   // a stale value survives from before it was hidden — otherwise the list
@@ -467,9 +472,15 @@ export default function ApartmentsPage() {
   function onAreasChange(ids: number[]) {
     setAreaIds(ids);
     // Drop building selections that fell outside the chosen areas.
+    // fixes57 §2: 0 is the "-" (no area assigned) sentinel.
     if (buildingIds.length > 0 && ids.length > 0) {
       const kept = buildingIds.filter((id) =>
-        buildings.some((b) => b.id === id && b.area_id != null && ids.includes(b.area_id)),
+        buildings.some(
+          (b) =>
+            b.id === id &&
+            ((ids.includes(0) && b.area_id == null) ||
+              (b.area_id != null && ids.includes(b.area_id))),
+        ),
       );
       if (kept.length !== buildingIds.length) setBuildingIds(kept);
     }
@@ -895,7 +906,10 @@ export default function ApartmentsPage() {
 
   const visibleBuildings = buildings.filter(
     (b) =>
-      (areaIds.length === 0 || (b.area_id != null && areaIds.includes(b.area_id))) &&
+      (areaIds.length === 0 ||
+        // fixes57 §2: 0 is the "-" (no area assigned) sentinel.
+        (areaIds.includes(0) && b.area_id == null) ||
+        (b.area_id != null && areaIds.includes(b.area_id))) &&
       // fixes23 §2: when report numbers are selected, only buildings that hold a
       // matching apartment remain choosable.
       (buildingIdsForReports === null || buildingIdsForReports.has(b.id)),
@@ -1183,14 +1197,20 @@ export default function ApartmentsPage() {
         <span className="text-muted-foreground">{t("filter.by_area", "סנן לפי אזור:")}</span>
         <MultiSelectFilter
           allLabel={t("filter.all_areas", "כל האזורים")}
-          options={areas.map((a) => ({ id: a.id, label: a.area_name }))}
+          label={t("buildings.area_id", "אזור")}
+          options={[
+            { id: 0, label: emptyOptionLabel },
+            ...areas.map((a) => ({ id: a.id, label: a.area_name })),
+          ]}
           value={areaIds}
           onChange={onAreasChange}
         />
-        {/* fixes23 §2: multi-select searchable building filter. */}
+        {/* fixes23 §2: multi-select searchable building filter. No "-" empty
+            option here — building_id is mandatory on every apartment. */}
         <MultiSelectSearchFilter
           className="w-56"
           allLabel={t("filter.all_buildings", "כל הבניינים")}
+          label={t("apartments.building_id", "בניין")}
           options={visibleBuildings.map((b) => ({
             id: b.id,
             label: buildingDisplayName(b),
@@ -1205,7 +1225,11 @@ export default function ApartmentsPage() {
           <MultiSelectSearchFilter
             className="w-48"
             allLabel={t("filter.all_report_numbers", "כל מספרי הדוח")}
-            options={reportNumbers.map((rn) => ({ id: rn.id, label: rn.name }))}
+            label={t("apartments.report_number_id", "מספר דוח")}
+            options={[
+              { id: 0, label: emptyOptionLabel },
+              ...reportNumbers.map((rn) => ({ id: rn.id, label: rn.name })),
+            ]}
             value={reportNumberIds}
             onChange={onReportNumbersChange}
             searchPlaceholder={t("filter.search_report_numbers", "חיפוש מספר דוח…")}
@@ -1216,7 +1240,11 @@ export default function ApartmentsPage() {
         {fieldVisible("jewish_status") && (
           <MultiSelectFilter
             allLabel={t("filter.all_jewish", "כל סטטוסי היהדות")}
-            options={jewish.options.map((o) => ({ id: o.value, label: jewish.display(o) }))}
+            label={t("picklist.apartment.Jewish_status", "יהדות")}
+            options={[
+              { id: EMPTY_FIELD_SENTINEL, label: emptyOptionLabel },
+              ...jewish.options.map((o) => ({ id: o.value, label: jewish.display(o) })),
+            ]}
             value={jewishFilter}
             onChange={(vals) => {
               setJewishFilter(vals);
@@ -1227,7 +1255,11 @@ export default function ApartmentsPage() {
         {fieldVisible("mezuzah_status") && (
           <MultiSelectFilter
             allLabel={t("filter.all_mezuzah", "כל סטטוסי המזוזה")}
-            options={mezuzah.options.map((o) => ({ id: o.value, label: mezuzah.display(o) }))}
+            label={t("picklist.apartment.mezuzah_status", "מזוזה")}
+            options={[
+              { id: EMPTY_FIELD_SENTINEL, label: emptyOptionLabel },
+              ...mezuzah.options.map((o) => ({ id: o.value, label: mezuzah.display(o) })),
+            ]}
             value={mezuzahFilter}
             onChange={(vals) => {
               setMezuzahFilter(vals);
@@ -1239,7 +1271,11 @@ export default function ApartmentsPage() {
         {fieldVisible("language") && (
         <MultiSelectFilter
           allLabel={t("filter.all_languages", "כל השפות")}
-          options={language.options.map((o) => ({ id: o.value, label: language.display(o) }))}
+          label={t("picklist.apartment.language", "שפה")}
+          options={[
+            { id: EMPTY_FIELD_SENTINEL, label: emptyOptionLabel },
+            ...language.options.map((o) => ({ id: o.value, label: language.display(o) })),
+          ]}
           value={languageFilter}
           onChange={(vals) => {
             setLanguageFilter(vals);
@@ -1255,7 +1291,11 @@ export default function ApartmentsPage() {
             <MultiSelectFilter
               key={d.field_key}
               allLabel={customDefLabel(d)}
-              options={opts.map((o) => ({ id: o.value, label: customPicklists.display(o) }))}
+              label={customDefLabel(d)}
+              options={[
+                { id: EMPTY_FIELD_SENTINEL, label: emptyOptionLabel },
+                ...opts.map((o) => ({ id: o.value, label: customPicklists.display(o) })),
+              ]}
               value={customFilters[d.field_key] ?? []}
               onChange={(vals) => {
                 setCustomFilters((prev) => ({ ...prev, [d.field_key]: vals }));

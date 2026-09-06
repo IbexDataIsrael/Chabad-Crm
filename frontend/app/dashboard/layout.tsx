@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LogOut, Menu } from "lucide-react";
+import { LogOut, Menu, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { GlobalSearch } from "@/components/GlobalSearch";
@@ -12,6 +12,7 @@ import { Sidebar, type SidebarGroup, type SidebarNavItem } from "@/components/la
 import { Button } from "@/components/ui/button";
 import { isFeatureEnabled, useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
+import { usePersistentState } from "@/lib/persist";
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
@@ -23,6 +24,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
 function DashboardChrome({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // fixes57 §4: desktop-only sidebar collapse, independent of the mobile
+  // drawer's open/close above — same idea (hide the sidebar, reclaim the
+  // width) but reachable at desktop widths too, toggled from its own header
+  // button (the mobile hamburger stays lg:hidden, this stays hidden below lg).
+  const [desktopCollapsed, setDesktopCollapsed] = usePersistentState(
+    "crm.sidebarCollapsed", false,
+  );
   const { user, isAdmin, isShliach, isSuperadmin, signOut } = useAuth();
   const { t } = useLocalization();
   const orgName = user?.organization?.name ?? t("auth.app_title", "מיני CRM");
@@ -140,10 +148,17 @@ function DashboardChrome({ children }: { children: ReactNode }) {
           shliachSuffix={isShliach ? t("header.shliach_display_suffix", "תצוגת פעילים") : undefined}
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
+          desktopCollapsed={desktopCollapsed}
         />
       )}
 
-      <div className={!isSuperadmin ? "flex min-h-screen flex-col lg:mr-64" : "flex min-h-screen flex-col"}>
+      <div
+        className={
+          !isSuperadmin
+            ? `flex min-h-screen flex-col ${desktopCollapsed ? "lg:mr-0" : "lg:mr-64"}`
+            : "flex min-h-screen flex-col"
+        }
+      >
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-border bg-background/80 px-4 py-3 backdrop-blur-lg md:px-6">
           <div className="flex items-center gap-2">
             {!isSuperadmin && (
@@ -154,6 +169,27 @@ function DashboardChrome({ children }: { children: ReactNode }) {
                 onClick={() => setSidebarOpen(true)}
               >
                 <Menu className="h-5 w-5" />
+              </Button>
+            )}
+            {/* fixes57 §4: desktop-only collapse toggle — the mirror of the
+                mobile hamburger above (lg:hidden), shown only from lg up. */}
+            {!isSuperadmin && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hidden min-h-[44px] min-w-[44px] lg:flex"
+                onClick={() => setDesktopCollapsed((v) => !v)}
+                title={
+                  desktopCollapsed
+                    ? t("nav.expand_sidebar", "הצג תפריט")
+                    : t("nav.collapse_sidebar", "צמצם תפריט")
+                }
+              >
+                {desktopCollapsed ? (
+                  <PanelRightOpen className="h-5 w-5" />
+                ) : (
+                  <PanelRightClose className="h-5 w-5" />
+                )}
               </Button>
             )}
             {isSuperadmin && (

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   Activity,
   Building2,
@@ -361,7 +362,14 @@ export function AdminDashboardHome() {
                       key={`${c.apartment_id}-${c.changed_at}`}
                       className="flex flex-wrap items-center gap-2 border-b border-border py-2 text-sm last:border-0"
                     >
-                      <span className="font-medium text-foreground">{c.label}</span>
+                      {/* fixes57 §3: link straight to the apartment instead of
+                          plain text — every row already carries apartment_id. */}
+                      <Link
+                        href={`/dashboard/apartments/${c.apartment_id}`}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        {c.label}
+                      </Link>
                       {c.building_address && (
                         <span className="text-muted-foreground">· {c.building_address}</span>
                       )}

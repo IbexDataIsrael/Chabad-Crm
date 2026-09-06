@@ -210,6 +210,25 @@ def matching_entity_ids(entity_table: str, field_key: str, values: list[str]):
     )
 
 
+def unassigned_entity_ids(entity_table: str, field_key: str):
+    """fixes57 §2: a scalar subquery of entity_ids (within `entity_table`) that
+    HAVE any stored value at all for `field_key` — the complement (an entity
+    id NOT in this set) is "blank/unassigned", used by the "-" empty-state
+    filter option. Distinct from `matching_entity_ids`, which only ever
+    returns entities matching specific *values*."""
+    return (
+        select(models.PicklistLink.entity_id)
+        .join(
+            models.PicklistDefinition,
+            models.PicklistDefinition.id == models.PicklistLink.picklist_definition_id,
+        )
+        .where(
+            models.PicklistLink.entity_table == entity_table,
+            models.PicklistDefinition.system_name == field_key,
+        )
+    )
+
+
 def set_value(
     db: Session,
     organization_id: int,

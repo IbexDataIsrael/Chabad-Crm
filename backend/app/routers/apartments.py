@@ -345,12 +345,26 @@ def _sort_keys(sort: str, db: Session) -> list:
 
 def _picklist_filter(query, field_key: str, values: list[str]):
     """Restrict to apartments whose stored value for `field_key` (fixes32:
-    PicklistLink, not a real column) is one of `values`."""
-    return query.filter(
-        models.Apartment.id.in_(
-            picklist_utils.matching_entity_ids("apartments", field_key, values)
+    PicklistLink, not a real column) is one of `values`. fixes57 §2: `values`
+    may include EMPTY_FIELD_SENTINEL, meaning "also match apartments with no
+    value at all for this field" — ORed alongside any real values requested."""
+    real_values = [v for v in values if v != EMPTY_FIELD_SENTINEL]
+    conditions = []
+    if real_values:
+        conditions.append(
+            models.Apartment.id.in_(
+                picklist_utils.matching_entity_ids("apartments", field_key, real_values)
+            )
         )
-    )
+    if len(real_values) != len(values):  # sentinel was present
+        conditions.append(
+            models.Apartment.id.notin_(
+                picklist_utils.unassigned_entity_ids("apartments", field_key)
+            )
+        )
+    if not conditions:
+        return query
+    return query.filter(or_(*conditions))
 
 
 # fixes53 §2: sent as the `custom_field_filter` query value in place of real
@@ -399,6 +413,21 @@ def _custom_field_text_filter(query, db: Session, org_id: int, field_key: str, t
     return query.filter(models.Apartment.id.in_(sub))
 
 
+def _id_or_null_filter(query, column, ids: list[int]):
+    """fixes57 §2: an id-list filter where 0 is a reserved sentinel meaning
+    "no value assigned" (real ids are always >= 1, Postgres serial columns
+    start at 1) — ORed alongside any real ids requested."""
+    real_ids = [i for i in ids if i != 0]
+    conditions = []
+    if real_ids:
+        conditions.append(column.in_(real_ids))
+    if len(real_ids) != len(ids):  # sentinel 0 was present
+        conditions.append(column.is_(None))
+    if not conditions:
+        return query
+    return query.filter(or_(*conditions))
+
+
 def _apply_apartment_filters(
     query,
     db: Session,
@@ -431,8 +460,9 @@ def _apply_apartment_filters(
     if area_id is not None:
         query = query.filter(models.Building.area_id == area_id)
     # fixes15 §7.1: multi-select area filter (repeated ?area_ids=… params).
+    # fixes57 §2: 0 is the "-" (no area assigned) sentinel.
     if area_ids:
-        query = query.filter(models.Building.area_id.in_(area_ids))
+        query = _id_or_null_filter(query, models.Building.area_id, area_ids)
     if apartment_id is not None:
         query = query.filter(models.Apartment.id == apartment_id)
     # fixes30 §3: explicit apartment selection (repeated ?apartment_ids=…) —
@@ -440,8 +470,11 @@ def _apply_apartment_filters(
     if apartment_ids:
         query = query.filter(models.Apartment.id.in_(apartment_ids))
     # fixes20 §3: searchable report-number filter (multi-select).
+    # fixes57 §2: 0 is the "-" (no report number assigned) sentinel.
     if report_number_ids:
-        query = query.filter(models.Apartment.report_number_id.in_(report_number_ids))
+        query = _id_or_null_filter(
+            query, models.Apartment.report_number_id, report_number_ids
+        )
     if q:
         like = f"%{q.strip()}%"
         query = query.filter(
