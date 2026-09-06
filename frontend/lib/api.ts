@@ -27,7 +27,24 @@ export function setToken(token: string): void {
 }
 
 export function clearToken(): void {
-  if (typeof window !== "undefined") window.localStorage.removeItem(TOKEN_KEY);
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(TOKEN_KEY);
+  // fixes58: every list/grid page's filters/sort/columns/paging persist via
+  // usePersistentState under a plain "crm.<page>.*" localStorage key — with
+  // no per-account namespacing, so on a shared/reused browser (e.g. someone
+  // else logged in on this device before) the next account silently inherits
+  // the previous one's filter values (a building/area id that doesn't exist
+  // for them, etc.), making a page look empty even though an unfiltered
+  // summary count elsewhere is correct. Sweep them on every session end so
+  // the next login starts clean. "crm.pref.*" is excluded on purpose — those
+  // already follow the account via the server (useDbPreference) and
+  // reconcile on load, they aren't device-local state.
+  for (let i = window.localStorage.length - 1; i >= 0; i--) {
+    const key = window.localStorage.key(i);
+    if (key && key.startsWith("crm.") && !key.startsWith("crm.pref.")) {
+      window.localStorage.removeItem(key);
+    }
+  }
 }
 
 /** Upload an image to our backend, which stores it on Cloudinary and returns the
