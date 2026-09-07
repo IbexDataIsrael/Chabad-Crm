@@ -252,6 +252,13 @@ export default function ApartmentsPage() {
   const [batchOpen, setBatchOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [busy, setBusy] = useState(true);
+  // A failed list fetch (network blip, cold-start timeout, etc.) used to
+  // silently render the same "no apartments" empty state as a genuinely
+  // empty result, so a transient error looked exactly like "you have zero
+  // apartments" with nothing to retry. Track it separately so the grid can
+  // tell the two apart.
+  const [loadError, setLoadError] = useState(false);
+  const { error: toastError } = useToast();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const language = usePicklist("apartment.language");
   const jewish = usePicklist("apartment.Jewish_status");
@@ -423,9 +430,12 @@ export default function ApartmentsPage() {
     if (loading) return;
     setBusy(true);
     reload()
+      .then(() => setLoadError(false))
       .catch(() => {
         setItems([]);
         setTotal(0);
+        setLoadError(true);
+        toastError(t("apt.load_failed", "טעינת הדירות נכשלה. נסה שוב."));
       })
       .finally(() => setBusy(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1581,6 +1591,30 @@ export default function ApartmentsPage() {
               <tr>
                 <td colSpan={colCount} className="px-4 py-10 text-center">
                   <div className="mx-auto h-6 w-6 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
+                </td>
+              </tr>
+            ) : loadError ? (
+              <tr>
+                <td colSpan={colCount} className="px-4 py-6 text-center text-status-darkred">
+                  <p>{t("apt.load_failed", "טעינת הדירות נכשלה. נסה שוב.")}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => {
+                      setBusy(true);
+                      reload()
+                        .then(() => setLoadError(false))
+                        .catch(() => {
+                          setItems([]);
+                          setTotal(0);
+                          setLoadError(true);
+                        })
+                        .finally(() => setBusy(false));
+                    }}
+                  >
+                    {t("action.retry", "נסה שוב")}
+                  </Button>
                 </td>
               </tr>
             ) : items.length === 0 ? (

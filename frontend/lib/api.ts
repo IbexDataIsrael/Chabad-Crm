@@ -124,6 +124,27 @@ export async function apiDownload(path: string, fallback: string): Promise<void>
   URL.revokeObjectURL(url);
 }
 
+// The Render free/starter backend spins down after idling and, while it's
+// booting back up, Render's own edge proxy returns 502/503/504 (or the
+// request fails at the network level entirely — a CORS preflight against a
+// 502 surfaces to the browser as a plain "Failed to fetch") until the app
+// process is actually listening. That's transient, not a real error, but
+// every page's silently-caught "empty" state used to treat it exactly like
+// one (see docs/fixes58.md-adjacent apartments-page fix). Retry a GET a few
+// times with backoff before giving up — covers the common few-seconds-long
+// wake-up without masking a genuinely down/broken backend forever. Mutating
+// requests are never auto-retried (a lost response to a POST that actually
+// reached the app would double-submit).
+const RETRY_DELAYS_MS = [1000, 3000, 6000, 10000];
+
+function isRetryableStatus(status: number): boolean {
+  return status === 502 || status === 503 || status === 504;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /** Authenticated JSON fetch. Throws ApiError on non-2xx; redirects to login on 401. */
 export async function apiFetch<T>(
   path: string,
@@ -136,7 +157,29 @@ export async function apiFetch<T>(
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  const method = (options.method ?? "GET").toUpperCase();
+  const retryable = method === "GET";
+
+  let res: Response;
+  let attempt = 0;
+  for (;;) {
+    try {
+      res = await fetch(`${API_URL}${path}`, { ...options, headers });
+    } catch (networkErr) {
+      if (retryable && attempt < RETRY_DELAYS_MS.length) {
+        await sleep(RETRY_DELAYS_MS[attempt]);
+        attempt++;
+        continue;
+      }
+      throw networkErr;
+    }
+    if (retryable && isRetryableStatus(res.status) && attempt < RETRY_DELAYS_MS.length) {
+      await sleep(RETRY_DELAYS_MS[attempt]);
+      attempt++;
+      continue;
+    }
+    break;
+  }
 
   if (res.status === 401) {
     clearToken();

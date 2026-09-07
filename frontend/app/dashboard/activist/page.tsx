@@ -30,10 +30,25 @@ export default function ActivistLandingPage() {
   const { success } = useToast();
 
   const [apartmentsTotal, setApartmentsTotal] = useState<number | null>(null);
+  // A failed count fetch used to render as setApartmentsTotal(0), which is
+  // indistinguishable from "you genuinely have zero apartments" — an
+  // activist would see "0 דירות משויכות" with no hint that loading actually
+  // failed and no way to retry. Track the failure separately instead.
+  const [apartmentsError, setApartmentsError] = useState(false);
   const [announcements, setAnnouncements] = useState<ShliachAnnouncement[]>([]);
   const [announcementsLoading, setAnnouncementsLoading] = useState(true);
   const [completionModalOpen, setCompletionModalOpen] = useState(false);
   const [commentModalOpen, setCommentModalOpen] = useState(false);
+
+  function loadApartmentsTotal() {
+    setApartmentsError(false);
+    // fixes54 §6.1: the shliach's own apartments count — already self-scoped
+    // server-side (apartments.py::_shliach_apartment_ids) for this role, so
+    // a small page_size is enough to read `total`.
+    apiFetch<ApartmentPage>("/api/apartments/list?page=1&page_size=20")
+      .then((res) => setApartmentsTotal(res.total))
+      .catch(() => setApartmentsError(true));
+  }
 
   useEffect(() => {
     if (loading) return;
@@ -41,16 +56,12 @@ export default function ActivistLandingPage() {
       router.replace("/dashboard");
       return;
     }
-    // fixes54 §6.1: the shliach's own apartments count — already self-scoped
-    // server-side (apartments.py::_shliach_apartment_ids) for this role, so
-    // a small page_size is enough to read `total`.
-    apiFetch<ApartmentPage>("/api/apartments/list?page=1&page_size=20")
-      .then((res) => setApartmentsTotal(res.total))
-      .catch(() => setApartmentsTotal(0));
+    loadApartmentsTotal();
     apiFetch<ShliachAnnouncement[]>("/api/shliach-messages/announcements")
       .then(setAnnouncements)
       .catch(() => setAnnouncements([]))
       .finally(() => setAnnouncementsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, isShliach, router]);
 
   if (loading || !isShliach) {
@@ -89,8 +100,8 @@ export default function ActivistLandingPage() {
             </Card>
           </Link>
         )}
-        <Link href="/dashboard/apartments">
-          <Card className="border-2 border-foreground/70 p-5 transition-colors hover:bg-accent">
+        {apartmentsError ? (
+          <Card className="border-2 border-status-darkred/70 p-5">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground">
                 <Home className="h-5 w-5" />
@@ -99,15 +110,40 @@ export default function ActivistLandingPage() {
                 {t("activist_home.my_apartments", "הדירות שלי")}
               </div>
             </div>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {apartmentsTotal == null
-                ? t("action.loading", "טוען…")
-                : t("activist_home.my_apartments_count", "{n} דירות משויכות").replace(
-                    "{n}", String(apartmentsTotal),
-                  )}
+            <p className="mt-2 text-sm text-status-darkred">
+              {t("apt.load_failed", "טעינת הדירות נכשלה. נסה שוב.")}
             </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={loadApartmentsTotal}
+            >
+              {t("action.retry", "נסה שוב")}
+            </Button>
           </Card>
-        </Link>
+        ) : (
+          <Link href="/dashboard/apartments">
+            <Card className="border-2 border-foreground/70 p-5 transition-colors hover:bg-accent">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground">
+                  <Home className="h-5 w-5" />
+                </div>
+                <div className="text-lg font-semibold">
+                  {t("activist_home.my_apartments", "הדירות שלי")}
+                </div>
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {apartmentsTotal == null
+                  ? t("action.loading", "טוען…")
+                  : t("activist_home.my_apartments_count", "{n} דירות משויכות").replace(
+                      "{n}", String(apartmentsTotal),
+                    )}
+              </p>
+            </Card>
+          </Link>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2">
