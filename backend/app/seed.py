@@ -303,6 +303,8 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("apt", "apt.add_apartment", "הוסף דירה", "Add apartment"),
     ("apt", "apt.no_apartments_page", "אין דירות להצגה.", "No apartments to show."),
     ("apt", "apt.load_failed", "טעינת הדירות נכשלה. נסה שוב.", "Failed to load apartments. Please try again."),
+    ("apt", "apt.no_apartments_filtered", "אין דירות התואמות לסינון הנוכחי.", "No apartments match the current filters."),
+    ("apt", "apt.filters_set_by_admin", "הסינון הוגדר על ידי מנהל המערכת בהגדרות תצוגת הפעילים.", "This filter was set by your administrator in the activist view settings."),
     ("apt", "apt.no_contact", "ללא איש קשר", "No contact"),
     ("apt", "apt.select_building", "יש לבחור בניין", "Please select a building"),
     ("apt", "apt.new_apartment", "דירה חדשה", "New apartment"),

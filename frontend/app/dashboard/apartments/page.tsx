@@ -347,10 +347,23 @@ export default function ApartmentsPage() {
   // later visit (there's no signal to distinguish "never touched" from
   // "cleared" once both look identical) — an accepted, minor edge case.
   const appliedShliachDefaults = useRef(false);
+  // fixes58 bug ("apartments vanish on refresh"): the list effect below used
+  // to fire from the *pre-default* state in the same commit this effect
+  // queued the default filters in, so an activist's first visit sent two
+  // requests — unfiltered, then filtered — and whichever answered last won
+  // the grid. The unfiltered one usually did (it's the heavier query), so
+  // the first visit showed everything while the defaults quietly landed in
+  // localStorage; the next reload was the first fetch that actually honoured
+  // them and looked like "all data disappeared". Logging out swept the
+  // persisted keys (clearToken) and restarted the cycle, which is why a
+  // re-login seemed to fix it. The list effect now waits for this flag so
+  // the very first fetch already carries the defaults — one request, and
+  // the same result on every later reload.
+  const [shliachDefaultsApplied, setShliachDefaultsApplied] = useState(false);
   useEffect(() => {
-    if (appliedShliachDefaults.current || !isShliach || !shliachViewConfig) return;
+    if (loading || appliedShliachDefaults.current) return;
     appliedShliachDefaults.current = true;
-    const df = shliachViewConfig.default_filters;
+    const df = isShliach ? shliachViewConfig?.default_filters : undefined;
     if (df) {
       if (areaIds.length === 0 && Array.isArray(df.area_ids) && df.area_ids.length) {
         setAreaIds(df.area_ids as number[]);
@@ -369,13 +382,15 @@ export default function ApartmentsPage() {
       }
     }
     if (
-      shliachViewConfig.default_columns &&
+      isShliach &&
+      shliachViewConfig?.default_columns &&
       JSON.stringify(fields) === JSON.stringify(DEFAULT_FIELDS)
     ) {
       setFields(shliachViewConfig.default_columns as FieldKey[]);
     }
+    setShliachDefaultsApplied(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isShliach, shliachViewConfig]);
+  }, [loading, isShliach, shliachViewConfig]);
 
   // fixes53 §3: a deep link from the Report Numbers grid ("view its
   // apartments") — ?report_number_ids=<id> replaces whatever filters were
@@ -427,7 +442,9 @@ export default function ApartmentsPage() {
 
   // One server-side page per filter/sort/page change.
   useEffect(() => {
-    if (loading) return;
+    // Wait for the activist defaults above (a no-op pass for admin/staff)
+    // so the first fetch and every later one see the same filter state.
+    if (loading || !shliachDefaultsApplied) return;
     setBusy(true);
     reload()
       .then(() => setLoadError(false))
@@ -440,7 +457,8 @@ export default function ApartmentsPage() {
       .finally(() => setBusy(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    loading, areaIds, buildingIds, reportNumberIds, jewishFilter, mezuzahFilter,
+    loading, shliachDefaultsApplied, areaIds, buildingIds, reportNumberIds,
+    jewishFilter, mezuzahFilter,
     languageFilter, customFilters, debouncedCustomFieldFilters, debouncedQ,
     sort, dir, page, pageSize, groupByBuilding,
   ]);
@@ -1620,7 +1638,36 @@ export default function ApartmentsPage() {
             ) : items.length === 0 ? (
               <tr>
                 <td colSpan={colCount} className="px-4 py-6 text-center text-muted-foreground">
-                  {t("apt.no_apartments_page", "אין דירות להצגה.")}
+                  {activeFilterCount > 0 ? (
+                    // fixes58 bug: an empty page under an active filter must
+                    // say so. For an activist whose filters are hidden
+                    // (shliach-config "hide filters") this was an unexplained
+                    // blank grid — the admin-configured default filters that
+                    // emptied it aren't visible anywhere on the page.
+                    <>
+                      <p>{t("apt.no_apartments_filtered", "אין דירות התואמות לסינון הנוכחי.")}</p>
+                      {shliachFiltersHidden ? (
+                        <p className="mt-1 text-xs">
+                          {t(
+                            "apt.filters_set_by_admin",
+                            "הסינון הוגדר על ידי מנהל המערכת בהגדרות תצוגת הפעילים.",
+                          )}
+                        </p>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="mt-2"
+                          onClick={clearAllFilters}
+                        >
+                          {t("filter.clear_all", "נקה את כל הסינונים")}
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    t("apt.no_apartments_page", "אין דירות להצגה.")
+                  )}
                 </td>
               </tr>
             ) : (
