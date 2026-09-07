@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Plus, Settings2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, ListPlus, Plus, Settings2 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { AreaMultiSelect } from "@/components/AreaMultiSelect";
+import { TaskQuickCreateForm } from "@/components/TaskQuickCreateForm";
 import { CustomFieldValueDisplay, CustomFieldValueInput } from "@/components/CustomFieldValueInput";
 import { EmailInput } from "@/components/EmailInput";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { PicklistSelect } from "@/components/PicklistSelect";
-import { ReportNumberMultiSelect } from "@/components/ReportNumberMultiSelect";
 import { Button } from "@/components/ui/button";
 import { InlineEdit } from "@/components/ui/InlineEdit";
 import { MultiSelectEditor } from "@/components/ui/MultiSelectEditor";
@@ -55,7 +55,7 @@ export interface OrgUser {
   shliach: Shliach | null;
 }
 
-type Role = "admin" | "staff" | "shliach";
+type Role = "admin" | "staff" | "shliach" | "campaign_manager";
 type SortKey = "name" | "created";
 
 /** fixes42 §4: a unified directory row — either a real login account
@@ -200,6 +200,9 @@ export default function UsersPage() {
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(true);
   const [recreatingKey, setRecreatingKey] = useState<string | null>(null);
+  // fixes58 §3.3: the Users-page "Add task" quick action — which shliach row
+  // (if any) currently has the task-creation modal open.
+  const [taskFor, setTaskFor] = useState<UserRow | null>(null);
 
   // fixes42 §4B: role filter, geo filters (shliach-only), inactive toggle,
   // column visibility + reorder — all persisted like the Contacts page.
@@ -331,7 +334,9 @@ export default function UsersPage() {
       ? t("users.role_admin", "מנהל מערכת")
       : role === "shliach"
         ? t("users.role_shliach", "פעיל")
-        : t("users.role_staff", "משתמש מוגבל");
+        : role === "campaign_manager"
+          ? t("users.role_campaign_manager", "מנהל קמפיינים")
+          : t("users.role_staff", "משתמש מוגבל");
 
   // fixes46: contact_shliach custom-field/picklist values live on the linked
   // Contact record, fetched in bulk by fetchAllShliachContacts (ContactOut
@@ -661,28 +666,11 @@ export default function UsersPage() {
     />
   );
 
+  // fixes58 §Phase 4: read-only now — apartment access is granted by a Task
+  // (see the "Add task" quick action), not this direct assignment, so an
+  // editable picker here would look functional but be dead.
   const inlineReportNumbersCell = (r: UserRow) => (
-    <InlineEdit<number[]>
-      value={r.raw.shliach?.report_number_ids ?? []}
-      display={
-        <TruncatedText text={reportNumberNamesText(r.raw.shliach?.report_number_ids ?? [])} />
-      }
-      disabled={r.contactId == null}
-      commitOnBlur={false}
-      onSave={async (ids) => {
-        await saveUserField(r, { shliach: { report_number_ids: ids } });
-        success(t("contact_shliach.report_numbers_saved", "מספרי הדוח נשמרו"));
-      }}
-      editor={(draft, setDraft, commit) => (
-        <MultiSelectEditor onApply={() => commit(draft)}>
-          <ReportNumberMultiSelect
-            value={draft}
-            onChange={setDraft}
-            excludeContactId={r.contactId ?? undefined}
-          />
-        </MultiSelectEditor>
-      )}
-    />
+    <TruncatedText text={reportNumberNamesText(r.raw.shliach?.report_number_ids ?? [])} />
   );
 
   // fixes46: any admin-added contact_shliach picklist/custom field — reads
@@ -783,7 +771,7 @@ export default function UsersPage() {
 
   // fixes42 §4C: role change directly from the row — admin/staff only (a
   // shliach's role is managed by its contact link, same guard UserForm uses).
-  async function changeRole(row: UserRow, role: "admin" | "staff") {
+  async function changeRole(row: UserRow, role: "admin" | "staff" | "campaign_manager") {
     try {
       await apiFetch(`/api/users/${row.id}`, {
         method: "PUT",
@@ -874,6 +862,7 @@ export default function UsersPage() {
   const roleOptions: { id: Role; label: string }[] = [
     { id: "admin", label: t("users.role_admin", "מנהל מערכת") },
     { id: "staff", label: t("users.role_staff", "משתמש מוגבל") },
+    { id: "campaign_manager", label: t("users.role_campaign_manager", "מנהל קמפיינים") },
     ...(activistSystemEnabled
       ? [{ id: "shliach" as Role, label: t("users.role_shliach", "פעיל") }]
       : []),
@@ -1239,7 +1228,7 @@ export default function UsersPage() {
                     )}
                   </td>
                   <td className="px-3 py-1.5 w-px whitespace-nowrap">
-                    {r.role !== "admin" && r.role !== "staff" ? (
+                    {r.role !== "admin" && r.role !== "staff" && r.role !== "campaign_manager" ? (
                       <span className="rounded px-2 py-0.5 text-xs bg-muted text-muted-foreground">
                         {roleLabel(r.role)}
                       </span>
@@ -1248,10 +1237,15 @@ export default function UsersPage() {
                         className="rounded-md border border-input px-2 py-1 text-xs focus:border-primary focus:outline-none disabled:bg-background disabled:text-muted-foreground"
                         value={r.role}
                         disabled={me?.id === r.id}
-                        onChange={(e) => changeRole(r, e.target.value as "admin" | "staff")}
+                        onChange={(e) =>
+                          changeRole(r, e.target.value as "admin" | "staff" | "campaign_manager")
+                        }
                       >
                         <option value="staff">{t("users.role_staff", "משתמש מוגבל")}</option>
                         <option value="admin">{t("users.role_admin", "מנהל מערכת")}</option>
+                        <option value="campaign_manager">
+                          {t("users.role_campaign_manager", "מנהל קמפיינים")}
+                        </option>
                       </select>
                     )}
                   </td>
@@ -1297,6 +1291,18 @@ export default function UsersPage() {
                         </Link>
                       )
                     )}
+                    {/* fixes58 §3.3: quick-create a Task for this activist,
+                        same "icon button -> modal" pattern as the Contacts
+                        page's add-visit action. */}
+                    {r.kind === "user" && r.role === "shliach" && (
+                      <button
+                        onClick={() => setTaskFor(r)}
+                        className="me-3 inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                        title={t("users.add_task_action", "הוסף משימה")}
+                      >
+                        <ListPlus className="h-3.5 w-3.5" /> {t("users.add_task_action", "הוסף משימה")}
+                      </button>
+                    )}
                     {r.kind === "user" && me?.id !== r.id && (
                       <button
                         onClick={() => remove(r)}
@@ -1336,6 +1342,18 @@ export default function UsersPage() {
             {t("pager.next", "הבא")} <ChevronLeft className="h-4 w-4" />
           </Button>
         </div>
+      )}
+
+      {taskFor && (
+        <TaskQuickCreateForm
+          volunteerUserId={taskFor.id}
+          volunteerName={taskFor.full_name}
+          onClose={() => setTaskFor(null)}
+          onSaved={async () => {
+            setTaskFor(null);
+            success(t("msg.saved", "נשמר בהצלחה"));
+          }}
+        />
       )}
     </div>
   );
@@ -1413,6 +1431,9 @@ function UserForm({
           >
             <option value="staff">{t("users.role_staff", "משתמש מוגבל")}</option>
             <option value="admin">{t("users.role_admin", "מנהל מערכת")}</option>
+            <option value="campaign_manager">
+              {t("users.role_campaign_manager", "מנהל קמפיינים")}
+            </option>
           </select>
         </label>
         <label className="block space-y-1">

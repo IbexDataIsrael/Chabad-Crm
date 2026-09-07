@@ -1,6 +1,7 @@
 """Fixes20 acceptance tests: shliach apartment visibility via report numbers,
 apartment-list report_number filter + name enrichment, apartment-title
 concatenation, and the default-hidden contact fields registry."""
+from app import models
 from app.field_registry import DEFAULT_HIDDEN, TOGGLEABLE_KEYS, default_visible
 
 
@@ -67,7 +68,9 @@ def _shliach_login(client, email):
 
 # --- §4 shliach apartment visibility via report numbers -------------------------
 class TestShliachSeesApartmentsViaReportNumber:
-    def test_report_number_grants_visibility(self, client, admin_headers):
+    def test_report_number_grants_visibility(
+        self, client, admin_headers, db_session, grant_task_access
+    ):
         area = _mk_area(client, admin_headers)
         b = _mk_building(client, admin_headers, area["id"])
         rn = _mk_report_number(client, admin_headers, "דוח פעיל")
@@ -81,6 +84,12 @@ class TestShliachSeesApartmentsViaReportNumber:
             client, admin_headers, "rn.vis@example.com",
             report_number_ids=[rn["id"]],
         )
+        # fixes58: visibility now comes from an ACTIVE Task under an active
+        # Campaign, not the direct ReportNumberContactShliach row above.
+        user = db_session.query(models.User).filter(
+            models.User.email == "rn.vis@example.com"
+        ).one()
+        grant_task_access(user.organization_id, user.id, rn["id"])
         shliach = _shliach_login(client, "rn.vis@example.com")
 
         names = [

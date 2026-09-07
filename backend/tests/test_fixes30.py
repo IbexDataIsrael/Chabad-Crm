@@ -1,6 +1,7 @@
 """Fixes30 (round 2) acceptance tests: explicit apartment selection on the
 list endpoint (the arbitrary-apartments report flow) and the per-building
 aggregate counts behind the group-by-building view."""
+from app import models
 
 
 # --- Builders ----------------------------------------------------------------
@@ -155,7 +156,9 @@ class TestBuildingAggregates:
         counts = _aggregates(client, admin_headers)
         assert counts == {b["id"]: 1}
 
-    def test_shliach_sees_only_covered_apartments(self, client, admin_headers):
+    def test_shliach_sees_only_covered_apartments(
+        self, client, admin_headers, db_session, grant_task_access
+    ):
         area = _mk_area(client, admin_headers)
         b1 = _mk_building(client, admin_headers, area["id"], "1 A St")
         b2 = _mk_building(client, admin_headers, area["id"], "2 B St")
@@ -169,6 +172,11 @@ class TestBuildingAggregates:
         _mk_shliach(
             client, admin_headers, "agg30@example.com", report_number_ids=[rn["id"]]
         )
+        # fixes58: visibility now comes from an ACTIVE Task under an active Campaign.
+        user = db_session.query(models.User).filter(
+            models.User.email == "agg30@example.com"
+        ).one()
+        grant_task_access(user.organization_id, user.id, rn["id"])
         shliach = _shliach_login(client, "agg30@example.com")
 
         counts = _aggregates(client, shliach)

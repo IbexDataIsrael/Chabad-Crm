@@ -156,7 +156,7 @@ class UserOut(BaseModel):
 
 
 # --- Org user management (fixes7 §1: admins provision admins/staff) ---------
-OrgRole = Literal["admin", "staff"]
+OrgRole = Literal["admin", "staff", "campaign_manager"]
 
 
 class OrgUserCreate(BaseModel):
@@ -1520,3 +1520,97 @@ class DashboardSummaryOut(BaseModel):
     top_activists: list[DashboardActivistActivity]
     jewish_status_breakdown: list[DashboardJewishStatusBreakdownItem]
     recent_jewish_changes: list[DashboardJewishStatusChange]
+
+
+# --- fixes58: Campaign & Task entities -------------------------------------
+
+TaskStatus = Literal["ACTIVE", "COMPLETED", "PAUSED"]
+
+
+class CampaignCreate(BaseModel):
+    name: str
+    is_active: bool = False
+    custom_stats_text: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def _check_name(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Name is required")
+        return v.strip()
+
+
+class CampaignUpdate(BaseModel):
+    name: Optional[str] = None
+    is_active: Optional[bool] = None
+    custom_stats_text: Optional[str] = None
+
+
+class CampaignOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    guid: str
+    name: str
+    is_active: bool
+    custom_stats_text: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class TaskCreate(BaseModel):
+    campaign_id: int
+    volunteer_user_id: int
+    custom_date_value_id: Optional[int] = None
+    report_number_ids: list[int] = []
+    status: TaskStatus = "ACTIVE"
+    volunteer_report_summary: Optional[str] = None
+
+
+class TaskUpdate(BaseModel):
+    campaign_id: Optional[int] = None
+    custom_date_value_id: Optional[int] = None
+    report_number_ids: Optional[list[int]] = None
+    status: Optional[TaskStatus] = None
+    volunteer_report_summary: Optional[str] = None
+
+
+class TaskOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    guid: str
+    campaign_id: int
+    campaign_name: str
+    volunteer_user_id: int
+    volunteer_name: str
+    custom_date_value_id: Optional[int] = None
+    # Raw picklist token (e.g. "first_candle_hanukkah"), matching every other
+    # picklist-backed field's API shape — the frontend resolves the bilingual
+    # label via usePicklist("task.custom_date").display(...).
+    custom_date_value: Optional[str] = None
+    report_number_ids: list[int] = []
+    report_number_names: list[str] = []
+    status: TaskStatus
+    volunteer_report_summary: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class TaskPageOut(BaseModel):
+    items: list[TaskOut]
+    total: int
+    page: int
+    page_size: int
+
+
+class CampaignActiveStat(BaseModel):
+    """fixes58 §3.2: one active campaign's homepage tile — `count` is the
+    number of distinct report numbers currently under that campaign's active
+    tasks, org-wide, with `custom_stats_text`'s `{{count}}` tag substituted
+    client-side."""
+
+    id: int
+    name: str
+    custom_stats_text: Optional[str] = None
+    count: int

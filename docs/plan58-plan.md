@@ -248,9 +248,51 @@ One Alembic migration (`down_revision` = current head, `8e9f0a1b2c3d`):
 
 ## Progress log
 
-- [ ] Phase 1 — DB schema & migration
-- [ ] Phase 2 — Backend APIs & access control
-- [ ] Phase 3 — Roles & route guards
-- [ ] Phase 4 — Admin/Campaign Manager UI
-- [ ] Phase 5 — Picklist/Fields/Custom-fields "Tasks" tab
-- [ ] Phase 6 — Activist homepage dynamic stats
+- [x] Phase 1 — DB schema & migration. `campaigns`/`tasks`/`task_report_numbers`
+  added (migration `9c1d2e3f4a5b`), `campaign_manager` role inserted, legacy-access
+  backfill run and verified against local Postgres (org 1: 1 shliach with a prior
+  report-number assignment → 1 Legacy Access campaign + task, apartment set
+  unchanged before/after). Orgs with zero migratable shliachim get no Legacy
+  campaign (a deliberate, sensible narrowing of "for each org" — nothing to
+  preserve there).
+- [x] Phase 2 — Backend APIs & access control. `routers/campaigns.py`,
+  `routers/tasks.py`, `_shliach_apartment_ids` rewritten to gate on
+  `TaskReportNumber → Task(ACTIVE) → Campaign(active)`, `campaign-task-status`
+  and `active-stats` endpoints added.
+- [x] Phase 3 — Roles & route guards. `require_admin_or_campaign_manager` /
+  `forbid_campaign_manager` / `require_staff_admin_or_campaign_manager` added;
+  applied to apartments/contacts/visits/users/organizations. Frontend
+  `isCampaignManager` + nav `roles` allow-list. A live drive caught a real gap
+  beyond the plan's own checklist — Contacts pages had no page-level guard, only
+  a nav hide, so a direct URL still rendered the page shell (data itself was
+  already 403'd server-side) — fixed on the Contacts list/detail and Visit
+  Summary pages.
+- [x] Phase 4 — Admin/Campaign Manager UI. Campaigns page, Tasks page (search/
+  filter/sort/paginate + inline status/report), Users-page "Add task" quick
+  action + `TaskQuickCreateForm`, Report Numbers page's activist column replaced
+  with one badge column per active campaign (Completed uses a neutral outline
+  badge, not the spec's blue — not one of CLAUDE.md's 5 mandated status colors),
+  `ReportNumberMultiSelect` retired from the 4 places it was still wired
+  (ContactView, ContactForm, Users list, Users detail) in favor of a read-only
+  display + pointer to the Tasks page.
+- [x] Phase 5 — Picklist/Fields/Custom-fields "Tasks" tab. `task.custom_date`
+  picklist category added; contact_shliach already had its own tab pre-fixes58
+  (item 1 of this phase was already satisfied). `fields/page.tsx`'s new tab is
+  structurally ready but empty (no fixed Task field is registered in
+  `field_registry.py` — out of scope here, Task's fields live on the Tasks page
+  itself).
+- [x] Phase 6 — Activist homepage dynamic stats. One tile per active campaign
+  on `/dashboard/activist`, `{{count}}` substituted client-side; the admin
+  dashboard's "coming soon: campaigns & tasks" placeholder card removed.
+
+**Verification**: full backend suite green (516 passed, includes new
+`test_fixes58.py`), `tsc --noEmit` clean, and a full live Playwright drive against
+local Docker covering the plan's own checklist: created a Campaign Manager user
+and confirmed Contacts/Visit-Summary blocked (nav + direct URL) while Apartments/
+Tasks/Campaigns/Users/shliach-config work; created a Campaign + Task from the
+Users-page quick action; confirmed the linked report number's apartments became
+visible to that shliach (0 → 1) and disappeared again when the Task was paused
+(1 → 0); confirmed the Report Numbers page's new campaign badge column; confirmed
+the activist homepage's stat tile rendered with the `{{count}}` tag correctly
+substituted. Not committed/pushed, not deployed to Neon — per the standing
+no-commit/push-without-being-asked rule.

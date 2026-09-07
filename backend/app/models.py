@@ -461,6 +461,107 @@ class ReportNumberContactShliach(Base):
     shliach = relationship("ContactShliach", back_populates="report_numbers")
 
 
+class Campaign(Base):
+    """fixes58 §2.1: an org-scoped named campaign a Task belongs to. Plain
+    mutable row (not versioned like Apartment/ContactShliach) — nothing in the
+    spec asks for edit history here, matching ShliachAnnouncement's shape
+    (row + is_active toggle + timestamps). Soft-deleted via `deleted_at` so a
+    Task's `campaign_id` FK never dangles."""
+
+    __tablename__ = "campaigns"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    name = Column(String(150), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=False)
+    # Template for the activist-homepage stat tile, e.g.
+    # "{{count}} Jews received a Menorah" (fixes58 §3.1/§3.2).
+    custom_stats_text = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(
+        DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+    deleted_at = Column(DateTime, nullable=True)
+
+    tasks = relationship("Task", back_populates="campaign")
+
+
+class Task(Base):
+    """fixes58 §2.2: a unit of work assigning a volunteer (shliach-role User)
+    to one or more report numbers, under a Campaign. `volunteer_user_id` FKs
+    `users.id` directly (not ContactShliach) — the spec's own workflow (a
+    quick-action button on the Users/"Volunteers" page) and field name point
+    at a real login, sidestepping the linked-vs-email-fallback shliach
+    identity complexity `resolve_shliach()` exists for. `status` is a plain
+    validated string (ACTIVE|COMPLETED|PAUSED), matching how every other
+    status-like field in this codebase avoids a DB-level enum."""
+
+    __tablename__ = "tasks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    # No ondelete cascade: a Campaign with live Tasks can't be hard-deleted
+    # (soft-delete only), matching Campaign's own soft-delete design.
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False, index=True)
+    volunteer_user_id = Column(
+        Integer, ForeignKey("users.id"), nullable=False, index=True
+    )
+    # fixes58 §3.3: an admin-defined picklist option under entity_type="task"
+    # (e.g. "First Candle of Hanukkah") — a PicklistValue row, not a
+    # PicklistDefinition (the spec's ER diagram names the wrong table).
+    custom_date_value_id = Column(
+        Integer, ForeignKey("picklist_values.id"), nullable=True
+    )
+    status = Column(String(20), nullable=False, default="ACTIVE")
+    volunteer_report_summary = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(
+        DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+    campaign = relationship("Campaign", back_populates="tasks")
+    volunteer = relationship("User")
+    custom_date_value = relationship("PicklistValue")
+    report_numbers = relationship(
+        "TaskReportNumber", back_populates="task", cascade="all, delete-orphan"
+    )
+
+
+class TaskReportNumber(Base):
+    """fixes58 §2.3: M2M — which report numbers a Task covers. Access control
+    (`_shliach_apartment_ids`) walks this table to find apartments visible to
+    a volunteer through an ACTIVE Task under an active Campaign."""
+
+    __tablename__ = "task_report_numbers"
+    __table_args__ = (
+        UniqueConstraint("task_id", "report_number_id", name="uq_task_report_number"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    task_id = Column(
+        Integer, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    report_number_id = Column(
+        Integer,
+        ForeignKey("report_number.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    task = relationship("Task", back_populates="report_numbers")
+    report_number = relationship("ReportNumber")
+
+
 class ContactShliachArea(Base):
     """M2M: which areas a shliach (active member) covers."""
 

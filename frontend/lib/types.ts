@@ -11,7 +11,8 @@ export type CustomFieldEntityType =
   | "contact_mekurav"
   | "contact_shliach"
   | "visit"
-  | "apartment";
+  | "apartment"
+  | "task";
 export type CustomFieldType = "text" | "number" | "boolean" | "date" | "select";
 /** One entity's non-select custom field values, keyed by field_key. */
 export type CustomFieldValueMap = Record<string, string | number | boolean | null>;
@@ -458,6 +459,51 @@ export interface ShliachSummary {
   id: number;
   name: string;
   last_name: string | null;
+}
+
+// --- fixes58: Campaign & Task entities --------------------------------------
+
+export interface Campaign {
+  id: number;
+  guid: string;
+  name: string;
+  is_active: boolean;
+  custom_stats_text: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export type TaskStatus = "ACTIVE" | "COMPLETED" | "PAUSED";
+
+export interface Task {
+  id: number;
+  guid: string;
+  campaign_id: number;
+  campaign_name: string;
+  volunteer_user_id: number;
+  volunteer_name: string;
+  custom_date_value_id: number | null;
+  custom_date_value: string | null;
+  report_number_ids: number[];
+  report_number_names: string[];
+  status: TaskStatus;
+  volunteer_report_summary: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface TaskPage {
+  items: Task[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface CampaignActiveStat {
+  id: number;
+  name: string;
+  custom_stats_text: string | null;
+  count: number;
 }
 
 /** fixes53 §3/§4: the "Number of Jews" / "Number of Engaged Jews"

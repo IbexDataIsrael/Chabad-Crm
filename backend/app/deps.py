@@ -70,3 +70,45 @@ def require_staff_or_admin(
             detail="Admin or staff privileges required",
         )
     return current_user
+
+
+def require_staff_admin_or_campaign_manager(
+    current_user: models.User = Depends(get_current_user),
+) -> models.User:
+    """fixes58 §3.7: the Users ("Volunteers") directory read path — admin,
+    staff, or campaign_manager; still blocks shliach, same reasoning as
+    `require_staff_or_admin`."""
+    if current_user.role not in ("admin", "staff", "campaign_manager"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin, staff, or campaign manager privileges required",
+        )
+    return current_user
+
+
+def require_admin_or_campaign_manager(
+    current_user: models.User = Depends(get_current_user),
+) -> models.User:
+    """fixes58 §3.7: Campaign Manager gets full management of Apartments (and
+    Campaigns/Tasks themselves), alongside admin."""
+    if current_user.role not in ("admin", "campaign_manager"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin or campaign manager privileges required",
+        )
+    return current_user
+
+
+def forbid_campaign_manager(
+    current_user: models.User = Depends(get_current_user),
+) -> models.User:
+    """fixes58 §3.7: Campaign Manager is explicitly forbidden from Contacts,
+    Visits, and global System Settings — applied to those routers'
+    representative read/write endpoints, alongside whatever role check the
+    endpoint already has."""
+    if current_user.role == "campaign_manager":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Campaign managers cannot access this resource",
+        )
+    return current_user

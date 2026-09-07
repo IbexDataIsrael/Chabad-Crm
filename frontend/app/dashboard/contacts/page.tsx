@@ -114,7 +114,7 @@ const CF_PREFIX = "cf:";
 export default function ContactsPage() {
   const router = useRouter();
   const { t, lang } = useLocalization();
-  const { user, isShliach } = useAuth();
+  const { user, isShliach, isCampaignManager } = useAuth();
   const { success, error: toastError } = useToast();
   // fixes30 §2a: which contact the quick add-visit modal is open for.
   const [visitFor, setVisitFor] = useState<Contact | null>(null);
@@ -895,6 +895,18 @@ export default function ContactsPage() {
 
   const selectClass =
     "rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none";
+
+  // fixes58 §3.7: the nav already hides this page from Campaign Manager;
+  // this closes the direct-URL gap the backend's own `forbid_campaign_manager`
+  // 403 leaves open at the page-shell level (found via a live drive, not a
+  // hole the approved plan called out by name).
+  if (isCampaignManager) {
+    return (
+      <p className="text-status-darkred">
+        {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
+      </p>
+    );
+  }
 
   return (
     <div className="space-y-4">

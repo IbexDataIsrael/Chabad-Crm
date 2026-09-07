@@ -38,7 +38,7 @@ export default function ContactDetailPage() {
   const router = useRouter();
   const { t } = useLocalization();
   const confirmDialog = useConfirm();
-  const { isAdmin, isShliach, user } = useAuth();
+  const { isAdmin, isShliach, isCampaignManager, user } = useAuth();
   const { success, error: toastError } = useToast();
   const { isFieldVisible: vis } = useFieldSettings();
 
@@ -254,6 +254,17 @@ export default function ContactDetailPage() {
           </section>
         );
     }
+  }
+
+  // fixes58 §3.7: Campaign Manager never gets Contacts (Volunteer/shliach
+  // management goes through the Users page, not this one) — same direct-URL
+  // gap fix as the Contacts list page.
+  if (isCampaignManager) {
+    return (
+      <p className="text-status-darkred">
+        {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
+      </p>
+    );
   }
 
   return (

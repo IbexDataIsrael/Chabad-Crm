@@ -20,11 +20,13 @@ import { Badge } from "@/components/ui/badge";
 // "contact_shliach" got pulled out into its own tab (was lumped into
 // "contacts" too) so an admin-only shliach field (manager_jewish_status)
 // gets a dedicated home, per spec.
-type PicklistTab = "contacts" | "visit" | "apartment" | "shliach";
+type PicklistTab = "contacts" | "visit" | "apartment" | "shliach" | "tasks";
 function tabFor(entityType: string): PicklistTab {
   if (entityType === "apartment") return "apartment";
   if (entityType === "visit") return "visit";
   if (entityType === "contact_shliach") return "shliach";
+  // fixes58 §Phase 5: task.custom_date (the only task.* picklist today).
+  if (entityType === "task") return "tasks";
   return "contacts";
 }
 
@@ -136,6 +138,7 @@ export default function PicklistsPage() {
   const visitDefs = fields.filter((f) => tabFor(f.entity_type) === "visit");
   const apartmentDefs = fields.filter((f) => tabFor(f.entity_type) === "apartment");
   const shliachDefs = fields.filter((f) => tabFor(f.entity_type) === "shliach");
+  const taskDefs = fields.filter((f) => tabFor(f.entity_type) === "tasks");
 
   // fixes44 §4: a select-type custom field already has a matching row in
   // `fields` above (routers/custom_fields.py auto-provisions a
@@ -183,6 +186,7 @@ export default function PicklistsPage() {
     { key: "visit", icon: "📋", labelKey: "pl.tab_visit", fallback: "ביקורים" },
     { key: "apartment", icon: "🏠", labelKey: "pl.tab_apartment", fallback: "דירה" },
     { key: "shliach", icon: "🧑‍🏫", labelKey: "pl.tab_shliach", fallback: "פעילים" },
+    { key: "tasks", icon: "✅", labelKey: "nav.tasks", fallback: "משימות" },
   ];
 
   return (
@@ -262,6 +266,19 @@ export default function PicklistsPage() {
             onAdded={loadAll}
           />
           {renderCustomFieldsSection("shliach")}
+        </section>
+      )}
+
+      {tab === "tasks" && (
+        <section className="space-y-6 rounded-2xl border border-border bg-card p-5">
+          {taskDefs.map(renderDefinition)}
+          <AddPicklist
+            heading={t("pl.add_list_task", "הוספת רשימת בחירה למשימה")}
+            prefix="task."
+            entityType="task"
+            onAdded={loadAll}
+          />
+          {renderCustomFieldsSection("tasks")}
         </section>
       )}
     </div>

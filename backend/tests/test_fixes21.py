@@ -75,7 +75,7 @@ class TestUnlinkedShliachVisibility:
         return contact, {"Authorization": f"Bearer {token}"}
 
     def test_report_number_visible_without_user_id_link(
-        self, client, admin_headers, db_session
+        self, client, admin_headers, db_session, grant_task_access
     ):
         area = _mk_area(client, admin_headers)
         b = _mk_building(client, admin_headers, area["id"])
@@ -90,6 +90,13 @@ class TestUnlinkedShliachVisibility:
             client, admin_headers, db_session, "imported21@example.com",
             report_number_ids=[rn["id"]],
         )
+        # fixes58: Task.volunteer_user_id is a direct users.id FK — it never
+        # goes through resolve_shliach(), so the broken ContactShliach.user_id
+        # link this test simulates doesn't matter for this grant.
+        user = db_session.query(models.User).filter(
+            models.User.email == "imported21@example.com"
+        ).one()
+        grant_task_access(user.organization_id, user.id, rn["id"])
         # Resolved by email → sees the report-number apartment.
         assert [a["id"] for a in client.get("/api/apartments", headers=shliach).json()] == [
             covered["id"]

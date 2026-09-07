@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from app import custom_field_utils, models, picklist_utils
 from app.database import get_db
-from app.deps import get_current_user, require_admin
+from app.deps import forbid_campaign_manager, get_current_user, require_admin
 from app.picklist_utils import validate_picklist_value
 from app.schemas import (
     ContactCustomFieldOut,
@@ -194,6 +194,7 @@ def list_visits(
     contact_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
+    _forbid: models.User = Depends(forbid_campaign_manager),
 ):
     _contact_or_404(contact_id, current_user.organization_id, db)
     rows = (
@@ -214,6 +215,7 @@ def add_visit(
     payload: VisitCreate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
+    _forbid: models.User = Depends(forbid_campaign_manager),
 ):
     org_id = current_user.organization_id
     _contact_or_404(contact_id, org_id, db)
@@ -240,6 +242,7 @@ def update_visit(
     payload: VisitUpdate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
+    _forbid: models.User = Depends(forbid_campaign_manager),
 ):
     org_id = current_user.organization_id
     v = _visit_or_404(visit_id, org_id, db, contact_id=contact_id)
@@ -262,6 +265,7 @@ def delete_visit(
     visit_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
+    _forbid: models.User = Depends(forbid_campaign_manager),
 ):
     v = _visit_or_404(visit_id, current_user.organization_id, db, contact_id=contact_id)
     picklist_utils.delete_links(db, "visit_history", v.id)

@@ -51,6 +51,7 @@ from app.routers import (
     auth,
     backups,
     buildings,
+    campaigns,
     contacts,
     custom_fields,
     dashboard,
@@ -64,6 +65,7 @@ from app.routers import (
     report_numbers,
     search,
     shliach_messages,
+    tasks,
     uploads,
     users,
     visits,
@@ -135,6 +137,8 @@ app.include_router(backups.router)
 app.include_router(preferences.router)
 app.include_router(search.router)
 app.include_router(ai_query.router)
+app.include_router(campaigns.router)
+app.include_router(tasks.router)
 
 # fixes25 §6: locally stored uploads (logo fallback when Cloudinary is
 # unavailable) are served straight from the data volume.

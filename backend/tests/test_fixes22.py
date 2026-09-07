@@ -64,7 +64,7 @@ def _shliach_login(client, email):
 # --- §2 shliach apartment editing ------------------------------------------------
 class TestShliachEditing:
     def test_shliach_edits_assigned_apartment_versions(
-        self, client, admin_headers, db_session
+        self, client, admin_headers, db_session, grant_task_access
     ):
         area = _mk_area(client, admin_headers)
         b = _mk_building(client, admin_headers, area["id"])
@@ -75,6 +75,14 @@ class TestShliachEditing:
         )
         _mk_shliach(client, admin_headers, "editor22@example.com",
                     report_number_ids=[rn["id"]])
+        # fixes58: visibility/edit access now comes from an ACTIVE Task under
+        # an active Campaign, not the direct ReportNumberContactShliach row.
+        pre_login_user = (
+            db_session.query(models.User)
+            .filter(models.User.email == "editor22@example.com")
+            .one()
+        )
+        grant_task_access(pre_login_user.organization_id, pre_login_user.id, rn["id"])
         shliach = _shliach_login(client, "editor22@example.com")
 
         r = client.put(

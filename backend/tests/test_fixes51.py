@@ -2,6 +2,7 @@
 multi-language, manager_jewish_status (admin-only), and the Shliach Role
 Configuration Panel. (§1's colored section borders are frontend-only, not
 covered here.)"""
+from app import models
 from app.seed import seed_picklist_definitions, seed_picklists
 
 
@@ -82,7 +83,9 @@ def _mk_staff(client, headers, email):
 
 # --- §2.1 apartment_number locked for Shliach --------------------------------
 class TestApartmentNumberLock:
-    def test_shliach_cannot_edit_apartment_name(self, client, admin_headers, db_session):
+    def test_shliach_cannot_edit_apartment_name(
+        self, client, admin_headers, db_session, grant_task_access
+    ):
         _provision(client, db_session, admin_headers)
         area = _mk_area(client, admin_headers)
         b = _mk_building(client, admin_headers, area["id"])
@@ -92,6 +95,12 @@ class TestApartmentNumberLock:
             report_number_id=rn["id"],
         )
         _mk_shliach(client, admin_headers, "lock51@example.com", report_number_ids=[rn["id"]])
+        # fixes58: visibility/edit access now comes from an ACTIVE Task under
+        # an active Campaign.
+        user = db_session.query(models.User).filter(
+            models.User.email == "lock51@example.com"
+        ).one()
+        grant_task_access(user.organization_id, user.id, rn["id"])
         shliach = _login(client, "lock51@example.com")
 
         # Blocked: changing the apartment number.

@@ -26,7 +26,11 @@ from app.core.shliach import (
     set_shliach_report_numbers,
 )
 from app.database import get_db
-from app.deps import require_admin, require_staff_or_admin
+from app.deps import (
+    get_current_user,
+    require_admin,
+    require_staff_admin_or_campaign_manager,
+)
 from app.schemas import (
     OrgUserCreate,
     OrgUserUpdate,
@@ -91,7 +95,7 @@ def _user_out(db: Session, user: models.User) -> UserOut:
 @router.get("", response_model=list[UserOut])
 def list_users(
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(require_staff_or_admin),
+    current_user: models.User = Depends(require_staff_admin_or_campaign_manager),
 ):
     users = (
         db.query(models.User)
@@ -123,7 +127,7 @@ def list_users(
 def get_user(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(require_staff_or_admin),
+    current_user: models.User = Depends(require_staff_admin_or_campaign_manager),
 ):
     """fixes47: backs the dedicated dashboard/users/{id} detail page — same
     single-record-fetch role list_contacts's GET /{id} plays for Contacts."""
@@ -206,9 +210,18 @@ def update_user(
     user_id: int,
     payload: OrgUserUpdate,
     db: Session = Depends(get_db),
-    admin: models.User = Depends(require_admin),
+    # fixes58 §3.7/plan decision #6: `admin` here means "the caller" — a
+    # campaign_manager may also reach this endpoint, but only for a
+    # shliach-role target row (checked just below). Kept named `admin` to
+    # avoid renaming its ~15 other uses through the rest of this function.
+    admin: models.User = Depends(get_current_user),
 ):
     user = _get_or_404(user_id, admin.organization_id, db)
+    if admin.role == "campaign_manager":
+        if user.role != "shliach":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin privileges required")
+    elif admin.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin privileges required")
     # fixes46: `shliach` (notes/area_ids/report_number_ids) is handled on its
     # own below, alongside the identity fields — together they still collapse
     # into at most one new ContactShliach version per request.
@@ -480,9 +493,15 @@ def recreate_user(
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
-    admin: models.User = Depends(require_admin),
+    # fixes58 §3.7/plan decision #6: see update_user's comment above.
+    admin: models.User = Depends(get_current_user),
 ):
     user = _get_or_404(user_id, admin.organization_id, db)
+    if admin.role == "campaign_manager":
+        if user.role != "shliach":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin privileges required")
+    elif admin.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin privileges required")
     if user.id == admin.id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "You cannot delete yourself")
     # Unassign their contacts instead of blocking the delete (guid FK, fixes10).

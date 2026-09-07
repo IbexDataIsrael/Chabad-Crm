@@ -5,7 +5,6 @@ import {
   Activity,
   Building2,
   Home as HomeIcon,
-  Rocket,
   TrendingDown,
   TrendingUp,
   Users,
@@ -401,14 +400,6 @@ export function AdminDashboardHome() {
               </div>
             </Card>
           </div>
-
-          {/* Placeholder for the next entities — campaigns & tasks are not
-              built yet; this keeps the grid's shape stable so it's a drop-in
-              slot once they exist, instead of a surprise reflow later. */}
-          <Card className="flex items-center gap-3 border-dashed p-5 text-muted-foreground">
-            <Rocket className="h-5 w-5 shrink-0" />
-            <span className="text-sm">{t("dashboard.coming_soon", "בקרוב: קמפיינים ומשימות")}</span>
-          </Card>
         </>
       )}
     </div>

@@ -31,30 +31,48 @@ function DashboardChrome({ children }: { children: ReactNode }) {
   const [desktopCollapsed, setDesktopCollapsed] = usePersistentState(
     "crm.sidebarCollapsed", false,
   );
-  const { user, isAdmin, isShliach, isSuperadmin, signOut } = useAuth();
+  const { user, isAdmin, isShliach, isSuperadmin, isCampaignManager, signOut } = useAuth();
   const { t } = useLocalization();
   const orgName = user?.organization?.name ?? t("auth.app_title", "מיני CRM");
   const logoUrl = user?.organization?.logo_url ?? null;
   // The browser-tab title comes from TitleManager (fixes9 §1) — not set here.
 
-  // Drop admin-only entries for staff users; a menu with no items hides itself.
-  const adminOnly = (items: (SidebarNavItem & { admin?: boolean })[]): SidebarNavItem[] =>
-    items.filter((it) => isAdmin || !it.admin).map(({ href, label }) => ({ href, label }));
+  // Drop admin-only entries for non-admins; a menu with no items hides
+  // itself. fixes58 §3.7 (plan Phase 3): an item can also carry a `roles`
+  // allow-list instead of the bare `admin` flag, for "admin or
+  // campaign_manager"-style entries (Users, shliach-config, Campaigns/Tasks)
+  // — `roles` takes priority over `admin` when both would apply.
+  const currentRole = user?.role;
+  const adminOnly = (
+    items: (SidebarNavItem & { admin?: boolean; roles?: string[] })[],
+  ): SidebarNavItem[] =>
+    items
+      .filter((it) => {
+        if (it.roles) return !!currentRole && it.roles.includes(currentRole);
+        return isAdmin || !it.admin;
+      })
+      .map(({ href, label }) => ({ href, label }));
 
   // fixes18 §6: a shliach only gets the contacts entry when the org opted in.
+  // fixes58 §3.7: Campaign Manager never gets Contacts, regardless of that toggle.
   const shliachContactsBlocked =
-    isShliach && !user?.organization?.shliach_can_view_contacts;
+    (isShliach && !user?.organization?.shliach_can_view_contacts) || isCampaignManager;
   const peopleItems = adminOnly([
     ...(shliachContactsBlocked
       ? []
       : [{ href: "/dashboard/contacts", label: t("nav.contacts", "אנשי קשר") }]),
     // fixes38 §1.1: Manage Areas relocated here from Places — hidden from
-    // shliach users (fixes10 §3.7 — the whole section is blocked for them).
-    ...(isShliach
+    // shliach users (fixes10 §3.7 — the whole section is blocked for them)
+    // and from Campaign Manager (fixes58 §3.7 — not in their allowed list).
+    ...(isShliach || isCampaignManager
       ? []
-      : [{ href: "/dashboard/admin-areas", label: t("nav.admin_areas", "אזור מנהל") }]),
-    // fixes42 §4A: the Shluchim nav entry merged into Users.
-    { href: "/dashboard/users", label: t("nav.users", "משתמשים"), admin: true },
+      : [{ href: "/dashboard/admin-areas", label: t("nav.admin_areas", "אזור מותאם אישית") }]),
+    // fixes42 §4A: the Shluchim nav entry merged into Users. fixes58 §3.7:
+    // Campaign Manager gets "Volunteers" management here too.
+    {
+      href: "/dashboard/users", label: t("nav.users", "משתמשים"),
+      roles: ["admin", "campaign_manager"],
+    },
     // fixes25 §4: the Visits menu entry is retired (visit logging happens from
     // the contact page); /dashboard/visits still serves by direct URL.
     // fixes24 §2: donations moved from a standalone header link into People.
@@ -68,6 +86,17 @@ function DashboardChrome({ children }: { children: ReactNode }) {
             label: t("nav.visit_summary", "סיכום ביקורים"),
           },
         ]),
+  ]);
+  // fixes58 §3.1/§3.4: Campaign + Task management — admin and campaign_manager.
+  const campaignItems = adminOnly([
+    {
+      href: "/dashboard/campaigns", label: t("nav.campaigns", "קמפיינים"),
+      roles: ["admin", "campaign_manager"],
+    },
+    {
+      href: "/dashboard/tasks", label: t("nav.tasks", "משימות"),
+      roles: ["admin", "campaign_manager"],
+    },
   ]);
   // fixes54 §8: superadmin cascading module toggles (Area -> Building ->
   // Apartment -> Activist) — each nav entry is gated on its own module's
@@ -87,8 +116,10 @@ function DashboardChrome({ children }: { children: ReactNode }) {
   // fixes24 §2: dedicated Reports group — PDF generation plus the
   // report-number management page (moved out of Places; still admin-only).
   // fixes30 §1: the whole group is hidden for shliach users (an empty menu
-  // renders nothing).
-  const reportItems = isShliach
+  // renders nothing). fixes58 §3.7: also hidden for Campaign Manager
+  // (Report Numbers moved into Tasks; the report-creation flow isn't in
+  // their allowed list either).
+  const reportItems = isShliach || isCampaignManager
     ? []
     : adminOnly([
         { href: "/dashboard/reports/create", label: t("reports.create_reports", "יצירת דוחות") },
@@ -116,11 +147,13 @@ function DashboardChrome({ children }: { children: ReactNode }) {
     { href: "/dashboard/custom-fields", label: t("nav.custom_fields", "שדות מותאמים"), admin: true },
     { href: "/dashboard/fields", label: t("page.fields_title", "ניהול שדות"), admin: true },
     { href: "/dashboard/localization", label: t("nav.localization", "תרגומים"), admin: true },
-    // fixes51 §4: admin-only config panel for the Shliach role's Apartments view.
+    // fixes51 §4: config panel for the Shliach role's Apartments view.
+    // fixes58 §3.7: this is the "Volunteer View Settings" page Campaign
+    // Manager is explicitly granted.
     {
       href: "/dashboard/shliach-config",
       label: t("nav.shliach_config", "הגדרות לתצוגת פעילים"),
-      admin: true,
+      roles: ["admin", "campaign_manager"],
     },
     { href: "/dashboard/settings", label: t("nav.settings", "הגדרות") },
   ]);
@@ -134,6 +167,9 @@ function DashboardChrome({ children }: { children: ReactNode }) {
     { label: t("nav.group.people", "אנשים"), items: peopleItems },
     { label: t("nav.group.places", "מקומות"), items: placeItems },
     { label: t("reports.menu_title", "דוחות"), items: reportItems },
+    // fixes58 §3.1/§3.4: own group so it reads as a distinct module, not
+    // buried inside an existing one.
+    { label: t("nav.group.campaigns", "קמפיינים ומשימות"), items: campaignItems },
     { label: t("nav.group.more", "עוד"), items: moreItems },
   ];
 

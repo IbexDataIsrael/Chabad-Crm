@@ -31,7 +31,6 @@ import { ContactMap } from "./ContactMap";
 import { CustomFieldValueDisplay, CustomFieldValueInput } from "./CustomFieldValueInput";
 import { DatePicker } from "./DatePicker";
 import { PicklistSelect } from "./PicklistSelect";
-import { ReportNumberMultiSelect } from "./ReportNumberMultiSelect";
 import { InlineEdit } from "./ui/InlineEdit";
 import { MultiSelectEditor } from "./ui/MultiSelectEditor";
 
@@ -707,34 +706,24 @@ export function ContactView({
               </div>
             )}
             {/* fixes19: shluchim associate with report numbers (the covered
-                apartments grid is gone). */}
+                apartments grid is gone). fixes58 §Phase 4: no longer
+                editable here — apartment access is now granted by a Task,
+                not this direct assignment, so the picker would look
+                functional but be dead. Read-only display + a pointer to
+                where coverage is actually managed now. */}
             {vis("contact_shliach.report_numbers") && (
               <div className="flex flex-col gap-1 rounded-lg border-2 border-primary/25 p-3 transition-colors hover:border-primary/50 hover:bg-primary/5">
                 <dt className={dtClass} style={dtStyle}>
                   {t("contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל")}
                 </dt>
-                <dd className="text-sm">
-                  {onPatch && isLocked("shliach.report_numbers") ? (
-                    lockedNode(<ReportNumbersLabel ids={contact.shliach.report_number_ids} />)
-                  ) : onPatch ? (
-                    <InlineEdit<number[]>
-                      value={contact.shliach.report_number_ids}
-                      display={<ReportNumbersLabel ids={contact.shliach.report_number_ids} />}
-                      commitOnBlur={false}
-                      onSave={(ids) => onPatch({ shliach: { report_number_ids: ids } })}
-                      editor={(draft, setDraft, commit) => (
-                        <MultiSelectEditor onApply={() => commit(draft)}>
-                          <ReportNumberMultiSelect
-                            value={draft}
-                            onChange={setDraft}
-                            excludeContactId={contact.id}
-                          />
-                        </MultiSelectEditor>
-                      )}
-                    />
-                  ) : (
-                    <ReportNumbersLabel ids={contact.shliach.report_number_ids} />
-                  )}
+                <dd className="text-sm space-y-1">
+                  <ReportNumbersLabel ids={contact.shliach.report_number_ids} />
+                  <p className="text-xs text-muted-foreground">
+                    {t(
+                      "contact_shliach.report_numbers_moved_to_tasks",
+                      "שיוך מספרי דוח מנוהל כעת דרך עמוד המשימות.",
+                    )}
+                  </p>
                 </dd>
               </div>
             )}

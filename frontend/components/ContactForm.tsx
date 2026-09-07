@@ -29,7 +29,6 @@ import { DatePicker } from "./DatePicker";
 import { EmailInput } from "./EmailInput";
 import { PhoneInput } from "./PhoneInput";
 import { PicklistSelect } from "./PicklistSelect";
-import { ReportNumberMultiSelect } from "./ReportNumberMultiSelect";
 
 export interface MekuravFormValues {
   apartment_id: number | null;
@@ -535,7 +534,9 @@ export function ContactForm({
           )}
 
           {/* fixes19: shluchim are associated with report numbers (the
-              apartment coverage picker is gone). */}
+              apartment coverage picker is gone). fixes58 §Phase 4: no longer
+              editable here — apartment access is granted by a Task, created
+              afterward from the Users page's quick action. */}
           {vis("contact_shliach.report_numbers") && (
             <div className="sm:col-span-2">
               <Field
@@ -544,10 +545,12 @@ export function ContactForm({
                   "מספרי דוח באחריות הפעיל",
                 )}
               >
-                <ReportNumberMultiSelect
-                  value={values.shliach.report_number_ids}
-                  onChange={(ids) => setShliach("report_number_ids", ids)}
-                />
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    "contact_shliach.report_numbers_moved_to_tasks",
+                    "שיוך מספרי דוח מנוהל כעת דרך עמוד המשימות.",
+                  )}
+                </p>
               </Field>
             </div>
           )}

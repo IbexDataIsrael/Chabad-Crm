@@ -33,7 +33,7 @@ from app.core.shliach import (
     validate_report_number,
 )
 from app.database import get_db
-from app.deps import get_current_user, require_admin
+from app.deps import forbid_campaign_manager, get_current_user, require_admin
 from app.picklist_utils import validate_picklist_value
 from app.schemas import (
     ContactBulkUpdate,
@@ -825,6 +825,7 @@ def _contacts_query(
 def list_contacts(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
+    _forbid: models.User = Depends(forbid_campaign_manager),
     pipeline_status: Optional[str] = None,
     contact_type: Optional[str] = None,
     assigned_user_id: Optional[str] = None,
@@ -930,6 +931,7 @@ def _login_status_map(db: Session, rows: list[models.Contact]) -> dict[int, str]
 def list_contacts_paginated(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
+    _forbid: models.User = Depends(forbid_campaign_manager),
     pipeline_status: Optional[str] = None,
     contact_type: Optional[str] = None,
     assigned_user_id: Optional[str] = None,
@@ -1155,6 +1157,7 @@ def create_contact(
     payload: ContactCreate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
+    _forbid: models.User = Depends(forbid_campaign_manager),
 ):
     org_id = current_user.organization_id
     data = payload.model_dump(
@@ -1351,6 +1354,7 @@ def update_contact(
     payload: ContactUpdate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
+    _forbid: models.User = Depends(forbid_campaign_manager),
 ):
     org_id = current_user.organization_id
     contact = _get_contact_or_404(contact_id, current_user, db)

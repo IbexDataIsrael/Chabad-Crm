@@ -15,7 +15,7 @@ import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
-import type { ApartmentPage, ShliachAnnouncement } from "@/lib/types";
+import type { ApartmentPage, CampaignActiveStat, ShliachAnnouncement } from "@/lib/types";
 
 /** fixes54 §6.1: a standalone landing page for the shliach role — replaces
  *  landing directly on the generic contact-edit page (`/dashboard/contacts/
@@ -39,6 +39,8 @@ export default function ActivistLandingPage() {
   const [announcementsLoading, setAnnouncementsLoading] = useState(true);
   const [completionModalOpen, setCompletionModalOpen] = useState(false);
   const [commentModalOpen, setCommentModalOpen] = useState(false);
+  // fixes58 §3.2/Phase 6: one dynamic stat tile per active campaign.
+  const [campaignStats, setCampaignStats] = useState<CampaignActiveStat[]>([]);
 
   function loadApartmentsTotal() {
     setApartmentsError(false);
@@ -61,6 +63,9 @@ export default function ActivistLandingPage() {
       .then(setAnnouncements)
       .catch(() => setAnnouncements([]))
       .finally(() => setAnnouncementsLoading(false));
+    apiFetch<CampaignActiveStat[]>("/api/campaigns/active-stats")
+      .then(setCampaignStats)
+      .catch(() => setCampaignStats([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, isShliach, router]);
 
@@ -145,6 +150,23 @@ export default function ActivistLandingPage() {
           </Link>
         )}
       </div>
+
+      {/* fixes58 §3.2/Phase 6: one dynamic stat tile per active campaign,
+          same fetch-count-into-tile pattern as "my apartments" above. */}
+      {campaignStats.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {campaignStats.map((c) => (
+            <Card key={c.id} className="border-2 border-primary/30 p-5">
+              <div className="text-lg font-semibold">{c.name}</div>
+              {c.custom_stats_text && (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {c.custom_stats_text.replace("{{count}}", String(c.count))}
+                </p>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {/* fixes54 §6.1: only when the activist has ≥1 assigned apartment. */}

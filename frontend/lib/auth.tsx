@@ -104,6 +104,10 @@ interface AuthContextValue {
   isAdmin: boolean;
   isShliach: boolean;
   isSuperadmin: boolean;
+  /** fixes58 §3.7: the Campaign Manager role — full Apartments/Tasks/
+   *  Campaigns/Volunteers/shliach-config management, blocked from Contacts/
+   *  Visits/global System Settings. */
+  isCampaignManager: boolean;
   /** Resolves to null when logged in, or to the organization list when the
    * identity spans several orgs and one must be chosen (fixes14). */
   signIn: (
@@ -198,6 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdmin: user?.role === "admin",
         isShliach: user?.role === "shliach",
         isSuperadmin: user?.role === "superadmin",
+        isCampaignManager: user?.role === "campaign_manager",
         signIn,
         signInWithGoogle,
         signUp,

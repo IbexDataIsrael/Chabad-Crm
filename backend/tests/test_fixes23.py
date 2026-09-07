@@ -1,6 +1,7 @@
 """Fixes23 acceptance tests: the conditional (report number → building) filter
 map, the multi-select building filter on the apartment list, and bulk editing of
 the apartments matching the active filters (report number + notes)."""
+from app import models
 
 
 # --- Builders ----------------------------------------------------------------
@@ -243,7 +244,7 @@ class TestBulkUpdate:
         assert hist[0]["is_display"] is False
 
     def test_shliach_bulk_update_scoped_to_their_apartments(
-        self, client, admin_headers
+        self, client, admin_headers, db_session, grant_task_access
     ):
         area = _mk_area(client, admin_headers)
         b = _mk_building(client, admin_headers, area["id"])
@@ -257,6 +258,11 @@ class TestBulkUpdate:
         _mk_shliach(
             client, admin_headers, "bulk23@example.com", report_number_ids=[rn["id"]]
         )
+        # fixes58: visibility now comes from an ACTIVE Task under an active Campaign.
+        user = db_session.query(models.User).filter(
+            models.User.email == "bulk23@example.com"
+        ).one()
+        grant_task_access(user.organization_id, user.id, rn["id"])
         shliach = _shliach_login(client, "bulk23@example.com")
 
         # The shliach sees only MINE, and a bulk update touches only it.

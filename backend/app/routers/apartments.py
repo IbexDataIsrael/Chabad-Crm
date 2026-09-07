@@ -21,7 +21,7 @@ from app import custom_field_utils, models, picklist_utils
 from app.core.natural_sort import natural_sort_keys
 from app.core.shliach import resolve_shliach
 from app.database import get_db
-from app.deps import get_current_user, require_admin
+from app.deps import get_current_user, require_admin_or_campaign_manager
 from app.picklist_utils import validate_picklist_value
 from app.schemas import (
     ApartmentBatchCreate,
@@ -146,19 +146,30 @@ def _validate_report_number(data: dict, org_id: int, db: Session) -> None:
 
 def _shliach_apartment_ids(db: Session, user: models.User) -> list[int]:
     """Apartment ids visible to a shliach user: apartments whose report number
-    is assigned to them (fixes20 §4 — the point of the report-number
-    association) plus apartments of buildings inside their covered areas
-    (fixes19). fixes21 §1: the shliach contact is resolved by the user_id link
-    *or* by matching email, so an unlinked (e.g. imported) shliach still sees
-    their apartments."""
-    shliach = resolve_shliach(db, user)
-    if not shliach:
-        return []
+    is linked to an ACTIVE Task under an active Campaign for them (fixes58 —
+    replaces the old direct `ReportNumberContactShliach` assignment), plus
+    apartments of buildings inside their covered areas (fixes19).
+
+    fixes58: `Task.volunteer_user_id` is a direct `users.id` FK (plan decision
+    #2, `docs/plan58-plan.md`), not routed through `resolve_shliach()` — a
+    volunteer with no linked/resolvable shliach contact still sees their
+    Task-driven apartments. The area branch is unaffected by fixes58 and
+    still needs a resolvable shliach; fixes21 §1: resolved by the user_id
+    link *or* by matching email, so an unlinked (e.g. imported) shliach still
+    sees their area coverage."""
     ids: set[int] = set()
+
     report_number_ids = [
         row.report_number_id
-        for row in db.query(models.ReportNumberContactShliach.report_number_id)
-        .filter(models.ReportNumberContactShliach.contact_shliach_id == shliach.id)
+        for row in db.query(models.TaskReportNumber.report_number_id)
+        .join(models.Task, models.Task.id == models.TaskReportNumber.task_id)
+        .join(models.Campaign, models.Campaign.id == models.Task.campaign_id)
+        .filter(
+            models.Task.volunteer_user_id == user.id,
+            models.Task.status == "ACTIVE",
+            models.Campaign.is_active.is_(True),
+            models.Campaign.deleted_at.is_(None),
+        )
         .all()
     ]
     if report_number_ids:
@@ -168,20 +179,23 @@ def _shliach_apartment_ids(db: Session, user: models.User) -> list[int]:
             .filter(models.Apartment.report_number_id.in_(report_number_ids))
             .all()
         )
-    area_ids = [
-        row.area_id
-        for row in db.query(models.ContactShliachArea.area_id)
-        .filter(models.ContactShliachArea.contact_shliach_id == shliach.id)
-        .all()
-    ]
-    if area_ids:
-        ids.update(
-            row.id
-            for row in db.query(models.Apartment.id)
-            .join(models.Building, models.Building.id == models.Apartment.building_id)
-            .filter(models.Building.area_id.in_(area_ids))
+
+    shliach = resolve_shliach(db, user)
+    if shliach:
+        area_ids = [
+            row.area_id
+            for row in db.query(models.ContactShliachArea.area_id)
+            .filter(models.ContactShliachArea.contact_shliach_id == shliach.id)
             .all()
-        )
+        ]
+        if area_ids:
+            ids.update(
+                row.id
+                for row in db.query(models.Apartment.id)
+                .join(models.Building, models.Building.id == models.Apartment.building_id)
+                .filter(models.Building.area_id.in_(area_ids))
+                .all()
+            )
     return sorted(ids)
 
 
@@ -1044,7 +1058,7 @@ _VERSIONED_COLUMNS = (
 def apartment_history(
     apartment_id: int,
     db: Session = Depends(get_db),
-    admin: models.User = Depends(require_admin),
+    admin: models.User = Depends(require_admin_or_campaign_manager),
 ):
     """Previous versions of this apartment's lineage, newest first — the admin
     history view (fixes19 §3). Each row is a full read-only snapshot plus the
@@ -1094,7 +1108,7 @@ def restore_apartment_field(
     apartment_id: int,
     payload: ApartmentRestoreField,
     db: Session = Depends(get_db),
-    admin: models.User = Depends(require_admin),
+    admin: models.User = Depends(require_admin_or_campaign_manager),
 ):
     """fixes22 §2: roll one field of the active apartment back to the value it
     held in a previous version. Applied as a normal versioned edit — a new
@@ -1279,7 +1293,7 @@ def update_apartment(
 def delete_apartment(
     apartment_id: int,
     db: Session = Depends(get_db),
-    admin: models.User = Depends(require_admin),
+    admin: models.User = Depends(require_admin_or_campaign_manager),
 ):
     a = _get_or_404(apartment_id, admin.organization_id, db)
     # fixes19: remove the whole lineage — historical versions must not linger

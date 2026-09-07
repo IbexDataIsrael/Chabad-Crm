@@ -116,3 +116,37 @@ def admin_headers(client):
         data={"username": "boss", "password": "pw12345"},
     ).json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def grant_task_access(db_session):
+    """fixes58: apartment visibility via a report number now requires an
+    ACTIVE Task under an active Campaign (replaces the old direct
+    `ReportNumberContactShliach` grant) — shared factory fixture for every
+    pre-fixes58 test that used to rely on that direct assignment alone.
+    Usage: `grant_task_access(org_id, user_id, report_number_id)`."""
+    from app import models
+
+    def _grant(organization_id, user_id, report_number_id, *, status="ACTIVE", campaign_active=True):
+        campaign = models.Campaign(
+            organization_id=organization_id, name="Test Campaign", is_active=campaign_active,
+        )
+        db_session.add(campaign)
+        db_session.flush()
+        task = models.Task(
+            organization_id=organization_id,
+            campaign_id=campaign.id,
+            volunteer_user_id=user_id,
+            status=status,
+        )
+        db_session.add(task)
+        db_session.flush()
+        db_session.add(
+            models.TaskReportNumber(
+                organization_id=organization_id, task_id=task.id, report_number_id=report_number_id,
+            )
+        )
+        db_session.commit()
+        return task
+
+    return _grant

@@ -40,6 +40,9 @@ PICKLIST_FIELDS: dict[str, tuple[str, str]] = {
     # fixes51 §3: admin-only field on contact_shliach, shares options with
     # Jewish_status (see app/seed.py's PICKLISTS).
     "contact_shliach.manager_jewish_status": ("סטטוס יהדות מנהל", "contact_shliach"),
+    # fixes58 §3.3/§3.6: admin-defined task custom-date options (e.g. "First
+    # Candle of Hanukkah") — Task.custom_date_value_id points at one of these.
+    "task.custom_date": ("תאריך מותאם", "task"),
 }
 
 # fixes51 §2.2: which of the fields above allow more than one selected value

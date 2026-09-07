@@ -237,7 +237,7 @@ class TestRolesTable:
         from app import models
 
         names = {r.name for r in db_session.query(models.Role).all()}
-        assert names == {"admin", "staff", "shliach", "superadmin"}
+        assert names == {"admin", "staff", "shliach", "superadmin", "campaign_manager"}
 
     def test_admin_role_label_is_system_admin(self, client, admin_headers, db_session):
         from app.seed import seed_localization

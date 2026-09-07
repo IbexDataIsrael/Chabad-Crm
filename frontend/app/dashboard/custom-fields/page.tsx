@@ -20,6 +20,7 @@ const ENTITY_TYPES: { value: CustomFieldEntityType; labelKey: string; fallback: 
   { value: "contact_shliach", labelKey: "contact_shliach", fallback: "פעיל" },
   { value: "visit", labelKey: "page.visits", fallback: "ביקורים" },
   { value: "apartment", labelKey: "apartment", fallback: "דירה" },
+  { value: "task", labelKey: "nav.tasks", fallback: "משימות" },
 ];
 
 const FIELD_TYPES: { value: CustomFieldType; labelKey: string; fallback: string }[] = [
@@ -33,10 +34,12 @@ const FIELD_TYPES: { value: CustomFieldType; labelKey: string; fallback: string 
 // fixes40 §1: which of the 3 admin tabs a custom field is managed from —
 // same grouping `dashboard/picklists` uses for the exact same entity_type
 // vocabulary (contact_mekurav/contact_shliach group under "contacts").
-type CFTab = "contacts" | "visit" | "apartment";
+type CFTab = "contacts" | "visit" | "apartment" | "tasks";
 function tabFor(entityType: CustomFieldEntityType): CFTab {
   if (entityType === "apartment") return "apartment";
   if (entityType === "visit") return "visit";
+  // fixes58 §Phase 5.
+  if (entityType === "task") return "tasks";
   return "contacts";
 }
 
@@ -44,6 +47,7 @@ const TABS: { key: CFTab; icon: string; labelKey: string; fallback: string }[] =
   { key: "contacts", icon: "👤", labelKey: "pl.tab_contacts", fallback: "אנשי קשר" },
   { key: "visit", icon: "📋", labelKey: "pl.tab_visit", fallback: "ביקורים" },
   { key: "apartment", icon: "🏠", labelKey: "pl.tab_apartment", fallback: "דירה" },
+  { key: "tasks", icon: "✅", labelKey: "nav.tasks", fallback: "משימות" },
 ];
 
 export default function CustomFieldsPage() {
@@ -161,6 +165,16 @@ export default function CustomFieldsPage() {
           {renderGroups(["apartment"])}
           <AddDef
             entityOptions={ENTITY_TYPES.filter((e) => e.value === "apartment")}
+            onAdded={reload}
+          />
+        </section>
+      )}
+
+      {tab === "tasks" && (
+        <section className="space-y-6 rounded-2xl border border-border bg-card p-5">
+          {renderGroups(["task"])}
+          <AddDef
+            entityOptions={ENTITY_TYPES.filter((e) => e.value === "task")}
             onAdded={reload}
           />
         </section>

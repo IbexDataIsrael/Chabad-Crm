@@ -12,18 +12,17 @@ import { naturalCompare } from "@/lib/naturalSort";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 import { useSortableList } from "@/lib/useSortableList";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  contactFullName,
-  type JewishCounts,
-  type ReportNumber,
-  type ShliachSummary,
-} from "@/lib/types";
+import type { Campaign, JewishCounts, ReportNumber, TaskStatus } from "@/lib/types";
 
 // fixes53 §3: the grid's optional (toggleable) columns — name + actions
-// always show.
-const OPTIONAL_COLUMNS = ["jews", "engaged", "activist", "created_at"] as const;
+// always show. fixes58 §3.5: the "activist" column (direct report-number
+// assignment) is retired — coverage is now shown per active campaign
+// instead, as its own always-on set of columns below (not part of this
+// toggle system, since which campaigns exist is dynamic, not a fixed list).
+const OPTIONAL_COLUMNS = ["jews", "engaged", "created_at"] as const;
 type OptionalColumn = (typeof OPTIONAL_COLUMNS)[number];
 type SortKey = "name" | OptionalColumn;
 
@@ -31,7 +30,6 @@ interface Row {
   rn: ReportNumber;
   jews: number;
   engaged: number;
-  activists: ShliachSummary[];
 }
 
 /** Report-number (מספר דוח, fixes19) CRUD: list + add + inline edit + delete.
@@ -46,14 +44,19 @@ export default function ReportNumbersPage() {
   const { success } = useToast();
   const [items, setItems] = useState<ReportNumber[]>([]);
   const [jewishCounts, setJewishCounts] = useState<Record<number, JewishCounts>>({});
-  const [assignments, setAssignments] = useState<Record<number, ShliachSummary[]>>({});
+  // fixes58 §3.5: one colored badge column per currently-active campaign,
+  // replacing the old "activist" assignment column.
+  const [activeCampaigns, setActiveCampaigns] = useState<Campaign[]>([]);
+  const [campaignTaskStatus, setCampaignTaskStatus] = useState<
+    Record<number, Record<number, TaskStatus>>
+  >({});
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<ReportNumber | null>(null);
   const [busy, setBusy] = useState(true);
   const [query, setQuery] = useState("");
   const [fieldsOpen, setFieldsOpen] = useState(false);
   const [fields, setFields] = usePersistentState<OptionalColumn[]>(
-    "crm.reportNumbers.fields", ["jews", "engaged", "activist"],
+    "crm.reportNumbers.fields", ["jews", "engaged"],
   );
   // fixes54 §2: "Customize Columns" parity with Contacts — a persisted
   // relative order spanning every optional column (a permutation of
@@ -103,16 +106,18 @@ export default function ReportNumbersPage() {
   const [pageSize, setPageSize] = usePersistentState("crm.reportNumbers.pageSize", 20);
 
   async function reload() {
-    const [rns, counts, links] = await Promise.all([
+    const [rns, counts, campaigns, taskStatus] = await Promise.all([
       apiFetch<ReportNumber[]>("/api/report-numbers"),
       apiFetch<Record<number, JewishCounts>>("/api/report-numbers/jewish-counts"),
-      apiFetch<Record<number, ShliachSummary[]>>(
-        "/api/report-numbers/shliach-assignments",
+      apiFetch<Campaign[]>("/api/campaigns?active=true"),
+      apiFetch<Record<number, Record<number, TaskStatus>>>(
+        "/api/report-numbers/campaign-task-status",
       ),
     ]);
     setItems(rns);
     setJewishCounts(counts);
-    setAssignments(links);
+    setActiveCampaigns(campaigns);
+    setCampaignTaskStatus(taskStatus);
   }
 
   useEffect(() => {
@@ -142,10 +147,6 @@ export default function ReportNumbersPage() {
     setFields((prev) => (prev.includes(f) ? prev.filter((k) => k !== f) : [...prev, f]));
   }
 
-  function activistLabel(activists: ShliachSummary[]): string {
-    return activists.map((a) => contactFullName(a)).join(", ");
-  }
-
   function onSortClick(key: SortKey) {
     if (sortKey === key) {
       setSortDir(sortDir === "asc" ? "desc" : "asc");
@@ -171,7 +172,6 @@ export default function ReportNumbersPage() {
       rn,
       jews: jewishCounts[rn.id]?.jews ?? 0,
       engaged: jewishCounts[rn.id]?.engaged ?? 0,
-      activists: assignments[rn.id] ?? [],
     }));
 
   const sign = sortDir === "asc" ? 1 : -1;
@@ -181,8 +181,6 @@ export default function ReportNumbersPage() {
         return sign * (a.jews - b.jews);
       case "engaged":
         return sign * (a.engaged - b.engaged);
-      case "activist":
-        return sign * naturalCompare(activistLabel(a.activists), activistLabel(b.activists));
       case "created_at":
         return sign * ((a.rn.created_at ?? "").localeCompare(b.rn.created_at ?? ""));
       default:
@@ -202,9 +200,24 @@ export default function ReportNumbersPage() {
   const columnLabels: Record<OptionalColumn, string> = {
     jews: t("report.jews_count", "מספר יהודים"),
     engaged: t("report.engaged_jews_count", "מספר יהודים מעוניינים"),
-    activist: t("report.activist_name", "שם הפעיל"),
     created_at: t("sort.created", "תאריך יצירה"),
   };
+
+  // fixes58 §3.5: colored badge per active campaign — green=Active,
+  // red=Paused; Completed uses a neutral outline badge rather than the blue
+  // the spec names, since blue isn't one of CLAUDE.md's 5 mandated status
+  // colors (magenta/green/yellow/dark-red/orange) and this reuses that same
+  // fixed palette rather than adding a 6th color to it.
+  function taskStatusBadge(status: TaskStatus | undefined) {
+    if (!status) return <span className="text-muted-foreground">—</span>;
+    if (status === "ACTIVE") {
+      return <Badge variant="status-green">{t("task.status_active", "פעיל")}</Badge>;
+    }
+    if (status === "PAUSED") {
+      return <Badge variant="status-darkred">{t("task.status_paused", "מושהה")}</Badge>;
+    }
+    return <Badge variant="outline">{t("task.status_completed", "הושלם")}</Badge>;
+  }
 
   function SortHeader({ column, label }: { column: SortKey; label: string }) {
     // A user complaint on production traced back here: only the *active*
@@ -368,13 +381,20 @@ export default function ReportNumbersPage() {
                 {orderedActiveFields.map((f) => (
                   <SortHeader key={f} column={f} label={columnLabels[f]} />
                 ))}
+                {/* fixes58 §3.5: one column per active campaign — not part of
+                    the toggle/reorder system since the set is dynamic. */}
+                {activeCampaigns.map((c) => (
+                  <th key={c.id} className="px-3 py-2 text-start font-medium">
+                    {c.name}
+                  </th>
+                ))}
                 <th className="px-3 py-2 text-start font-medium">
                   {t("action.actions", "פעולות")}
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {visibleRows.map(({ rn, jews, engaged, activists }) => (
+              {visibleRows.map(({ rn, jews, engaged }) => (
                 <tr key={rn.id}>
                   <td className="px-3 py-2 font-medium">{rn.name}</td>
                   {orderedActiveFields.map((f) => (
@@ -383,26 +403,11 @@ export default function ReportNumbersPage() {
                       {f === "engaged" && engaged}
                       {f === "created_at" &&
                         (rn.created_at ? new Date(rn.created_at).toLocaleDateString() : "—")}
-                      {f === "activist" &&
-                        (activists.length === 0 ? (
-                          <span className="text-muted-foreground">
-                            {t("report.no_activist", "אין פעיל משויך")}
-                          </span>
-                        ) : (
-                          <span className="flex flex-wrap gap-1">
-                            {activists.map((a, i) => (
-                              <span key={a.id}>
-                                <Link
-                                  href={`/dashboard/contacts/${a.id}`}
-                                  className="text-primary hover:underline"
-                                >
-                                  {contactFullName(a)}
-                                </Link>
-                                {i < activists.length - 1 ? "," : ""}
-                              </span>
-                            ))}
-                          </span>
-                        ))}
+                    </td>
+                  ))}
+                  {activeCampaigns.map((c) => (
+                    <td key={c.id} className="px-3 py-2">
+                      {taskStatusBadge(campaignTaskStatus[rn.id]?.[c.id])}
                     </td>
                   ))}
                   <td className="px-3 py-2">

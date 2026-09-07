@@ -12,18 +12,24 @@ import { useToast } from "@/lib/toast";
 // fixes40 round 2 §3.1: 3 tabs, matching dashboard/custom-fields and
 // dashboard/picklists. "Apartment" also carries the building entity (its
 // own built-in toggleable fields never got a separate tab elsewhere either).
-type FieldsTab = "contacts" | "apartment" | "visit";
+// fixes58 §Phase 5: "tasks" added alongside the existing 3 — empty until a
+// fixed Task field is registered in field_registry.py (none is today; Task's
+// fields are all managed via the Tasks page itself, not this toggle
+// registry), but the admin-config surface is ready per the approved plan.
+type FieldsTab = "contacts" | "apartment" | "visit" | "tasks";
 
 const TAB_ENTITIES: Record<FieldsTab, string[]> = {
   contacts: ["contact", "contact_mekurav", "contact_shliach"],
   apartment: ["building", "apartment"],
   visit: ["visit"],
+  tasks: ["task"],
 };
 
 const TABS: { key: FieldsTab; icon: string; labelKey: string; fallback: string }[] = [
   { key: "contacts", icon: "👤", labelKey: "pl.tab_contacts", fallback: "אנשי קשר" },
   { key: "apartment", icon: "🏠", labelKey: "pl.tab_apartment", fallback: "דירה" },
   { key: "visit", icon: "📋", labelKey: "pl.tab_visit", fallback: "ביקורים" },
+  { key: "tasks", icon: "✅", labelKey: "nav.tasks", fallback: "משימות" },
 ];
 
 const ENTITY_LABELS: Record<string, { labelKey: string; fallback: string }> = {

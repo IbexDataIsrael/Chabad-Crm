@@ -20,7 +20,7 @@ from app.schemas import (
 
 router = APIRouter(prefix="/api/custom-fields", tags=["custom-fields"])
 
-_VALID_ENTITY_TYPES = {"contact_mekurav", "contact_shliach", "visit", "apartment"}
+_VALID_ENTITY_TYPES = {"contact_mekurav", "contact_shliach", "visit", "apartment", "task"}
 _VALID_FIELD_TYPES = {"text", "number", "boolean", "date", "select"}
 
 

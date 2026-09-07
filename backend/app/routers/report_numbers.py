@@ -93,6 +93,38 @@ def report_number_shliach_assignments(
     return result
 
 
+@router.get("/campaign-task-status", response_model=dict[int, dict[int, str]])
+def report_number_campaign_task_status(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """fixes58 §3.5: for each report number, its Task status under each
+    currently-active campaign — `{report_number_id: {campaign_id: status}}`.
+    Powers the Report Numbers page's one-colored-badge-column-per-active-
+    campaign display. Nested by campaign_id (not a single flat value) because
+    a report number can carry tasks under more than one active campaign at
+    once, and each gets its own column."""
+    rows = (
+        db.query(
+            models.TaskReportNumber.report_number_id,
+            models.Task.campaign_id,
+            models.Task.status,
+        )
+        .join(models.Task, models.Task.id == models.TaskReportNumber.task_id)
+        .join(models.Campaign, models.Campaign.id == models.Task.campaign_id)
+        .filter(
+            models.Task.organization_id == current_user.organization_id,
+            models.Campaign.is_active.is_(True),
+            models.Campaign.deleted_at.is_(None),
+        )
+        .all()
+    )
+    result: dict[int, dict[int, str]] = {}
+    for report_number_id, campaign_id, task_status in rows:
+        result.setdefault(report_number_id, {})[campaign_id] = task_status
+    return result
+
+
 @router.get("/jewish-counts", response_model=dict[int, JewishCounts])
 def report_number_jewish_counts(
     db: Session = Depends(get_db),

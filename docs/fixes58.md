@@ -147,3 +147,18 @@ Applies to:
 3. **Phase 3**: Backend APIs & Access Control Logic update.
 4. **Phase 4**: Admin & Campaign Manager UI Implementation.
 5. **Phase 5**: Activist UI & Homepage dynamic sync integration.
+
+---
+
+## Round status (2026-09-07)
+
+Fully implemented per the approved `docs/plan58-plan.md` — see that file's own
+Progress log for the phase-by-phase detail and the judgment calls made along the
+way (a Legacy Access campaign/task auto-created per org during the migration so
+no currently-assigned shliach lost apartment access; `Task.volunteer_user_id`
+points straight at a login, not a shliach contact; Completed tasks use a neutral
+badge instead of the spec's blue, since blue isn't one of CLAUDE.md's 5 status
+colors). Backend suite green (516 passed, new `test_fixes58.py`), `tsc --noEmit`
+clean, full live Playwright drive against local Docker per the plan's own
+verification checklist. **Not committed/pushed, not deployed to Neon** — per the
+standing rule not to commit or push without an explicit ask in the session.

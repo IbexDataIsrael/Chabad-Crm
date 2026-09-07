@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.database import get_db
-from app.deps import get_current_user, require_admin
+from app.deps import get_current_user
 from app.schemas import OrganizationOut, OrganizationUpdate
 
 router = APIRouter(prefix="/api/organizations", tags=["organizations"])
@@ -25,12 +25,24 @@ def get_my_org(
 def update_my_org(
     payload: OrganizationUpdate,
     db: Session = Depends(get_db),
-    admin: models.User = Depends(require_admin),
+    current_user: models.User = Depends(get_current_user),
 ):
-    org = db.get(models.Organization, admin.organization_id)
+    # fixes58 §3.7/§Volunteer View Settings: Campaign Manager gets the
+    # shliach-config page ("Volunteer View Settings") but not global System
+    # Settings — so they may PUT here only when the payload touches nothing
+    # but shliach_view_config. Everyone else needs the plain admin gate.
+    data = payload.model_dump(exclude_unset=True)
+    if current_user.role == "campaign_manager":
+        if set(data.keys()) - {"shliach_view_config"}:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN, "Admin privileges required for these fields"
+            )
+    elif current_user.role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin privileges required")
+
+    org = db.get(models.Organization, current_user.organization_id)
     if not org:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Organization not found")
-    data = payload.model_dump(exclude_unset=True)
     if data.get("name"):
         org.name = data["name"]
     if "logo_url" in data:  # present-but-null clears the logo

@@ -161,6 +161,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     # Header dropdown group labels.
     ("nav", "nav.group.people", "אנשים", "People"),
     ("nav", "nav.group.places", "מקומות", "Places"),
+    ("nav", "nav.group.campaigns", "קמפיינים ומשימות", "Campaigns & tasks"),
     ("nav", "nav.group.more", "עוד", "More"),
     # --- Common actions / words ---
     ("action", "action.save", "שמור", "Save"),
@@ -943,6 +944,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     # contact_shliach-scoped admin picklist).
     ("pl", "pl.tab_shliach", "פעילים", "Activists"),
     ("pl", "pl.add_list_shliach", "הוספת רשימת בחירה לפעיל", "Add picklist to activist"),
+    ("pl", "pl.add_list_task", "הוספת רשימת בחירה למשימה", "Add picklist to task"),
     # --- fixes51 §4: Shliach Role Configuration Panel ---
     ("shliach_config", "shliach_config.title", "הגדרות לתצוגת פעילים", "Configuration for Activist Role"),
     (
@@ -1164,6 +1166,58 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     (
         "dashboard", "dashboard.coming_soon",
         "בקרוב: קמפיינים ומשימות", "Coming soon: campaigns & tasks",
+    ),
+
+    # --- fixes58: Campaign & Task entities ---
+    ("nav", "nav.campaigns", "קמפיינים", "Campaigns"),
+    ("nav", "nav.tasks", "משימות", "Tasks"),
+    ("users", "users.role_campaign_manager", "מנהל קמפיינים", "Campaign manager"),
+    ("page", "page.campaigns_title", "קמפיינים", "Campaigns"),
+    ("page", "page.add_campaign", "קמפיין חדש", "New campaign"),
+    ("page", "page.no_campaigns", "אין קמפיינים להצגה.", "No campaigns to show."),
+    ("msg", "msg.delete_campaign_confirm", "למחוק את הקמפיין?", "Delete this campaign?"),
+    ("campaign", "campaign.name", "שם", "Name"),
+    ("campaign", "campaign.is_active", "פעיל", "Active"),
+    ("campaign", "campaign.custom_stats_text", "טקסט סטטיסטיקה", "Stats text"),
+    (
+        "campaign", "campaign.custom_stats_text_hint",
+        "טקסט שיוצג בעמוד הבית של הפעיל. אפשר להשתמש בתגית {{count}} — תוחלף במספר "
+        "מספרי הדוח הפעילים תחת המשימות הפעילות של הקמפיין. לדוגמה: "
+        "\"{{count}} יהודים קיבלו חנוכייה\".",
+        "Text shown on the activist's homepage. Use the {{count}} tag — replaced with "
+        "the number of report numbers currently active under this campaign's active "
+        "tasks. e.g. \"{{count}} Jews received a Menorah\".",
+    ),
+    ("page", "page.tasks_title", "משימות", "Tasks"),
+    ("page", "page.add_task", "משימה חדשה", "New task"),
+    ("page", "page.no_tasks", "אין משימות להצגה.", "No tasks to show."),
+    ("msg", "msg.delete_task_confirm", "למחוק את המשימה?", "Delete this task?"),
+    ("task", "task.campaign", "קמפיין", "Campaign"),
+    ("task", "task.volunteer", "פעיל", "Activist"),
+    ("task", "task.report_numbers", "מספרי דוח", "Report numbers"),
+    ("task", "task.status", "סטטוס", "Status"),
+    ("task", "task.status_active", "פעיל", "Active"),
+    ("task", "task.status_completed", "הושלם", "Completed"),
+    ("task", "task.status_paused", "מושהה", "Paused"),
+    ("task", "task.custom_date", "תאריך מותאם", "Custom date"),
+    ("task", "task.select_campaign", "בחר קמפיין", "Select a campaign"),
+    ("task", "task.volunteer_report_summary", "דיווח הפעיל", "Volunteer report"),
+    ("task", "task.created_at", "תאריך יצירה", "Created"),
+    ("filter", "filter.all_campaigns", "כל הקמפיינים", "All campaigns"),
+    ("filter", "filter.all_task_statuses", "כל הסטטוסים", "All statuses"),
+    ("sort", "sort.by_volunteer", "פעיל", "Activist"),
+    ("sort", "sort.by_report_number", "מספר דוח", "Report number"),
+    (
+        "users", "users.add_task_action", "הוסף משימה", "Add task",
+    ),
+    (
+        "picklist_def", "picklist_def.task.custom_date", "תאריך מותאם (משימה)",
+        "Custom date (task)",
+    ),
+    (
+        "contact_shliach", "contact_shliach.report_numbers_moved_to_tasks",
+        "שיוך מספרי דוח מנוהל כעת דרך עמוד המשימות.",
+        "Report-number assignment is now managed from the Tasks page.",
     ),
 ]
 
@@ -1750,6 +1804,8 @@ _ROLES = [
     ("staff", 2),
     ("shliach", 3),
     ("superadmin", 4),
+    # fixes58 §3.7: scoped to Apartments/Tasks/Campaigns/Volunteers/shliach-config.
+    ("campaign_manager", 5),
 ]
 
 

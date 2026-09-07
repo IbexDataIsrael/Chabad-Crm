@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
 
 import { AreaMultiSelect } from "@/components/AreaMultiSelect";
 import { EmailInput } from "@/components/EmailInput";
-import { ReportNumberMultiSelect } from "@/components/ReportNumberMultiSelect";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { InlineEdit } from "@/components/ui/InlineEdit";
@@ -333,29 +332,21 @@ export default function UserDetailPage() {
                 />
               </dd>
             </div>
+            {/* fixes58 §Phase 4: read-only — apartment access now comes from
+                a Task (Users list's "Add task" quick action), not this
+                direct assignment. */}
             <div className="flex flex-col sm:col-span-2">
               <dt className="text-xs text-muted-foreground">
                 {t("contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל")}
               </dt>
-              <dd className="text-sm">
-                <InlineEdit<number[]>
-                  value={user.shliach.report_number_ids}
-                  display={reportNumberNamesText(user.shliach.report_number_ids)}
-                  commitOnBlur={false}
-                  onSave={async (ids) => {
-                    await patchUser({ shliach: { report_number_ids: ids } });
-                    success(t("contact_shliach.report_numbers_saved", "מספרי הדוח נשמרו"));
-                  }}
-                  editor={(draft, setDraft, commit) => (
-                    <MultiSelectEditor onApply={() => commit(draft)}>
-                      <ReportNumberMultiSelect
-                        value={draft}
-                        onChange={setDraft}
-                        excludeContactId={contactId ?? undefined}
-                      />
-                    </MultiSelectEditor>
+              <dd className="text-sm space-y-1">
+                <div>{reportNumberNamesText(user.shliach.report_number_ids)}</div>
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    "contact_shliach.report_numbers_moved_to_tasks",
+                    "שיוך מספרי דוח מנוהל כעת דרך עמוד המשימות.",
                   )}
-                />
+                </p>
               </dd>
             </div>
             <div className="flex flex-col sm:col-span-2">
