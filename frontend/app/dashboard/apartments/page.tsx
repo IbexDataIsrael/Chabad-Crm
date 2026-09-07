@@ -327,17 +327,36 @@ export default function ApartmentsPage() {
     router.push(`/dashboard/reports/create?${params.toString()}`);
   }
 
-  async function reload() {
+  // fixes58 bug #2 ("filters off, grid still empty until re-login"): list
+  // responses can land out of order — a slower, earlier request (e.g. a
+  // picklist filter, which joins picklist_links) resolving *after* the
+  // "clear filters" request that superseded it, and overwriting the full
+  // page with its 0 rows. Nothing re-fetches until the next filter/page
+  // change or a re-login, so the grid just sits empty with every filter
+  // visibly off. Each reload takes a sequence number and only the latest
+  // one may touch the grid; a superseded call resolves `false` (swallowing
+  // its own error too) so no caller ever acts on a stale result.
+  const reloadSeq = useRef(0);
+  async function reload(): Promise<boolean> {
+    const seq = ++reloadSeq.current;
     const params = buildFilterParams();
     // fixes30 §1a: grouping needs building-contiguous rows.
     params.set("sort", groupByBuilding ? "building" : sort);
     params.set("dir", dir);
     params.set("page", String(page));
     params.set("page_size", String(pageSize));
-    const res = await apiFetch<ApartmentPage>(`/api/apartments/list?${params}`);
+    let res: ApartmentPage;
+    try {
+      res = await apiFetch<ApartmentPage>(`/api/apartments/list?${params}`);
+    } catch (err) {
+      if (seq !== reloadSeq.current) return false;
+      throw err;
+    }
+    if (seq !== reloadSeq.current) return false;
     setItems(res.items);
     setTotal(res.total);
     setTotalBuildings(res.total_buildings ?? 0);
+    return true;
   }
 
   // fixes51 §4: an admin-configured default filter/column set for the
@@ -447,14 +466,19 @@ export default function ApartmentsPage() {
     if (loading || !shliachDefaultsApplied) return;
     setBusy(true);
     reload()
-      .then(() => setLoadError(false))
+      .then((latest) => {
+        // A superseded fetch leaves the spinner to the newer one.
+        if (!latest) return;
+        setLoadError(false);
+        setBusy(false);
+      })
       .catch(() => {
         setItems([]);
         setTotal(0);
         setLoadError(true);
+        setBusy(false);
         toastError(t("apt.load_failed", "טעינת הדירות נכשלה. נסה שוב."));
-      })
-      .finally(() => setBusy(false));
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     loading, shliachDefaultsApplied, areaIds, buildingIds, reportNumberIds,
@@ -1622,13 +1646,17 @@ export default function ApartmentsPage() {
                     onClick={() => {
                       setBusy(true);
                       reload()
-                        .then(() => setLoadError(false))
+                        .then((latest) => {
+                          if (!latest) return;
+                          setLoadError(false);
+                          setBusy(false);
+                        })
                         .catch(() => {
                           setItems([]);
                           setTotal(0);
                           setLoadError(true);
-                        })
-                        .finally(() => setBusy(false));
+                          setBusy(false);
+                        });
                     }}
                   >
                     {t("action.retry", "נסה שוב")}
