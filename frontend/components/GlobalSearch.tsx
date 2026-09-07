@@ -14,6 +14,15 @@ const DETAIL_PATH: Record<SearchHitType, string> = {
   apartment: "/dashboard/apartments",
 };
 
+// fixes59 §3: a building result used to open the standalone building page;
+// it now deep-links into the apartments grid pre-filtered to that building
+// (via the same ?building_ids= deep-link the apartments page already
+// supports for report numbers, fixes53 §3) instead.
+function hitHref(h: SearchHit): string {
+  if (h.type === "building") return `/dashboard/apartments?building_ids=${h.id}`;
+  return `${DETAIL_PATH[h.type]}/${h.id}`;
+}
+
 const GROUP_ORDER: SearchHitType[] = ["contact", "area", "building", "apartment"];
 
 const TYPE_ICON: Record<SearchHitType, string> = {
@@ -145,7 +154,7 @@ export function GlobalSearch() {
                   {group.map((h) => (
                     <Link
                       key={`${h.type}-${h.id}`}
-                      href={`${DETAIL_PATH[h.type]}/${h.id}`}
+                      href={hitHref(h)}
                       onClick={() => setOpen(false)}
                       className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
                     >

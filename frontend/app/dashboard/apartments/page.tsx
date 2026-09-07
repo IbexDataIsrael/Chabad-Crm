@@ -429,6 +429,22 @@ export default function ApartmentsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, searchParams]);
 
+  // fixes59 §3: a building deep link from the global header search
+  // (?building_ids=<id>) — same "replace whatever filters were already
+  // persisted" behavior as the report-number deep link above.
+  const appliedBuildingDeepLink = useRef(false);
+  useEffect(() => {
+    if (appliedBuildingDeepLink.current || loading) return;
+    const raw = searchParams.getAll("building_ids");
+    if (raw.length === 0) return;
+    appliedBuildingDeepLink.current = true;
+    const ids = raw.map(Number).filter((n) => !Number.isNaN(n));
+    if (ids.length === 0) return;
+    clearAllFilters();
+    setBuildingIds(ids);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, searchParams]);
+
   // Boot: load the filter sources once; the list itself is fetched by the
   // effect below (restored filters included — fixes15 §1.2).
   useEffect(() => {

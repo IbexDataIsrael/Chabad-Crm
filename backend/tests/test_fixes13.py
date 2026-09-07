@@ -59,7 +59,7 @@ def test_apartment_language_picklist_provisioned(client, admin_headers, db_sessi
     assert by_key["apartment.language"]["english_label"] == "Language"
     assert by_key["apartment.language"]["label"] == "שפה"
 
-    # The four bilingual options are seeded.
+    # The five bilingual options are seeded.
     options = client.get(
         "/api/picklists/apartment.language", headers=admin_headers
     ).json()
@@ -69,6 +69,7 @@ def test_apartment_language_picklist_provisioned(client, admin_headers, db_sessi
         ("english", "אנגלית", "English"),
         ("russian", "רוסית", "Russian"),
         ("yiddish", "יידיש", "Yiddish"),
+        ("missing", "חסר", "Missing"),
     }
 
 

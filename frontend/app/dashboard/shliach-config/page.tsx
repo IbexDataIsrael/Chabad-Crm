@@ -20,10 +20,12 @@ import { useToast } from "@/lib/toast";
 import {
   buildingDisplayName,
   type Area,
+  type ApartmentPage,
   type Building,
   type OrgDetails,
   type PicklistField,
   type ShliachAnnouncement,
+  type ShliachSummary,
 } from "@/lib/types";
 
 // fixes53 §7/§8: the fixed self-edit fields an admin can lock beyond the
@@ -177,15 +179,26 @@ export default function ShliachConfigPage() {
     mezuzah_status: t("picklist.apartment.mezuzah_status", "מזוזה"),
   };
 
+  // fixes59 §2b: which shliach(im) currently cover each area — powers the
+  // "this filter would hide an activist's own coverage" warning below.
+  // Reuses the same endpoint fixes43 §4.2 built for the area-picker conflict
+  // check (AreaMultiSelect); a building's own `area_id` stands in for a
+  // building-level check since coverage isn't tracked per-building.
+  const [areaAssignments, setAreaAssignments] = useState<Record<number, ShliachSummary[]>>({});
+
   useEffect(() => {
     Promise.all([
       apiFetch<OrgDetails>("/api/organizations/me"),
       apiFetch<Area[]>("/api/areas").catch(() => []),
       apiFetch<Building[]>("/api/buildings").catch(() => []),
+      apiFetch<Record<number, ShliachSummary[]>>("/api/areas/shliach-assignments").catch(
+        () => ({}),
+      ),
     ])
-      .then(([org, areaList, buildingList]) => {
+      .then(([org, areaList, buildingList, assignments]) => {
         setAreas(areaList);
         setBuildings(buildingList);
+        setAreaAssignments(assignments);
         const cfg = (org.shliach_view_config ?? {}) as ShliachViewConfigShape;
         setDisableEdit(!!cfg.disable_edit);
         setHideFilters(!!cfg.hide_filters);
@@ -224,8 +237,69 @@ export default function ShliachConfigPage() {
     );
   }
 
+  // fixes59 §2a: live count of apartments the default filter above currently
+  // matches, so an admin sees the effect of a change before saving it —
+  // debounced (matches the apartments grid's own filter-change cadence) and
+  // scoped by the same params /api/apartments/list already accepts.
+  const [matchingApartments, setMatchingApartments] = useState<number | null>(null);
+  useEffect(() => {
+    if (!loaded) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams();
+      areaIds.forEach((id) => params.append("area_ids", String(id)));
+      buildingIds.forEach((id) => params.append("building_ids", String(id)));
+      jewishFilter.forEach((v) => params.append("jewish_status", v));
+      mezuzahFilter.forEach((v) => params.append("mezuzah_status", v));
+      languageFilter.forEach((v) => params.append("language", v));
+      params.set("page", "1");
+      // fixes57 §guard: /api/apartments/list only accepts page_size 20/50/100
+      // — we only need `total`, so the smallest allowed value is fine.
+      params.set("page_size", "20");
+      apiFetch<ApartmentPage>(`/api/apartments/list?${params}`)
+        .then((res) => {
+          if (!cancelled) setMatchingApartments(res.total);
+        })
+        .catch(() => {
+          if (!cancelled) setMatchingApartments(null);
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [loaded, areaIds, buildingIds, jewishFilter, mezuzahFilter, languageFilter]);
+
+  // fixes59 §2b: an area/building filter selection is a *restriction* (only
+  // meaningful once non-empty — an empty list means "no restriction, show
+  // everything"), so only warn when a non-empty selection would leave out an
+  // area/building an activist is actually assigned to today. A building's
+  // own area stands in for a per-building assignment check (see the
+  // areaAssignments comment above).
+  async function confirmFilterExclusions(): Promise<boolean> {
+    const excludedArea =
+      areaIds.length > 0 &&
+      areas.some((a) => !areaIds.includes(a.id) && (areaAssignments[a.id]?.length ?? 0) > 0);
+    const excludedBuilding =
+      buildingIds.length > 0 &&
+      buildings.some(
+        (b) =>
+          !buildingIds.includes(b.id) &&
+          b.area_id != null &&
+          (areaAssignments[b.area_id]?.length ?? 0) > 0,
+      );
+    if (!excludedArea && !excludedBuilding) return true;
+    return confirmDialog({
+      message: t(
+        "shliach_config.filter_conflict_warning",
+        ".האזור/הבניין שייך לפעיל קיים",
+      ),
+    });
+  }
+
   async function save(e: FormEvent) {
     e.preventDefault();
+    if (!(await confirmFilterExclusions())) return;
     setBusy(true);
     try {
       const shliach_view_config: ShliachViewConfigShape = {
@@ -451,6 +525,16 @@ export default function ShliachConfigPage() {
               onChange={setLanguageFilter}
             />
           </div>
+          {/* fixes59 §2a: live preview so an admin sees the effect of a
+              filter change before saving it. */}
+          <p className="text-xs text-muted-foreground">
+            {matchingApartments == null
+              ? t("action.loading", "טוען…")
+              : t(
+                  "shliach_config.matching_apartments",
+                  "{n} דירות תואמות את הסינון הזה",
+                ).replace("{n}", String(matchingApartments))}
+          </p>
         </div>
 
         <div className="border-t border-border pt-4 space-y-3">

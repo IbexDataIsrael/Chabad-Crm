@@ -556,15 +556,17 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ),
     ("pager", "pager.page_size", "בעמוד:", "Per page:"),
     # --- fixes9: admin areas + mekurav fields + system title settings ---
-    ("nav", "nav.admin_areas", "אזור מנהל", "Admin area"),
-    ("page", "page.admin_areas_title", "אזורי מנהל", "Admin areas"),
-    ("page", "page.add_admin_area", "אזור מנהל חדש", "New admin area"),
-    ("page", "page.edit_admin_area", "עריכת אזור מנהל", "Edit admin area"),
-    ("page", "page.no_admin_areas", "אין אזורי מנהל להצגה.", "No admin areas to show."),
-    ("msg", "msg.delete_admin_area_confirm", "למחוק את אזור המנהל?", "Delete this admin area?"),
+    # fixes59 §4: rebranded "אזור מנהל"/"Admin area" -> "אזור מותאם אישית"/
+    # "Custom area" (see LOCALIZATION_RENAMES below for already-seeded orgs).
+    ("nav", "nav.admin_areas", "אזור מותאם אישית", "Custom area"),
+    ("page", "page.admin_areas_title", "אזורים מותאמים אישית", "Custom areas"),
+    ("page", "page.add_admin_area", "אזור מותאם אישית חדש", "New custom area"),
+    ("page", "page.edit_admin_area", "עריכת אזור מותאם אישית", "Edit custom area"),
+    ("page", "page.no_admin_areas", "אין אזורים מותאמים אישית להצגה.", "No custom areas to show."),
+    ("msg", "msg.delete_admin_area_confirm", "למחוק את האזור המותאם אישית?", "Delete this custom area?"),
     ("column", "admin_areas.name", "שם", "Name"),
     ("column", "admin_areas.comments", "הערות", "Comments"),
-    ("column", "contact_mekurav.admin_area_id", "אזור מנהל", "Admin area"),
+    ("column", "contact_mekurav.admin_area_id", "אזור מותאם אישית", "Custom area"),
     ("column", "contact_mekurav.tzedaka_potential", "פוטנציאל לצדקה", "Tzedaka potential"),
     ("admin", "admin.system_settings_title", "הגדרות מערכת", "System settings"),
     ("admin", "admin.system_settings_intro", "תבנית כותרת הדפדפן לכל העמודים ושם ברירת מחדל כשאין שם ארגון.", "The browser-title template for all pages, and the default name when no organization name exists."),
@@ -697,7 +699,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("select", "select.no_matches", "אין תוצאות", "No matches"),
     # --- fixes18: contacts filters ---
     ("filter", "filter.all_tzedaka", "כל פוטנציאל לצדקה", "All tzedaka potentials"),
-    ("filter", "filter.all_admin_areas", "כל אזורי המנהל", "All admin areas"),
+    ("filter", "filter.all_admin_areas", "כל האזורים המותאמים אישית", "All custom areas"),
     ("filter", "filter.all_jewish", "כל סטטוסי היהדות", "All Jewish statuses"),
     ("filter", "filter.all_mezuzah", "כל סטטוסי המזוזה", "All mezuzah statuses"),
     ("filter", "filter.all_languages", "כל השפות", "All languages"),
@@ -980,6 +982,17 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
         "הסינון שבו תיפתח תצוגת הדירות עבור פעילים.",
         "The filter the Apartments view opens with for activists.",
     ),
+    # fixes59 §2a: live count of apartments matching the default filter above.
+    (
+        "shliach_config", "shliach_config.matching_apartments",
+        "{n} דירות תואמות את הסינון הזה", "{n} apartments match this filter",
+    ),
+    # fixes59 §2b: shown when saving a default filter that would exclude an
+    # area/building an activist is currently individually assigned to.
+    (
+        "shliach_config", "shliach_config.filter_conflict_warning",
+        ".האזור/הבניין שייך לפעיל קיים", "The area/building has an activist assigned to it.",
+    ),
     ("shliach_config", "shliach_config.default_columns", "עמודות ברירת מחדל", "Default columns"),
     (
         "shliach_config", "shliach_config.default_columns_hint",
@@ -1216,6 +1229,7 @@ PICKLISTS: list[tuple[str, str, str, str | None, int, bool]] = [
     ("apartment.language", "english", "אנגלית", None, 1, False),
     ("apartment.language", "russian", "רוסית", None, 2, False),
     ("apartment.language", "yiddish", "יידיש", None, 3, False),
+    ("apartment.language", "missing", "חסר", None, 4, False),
     # fixes51 §3: shares its options with Jewish_status (per spec).
     ("contact_shliach.manager_jewish_status", "na", "/", None, 0, True),
     ("contact_shliach.manager_jewish_status", "jewish", "יהודי", None, 1, False),
@@ -1245,6 +1259,7 @@ PICKLIST_ENGLISH_VALUES: dict[tuple[str, str], str] = {
     ("apartment.language", "english"): "English",
     ("apartment.language", "russian"): "Russian",
     ("apartment.language", "yiddish"): "Yiddish",
+    ("apartment.language", "missing"): "Missing",
     # The contact-level language list carries the same values.
     ("language", "hebrew"): "Hebrew",
     ("language", "english"): "English",
@@ -1352,6 +1367,35 @@ LOCALIZATION_RENAMES: dict[str, tuple[set, str, set, str]] = {
     "shliach_config.self_edit_locks": (
         {"נעילת שדות לעריכה עצמית"}, "נעילת שדות בפרופיל האישי של הפעיל",
         {"Self-edit field locks"}, "Activist's own-profile field locks",
+    ),
+    # fixes59 §4: "אזור מנהל"/"Admin area" rebranded to "אזור מותאם אישית"/
+    # "Custom area" (same underlying admin_areas entity, just relabeled).
+    "nav.admin_areas": (
+        {"אזור מנהל"}, "אזור מותאם אישית", {"Admin area"}, "Custom area",
+    ),
+    "page.admin_areas_title": (
+        {"אזורי מנהל"}, "אזורים מותאמים אישית", {"Admin areas"}, "Custom areas",
+    ),
+    "page.add_admin_area": (
+        {"אזור מנהל חדש"}, "אזור מותאם אישית חדש", {"New admin area"}, "New custom area",
+    ),
+    "page.edit_admin_area": (
+        {"עריכת אזור מנהל"}, "עריכת אזור מותאם אישית", {"Edit admin area"}, "Edit custom area",
+    ),
+    "page.no_admin_areas": (
+        {"אין אזורי מנהל להצגה."}, "אין אזורים מותאמים אישית להצגה.",
+        {"No admin areas to show."}, "No custom areas to show.",
+    ),
+    "msg.delete_admin_area_confirm": (
+        {"למחוק את אזור המנהל?"}, "למחוק את האזור המותאם אישית?",
+        {"Delete this admin area?"}, "Delete this custom area?",
+    ),
+    "contact_mekurav.admin_area_id": (
+        {"אזור מנהל"}, "אזור מותאם אישית", {"Admin area"}, "Custom area",
+    ),
+    "filter.all_admin_areas": (
+        {"כל אזורי המנהל"}, "כל האזורים המותאמים אישית",
+        {"All admin areas"}, "All custom areas",
     ),
 }
 
