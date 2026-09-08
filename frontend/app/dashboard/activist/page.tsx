@@ -14,6 +14,7 @@ import { Card } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
+import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 import type { ApartmentPage, CampaignActiveStat, ShliachAnnouncement } from "@/lib/types";
 
@@ -42,12 +43,60 @@ export default function ActivistLandingPage() {
   // fixes58 §3.2/Phase 6: one dynamic stat tile per active campaign.
   const [campaignStats, setCampaignStats] = useState<CampaignActiveStat[]>([]);
 
+  // The count here used to ignore every filter, so it always showed the
+  // activist's *full* assigned set — bigger than what the Apartments page
+  // actually lists whenever a filter is active there, whether that filter
+  // came from the admin's default_filters (shliach-config) or the activist's
+  // own persisted selection. Reading the exact same localStorage keys the
+  // Apartments page filters on (fixes15 §1.2) and falling back to the same
+  // admin default when a key is still empty (fixes51 §4's "apply once, only
+  // while untouched" rule) makes this tile predict precisely what that page
+  // will show, instead of a separate, larger number.
+  const [areaIds] = usePersistentState<number[]>("crm.apartments.areaIds", []);
+  const [buildingIds] = usePersistentState<number[]>("crm.apartments.buildingIds", []);
+  const [reportNumberIds] = usePersistentState<number[]>(
+    "crm.apartments.reportNumberIds", [],
+  );
+  const [jewishFilter] = usePersistentState<string[]>("crm.apartments.jewish", []);
+  const [mezuzahFilter] = usePersistentState<string[]>("crm.apartments.mezuzah", []);
+  const [languageFilter] = usePersistentState<string[]>("crm.apartments.language", []);
+  const [query] = usePersistentState("crm.apartments.q", "");
+
   function loadApartmentsTotal() {
     setApartmentsError(false);
+    const defaultFilters = (user?.organization?.shliach_view_config?.default_filters ?? {}) as {
+      area_ids?: number[];
+      building_ids?: number[];
+      jewish_status?: string[];
+      mezuzah_status?: string[];
+      language?: string[];
+    };
+    const effective = (persisted: number[] | string[], fallback?: (number | string)[]) =>
+      persisted.length > 0 ? persisted : fallback ?? [];
+    const params = new URLSearchParams();
+    effective(areaIds, defaultFilters.area_ids).forEach((id) =>
+      params.append("area_ids", String(id)),
+    );
+    effective(buildingIds, defaultFilters.building_ids).forEach((id) =>
+      params.append("building_ids", String(id)),
+    );
+    reportNumberIds.forEach((id) => params.append("report_number_ids", String(id)));
+    effective(jewishFilter, defaultFilters.jewish_status).forEach((v) =>
+      params.append("jewish_status", String(v)),
+    );
+    effective(mezuzahFilter, defaultFilters.mezuzah_status).forEach((v) =>
+      params.append("mezuzah_status", String(v)),
+    );
+    effective(languageFilter, defaultFilters.language).forEach((v) =>
+      params.append("language", String(v)),
+    );
+    if (query.trim()) params.set("q", query.trim());
+    params.set("page", "1");
+    params.set("page_size", "20");
     // fixes54 §6.1: the shliach's own apartments count — already self-scoped
     // server-side (apartments.py::_shliach_apartment_ids) for this role, so
     // a small page_size is enough to read `total`.
-    apiFetch<ApartmentPage>("/api/apartments/list?page=1&page_size=20")
+    apiFetch<ApartmentPage>(`/api/apartments/list?${params}`)
       .then((res) => setApartmentsTotal(res.total))
       .catch(() => setApartmentsError(true));
   }
