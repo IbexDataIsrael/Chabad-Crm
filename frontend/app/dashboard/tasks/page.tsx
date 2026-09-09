@@ -1,12 +1,15 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
+import { ReportStatusBadge } from "@/components/ReportStatusBadge";
+import { TaskQuickCreateForm } from "@/components/TaskQuickCreateForm";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { InlineEdit } from "@/components/ui/InlineEdit";
+import { TruncatedText } from "@/components/ui/TruncatedText";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useConfirm } from "@/lib/confirm";
@@ -44,6 +47,18 @@ export default function TasksPage() {
   const [dir, setDir] = usePersistentState<"asc" | "desc">("crm.tasks.dir", "desc");
   const [page, setPage] = usePersistentState("crm.tasks.page", 1);
   const [pageSize, setPageSize] = usePersistentState("crm.tasks.pageSize", 20);
+  // fixes60 §1: the page's own "New Task" button (was only reachable from
+  // the Users page's per-row quick action).
+  const [creating, setCreating] = useState(false);
+
+  // fixes60 §4: same "Clear all filters" convention as Apartments/Contacts.
+  const activeFilterCount = statusFilter.length + campaignFilter.length + (q.trim() ? 1 : 0);
+  function clearAllFilters() {
+    setStatusFilter([]);
+    setCampaignFilter([]);
+    setQ("");
+    setPage(1);
+  }
 
   const statusLabel: Record<TaskStatus, string> = {
     ACTIVE: t("task.status_active", "פעיל"),
@@ -145,7 +160,12 @@ export default function TasksPage() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-bold">{t("page.tasks_title", "משימות")}</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">{t("page.tasks_title", "משימות")}</h1>
+        <Button onClick={() => setCreating(true)}>
+          <Plus className="h-4 w-4" /> {t("page.add_task", "משימה חדשה")}
+        </Button>
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <input
@@ -177,6 +197,11 @@ export default function TasksPage() {
             setPage(1);
           }}
         />
+        {activeFilterCount > 0 && (
+          <Button type="button" variant="outline" onClick={clearAllFilters}>
+            <X className="h-4 w-4" /> {t("filter.clear_all", "נקה את כל הסינונים")}
+          </Button>
+        )}
       </div>
 
       <Card className="overflow-x-auto shadow-sm">
@@ -187,7 +212,8 @@ export default function TasksPage() {
               <th className="px-3 py-2 text-start">{t("task.campaign", "קמפיין")}</th>
               <th className="px-3 py-2 text-start">{sortHeader("report_number", t("task.report_numbers", "מספרי דוח"))}</th>
               <th className="px-3 py-2 text-start">{t("task.status", "סטטוס")}</th>
-              <th className="px-3 py-2 text-start">{t("task.volunteer_report_summary", "דיווח הפעיל")}</th>
+              <th className="px-3 py-2 text-start">{t("task.report_status", "סטטוס דיווח")}</th>
+              <th className="px-3 py-2 text-start">{t("task.report_notes", "הערות הפעיל")}</th>
               <th className="px-3 py-2 text-start">{sortHeader("created_at", t("task.created_at", "תאריך יצירה"))}</th>
               <th className="px-3 py-2" />
             </tr>
@@ -195,13 +221,13 @@ export default function TasksPage() {
           <tbody className="divide-y divide-border">
             {busy ? (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-muted-foreground">
+                <td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">
                   {t("action.loading", "טוען…")}
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-muted-foreground">
+                <td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">
                   {t("page.no_tasks", "אין משימות להצגה.")}
                 </td>
               </tr>
@@ -232,26 +258,21 @@ export default function TasksPage() {
                       )}
                     />
                   </td>
+                  {/* fixes60 §1: the volunteer's own self-reported status/notes
+                      (ShliachReportCompletion, resolved server-side) — replaces
+                      the old free-text "Volunteer report" cell nobody actually
+                      filled in, since the real report data lives elsewhere. */}
+                  <td className="px-3 py-2">
+                    {task.latest_report_status ? (
+                      <ReportStatusBadge status={task.latest_report_status} />
+                    ) : (
+                      <span className="text-muted-foreground">
+                        {t("task.no_report_yet", "טרם דווח")}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-2 max-w-[16rem]">
-                    <InlineEdit<string>
-                      value={task.volunteer_report_summary ?? ""}
-                      display={
-                        <span className="text-muted-foreground">
-                          {task.volunteer_report_summary || "—"}
-                        </span>
-                      }
-                      onSave={(v) => saveField(task, { volunteer_report_summary: v.trim() || null })}
-                      commitOnBlur
-                      enterCommits={false}
-                      editor={(draft, setDraft) => (
-                        <textarea
-                          className={inputClass}
-                          value={draft}
-                          onChange={(e) => setDraft(e.target.value)}
-                          rows={2}
-                        />
-                      )}
-                    />
+                    <TruncatedText text={task.latest_report_notes || "—"} />
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">
                     {task.created_at ? new Date(task.created_at).toLocaleDateString("he-IL") : "—"}
@@ -300,6 +321,17 @@ export default function TasksPage() {
             {t("pager.next", "הבא")} <ChevronLeft className="h-4 w-4" />
           </Button>
         </div>
+      )}
+
+      {creating && (
+        <TaskQuickCreateForm
+          onClose={() => setCreating(false)}
+          onSaved={async () => {
+            setCreating(false);
+            await reload();
+            success(t("msg.saved", "נשמר בהצלחה"));
+          }}
+        />
       )}
     </div>
   );

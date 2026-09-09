@@ -14,8 +14,13 @@ import { useToast } from "@/lib/toast";
 import { useSortableList } from "@/lib/useSortableList";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { InlineEdit } from "@/components/ui/InlineEdit";
 import { Input } from "@/components/ui/input";
-import type { Campaign, JewishCounts, ReportNumber, TaskStatus } from "@/lib/types";
+import type { Campaign, JewishCounts, ReportNumber, TaskStatus, TaskStatusWithId } from "@/lib/types";
+
+const STATUS_OPTIONS: TaskStatus[] = ["ACTIVE", "COMPLETED", "PAUSED"];
+const selectClass =
+  "rounded-md border border-input px-2 py-1 text-xs focus:border-primary focus:outline-none";
 
 // fixes53 §3: the grid's optional (toggleable) columns — name + actions
 // always show. fixes58 §3.5: the "activist" column (direct report-number
@@ -48,7 +53,7 @@ export default function ReportNumbersPage() {
   // replacing the old "activist" assignment column.
   const [activeCampaigns, setActiveCampaigns] = useState<Campaign[]>([]);
   const [campaignTaskStatus, setCampaignTaskStatus] = useState<
-    Record<number, Record<number, TaskStatus>>
+    Record<number, Record<number, TaskStatusWithId>>
   >({});
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<ReportNumber | null>(null);
@@ -110,7 +115,7 @@ export default function ReportNumbersPage() {
       apiFetch<ReportNumber[]>("/api/report-numbers"),
       apiFetch<Record<number, JewishCounts>>("/api/report-numbers/jewish-counts"),
       apiFetch<Campaign[]>("/api/campaigns?active=true"),
-      apiFetch<Record<number, Record<number, TaskStatus>>>(
+      apiFetch<Record<number, Record<number, TaskStatusWithId>>>(
         "/api/report-numbers/campaign-task-status",
       ),
     ]);
@@ -203,20 +208,56 @@ export default function ReportNumbersPage() {
     created_at: t("sort.created", "תאריך יצירה"),
   };
 
+  const taskStatusLabel: Record<TaskStatus, string> = {
+    ACTIVE: t("task.status_active", "פעיל"),
+    COMPLETED: t("task.status_completed", "הושלם"),
+    PAUSED: t("task.status_paused", "מושהה"),
+  };
+
   // fixes58 §3.5: colored badge per active campaign — green=Active,
   // red=Paused; Completed uses a neutral outline badge rather than the blue
   // the spec names, since blue isn't one of CLAUDE.md's 5 mandated status
   // colors (magenta/green/yellow/dark-red/orange) and this reuses that same
-  // fixed palette rather than adding a 6th color to it.
-  function taskStatusBadge(status: TaskStatus | undefined) {
-    if (!status) return <span className="text-muted-foreground">—</span>;
-    if (status === "ACTIVE") {
-      return <Badge variant="status-green">{t("task.status_active", "פעיל")}</Badge>;
-    }
-    if (status === "PAUSED") {
-      return <Badge variant="status-darkred">{t("task.status_paused", "מושהה")}</Badge>;
-    }
-    return <Badge variant="outline">{t("task.status_completed", "הושלם")}</Badge>;
+  // fixed palette rather than adding a 6th color to it. fixes60 §2: now an
+  // inline PUT-able toggle (same InlineEdit<TaskStatus> shape the Tasks page
+  // already uses) whenever the cell has a real task_id to address.
+  function taskStatusCell(cell: TaskStatusWithId | undefined) {
+    if (!cell) return <span className="text-muted-foreground">—</span>;
+    const badge =
+      cell.status === "ACTIVE" ? (
+        <Badge variant="status-green">{taskStatusLabel.ACTIVE}</Badge>
+      ) : cell.status === "PAUSED" ? (
+        <Badge variant="status-darkred">{taskStatusLabel.PAUSED}</Badge>
+      ) : (
+        <Badge variant="outline">{taskStatusLabel.COMPLETED}</Badge>
+      );
+    return (
+      <InlineEdit<TaskStatus>
+        value={cell.status}
+        display={badge}
+        onSave={async (v) => {
+          await apiFetch(`/api/tasks/${cell.task_id}`, {
+            method: "PUT",
+            body: JSON.stringify({ status: v }),
+          });
+          await reload();
+        }}
+        editor={(draft, setDraft, commit) => (
+          <select
+            className={selectClass}
+            value={draft}
+            onChange={(e) => commit(e.target.value as TaskStatus)}
+            autoFocus
+          >
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                {taskStatusLabel[s]}
+              </option>
+            ))}
+          </select>
+        )}
+      />
+    );
   }
 
   function SortHeader({ column, label }: { column: SortKey; label: string }) {
@@ -291,6 +332,18 @@ export default function ReportNumbersPage() {
         >
           {t("columns.title", "עמודות מוצגות")}
         </Button>
+        {query.trim() && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setQuery("");
+              setPage(1);
+            }}
+          >
+            {t("filter.clear_all", "נקה את כל הסינונים")}
+          </Button>
+        )}
         <span className="ms-auto flex items-center gap-2 text-sm text-muted-foreground">
           {t("pager.page_size", "בעמוד:")}
           <select
@@ -407,7 +460,7 @@ export default function ReportNumbersPage() {
                   ))}
                   {activeCampaigns.map((c) => (
                     <td key={c.id} className="px-3 py-2">
-                      {taskStatusBadge(campaignTaskStatus[rn.id]?.[c.id])}
+                      {taskStatusCell(campaignTaskStatus[rn.id]?.[c.id])}
                     </td>
                   ))}
                   <td className="px-3 py-2">

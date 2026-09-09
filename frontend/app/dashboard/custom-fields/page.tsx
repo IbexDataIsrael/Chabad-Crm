@@ -34,10 +34,14 @@ const FIELD_TYPES: { value: CustomFieldType; labelKey: string; fallback: string 
 // fixes40 §1: which of the 3 admin tabs a custom field is managed from —
 // same grouping `dashboard/picklists` uses for the exact same entity_type
 // vocabulary (contact_mekurav/contact_shliach group under "contacts").
-type CFTab = "contacts" | "visit" | "apartment" | "tasks";
+// fixes60 §3: "shliach" split out of "contacts" into its own tab, mirroring
+// dashboard/picklists's already-working 5-tab pattern for this exact
+// entity_type vocabulary.
+type CFTab = "contacts" | "visit" | "apartment" | "shliach" | "tasks";
 function tabFor(entityType: CustomFieldEntityType): CFTab {
   if (entityType === "apartment") return "apartment";
   if (entityType === "visit") return "visit";
+  if (entityType === "contact_shliach") return "shliach";
   // fixes58 §Phase 5.
   if (entityType === "task") return "tasks";
   return "contacts";
@@ -47,6 +51,7 @@ const TABS: { key: CFTab; icon: string; labelKey: string; fallback: string }[] =
   { key: "contacts", icon: "👤", labelKey: "pl.tab_contacts", fallback: "אנשי קשר" },
   { key: "visit", icon: "📋", labelKey: "pl.tab_visit", fallback: "ביקורים" },
   { key: "apartment", icon: "🏠", labelKey: "pl.tab_apartment", fallback: "דירה" },
+  { key: "shliach", icon: "🧑‍🏫", labelKey: "pl.tab_shliach", fallback: "פעילים" },
   { key: "tasks", icon: "✅", labelKey: "nav.tasks", fallback: "משימות" },
 ];
 
@@ -140,11 +145,19 @@ export default function CustomFieldsPage() {
 
       {tab === "contacts" && (
         <section className="space-y-6 rounded-2xl border border-border bg-card p-5">
-          {renderGroups(["contact_mekurav", "contact_shliach"])}
+          {renderGroups(["contact_mekurav"])}
           <AddDef
-            entityOptions={ENTITY_TYPES.filter(
-              (e) => e.value === "contact_mekurav" || e.value === "contact_shliach",
-            )}
+            entityOptions={ENTITY_TYPES.filter((e) => e.value === "contact_mekurav")}
+            onAdded={reload}
+          />
+        </section>
+      )}
+
+      {tab === "shliach" && (
+        <section className="space-y-6 rounded-2xl border border-border bg-card p-5">
+          {renderGroups(["contact_shliach"])}
+          <AddDef
+            entityOptions={ENTITY_TYPES.filter((e) => e.value === "contact_shliach")}
             onAdded={reload}
           />
         </section>

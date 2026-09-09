@@ -721,6 +721,28 @@ class BuildingOut(BaseModel):
     is_townhouse: bool = False
 
 
+class BuildingListItemOut(BaseModel):
+    """Lighter `BuildingOut` for the plain, unpaginated `GET /api/buildings`
+    (filters/pickers across ~7 pages) — no `floors`. That field was never
+    read by any of those callers, but with an org past a few thousand
+    buildings the selectinload + per-building floor arrays made this
+    endpoint's payload large enough to be slow/flaky, taking sibling
+    parallel requests (areas/report-numbers/picklists) down with it — the
+    exact "all filter boxes empty" bug this fixes."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    guid: str
+    area_id: Optional[int] = None
+    building_name: Optional[str] = None
+    building_address: Optional[str] = None
+    longitude: Optional[float] = None
+    latitude: Optional[float] = None
+    is_town_house: bool = False
+    is_townhouse: bool = False
+
+
 class BuildingPageOut(BaseModel):
     """One server-side page of the buildings list (fixes12 §3.3)."""
 
@@ -1593,8 +1615,34 @@ class TaskOut(BaseModel):
     report_number_names: list[str] = []
     status: TaskStatus
     volunteer_report_summary: Optional[str] = None
+    # fixes60 §1/decision #2: the volunteer's own most recent
+    # ShliachReportCompletion — not literally scoped per-task (that table has
+    # no task_id) — see routers/tasks.py::_latest_reports_by_volunteer.
+    latest_report_status: Optional[str] = None
+    latest_report_notes: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+
+class GeneratePolygonResult(BaseModel):
+    """fixes60 §5: one area's outcome from a convex-hull polygon generation
+    run — `ok` means area_polygon was written; `skipped` names why not
+    (typically too few geocoded buildings)."""
+
+    area_id: int
+    area_name: str
+    ok: bool
+    building_count: int
+    skipped_reason: Optional[str] = None
+
+
+class TaskStatusWithId(BaseModel):
+    """fixes60 §2: report_number_campaign_task_status's per-cell value — a
+    plain status string couldn't be PUT against, since there's no task id in
+    it to address. Report Numbers' inline status toggle needs task_id."""
+
+    status: TaskStatus
+    task_id: int
 
 
 class TaskPageOut(BaseModel):

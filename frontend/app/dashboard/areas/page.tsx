@@ -14,7 +14,13 @@ import { useLocalization } from "@/lib/localization";
 import { naturalCompare } from "@/lib/naturalSort";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
-import { contactFullName, type Area, type JewishCounts, type ShliachSummary } from "@/lib/types";
+import {
+  contactFullName,
+  type Area,
+  type GeneratePolygonResult,
+  type JewishCounts,
+  type ShliachSummary,
+} from "@/lib/types";
 import { useConfirm } from "@/lib/confirm";
 
 // fixes53 §3: the grid's optional (toggleable) columns — name always shows.
@@ -32,9 +38,11 @@ interface Row {
 export default function AreasPage() {
   const { isAdmin, loading, user } = useAuth();
   const { t } = useLocalization();
+  const { success: toastSuccess, error: toastError } = useToast();
   const [areas, setAreas] = useState<Area[]>([]);
   const [jewishCounts, setJewishCounts] = useState<Record<number, JewishCounts>>({});
   const [assignments, setAssignments] = useState<Record<number, ShliachSummary[]>>({});
+  const [generatingAll, setGeneratingAll] = useState(false);
   // fixes15 §7.1 multi-select filter + §1.1 pagination, persisted (§1.2).
   const [areaIds, setAreaIds] = usePersistentState<number[]>("crm.areas.ids", []);
   const [page, setPage] = usePersistentState("crm.areas.page", 1);
@@ -61,6 +69,37 @@ export default function AreasPage() {
   useEffect(() => {
     reload().catch(() => {});
   }, []);
+
+  // fixes60 §5: bulk convex-hull generation for every area in one call,
+  // reporting per-area outcomes (a mix of ok/skipped is expected — areas
+  // with <3 geocoded buildings are skipped, not an error).
+  async function generateAllBoundaries() {
+    setGeneratingAll(true);
+    try {
+      const results = await apiFetch<GeneratePolygonResult[]>(
+        "/api/areas/generate-polygons",
+        { method: "POST" },
+      );
+      const ok = results.filter((r) => r.ok).length;
+      const skipped = results.length - ok;
+      await reload();
+      if (ok === 0) {
+        toastError(
+          t("areas.generate_all_none", "לא ניתן היה ליצור תחומים (אין מספיק בניינים עם קואורדינטות).")
+        );
+      } else {
+        toastSuccess(
+          t("areas.generate_all_result", "נוצרו תחומים ל-{ok} אזורים ({skipped} דולגו)")
+            .replace("{ok}", String(ok))
+            .replace("{skipped}", String(skipped)),
+        );
+      }
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : t("msg.action_failed", "הפעולה נכשלה"));
+    } finally {
+      setGeneratingAll(false);
+    }
+  }
 
   function toggleField(f: OptionalColumn) {
     setFields((prev) => (prev.includes(f) ? prev.filter((k) => k !== f) : [...prev, f]));
@@ -150,11 +189,24 @@ export default function AreasPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{t("areas", "אזורים")}</h1>
         {isAdmin && (
-          <Button asChild>
-            <Link href="/dashboard/areas/add">
-              <Plus className="h-4 w-4" /> {t("page.add_area", "אזור חדש")}
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={generatingAll}
+              onClick={generateAllBoundaries}
+            >
+              <MapPin className="h-4 w-4" />
+              {generatingAll
+                ? t("action.loading", "טוען…")
+                : t("areas.generate_all_boundaries", "צור תחומים לכל האזורים")}
+            </Button>
+            <Button asChild>
+              <Link href="/dashboard/areas/add">
+                <Plus className="h-4 w-4" /> {t("page.add_area", "אזור חדש")}
+              </Link>
+            </Button>
+          </div>
         )}
       </div>
       <p className="text-sm text-muted-foreground">{t("page.areas_intro")}</p>
@@ -313,11 +365,37 @@ function AreaRow({
 }) {
   const { t } = useLocalization();
   const confirmDialog = useConfirm();
-  const { error: toastError } = useToast();
+  const { success: toastSuccess, error: toastError } = useToast();
   // fixes33 §2.2: only set while the backend reports the area has buildings
   // and we're waiting on the admin's cascade/unassign/abort choice.
   const [cascadeChoiceOpen, setCascadeChoiceOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [generating, setGenerating] = useState(false);
+
+  // fixes60 §5: single-area convex-hull generation, mirroring the page-level
+  // bulk action — same endpoint family, one area's outcome.
+  async function generateBoundary() {
+    setGenerating(true);
+    try {
+      const result = await apiFetch<GeneratePolygonResult>(
+        `/api/areas/${area.id}/generate-polygon`,
+        { method: "POST" },
+      );
+      if (result.ok) {
+        toastSuccess(t("areas.generate_one_ok", "התחום נוצר בהצלחה"));
+        await onChanged();
+      } else {
+        toastError(
+          result.skipped_reason ??
+            t("areas.generate_one_skipped", "לא ניתן היה ליצור תחום לאזור זה"),
+        );
+      }
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : t("msg.action_failed", "הפעולה נכשלה"));
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   async function attemptDelete(mode?: "cascade" | "unassign") {
     const qs = mode ? `?mode=${mode}` : "";
@@ -405,6 +483,18 @@ function AreaRow({
             <>
               <Button asChild size="sm" variant="secondary">
                 <Link href={`/dashboard/areas/${area.id}/edit`}>{t("action.edit", "ערוך")}</Link>
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={generating}
+                onClick={generateBoundary}
+              >
+                {generating
+                  ? t("action.loading", "טוען…")
+                  : area.area_polygon
+                    ? t("areas.regenerate_boundary", "צור תחום מחדש")
+                    : t("areas.generate_boundary", "צור תחום")}
               </Button>
               <Button
                 size="sm"

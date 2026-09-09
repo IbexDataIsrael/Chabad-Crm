@@ -9,7 +9,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app import models
-from app.core.geo import point_in_polygon, polygon_ring
+from app.core.geo import convex_hull, hull_to_geojson, point_in_polygon, polygon_ring
 from app.core.jewish_status import apartment_jewish_counts_by
 from app.core.natural_sort import natural_sort_key
 from app.core.shliach import resolve_shliach
@@ -22,6 +22,7 @@ from app.schemas import (
     AreaUpdate,
     BuildingOut,
     ContactOut,
+    GeneratePolygonResult,
     JewishCounts,
     ShliachSummary,
 )
@@ -169,6 +170,60 @@ def update_area(
     db.commit()
     db.refresh(area)
     return area
+
+
+def _generate_polygon_for(db: Session, area: models.Area) -> GeneratePolygonResult:
+    """fixes60 §5: convex hull over an area's geocoded buildings, written
+    straight into `area_polygon` — the exact GeoJSON shape
+    AreaPolygonMap/AreasMap/BuildingsMap already render, so this needs no
+    frontend change to show up on the map."""
+    points = [
+        (b.longitude, b.latitude)
+        for b in db.query(models.Building.longitude, models.Building.latitude)
+        .filter(
+            models.Building.area_id == area.id,
+            models.Building.latitude.isnot(None),
+            models.Building.longitude.isnot(None),
+        )
+        .all()
+    ]
+    if len(points) < 3:
+        return GeneratePolygonResult(
+            area_id=area.id,
+            area_name=area.area_name,
+            ok=False,
+            building_count=len(points),
+            skipped_reason="fewer than 3 geocoded buildings",
+        )
+    hull = convex_hull(points)
+    area.area_polygon = hull_to_geojson(hull)
+    return GeneratePolygonResult(
+        area_id=area.id, area_name=area.area_name, ok=True, building_count=len(points)
+    )
+
+
+@router.post("/{area_id}/generate-polygon", response_model=GeneratePolygonResult)
+def generate_area_polygon(
+    area_id: int,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    area = _get_or_404(area_id, admin.organization_id, db)
+    result = _generate_polygon_for(db, area)
+    if result.ok:
+        db.commit()
+    return result
+
+
+@router.post("/generate-polygons", response_model=list[GeneratePolygonResult])
+def generate_all_area_polygons(
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    areas = db.query(models.Area).filter(models.Area.organization_id == admin.organization_id).all()
+    results = [_generate_polygon_for(db, a) for a in areas]
+    db.commit()
+    return results
 
 
 @router.delete("/{area_id}", status_code=status.HTTP_204_NO_CONTENT)

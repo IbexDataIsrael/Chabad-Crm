@@ -9,19 +9,24 @@ import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 
-// fixes40 round 2 §3.1: 3 tabs, matching dashboard/custom-fields and
+// fixes40 round 2 §3.1: tabs matching dashboard/custom-fields and
 // dashboard/picklists. "Apartment" also carries the building entity (its
 // own built-in toggleable fields never got a separate tab elsewhere either).
-// fixes58 §Phase 5: "tasks" added alongside the existing 3 — empty until a
-// fixed Task field is registered in field_registry.py (none is today; Task's
-// fields are all managed via the Tasks page itself, not this toggle
-// registry), but the admin-config surface is ready per the approved plan.
-type FieldsTab = "contacts" | "apartment" | "visit" | "tasks";
+// fixes58 §Phase 5: "tasks" — empty until a fixed Task field is registered in
+// field_registry.py (none is today; Task's fields are all managed via the
+// Tasks page itself, not this toggle registry), but the admin-config
+// surface is ready per the approved plan.
+// fixes60 §3: "shliach" split out of "contacts" — mirrors dashboard/
+// picklists's own contact_shliach tab; the base "contact" entity (fields
+// shared by every contact regardless of type, e.g. name/phone/email) stays
+// on the primary Contacts tab, only the shliach-specific fields move.
+type FieldsTab = "contacts" | "apartment" | "visit" | "shliach" | "tasks";
 
 const TAB_ENTITIES: Record<FieldsTab, string[]> = {
-  contacts: ["contact", "contact_mekurav", "contact_shliach"],
+  contacts: ["contact", "contact_mekurav"],
   apartment: ["building", "apartment"],
   visit: ["visit"],
+  shliach: ["contact_shliach"],
   tasks: ["task"],
 };
 
@@ -29,6 +34,7 @@ const TABS: { key: FieldsTab; icon: string; labelKey: string; fallback: string }
   { key: "contacts", icon: "👤", labelKey: "pl.tab_contacts", fallback: "אנשי קשר" },
   { key: "apartment", icon: "🏠", labelKey: "pl.tab_apartment", fallback: "דירה" },
   { key: "visit", icon: "📋", labelKey: "pl.tab_visit", fallback: "ביקורים" },
+  { key: "shliach", icon: "🧑‍🏫", labelKey: "pl.tab_shliach", fallback: "פעילים" },
   { key: "tasks", icon: "✅", labelKey: "nav.tasks", fallback: "משימות" },
 ];
 

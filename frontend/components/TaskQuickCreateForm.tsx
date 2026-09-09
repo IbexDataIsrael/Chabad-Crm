@@ -14,19 +14,27 @@ const inputClass =
 
 const STATUS_OPTIONS: TaskStatus[] = ["ACTIVE", "COMPLETED", "PAUSED"];
 
+interface ActivistOption {
+  id: number;
+  full_name: string;
+  role: string;
+}
+
 /** fixes58 §3.3: the Users-page quick-action "Add task" form — modeled on
  *  VisitForm's locked-subject shape (the volunteer here plays the same role
  *  `lockedContactId` does there). Campaign is required (auto-selected when
  *  only one is active); report numbers and the custom-date picklist are
- *  optional. */
+ *  optional. fixes60 §1: `volunteerUserId`/`volunteerName` are now optional —
+ *  omit both (the Tasks page's own "New Task" button does) to get a real
+ *  activist picker instead of a locked one. */
 export function TaskQuickCreateForm({
   volunteerUserId,
   volunteerName,
   onClose,
   onSaved,
 }: {
-  volunteerUserId: number;
-  volunteerName: string;
+  volunteerUserId?: number;
+  volunteerName?: string;
   onClose: () => void;
   onSaved: () => Promise<void> | void;
 }) {
@@ -35,6 +43,10 @@ export function TaskQuickCreateForm({
 
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [reportNumbers, setReportNumbers] = useState<ReportNumber[]>([]);
+  const [activists, setActivists] = useState<ActivistOption[]>([]);
+  const [selectedVolunteerId, setSelectedVolunteerId] = useState<number | "">(
+    volunteerUserId ?? "",
+  );
   const [campaignId, setCampaignId] = useState<number | "">("");
   const [reportNumberIds, setReportNumberIds] = useState<number[]>([]);
   const [customDateValueId, setCustomDateValueId] = useState<number | "">("");
@@ -58,6 +70,13 @@ export function TaskQuickCreateForm({
     apiFetch<ReportNumber[]>("/api/report-numbers")
       .then(setReportNumbers)
       .catch(() => setReportNumbers([]));
+    // fixes60 §1: only needed when no volunteer was locked in via props.
+    if (volunteerUserId === undefined) {
+      apiFetch<ActivistOption[]>("/api/users")
+        .then((rows) => setActivists(rows.filter((u) => u.role === "shliach")))
+        .catch(() => setActivists([]));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function save(e: FormEvent) {
@@ -67,13 +86,17 @@ export function TaskQuickCreateForm({
       setError(t("validation.campaign_required", "יש לבחור קמפיין"));
       return;
     }
+    if (selectedVolunteerId === "") {
+      setError(t("validation.activist_required", "יש לבחור פעיל"));
+      return;
+    }
     setBusy(true);
     try {
       await apiFetch("/api/tasks", {
         method: "POST",
         body: JSON.stringify({
           campaign_id: campaignId,
-          volunteer_user_id: volunteerUserId,
+          volunteer_user_id: selectedVolunteerId,
           report_number_ids: reportNumberIds,
           custom_date_value_id: customDateValueId === "" ? null : customDateValueId,
           status,
@@ -95,8 +118,29 @@ export function TaskQuickCreateForm({
       >
         <div>
           <h2 className="text-lg font-bold">{t("page.add_task", "משימה חדשה")}</h2>
-          <p className="text-sm text-muted-foreground">{volunteerName}</p>
+          {volunteerName && <p className="text-sm text-muted-foreground">{volunteerName}</p>}
         </div>
+
+        {volunteerUserId === undefined && (
+          <label className="block space-y-1">
+            <span className="block text-sm font-medium">{t("task.volunteer", "פעיל")}</span>
+            <select
+              className={inputClass}
+              value={selectedVolunteerId}
+              onChange={(e) =>
+                setSelectedVolunteerId(e.target.value ? Number(e.target.value) : "")
+              }
+              required
+            >
+              <option value="">{t("task.select_activist", "בחר פעיל")}</option>
+              {activists.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.full_name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <label className="block space-y-1">
           <span className="block text-sm font-medium">{t("task.campaign", "קמפיין")}</span>

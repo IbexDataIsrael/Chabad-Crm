@@ -7,6 +7,7 @@ import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useCustomFieldDefs } from "@/lib/customFields";
 import { useLocalization } from "@/lib/localization";
 import { naturalCompare } from "@/lib/naturalSort";
 import {
@@ -16,7 +17,7 @@ import {
   HEBREW_FONT,
   PDF_CONTENT_TOP,
 } from "@/lib/pdfRtl";
-import { displayPicklistValue } from "@/lib/picklists";
+import { displayPicklistValue, FIXED_APARTMENT_PICKLIST_KEYS } from "@/lib/picklists";
 import { useDbPreference } from "@/lib/preferences";
 import { useToast } from "@/lib/toast";
 import { useSortableList } from "@/lib/useSortableList";
@@ -25,6 +26,7 @@ import {
   buildingDisplayName,
   type ApartmentListItem,
   type ApartmentPage,
+  type PicklistField,
   type PicklistValue,
   type ReportNumber,
 } from "@/lib/types";
@@ -59,10 +61,16 @@ const REPORT_COLUMN_KEYS = [
 ] as const;
 type ReportColumnKey = (typeof REPORT_COLUMN_KEYS)[number];
 
+// fixes60 §7: a report column is now either one of the fixed ReportColumnKey
+// values, or a dynamic apartment.* custom column addressed by a prefixed
+// string key — "pl:<field_key>" for a custom picklist, "cf:<field_key>" for
+// a non-select custom field (mirrors the Apartments page's own GridColumn
+// prefix scheme, fixes60 §6). `columns`/`subheadings`/`widths` are widened
+// to plain strings so they can hold either kind side by side.
 interface ReportColumnConfig {
-  columns: ReportColumnKey[];
-  subheadings: Partial<Record<ReportColumnKey, string>>;
-  widths: Partial<Record<ReportColumnKey, number>>;
+  columns: string[];
+  subheadings: Record<string, string | undefined>;
+  widths: Record<string, number | undefined>;
 }
 
 // fixes40 §5: only the original 6 are active by default (same widths,
@@ -171,6 +179,25 @@ function CreateReportsInner() {
   const [reportColumns, setReportColumns] = useDbPreference<ReportColumnConfig>(
     "reports.apartmentColumns", DEFAULT_REPORT_COLUMNS,
   );
+  // fixes60 §7: any admin-added apartment.* custom picklist/field is
+  // selectable here too, same source + org-scoping as the Apartments page's
+  // own "Customize Fields" panel (fixes32 §6 / fixes35 §3) — org-wide
+  // Manage Fields hiding is deliberately NOT applied here (a report column
+  // choice is independent of what shows in the live grid).
+  const [customPicklistDefs, setCustomPicklistDefs] = useState<PicklistField[]>([]);
+  const customFieldDefs = useCustomFieldDefs("apartment").filter((d) => d.field_type !== "select");
+  useEffect(() => {
+    if (loading) return;
+    apiFetch<PicklistField[]>("/api/picklists")
+      .then((defs) =>
+        setCustomPicklistDefs(
+          defs.filter(
+            (d) => d.entity_type === "apartment" && !FIXED_APARTMENT_PICKLIST_KEYS.includes(d.field_key),
+          ),
+        ),
+      )
+      .catch(() => setCustomPicklistDefs([]));
+  }, [loading]);
 
   useEffect(() => {
     if (!notesDirty) setReportNotes(user?.organization?.report_notes ?? "");
@@ -211,12 +238,18 @@ function CreateReportsInner() {
     }
   }
 
+  // fixes60 §7: the fixed keys plus every dynamic apartment.* custom
+  // picklist/field, prefixed — see the ReportColumnConfig comment above.
+  const allColumnKeys: string[] = [
+    ...REPORT_COLUMN_KEYS,
+    ...customPicklistDefs.map((d) => `pl:${d.field_key}`),
+    ...customFieldDefs.map((d) => `cf:${d.field_key}`),
+  ];
+
   // fixes40 §5: which columns are active, in their user-chosen (now
   // reorderable) order — was fixed-logical-order-only ("the spec asks only
   // for inclusion, not reordering") before this round.
-  const activeReportColumns = reportColumns.columns.filter((k) =>
-    (REPORT_COLUMN_KEYS as readonly string[]).includes(k),
-  );
+  const activeReportColumns = reportColumns.columns.filter((k) => allColumnKeys.includes(k));
   const columnLabels: Record<ReportColumnKey, string> = {
     floor: t("reports.floor", "קומה"),
     apartment_name: t("reports.apartment_name", "מספר דירה"),
@@ -232,13 +265,31 @@ function CreateReportsInner() {
     language: t("reports.language", "שפה"),
     campaign_status: t("picklist.apartment.campaign_status", "סטטוס קמפיין"),
   };
+  // fixes60 §7: label lookup spanning both the fixed dictionary above and
+  // the dynamic pl:/cf: prefixed custom columns.
+  function columnLabel(k: string): string {
+    if ((REPORT_COLUMN_KEYS as readonly string[]).includes(k)) {
+      return columnLabels[k as ReportColumnKey];
+    }
+    if (k.startsWith("pl:")) {
+      const fieldKey = k.slice(3);
+      const d = customPicklistDefs.find((def) => def.field_key === fieldKey);
+      return (d && (lang === "en" ? d.english_label || d.label : d.label)) || fieldKey;
+    }
+    if (k.startsWith("cf:")) {
+      const fieldKey = k.slice(3);
+      const d = customFieldDefs.find((def) => def.field_key === fieldKey);
+      return (d && (lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label)) || fieldKey;
+    }
+    return k;
+  }
   const totalReportWidth = activeReportColumns.reduce(
     (sum, k) => sum + (reportColumns.widths[k] ?? 0), 0,
   );
   // fixes38 §4.3: sum of active column widths must not exceed 100%.
   const widthOverLimit = totalReportWidth > 100;
 
-  function toggleReportColumn(k: ReportColumnKey) {
+  function toggleReportColumn(k: string) {
     setReportColumns((prev) => ({
       ...prev,
       columns: prev.columns.includes(k)
@@ -254,14 +305,12 @@ function CreateReportsInner() {
   function reorderReportColumns(orderedKeys: string[]) {
     setReportColumns((prev) => {
       const activeSet = new Set(prev.columns);
-      const reordered = orderedKeys.filter(
-        (k): k is ReportColumnKey => activeSet.has(k as ReportColumnKey),
-      );
+      const reordered = orderedKeys.filter((k) => activeSet.has(k));
       return reordered.length > 0 ? { ...prev, columns: reordered } : prev;
     });
   }
 
-  function moveActiveReportColumn(key: ReportColumnKey, delta: -1 | 1) {
+  function moveActiveReportColumn(key: string, delta: -1 | 1) {
     setReportColumns((prev) => {
       const idx = prev.columns.indexOf(key);
       const to = idx + delta;
@@ -272,14 +321,14 @@ function CreateReportsInner() {
     });
   }
 
-  function setReportSubheading(k: ReportColumnKey, value: string) {
+  function setReportSubheading(k: string, value: string) {
     setReportColumns((prev) => ({
       ...prev,
       subheadings: { ...prev.subheadings, [k]: value },
     }));
   }
 
-  function setReportWidth(k: ReportColumnKey, value: number) {
+  function setReportWidth(k: string, value: number) {
     setReportColumns((prev) => ({
       ...prev,
       widths: { ...prev.widths, [k]: value },
@@ -377,6 +426,21 @@ function CreateReportsInner() {
         const o = opts.find((opt) => opt.value === value);
         return o ? displayPicklistValue(o, lang) : value;
       };
+      // fixes60 §7: label options for whichever custom picklists are
+      // actually selected on this report — fetched once here for the same
+      // "no raw technical value on a fast click" reason as the 4 fixed ones.
+      const activeCustomPlKeys = activeReportColumns
+        .filter((k) => k.startsWith("pl:"))
+        .map((k) => k.slice(3));
+      const customPlEntries = await Promise.all(
+        activeCustomPlKeys.map(
+          async (fieldKey): Promise<[string, PicklistValue[]]> => [
+            fieldKey,
+            await apiFetch<PicklistValue[]>(`/api/picklists/${fieldKey}`),
+          ],
+        ),
+      );
+      const customPlLabelMaps: Record<string, PicklistValue[]> = Object.fromEntries(customPlEntries);
 
       const { jsPDF } = await import("jspdf");
       const { default: autoTable } = await import("jspdf-autotable");
@@ -391,9 +455,23 @@ function CreateReportsInner() {
       // fixes38 §4.2 / fixes40 §5: only the user's selected columns render,
       // in their own (now reorderable) order; a subheading (if set) renders
       // as a second line via "\n" — jspdf-autotable wraps multi-line
-      // header/body strings natively.
-      const rowValueFor = (a: ApartmentListItem, k: ReportColumnKey): string => {
-        switch (k) {
+      // header/body strings natively. fixes60 §7: pl:/cf: prefixed keys
+      // resolve against the custom picklist/field defs instead of the
+      // fixed switch below.
+      const rowValueFor = (a: ApartmentListItem, k: string): string => {
+        if (k.startsWith("pl:")) {
+          const fieldKey = k.slice(3);
+          return labelFor(customPlLabelMaps[fieldKey] ?? [], a.picklist_values?.[fieldKey] ?? null);
+        }
+        if (k.startsWith("cf:")) {
+          const fieldKey = k.slice(3);
+          const def = customFieldDefs.find((d) => d.field_key === fieldKey);
+          const value = a.custom_field_values?.[fieldKey] ?? null;
+          if (!def) return "";
+          if (def.field_type === "boolean") return value ? "✓" : "";
+          return value == null || value === "" ? "" : String(value);
+        }
+        switch (k as ReportColumnKey) {
           case "floor":
             return a.floor ?? "";
           case "apartment_name":
@@ -425,6 +503,8 @@ function CreateReportsInner() {
             return a.language.map((v) => labelFor(language, v)).join(", ");
           case "campaign_status":
             return labelFor(campaign, a.campaign_status);
+          default:
+            return "";
         }
       };
       // fixes38 §4.2: width % of the usable page width, per active column.
@@ -438,7 +518,7 @@ function CreateReportsInner() {
       // land rightmost.
       const logicalHeads = activeReportColumns.map((k) => {
         const subheading = reportColumns.subheadings[k]?.trim();
-        return subheading ? `${columnLabels[k]}\n${subheading}` : columnLabels[k];
+        return subheading ? `${columnLabel(k)}\n${subheading}` : columnLabel(k);
       });
       const head = [...logicalHeads].reverse();
       const visualWidths = [...logicalWidths].reverse();
@@ -475,6 +555,13 @@ function CreateReportsInner() {
         y += 10;
       }
 
+      // fixes60 §8: only repeat the table header when a building's table
+      // actually starts on a different physical page than the previous
+      // building's table ended on — two buildings' tables that happen to
+      // share one page previously got a redundant header line printed
+      // between them. -1 guarantees the very first table always shows one.
+      let pageAtLastTableEnd = -1;
+
       // One table per building, headed by the building's cleaned
       // "street + number" display string (shared by both modes).
       const renderBuildingTables = (group: ApartmentListItem[]) => {
@@ -493,18 +580,24 @@ function CreateReportsInner() {
         const buildingKeys = [...byBuilding.keys()].sort(naturalCompare);
 
         for (const buildingKey of buildingKeys) {
-          if (y + 60 > bottom) {
+          const apts = byBuilding.get(buildingKey)!;
+          // fixes60 §8: a small building (under 4 apartments) gets a
+          // compact inline header and tighter spacing instead of the full
+          // section break a large building gets — proportionate to size.
+          const compact = apts.length < 4;
+          if (y + (compact ? 40 : 60) > bottom) {
             doc.addPage();
             y = PDF_CONTENT_TOP;
           }
           doc.setFont(HEBREW_FONT, "bold");
-          doc.setFontSize(12);
-          doc.text(buildingKey, pageW - MARGIN, y + 4, { align: "right" });
-          y += 12;
+          doc.setFontSize(compact ? 10 : 12);
+          doc.text(buildingKey, pageW - MARGIN, y + (compact ? 3 : 4), { align: "right" });
+          y += compact ? 8 : 12;
 
-          const body = byBuilding.get(buildingKey)!.map((a) =>
-            activeReportColumns.map((k) => rowValueFor(a, k)).reverse(),
-          );
+          const body = apts.map((a) => activeReportColumns.map((k) => rowValueFor(a, k)).reverse());
+
+          const pageBeforeTable = doc.getCurrentPageInfo().pageNumber;
+          const showHeader = pageBeforeTable !== pageAtLastTableEnd;
 
           autoTable(doc, {
             startY: y,
@@ -513,15 +606,15 @@ function CreateReportsInner() {
             // Explicit total width — with 'auto' this autotable version logs a
             // spurious "content width could not fit page" warning.
             tableWidth: logicalWidths.reduce((a, b) => a + b, 0),
-            head: [head],
+            head: showHeader ? [head] : [],
             body,
             theme: "grid",
             styles: {
               font: HEBREW_FONT,
-              fontSize: 10,
+              fontSize: compact ? 9 : 10,
               halign: "right",
               valign: "top",
-              cellPadding: CELL_PADDING,
+              cellPadding: compact ? 3 : CELL_PADDING,
             },
             headStyles: {
               fontStyle: "bold",
@@ -537,7 +630,8 @@ function CreateReportsInner() {
           });
           y =
             (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable
-              .finalY + 16;
+              .finalY + (compact ? 8 : 16);
+          pageAtLastTableEnd = doc.getCurrentPageInfo().pageNumber;
         }
       };
 
@@ -583,6 +677,30 @@ function CreateReportsInner() {
 
       // fixes26 §1: stamp the org name + logo header onto every page.
       drawPdfHeaders(doc, MARGIN, user?.organization?.name ?? "", headerLogo);
+
+      // fixes60 §8: a footer page number on every page, uniformly across all
+      // 3 generation modes. No persisted report entity exists yet to number
+      // against (fixes60-plan.md decision #9), so the "report id" is just
+      // the last 6 digits of this generation's own timestamp — unique
+      // enough to tell two PDFs' pages apart, not a real record id.
+      const reportShortId = String(Date.now()).slice(-6);
+      const totalPages = doc.getNumberOfPages();
+      for (let p = 1; p <= totalPages; p += 1) {
+        doc.setPage(p);
+        doc.setFont(HEBREW_FONT, "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(120, 120, 120);
+        doc.text(
+          t("reports.pdf_footer", "דוח #{id} · עמוד {page} מתוך {total}")
+            .replace("{id}", reportShortId)
+            .replace("{page}", String(p))
+            .replace("{total}", String(totalPages)),
+          pageW / 2,
+          pageH - 16,
+          { align: "center" },
+        );
+        doc.setTextColor(0, 0, 0);
+      }
 
       doc.save(`apartments-report-${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch (err) {
@@ -665,7 +783,7 @@ function CreateReportsInner() {
                   onClick={withColumnClickGuard(() => toggleReportColumn(k))}
                   className="rounded-md border px-3 py-1.5 text-sm border-primary bg-primary/10 text-primary cursor-grab active:cursor-grabbing"
                 >
-                  ⠿ {columnLabels[k]}
+                  ⠿ {columnLabel(k)}
                 </button>
                 <span className="flex flex-col gap-0.5">
                   <button
@@ -690,7 +808,7 @@ function CreateReportsInner() {
               </span>
             );
           })}
-          {REPORT_COLUMN_KEYS.filter((k) => !activeReportColumns.includes(k)).map((k) => (
+          {allColumnKeys.filter((k) => !activeReportColumns.includes(k)).map((k) => (
             <button
               key={k}
               type="button"
@@ -699,7 +817,7 @@ function CreateReportsInner() {
               onClick={() => toggleReportColumn(k)}
               className="rounded-md border px-3 py-1.5 text-sm border-border text-muted-foreground hover:bg-accent"
             >
-              {columnLabels[k]}
+              {columnLabel(k)}
             </button>
           ))}
         </div>
@@ -721,7 +839,7 @@ function CreateReportsInner() {
             <tbody>
               {activeReportColumns.map((k) => (
                 <tr key={k} className="border-t border-border">
-                  <td className="py-1.5 pe-3">{columnLabels[k]}</td>
+                  <td className="py-1.5 pe-3">{columnLabel(k)}</td>
                   <td className="py-1.5 pe-3">
                     <input
                       type="text"

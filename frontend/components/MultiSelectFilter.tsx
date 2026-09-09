@@ -36,11 +36,19 @@ export function MultiSelectFilter<Id extends number | string>({
 
   // fixes18 §general: long entity lists (e.g. buildings) are typeable inline.
   const searchable = options.length > 8;
-  const visible = query.trim()
+  const filtered = query.trim()
     ? options.filter((o) =>
         o.label.toLowerCase().includes(query.trim().toLowerCase()),
       )
     : options;
+  // fixes60 §4: checked items float to the top — otherwise a selection in a
+  // long list scrolls out of view the moment the dropdown reopens.
+  const visible = [...filtered].sort((a, b) => {
+    const aSelected = value.includes(a.id);
+    const bSelected = value.includes(b.id);
+    if (aSelected === bSelected) return 0;
+    return aSelected ? -1 : 1;
+  });
 
   useEffect(() => {
     if (!open) return;

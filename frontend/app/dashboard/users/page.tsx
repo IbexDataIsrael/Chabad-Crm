@@ -237,6 +237,27 @@ export default function UsersPage() {
   // field) columns — see the Contacts page's identical mechanism.
   const [columnOrder, setColumnOrder] = useDbPreference<string[]>("users.columnOrder", []);
   const [columnsOpen, setColumnsOpen] = useState(false);
+
+  // fixes60 §4: same "Clear all filters" convention as Apartments/Contacts.
+  // `showInactive` is deliberately excluded — it's an opt-in to see *more*
+  // rows, not a narrowing filter, same treatment other pages give similar
+  // toggles.
+  const activeFilterCount =
+    roleFilter.length +
+    areaIds.length +
+    buildingIds.length +
+    reportNumberIds.length +
+    Object.values(shliachPicklistFilters).filter((v) => v.length > 0).length +
+    Object.values(shliachFieldFilters).filter((v) => v).length;
+  function clearAllFilters() {
+    setRoleFilter([]);
+    setAreaIds([]);
+    setBuildingIds([]);
+    setReportNumberIds([]);
+    setShliachPicklistFilters({});
+    setShliachFieldFilters({});
+    setPage(1);
+  }
   const { containerRef: columnsSortableRef, withClickGuard } =
     useSortableList<HTMLDivElement>(reorderColumns);
 
@@ -1093,6 +1114,11 @@ export default function UsersPage() {
               }}
             />
           ),
+        )}
+        {activeFilterCount > 0 && (
+          <Button type="button" variant="outline" onClick={clearAllFilters}>
+            {t("filter.clear_all", "נקה את כל הסינונים")}
+          </Button>
         )}
         <label className="inline-flex items-center gap-1.5 cursor-pointer text-muted-foreground">
           <input

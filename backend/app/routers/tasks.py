@@ -29,6 +29,80 @@ def _get_or_404(task_id: int, org_id: int, db: Session) -> models.Task:
     return task
 
 
+def _latest_reports_by_volunteer(
+    db: Session, org_id: int, user_ids: list[int]
+) -> dict[int, tuple[str, Optional[str]]]:
+    """fixes60 §1/decision #2: the Tasks page's report column is the
+    volunteer's own most recent `ShliachReportCompletion`, not literally
+    scoped per-task — that table has no task_id (and no UI collects one on
+    submission). Resolved the same way apartment access is: by the shliach's
+    linked user_id, falling back to an email match for an unlinked contact
+    (fixes21). Batched across the whole page's rows in 3 queries total, not
+    one per row."""
+    result: dict[int, tuple[str, Optional[str]]] = {}
+    if not user_ids:
+        return result
+
+    contact_id_by_user: dict[int, int] = {}
+    linked = (
+        db.query(models.ContactShliach.user_id, models.ContactShliach.contact_id)
+        .filter(
+            models.ContactShliach.organization_id == org_id,
+            models.ContactShliach.user_id.in_(user_ids),
+            models.ContactShliach.is_display.is_(True),
+        )
+        .all()
+    )
+    for uid, cid in linked:
+        contact_id_by_user[uid] = cid
+
+    unresolved_ids = [uid for uid in user_ids if uid not in contact_id_by_user]
+    if unresolved_ids:
+        unresolved_users = {
+            u.id: u.email
+            for u in db.query(models.User.id, models.User.email).filter(
+                models.User.id.in_(unresolved_ids), models.User.email.isnot(None)
+            )
+        }
+        if unresolved_users:
+            by_email = (
+                db.query(models.Contact.email, models.ContactShliach.contact_id)
+                .join(models.ContactShliach, models.ContactShliach.contact_id == models.Contact.id)
+                .filter(
+                    models.ContactShliach.organization_id == org_id,
+                    models.ContactShliach.is_display.is_(True),
+                    models.Contact.email.in_(unresolved_users.values()),
+                )
+                .all()
+            )
+            email_to_contact = {email: cid for email, cid in by_email}
+            for uid, email in unresolved_users.items():
+                if email in email_to_contact:
+                    contact_id_by_user[uid] = email_to_contact[email]
+
+    contact_ids = list(set(contact_id_by_user.values()))
+    if not contact_ids:
+        return result
+    rows = (
+        db.query(
+            models.ShliachReportCompletion.contact_id,
+            models.ShliachReportCompletion.status,
+            models.ShliachReportCompletion.comments,
+        )
+        .filter(models.ShliachReportCompletion.contact_id.in_(contact_ids))
+        .order_by(models.ShliachReportCompletion.created_at.desc())
+        .all()
+    )
+    latest_by_contact: dict[int, tuple[str, Optional[str]]] = {}
+    for contact_id, report_status, comments in rows:
+        latest_by_contact.setdefault(contact_id, (report_status, comments))
+
+    for uid, cid in contact_id_by_user.items():
+        if cid in latest_by_contact:
+            result[uid] = latest_by_contact[cid]
+    return result
+
+
 def _report_numbers_by_task(db: Session, task_ids: list[int]) -> dict[int, list[tuple[int, str]]]:
     result: dict[int, list[tuple[int, str]]] = {tid: [] for tid in task_ids}
     if not task_ids:
@@ -51,7 +125,11 @@ def _report_numbers_by_task(db: Session, task_ids: list[int]) -> dict[int, list[
     return result
 
 
-def _to_out(task: models.Task, report_numbers: list[tuple[int, str]]) -> TaskOut:
+def _to_out(
+    task: models.Task,
+    report_numbers: list[tuple[int, str]],
+    latest_report: Optional[tuple[str, Optional[str]]] = None,
+) -> TaskOut:
     return TaskOut(
         id=task.id,
         guid=task.guid,
@@ -65,6 +143,8 @@ def _to_out(task: models.Task, report_numbers: list[tuple[int, str]]) -> TaskOut
         report_number_names=[name for _, name in report_numbers],
         status=task.status,
         volunteer_report_summary=task.volunteer_report_summary,
+        latest_report_status=latest_report[0] if latest_report else None,
+        latest_report_notes=latest_report[1] if latest_report else None,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -159,8 +239,14 @@ def list_tasks(
     rows = query.offset((page - 1) * page_size).limit(page_size).all()
 
     rn_by_task = _report_numbers_by_task(db, [t.id for t in rows])
+    reports_by_volunteer = _latest_reports_by_volunteer(
+        db, org_id, list({t.volunteer_user_id for t in rows})
+    )
     return TaskPageOut(
-        items=[_to_out(t, rn_by_task.get(t.id, [])) for t in rows],
+        items=[
+            _to_out(t, rn_by_task.get(t.id, []), reports_by_volunteer.get(t.volunteer_user_id))
+            for t in rows
+        ],
         total=total,
         page=page,
         page_size=page_size,
@@ -225,7 +311,8 @@ def create_task(
     db.commit()
     db.refresh(task)
     rn_by_task = _report_numbers_by_task(db, [task.id])
-    return _to_out(task, rn_by_task.get(task.id, []))
+    reports = _latest_reports_by_volunteer(db, org_id, [task.volunteer_user_id])
+    return _to_out(task, rn_by_task.get(task.id, []), reports.get(task.volunteer_user_id))
 
 
 @router.put("/{task_id}", response_model=TaskOut)
@@ -287,7 +374,8 @@ def update_task(
     db.commit()
     db.refresh(task)
     rn_by_task = _report_numbers_by_task(db, [task.id])
-    return _to_out(task, rn_by_task.get(task.id, []))
+    reports = _latest_reports_by_volunteer(db, org_id, [task.volunteer_user_id])
+    return _to_out(task, rn_by_task.get(task.id, []), reports.get(task.volunteer_user_id))
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -12,6 +12,7 @@ from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.schemas import (
     BuildingCreate,
+    BuildingListItemOut,
     BuildingOut,
     BuildingPageOut,
     BuildingUpdate,
@@ -88,15 +89,17 @@ def _townhouse_flags(building_ids: list[int], db: Session) -> dict[int, bool]:
     }
 
 
-@router.get("", response_model=list[BuildingOut])
+@router.get("", response_model=list[BuildingListItemOut])
 def list_buildings(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
     area_id: Optional[int] = None,
 ):
-    query = db.query(models.Building).options(
-        selectinload(models.Building.floors)
-    ).filter(
+    """The plain, unpaginated building list — feeds filters/pickers across
+    several pages. No `floors` (see `BuildingListItemOut`): with a few
+    thousand buildings, eager-loading and serializing every one's floors made
+    this slow enough to jeopardize sibling requests fired alongside it."""
+    query = db.query(models.Building).filter(
         models.Building.organization_id == current_user.organization_id
     )
     if area_id is not None:

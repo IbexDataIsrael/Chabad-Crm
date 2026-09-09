@@ -105,6 +105,22 @@ const FIELD_SORT_KEYS: Partial<Record<FieldKey, SortKey>> = {
   email: "email",
 };
 
+// fixes60 §6: one grid column, whichever of the 4 kinds it is — feeds the
+// unified drag-reorder list (Customize Columns panel + the table itself),
+// same mechanism the Users/Contacts pages already use (fixes48 §3). Before
+// this, custom-picklist/custom-field/contact columns were permanently
+// `data-sortable-disabled` and pinned after the built-ins with no order of
+// their own — the real Task 6 bug (toggling them on/off already worked).
+type GridColumn =
+  | { kind: "col"; key: FieldKey }
+  | { kind: "pl"; key: string; def: PicklistField }
+  | { kind: "cfield"; key: string; def: CustomFieldDefinition }
+  | { kind: "contact"; key: "contact" };
+
+function gridColumnSortKey(entry: GridColumn): string {
+  return `${entry.kind}:${entry.key}`;
+}
+
 export default function ApartmentsPage() {
   const { loading, isShliach, user } = useAuth();
   // fixes51 §4: org-wide Shliach Role Configuration Panel settings — only
@@ -224,6 +240,11 @@ export default function ApartmentsPage() {
   const [showContact, setShowContact] = useDbPreference<boolean>(
     "apartments.showContact", true,
   );
+  // fixes60 §6: one relative order spanning built-in AND custom-picklist/
+  // custom-field/contact columns — see the GridColumn union above.
+  const [columnOrder, setColumnOrder] = useDbPreference<string[]>(
+    "apartments.columnOrder", [],
+  );
   // fixes30 §1a / fixes53 §2: group the table by building; the sort is
   // forced to "building" while active. The backend paginates by building in
   // this mode (page_size = buildings per page) so a building's apartments
@@ -247,7 +268,7 @@ export default function ApartmentsPage() {
   // drag-and-drop never engages on many Windows trackpads — see
   // useSortableList's doc comment).
   const { containerRef: fieldsSortableRef, withClickGuard } =
-    useSortableList<HTMLDivElement>(reorderFields);
+    useSortableList<HTMLDivElement>(reorderColumns);
   const [debouncedQ, setDebouncedQ] = useState(query);
   const [batchOpen, setBatchOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -664,43 +685,6 @@ export default function ApartmentsPage() {
     );
   }
 
-  // fixes39 §3: SortableJS's container holds every chip (active + inactive
-  // — an inactive one can't be dragged, per useSortableList's `filter`, but
-  // a dragged active chip can still land next to/among them), so rather
-  // than translate a single from/to index pair against two different lists,
-  // just recompute the active order from the container's resulting DOM
-  // order directly: keep whichever of `orderedKeys` are currently active,
-  // in their new relative order.
-  function reorderFields(orderedKeys: string[]) {
-    setFields((prev) => {
-      const activeSet = new Set(
-        prev.filter((k): k is FieldKey => (FIELD_KEYS as readonly string[]).includes(k)),
-      );
-      const reordered = orderedKeys.filter((k): k is FieldKey => activeSet.has(k as FieldKey));
-      return reordered.length > 0 ? reordered : prev;
-    });
-  }
-
-  // fixes38: guaranteed-reliable fallback for the pointer/drag reorder above
-  // — a trackpad's drag gesture is ultimately at the mercy of the OS/driver
-  // ever reporting a sustained press-and-move, which nothing in-app can force
-  // 100% of the time. These buttons swap adjacent active fields directly, the
-  // same one-step arrow-button pattern the contact page's Display Order
-  // settings already use (moveSegment) — no gesture involved at all.
-  function moveActiveField(key: FieldKey, delta: -1 | 1) {
-    setFields((prev) => {
-      const known = prev.filter((k): k is FieldKey =>
-        (FIELD_KEYS as readonly string[]).includes(k),
-      );
-      const idx = known.indexOf(key);
-      const to = idx + delta;
-      if (idx === -1 || to < 0 || to >= known.length) return prev;
-      const next = [...known];
-      [next[idx], next[to]] = [next[to], next[idx]];
-      return next;
-    });
-  }
-
   // fixes30 §1c / fixes32 §6: one-field inline save from the list. The PUT is
   // a fixes19 §3 versioned edit returning a NEW active row — merge the full
   // response into the row in place (id + every Apartment field, including the
@@ -858,13 +842,6 @@ export default function ApartmentsPage() {
   // fixes33 §5.2: custom picklists an admin hid org-wide (Manage Fields)
   // never reach the filter row or the column-selector panel at all.
   const orgVisibleCustomDefs = customDefs.filter((d) => vis(d.field_key));
-  // fixes33 §3.1 / fixes52 §2.6: the subset of (org-visible) custom
-  // picklists the personal column-selector panel hasn't hidden — a field
-  // missing from `hiddenCustomKeys` is visible, including one created just
-  // now, with no reload needed.
-  const visibleCustomDefs = orgVisibleCustomDefs.filter(
-    (d) => !hiddenCustomKeys.includes(d.field_key),
-  );
   function toggleCustomField(fieldKey: string) {
     setHiddenCustomKeys((prev) =>
       prev.includes(fieldKey)
@@ -877,9 +854,6 @@ export default function ApartmentsPage() {
   const orgVisibleCustomFieldDefs = customFieldDefs.filter((d) =>
     vis(`customfield.apartment.${d.field_key}`),
   );
-  const visibleCustomFieldDefs = orgVisibleCustomFieldDefs.filter(
-    (d) => !hiddenCustomFieldKeys.includes(d.field_key),
-  );
   function toggleCustomFieldColumn(fieldKey: string) {
     setHiddenCustomFieldKeys((prev) =>
       prev.includes(fieldKey)
@@ -887,17 +861,6 @@ export default function ApartmentsPage() {
         : [...prev, fieldKey],
     );
   }
-  // fixes32 §6: the stored array's own order is now the display order — drag-
-  // reordering the chips below persists it. (Previously this always rendered
-  // in the fixed FIELD_KEYS order regardless of the stored array's order.)
-  // Unknown stored keys (older versions used e.g. "location") are dropped.
-  const activeFields = fields.filter((k): k is FieldKey =>
-    (FIELD_KEYS as readonly string[]).includes(k),
-  );
-  // fixes33 §5.2: what actually renders as a table column — active minus
-  // anything an admin hid org-wide. `activeFields` itself (the stored
-  // preference) is left untouched so it reappears if unhidden later.
-  const renderedFields = activeFields.filter(fieldVisible);
 
   function cell(a: ApartmentListItem, k: FieldKey) {
     switch (k) {
@@ -972,6 +935,155 @@ export default function ApartmentsPage() {
     }
   }
 
+  // fixes60 §6: fixed + custom-picklist + custom-field + contact columns,
+  // unified into one draggable/orderable list — see the GridColumn union
+  // above for the full rationale. `allGridColumns` lists every possible
+  // column regardless of on/off state (mirrors `orgVisibleCustomDefs`'s own
+  // org-visibility filtering for the "col" kind too, via fieldVisible).
+  const allGridColumns: GridColumn[] = [
+    ...FIELD_KEYS.filter(fieldVisible).map((key): GridColumn => ({ kind: "col", key })),
+    ...orgVisibleCustomDefs.map((def): GridColumn => ({ kind: "pl", key: def.field_key, def })),
+    ...orgVisibleCustomFieldDefs.map(
+      (def): GridColumn => ({ kind: "cfield", key: def.field_key, def }),
+    ),
+    { kind: "contact", key: "contact" },
+  ];
+
+  function isGridColumnActive(entry: GridColumn): boolean {
+    if (entry.kind === "col") return (fields as string[]).includes(entry.key);
+    if (entry.kind === "pl") return !hiddenCustomKeys.includes(entry.key);
+    if (entry.kind === "cfield") return !hiddenCustomFieldKeys.includes(entry.key);
+    return showContact;
+  }
+
+  function toggleGridColumn(entry: GridColumn) {
+    if (entry.kind === "col") return toggleField(entry.key);
+    if (entry.kind === "pl") return toggleCustomField(entry.key);
+    if (entry.kind === "cfield") return toggleCustomFieldColumn(entry.key);
+    setShowContact(!showContact);
+  }
+
+  function gridColumnLabel(entry: GridColumn): string {
+    if (entry.kind === "col") return fieldLabels[entry.key];
+    if (entry.kind === "pl") return customDefLabel(entry.def);
+    if (entry.kind === "cfield") {
+      return (
+        (lang === "en" ? entry.def.english_label || entry.def.hebrew_label : entry.def.hebrew_label) ||
+        entry.def.field_key
+      );
+    }
+    return t("apartments.contact", "איש קשר");
+  }
+
+  function gridColumnMinWidth(entry: GridColumn): string {
+    if (entry.kind === "col") return fieldMinWidth(entry.key);
+    if (entry.kind === "cfield") return entry.def.field_type === "text" ? "min-w-[150px]" : "min-w-[120px]";
+    return "min-w-[120px]";
+  }
+
+  // fixes60 §6: one row's cell content for whichever GridColumn kind it is —
+  // "col" delegates to the existing `cell()` switch; "pl"/"cfield"/"contact"
+  // are the exact same inline editors/link that used to render in their own
+  // fixed trailing block, now addressable at any position in the order.
+  function gridColumnCell(a: ApartmentListItem, entry: GridColumn) {
+    if (entry.kind === "col") return cell(a, entry.key);
+    if (entry.kind === "pl") {
+      const d = entry.def;
+      const value = a.picklist_values?.[d.field_key] ?? null;
+      return (
+        <InlineEdit<string | null>
+          value={value}
+          display={<TruncatedText text={customPicklists.labelFor(d.field_key, value) || "—"} />}
+          commitOnBlur={false}
+          onSave={(v) => saveListField(a, { picklist_values: { [d.field_key]: v } })}
+          editor={(draft, _setDraft, commit) => (
+            <PicklistSelect fieldKey={d.field_key} value={draft} onChange={commit} />
+          )}
+        />
+      );
+    }
+    if (entry.kind === "cfield") {
+      const d = entry.def;
+      const value = a.custom_field_values?.[d.field_key] ?? null;
+      return (
+        <InlineEdit<string | number | boolean | null>
+          value={value}
+          display={
+            d.field_type === "text" && typeof value === "string" ? (
+              <TruncatedText text={value} />
+            ) : (
+              <CustomFieldValueDisplay fieldType={d.field_type} value={value} />
+            )
+          }
+          commitOnBlur={d.field_type === "text" || d.field_type === "number"}
+          onSave={(v) => saveListField(a, { custom_field_values: { [d.field_key]: v } })}
+          editor={(draft, setDraft, commit) => (
+            <CustomFieldValueInput
+              fieldType={d.field_type}
+              value={draft}
+              onChange={d.field_type === "boolean" || d.field_type === "date" ? commit : setDraft}
+            />
+          )}
+        />
+      );
+    }
+    // entry.kind === "contact"
+    return a.contact_id ? (
+      <Link
+        href={`/dashboard/contacts/${a.contact_id}`}
+        className="rounded-full bg-primary/10 text-primary px-3 py-0.5 hover:bg-primary/20"
+      >
+        {a.contact_name}
+      </Link>
+    ) : (
+      <span className="text-muted-foreground">{t("apt.no_contact", "ללא איש קשר")}</span>
+    );
+  }
+
+  // fixes60 §6: when no explicit unified order has been saved yet (every
+  // account before this round), fall back to the built-in order this
+  // account already had — `fields`' own persisted order, which used to BE
+  // the display order — instead of resetting everyone to FIELD_KEYS'
+  // declared order. Customs/contact keep the same fixed relative order they
+  // always rendered in. The very first drag or ▲/▼ click replaces this
+  // fallback with a real saved `columnOrder`.
+  const legacyOrderKeys =
+    columnOrder.length > 0
+      ? columnOrder
+      : [
+          ...fields
+            .filter((k): k is FieldKey => (FIELD_KEYS as readonly string[]).includes(k))
+            .map((k) => `col:${k}`),
+          ...FIELD_KEYS.filter((k) => !fields.includes(k)).map((k) => `col:${k}`),
+          ...orgVisibleCustomDefs.map((d) => `pl:${d.field_key}`),
+          ...orgVisibleCustomFieldDefs.map((d) => `cfield:${d.field_key}`),
+          "contact:contact",
+        ];
+  const columnOrderIndex = new Map(legacyOrderKeys.map((k, i) => [k, i]));
+  const sortedGridColumns = [...allGridColumns].sort((a, b) => {
+    const ai = columnOrderIndex.get(gridColumnSortKey(a)) ?? Number.MAX_SAFE_INTEGER;
+    const bi = columnOrderIndex.get(gridColumnSortKey(b)) ?? Number.MAX_SAFE_INTEGER;
+    return ai - bi;
+  });
+  const orderedActiveColumns = sortedGridColumns.filter(isGridColumnActive);
+
+  function reorderColumns(orderedKeys: string[]) {
+    if (orderedKeys.length > 0) setColumnOrder(orderedKeys);
+  }
+
+  function moveActiveColumn(entry: GridColumn, delta: -1 | 1) {
+    const idx = orderedActiveColumns.findIndex(
+      (e) => gridColumnSortKey(e) === gridColumnSortKey(entry),
+    );
+    const to = idx + delta;
+    if (idx === -1 || to < 0 || to >= orderedActiveColumns.length) return;
+    const fullKeys = sortedGridColumns.map(gridColumnSortKey);
+    const ia = fullKeys.indexOf(gridColumnSortKey(orderedActiveColumns[idx]));
+    const ib = fullKeys.indexOf(gridColumnSortKey(orderedActiveColumns[to]));
+    [fullKeys[ia], fullKeys[ib]] = [fullKeys[ib], fullKeys[ia]];
+    setColumnOrder(fullKeys);
+  }
+
   const visibleBuildings = buildings.filter(
     (b) =>
       (areaIds.length === 0 ||
@@ -995,14 +1107,8 @@ export default function ApartmentsPage() {
     return counts;
   })();
 
-  // Title + optional data columns + custom-picklist columns + optional
-  // contact column + trailing filler.
-  const colCount =
-    2 +
-    renderedFields.length +
-    visibleCustomDefs.length +
-    visibleCustomFieldDefs.length +
-    (showContact ? 1 : 0);
+  // Title + every active grid column (fixes60 §6: unified) + trailing filler.
+  const colCount = 2 + orderedActiveColumns.length;
 
   // fixes53 §2: while grouped by building, the pager paginates buildings
   // (page_size = buildings per page), not apartment rows — `total` is still
@@ -1131,27 +1237,26 @@ export default function ApartmentsPage() {
               )}
             </p>
           )}
-          {/* fixes39 §3: one real SortableJS-managed container for every
-              chip (mobile-first — see useSortableList's doc comment). Only
-              the active-field chips are actually reorderable — every other
-              chip here (inactive fields, custom-picklist/custom-field/
-              linked-contact toggles) is marked `data-sortable-disabled` so
-              it can't be dragged (its own click still works —
+          {/* fixes60 §6: one unified SortableJS-managed container for every
+              chip — fixed AND custom-picklist/custom-field/contact, active
+              or not (mobile-first — see useSortableList's doc comment).
+              Only active chips are actually reorderable — an inactive one is
+              `data-sortable-disabled` (its own click still toggles it —
               `preventOnFilter: false`) but still occupies a normal slot so
               the active ones keep flowing in the same row. Active chips
               render FIRST, in their actual current (reordered) order.
               fixes33 §5.2: fields an admin hid org-wide aren't offered. */}
           <div ref={fieldsSortableRef} className="flex flex-wrap gap-2">
-            {activeFields.filter(fieldVisible).map((k) => {
-              const activeIdx = activeFields.indexOf(k);
+            {orderedActiveColumns.map((entry, activeIdx) => {
+              const key = gridColumnSortKey(entry);
               return (
-                <span key={k} data-sort-key={k} className="inline-flex items-center gap-0.5">
+                <span key={key} data-sort-key={key} className="inline-flex items-center gap-0.5">
                   <button
                     type="button"
-                    onClick={withClickGuard(() => toggleField(k))}
+                    onClick={withClickGuard(() => toggleGridColumn(entry))}
                     className="rounded-md border px-3 py-1.5 text-sm border-primary bg-primary/10 text-primary cursor-grab active:cursor-grabbing"
                   >
-                    ⠿ {fieldLabels[k]}
+                    ⠿ {gridColumnLabel(entry)}
                   </button>
                   {/* fixes38: guaranteed-reliable fallback for dragging —
                       a click always works, unlike a drag gesture on some
@@ -1160,7 +1265,7 @@ export default function ApartmentsPage() {
                     <button
                       type="button"
                       disabled={activeIdx === 0}
-                      onClick={() => moveActiveField(k, -1)}
+                      onClick={() => moveActiveColumn(entry, -1)}
                       title={t("action.move_up", "העלה")}
                       className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-primary hover:bg-accent active:bg-muted disabled:opacity-20"
                     >
@@ -1168,8 +1273,8 @@ export default function ApartmentsPage() {
                     </button>
                     <button
                       type="button"
-                      disabled={activeIdx === activeFields.length - 1}
-                      onClick={() => moveActiveField(k, 1)}
+                      disabled={activeIdx === orderedActiveColumns.length - 1}
+                      onClick={() => moveActiveColumn(entry, 1)}
                       title={t("action.move_down", "הורד")}
                       className="flex items-center justify-center w-7 h-7 rounded text-sm leading-none text-muted-foreground hover:text-primary hover:bg-accent active:bg-muted disabled:opacity-20"
                     >
@@ -1179,78 +1284,21 @@ export default function ApartmentsPage() {
                 </span>
               );
             })}
-            {FIELD_KEYS.filter((k) => !activeFields.includes(k) && fieldVisible(k)).map(
-              (k) => (
+            {sortedGridColumns.filter((entry) => !isGridColumnActive(entry)).map((entry) => {
+              const key = gridColumnSortKey(entry);
+              return (
                 <button
-                  key={k}
+                  key={key}
                   type="button"
-                  data-sort-key={k}
+                  data-sort-key={key}
                   data-sortable-disabled=""
-                  onClick={() => toggleField(k)}
+                  onClick={() => toggleGridColumn(entry)}
                   className="rounded-md border px-3 py-1.5 text-sm border-border text-muted-foreground hover:bg-accent"
                 >
-                  {fieldLabels[k]}
-                </button>
-              ),
-            )}
-            {/* fixes33 §3.1: one show/hide toggle per admin-added apartment.*
-                picklist — a personal preference, separate from whether the
-                field is hidden org-wide (Manage Fields, fixes33 §5.2). */}
-            {orgVisibleCustomDefs.map((d) => {
-              const active = !hiddenCustomKeys.includes(d.field_key);
-              return (
-                <button
-                  key={d.field_key}
-                  type="button"
-                  data-sortable-disabled=""
-                  onClick={() => toggleCustomField(d.field_key)}
-                  className={`rounded-md border px-3 py-1.5 text-sm ${
-                    active
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border text-muted-foreground hover:bg-accent"
-                  }`}
-                >
-                  {active ? "✓ " : ""}
-                  {customDefLabel(d)}
+                  {gridColumnLabel(entry)}
                 </button>
               );
             })}
-            {/* fixes35 §3: one show/hide toggle per admin-added non-select
-                apartment custom field. */}
-            {orgVisibleCustomFieldDefs.map((d) => {
-              const active = !hiddenCustomFieldKeys.includes(d.field_key);
-              return (
-                <button
-                  key={d.field_key}
-                  type="button"
-                  data-sortable-disabled=""
-                  onClick={() => toggleCustomFieldColumn(d.field_key)}
-                  className={`rounded-md border px-3 py-1.5 text-sm ${
-                    active
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border text-muted-foreground hover:bg-accent"
-                  }`}
-                >
-                  {active ? "✓ " : ""}
-                  {(lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
-                    d.field_key}
-                </button>
-              );
-            })}
-            {/* fixes30 §1b: the linked-contact column, previously always on. */}
-            <button
-              type="button"
-              data-sortable-disabled=""
-              onClick={() => setShowContact(!showContact)}
-              className={`rounded-md border px-3 py-1.5 text-sm ${
-                showContact
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-border text-muted-foreground hover:bg-accent"
-              }`}
-            >
-              {showContact ? "✓ " : ""}
-              {t("apartments.contact", "איש קשר")}
-            </button>
           </div>
         </div>
       )}
@@ -1592,55 +1640,28 @@ export default function ApartmentsPage() {
                 {t("apartments.apartment_name", "מספר דירה")}
                 {sortArrow("label")}
               </th>
-              {/* fixes49 §1: each column carries a data-type-dependent
-                  min-width floor so RTL headers don't squeeze. fixes54 §1.1:
-                  sortable columns (FIELD_SORT_KEYS) get a click handler +
-                  arrow; the rest (picklist-backed / dynamic) render plain. */}
-              {renderedFields.map((k) => {
-                const sortKeyForField = FIELD_SORT_KEYS[k];
+              {/* fixes60 §6: fixed + custom-picklist + custom-field +
+                  contact columns, in the user's unified (draggable) order.
+                  fixes49 §1: each carries a data-type-dependent min-width
+                  floor so RTL headers don't squeeze. fixes54 §1.1: only the
+                  "col" kind can be sortable (FIELD_SORT_KEYS) — the rest
+                  (picklist-backed / dynamic / contact) render plain. */}
+              {orderedActiveColumns.map((entry) => {
+                const sortKeyForField = entry.kind === "col" ? FIELD_SORT_KEYS[entry.key] : undefined;
                 const sortable = sortKeyForField && !groupByBuilding;
                 return (
                   <th
-                    key={k}
+                    key={gridColumnSortKey(entry)}
                     onClick={sortable ? () => onHeaderSortClick(sortKeyForField!) : undefined}
-                    className={`px-3 py-1.5 font-medium w-px whitespace-nowrap sticky top-0 z-10 bg-background ${fieldMinWidth(k)} ${
+                    className={`px-3 py-1.5 font-medium w-px whitespace-nowrap sticky top-0 z-10 bg-background ${gridColumnMinWidth(entry)} ${
                       sortable ? "cursor-pointer select-none hover:bg-accent" : ""
                     }`}
                   >
-                    {fieldLabels[k]}
+                    {gridColumnLabel(entry)}
                     {sortKeyForField ? sortArrow(sortKeyForField) : ""}
                   </th>
                 );
               })}
-              {/* fixes32 §6 / fixes33 §3.1: one column per admin-added
-                  apartment.* picklist the column-selector panel has left on. */}
-              {visibleCustomDefs.map((d) => (
-                <th
-                  key={d.field_key}
-                  className="px-3 py-1.5 font-medium w-px whitespace-nowrap min-w-[120px] sticky top-0 z-10 bg-background"
-                >
-                  {customDefLabel(d)}
-                </th>
-              ))}
-              {/* fixes35 §3: one column per non-select apartment custom field
-                  the column-selector panel has left on. */}
-              {visibleCustomFieldDefs.map((d) => (
-                <th
-                  key={d.field_key}
-                  className={`px-3 py-1.5 font-medium w-px whitespace-nowrap sticky top-0 z-10 bg-background ${
-                    d.field_type === "text" ? "min-w-[150px]" : "min-w-[120px]"
-                  }`}
-                >
-                  {(lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
-                    d.field_key}
-                </th>
-              ))}
-              {/* fixes30 §1b: toggleable via the fields panel. */}
-              {showContact && (
-                <th className="px-3 py-1.5 font-medium w-px whitespace-nowrap sticky top-0 z-10 bg-background">
-                  {t("apartments.contact", "איש קשר")}
-                </th>
-              )}
               <th className="w-full sticky top-0 z-10 bg-background"></th>
             </tr>
           </thead>
@@ -1782,95 +1803,17 @@ export default function ApartmentsPage() {
                         own <td> to stay visible, same reasoning as fixes47 on
                         the Contacts page. The cell text itself is already
                         pre-truncated via TruncatedText. */}
-                    {renderedFields.map((k) => (
+                    {/* fixes60 §6: fixed + custom-picklist + custom-field +
+                        contact columns, in the user's unified (draggable)
+                        order. */}
+                    {orderedActiveColumns.map((entry) => (
                       <td
-                        key={k}
-                        className={`px-3 py-2 max-w-[14rem] break-words ${fieldMinWidth(k)}`}
+                        key={gridColumnSortKey(entry)}
+                        className={`px-3 py-2 max-w-[14rem] break-words ${gridColumnMinWidth(entry)}`}
                       >
-                        {cell(a, k)}
+                        {gridColumnCell(a, entry)}
                       </td>
                     ))}
-                    {/* fixes32 §6: inline-editable, straight from the list row —
-                        no per-field code needed for a new custom picklist. */}
-                    {visibleCustomDefs.map((d) => {
-                      const value = a.picklist_values?.[d.field_key] ?? null;
-                      return (
-                        <td
-                          key={d.field_key}
-                          className="px-3 py-2 max-w-[14rem] break-words min-w-[120px]"
-                        >
-                          <InlineEdit<string | null>
-                            value={value}
-                            display={
-                              <TruncatedText text={customPicklists.labelFor(d.field_key, value) || "—"} />
-                            }
-                            commitOnBlur={false}
-                            onSave={(v) =>
-                              saveListField(a, { picklist_values: { [d.field_key]: v } })
-                            }
-                            editor={(draft, _setDraft, commit) => (
-                              <PicklistSelect
-                                fieldKey={d.field_key}
-                                value={draft}
-                                onChange={commit}
-                              />
-                            )}
-                          />
-                        </td>
-                      );
-                    })}
-                    {/* fixes35 §3: inline-editable, straight from the list row. */}
-                    {visibleCustomFieldDefs.map((d) => {
-                      const value = a.custom_field_values?.[d.field_key] ?? null;
-                      return (
-                        <td
-                          key={d.field_key}
-                          className={`px-3 py-2 max-w-[14rem] break-words ${
-                            d.field_type === "text" ? "min-w-[150px]" : "min-w-[120px]"
-                          }`}
-                        >
-                          <InlineEdit<string | number | boolean | null>
-                            value={value}
-                            display={
-                              d.field_type === "text" && typeof value === "string" ? (
-                                <TruncatedText text={value} />
-                              ) : (
-                                <CustomFieldValueDisplay fieldType={d.field_type} value={value} />
-                              )
-                            }
-                            commitOnBlur={d.field_type === "text" || d.field_type === "number"}
-                            onSave={(v) =>
-                              saveListField(a, { custom_field_values: { [d.field_key]: v } })
-                            }
-                            editor={(draft, setDraft, commit) => (
-                              <CustomFieldValueInput
-                                fieldType={d.field_type}
-                                value={draft}
-                                onChange={
-                                  d.field_type === "boolean" || d.field_type === "date"
-                                    ? commit
-                                    : setDraft
-                                }
-                              />
-                            )}
-                          />
-                        </td>
-                      );
-                    })}
-                    {showContact && (
-                      <td className="px-3 py-2 w-px whitespace-nowrap">
-                        {a.contact_id ? (
-                          <Link
-                            href={`/dashboard/contacts/${a.contact_id}`}
-                            className="rounded-full bg-primary/10 text-primary px-3 py-0.5 hover:bg-primary/20"
-                          >
-                            {a.contact_name}
-                          </Link>
-                        ) : (
-                          <span className="text-muted-foreground">{t("apt.no_contact", "ללא איש קשר")}</span>
-                        )}
-                      </td>
-                    )}
                     <td></td>
                   </tr>
                 </Fragment>

@@ -6,40 +6,10 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
+import { ReportStatusBadge as StatusBadge } from "@/components/ReportStatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  contactFullName,
-  type ReportCompletion,
-  type ReportCompletionStatus,
-  type SystemComment,
-} from "@/lib/types";
-
-// fixes53 §9: exact hex values from spec — distinct from (and more saturated
-// than) this app's own status-green/status-orange/status-darkred theme
-// tokens, so they're inline styles rather than Tailwind classes.
-const STATUS_COLORS: Record<ReportCompletionStatus, string> = {
-  completed: "#2e7d32",
-  not_completed: "#d32f2f",
-  partial: "#ed6c02",
-};
-
-function StatusBadge({ status }: { status: ReportCompletionStatus }) {
-  const { t } = useLocalization();
-  const labels: Record<ReportCompletionStatus, string> = {
-    completed: t("shliach_msg.status_completed", "דוח הושלם"),
-    not_completed: t("shliach_msg.status_not_completed", "דוח לא הושלם"),
-    partial: t("shliach_msg.status_partial", "דוח הושלם חלקית"),
-  };
-  return (
-    <span
-      className="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium text-white"
-      style={{ backgroundColor: STATUS_COLORS[status] }}
-    >
-      {labels[status]}
-    </span>
-  );
-}
+import { contactFullName, type ReportCompletion, type SystemComment } from "@/lib/types";
 
 // fixes54 §4: both lists are fetched in full (small/moderate admin-log
 // volume, not a customer-facing dataset) — search + pagination are purely

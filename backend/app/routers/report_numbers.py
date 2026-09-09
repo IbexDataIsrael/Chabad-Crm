@@ -19,6 +19,7 @@ from app.schemas import (
     ReportNumberOut,
     ReportNumberUpdate,
     ShliachSummary,
+    TaskStatusWithId,
 )
 
 router = APIRouter(prefix="/api/report-numbers", tags=["report-numbers"])
@@ -93,22 +94,26 @@ def report_number_shliach_assignments(
     return result
 
 
-@router.get("/campaign-task-status", response_model=dict[int, dict[int, str]])
+@router.get("/campaign-task-status", response_model=dict[int, dict[int, TaskStatusWithId]])
 def report_number_campaign_task_status(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
     """fixes58 §3.5: for each report number, its Task status under each
-    currently-active campaign — `{report_number_id: {campaign_id: status}}`.
-    Powers the Report Numbers page's one-colored-badge-column-per-active-
-    campaign display. Nested by campaign_id (not a single flat value) because
-    a report number can carry tasks under more than one active campaign at
-    once, and each gets its own column."""
+    currently-active campaign — `{report_number_id: {campaign_id: {status,
+    task_id}}}`. Powers the Report Numbers page's one-badge-column-per-
+    active-campaign display; fixes60 §2 added `task_id` so that badge can
+    become an inline PUT-able status toggle. Nested by campaign_id (not a
+    single flat value) because a report number can carry tasks under more
+    than one active campaign at once, and each gets its own column. If a
+    report number has 2+ tasks under the *same* campaign, the last one
+    iterated wins here (pre-existing behavior, unchanged by fixes60)."""
     rows = (
         db.query(
             models.TaskReportNumber.report_number_id,
             models.Task.campaign_id,
             models.Task.status,
+            models.Task.id,
         )
         .join(models.Task, models.Task.id == models.TaskReportNumber.task_id)
         .join(models.Campaign, models.Campaign.id == models.Task.campaign_id)
@@ -119,9 +124,11 @@ def report_number_campaign_task_status(
         )
         .all()
     )
-    result: dict[int, dict[int, str]] = {}
-    for report_number_id, campaign_id, task_status in rows:
-        result.setdefault(report_number_id, {})[campaign_id] = task_status
+    result: dict[int, dict[int, TaskStatusWithId]] = {}
+    for report_number_id, campaign_id, task_status, task_id in rows:
+        result.setdefault(report_number_id, {})[campaign_id] = TaskStatusWithId(
+            status=task_status, task_id=task_id
+        )
     return result
 
 

@@ -164,6 +164,15 @@ export interface Area {
   area_polygon: string | null;
 }
 
+// fixes60 §5: one area's outcome from a convex-hull polygon generation run.
+export interface GeneratePolygonResult {
+  area_id: number;
+  area_name: string;
+  ok: boolean;
+  building_count: number;
+  skipped_reason: string | null;
+}
+
 export interface Floor {
   id: number;
   guid: string;
@@ -488,6 +497,10 @@ export interface Task {
   report_number_names: string[];
   status: TaskStatus;
   volunteer_report_summary: string | null;
+  // fixes60 §1: the volunteer's own most recent ShliachReportCompletion —
+  // see backend routers/tasks.py::_latest_reports_by_volunteer.
+  latest_report_status: ReportCompletionStatus | null;
+  latest_report_notes: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -504,6 +517,13 @@ export interface CampaignActiveStat {
   name: string;
   custom_stats_text: string | null;
   count: number;
+}
+
+// fixes60 §2: campaign-task-status cells carry a task_id now, so the Report
+// Numbers page's badge can become an inline PUT-able status toggle.
+export interface TaskStatusWithId {
+  status: TaskStatus;
+  task_id: number;
 }
 
 /** fixes53 §3/§4: the "Number of Jews" / "Number of Engaged Jews"
