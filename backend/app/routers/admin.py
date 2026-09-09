@@ -222,6 +222,7 @@ def clone_organization_endpoint(
             payload.admin_full_name,
             payload.admin_email,
             payload.admin_password,
+            table_limits=payload.table_row_limits,
         )
         db.commit()
     except Exception:

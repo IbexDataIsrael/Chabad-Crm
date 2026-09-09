@@ -738,6 +738,18 @@ function DeleteUserModal({
 
 /** Copies an org's entire CRM data set into a brand-new org with a fresh
  * admin login the caller sets here. The source org is never modified. */
+// fixes61: tables worth capping on a clone — the ones that actually grow
+// large in practice (see [[unpaginated-buildings-at-scale-gotcha]]). Value
+// is the raw text input; blank = clone every row in that table (unchanged
+// default behavior).
+const CLONE_LIMIT_TABLES: { table: string; labelKey: string; fallback: string }[] = [
+  { table: "apartments", labelKey: "nav.apartments", fallback: "דירות" },
+  { table: "buildings", labelKey: "nav.buildings", fallback: "בניינים" },
+  { table: "contacts", labelKey: "nav.contacts", fallback: "אנשי קשר" },
+  { table: "visit_history", labelKey: "admin.clone_org_limit_visits", fallback: "ביקורים" },
+  { table: "donations", labelKey: "nav.donations", fallback: "תרומות" },
+];
+
 function CloneOrgModal({
   org,
   busy,
@@ -757,6 +769,7 @@ function CloneOrgModal({
     admin_username: "sample_admin",
     admin_password: "",
   });
+  const [limitInputs, setLimitInputs] = useState<Record<string, string>>({});
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -771,7 +784,18 @@ function CloneOrgModal({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            onConfirm(form);
+            const table_row_limits: Record<string, number> = {};
+            for (const { table } of CLONE_LIMIT_TABLES) {
+              const raw = limitInputs[table]?.trim();
+              if (!raw) continue;
+              const n = Number(raw);
+              if (Number.isFinite(n) && n >= 0) table_row_limits[table] = Math.floor(n);
+            }
+            onConfirm(
+              Object.keys(table_row_limits).length > 0
+                ? { ...form, table_row_limits }
+                : form,
+            );
           }}
           className="space-y-3"
         >
@@ -810,6 +834,34 @@ function CloneOrgModal({
             onChange={(e) => setForm({ ...form, admin_password: e.target.value })}
             placeholder={t("auth.password", "סיסמה")}
           />
+          <div className="space-y-2 rounded-md border border-border p-3">
+            <p className="text-sm font-medium">
+              {t("admin.clone_org_limits_title", "הגבלת מספר רשומות (אופציונלי)")}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "admin.clone_org_limits_hint",
+                "השאירו ריק כדי לשכפל את כל הרשומות בטבלה. רשומה שמתייחסת לרשומה שלא שוכפלה (כי הוגבלה בטבלה אחרת) תושמט.",
+              )}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {CLONE_LIMIT_TABLES.map(({ table, labelKey, fallback }) => (
+                <label key={table} className="flex items-center gap-2 text-sm">
+                  <span className="w-20 shrink-0 text-muted-foreground">{t(labelKey, fallback)}</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    dir="ltr"
+                    value={limitInputs[table] ?? ""}
+                    onChange={(e) =>
+                      setLimitInputs({ ...limitInputs, [table]: e.target.value })
+                    }
+                    placeholder="∞"
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
           <div className="flex items-center gap-2 pt-1">
             <Button type="submit" disabled={busy}>
               {t("admin.clone_org_confirm", "שכפל ארגון")}

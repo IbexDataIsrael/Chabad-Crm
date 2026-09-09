@@ -133,6 +133,13 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("admin", "admin.clone_org_intro", "יוצר ארגון חדש עם עותק מלא של כל הנתונים — אנשי קשר, ביקורים, דירות, בניינים, רשימות בחירה ועוד. הארגון המקורי לא ישתנה.", "Creates a new organization with a full copy of all its data — contacts, visits, apartments, buildings, picklists, and more. The original organization is never changed."),
     ("admin", "admin.clone_org_confirm", "שכפל ארגון", "Clone organization"),
     ("admin", "admin.org_cloned", "הארגון שוכפל", "Organization cloned"),
+    ("admin", "admin.clone_org_limits_title", "הגבלת מספר רשומות (אופציונלי)", "Row limits (optional)"),
+    (
+        "admin", "admin.clone_org_limits_hint",
+        "השאירו ריק כדי לשכפל את כל הרשומות בטבלה. רשומה שמתייחסת לרשומה שלא שוכפלה (כי הוגבלה בטבלה אחרת) תושמט.",
+        "Leave a field blank to clone every row in that table. A row referencing something left out by another table's limit is dropped rather than copied broken.",
+    ),
+    ("admin", "admin.clone_org_limit_visits", "ביקורים", "Visit history"),
     # --- Settings: change password ---
     ("settings", "settings.change_password", "שינוי סיסמה", "Change password"),
     ("settings", "settings.current_password", "סיסמה נוכחית", "Current password"),

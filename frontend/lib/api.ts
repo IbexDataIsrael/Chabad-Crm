@@ -377,6 +377,10 @@ export interface AdminOrgCreate {
   admin_full_name: string;
   admin_username: string;
   admin_password: string;
+  /** Clone only: caps how many rows are copied for one or more tables
+   *  (keyed by table name, e.g. {apartments: 500}). Ignored by plain org
+   *  creation (adminCreateOrg). */
+  table_row_limits?: Record<string, number>;
 }
 
 export const adminCreateOrg = (payload: AdminOrgCreate): Promise<AdminOrganization> =>

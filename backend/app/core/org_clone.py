@@ -12,11 +12,24 @@ User accounts are never cloned — the caller supplies fresh admin credentials
 for the new org instead, matching how a backup snapshot never carries user
 rows either. Columns that reference a user (Contact.assigned_user_id,
 Apartment.editor_id, ContactShliach.user_id) are nulled on the copy.
+
+Optional per-table row caps (`table_limits`, keyed by `__tablename__` — the
+same string used as `entity_table`) let the caller avoid dragging a source
+org's largest tables (e.g. 25k+ apartments) into what's meant to be a small
+sample/demo copy. A capped table keeps its highest-id rows (most recently
+created). Any row elsewhere in the plan whose *required* (NOT NULL) FK
+points at a row that a cap left out is dropped rather than inserted with a
+dangling reference; a nullable FK is set NULL instead (e.g. a mekurav whose
+apartment didn't make the cut just ends up unhoused in the copy).
 """
+import logging
+
 from sqlalchemy.orm import Session
 
 from app import models
 from app.core.security import hash_password
+
+logger = logging.getLogger(__name__)
 
 # Parent -> child order (same dependency ordering app.core.backup.
 # SNAPSHOT_MODELS already proves safe). Each entry is
@@ -90,12 +103,18 @@ def clone_organization(
     admin_full_name: str,
     admin_email: str,
     admin_password: str,
+    table_limits: dict[str, int] | None = None,
 ) -> models.Organization:
     """Copy every CRM row belonging to `source_org_id` into a brand-new
     organization, with fresh ids/guids and every internal reference rewired.
     Runs inside the caller's transaction — the caller commits; on any error
     the caller should roll back (a partially-inserted clone must never be
-    left committed)."""
+    left committed).
+
+    `table_limits` optionally caps how many rows are copied for one or more
+    tables (keyed by `__tablename__`, e.g. {"apartments": 500}) — see the
+    module docstring for what happens to rows elsewhere that referenced a
+    row a cap left out."""
     source = db.get(models.Organization, source_org_id)
     if source is None:
         raise ValueError(f"organization {source_org_id} not found")
@@ -137,13 +156,25 @@ def clone_organization(
     id_maps: dict[str, dict[int, int]] = {}
 
     for model, fk_remap, is_polymorphic in _CLONE_PLAN:
+        tablename = model.__tablename__
+        nullable_by_column = {col.name: col.nullable for col in model.__table__.columns}
+        query = db.query(model).filter(model.organization_id == source_org_id)
+        limit = (table_limits or {}).get(tablename)
+        if limit is not None:
+            limit = max(0, limit)
+            # Keep the most recently created rows. Re-sorted back to ascending
+            # id below — self-referential FKs (e.g. Apartment.root_id) only
+            # resolve if an earlier-id row in the same table was already
+            # cloned before a later one that points at it.
+            rows = (
+                query.order_by(model.id.desc()).limit(limit).all()
+            )
+            rows.reverse()
+        else:
+            rows = query.order_by(model.id).all()
+
         id_map: dict[int, int] = {}
-        rows = (
-            db.query(model)
-            .filter(model.organization_id == source_org_id)
-            .order_by(model.id)
-            .all()
-        )
+        skipped = 0
         for row in rows:
             data = {
                 col.name: getattr(row, col.name)
@@ -151,14 +182,31 @@ def clone_organization(
                 if col.name not in ("id", "guid")
             }
             data["organization_id"] = new_org.id
+            orphaned = False
             for column, target_table in fk_remap.items():
                 old_value = data.get(column)
                 if old_value is None:
                     continue
                 target_map = id_map if target_table == "self" else id_maps[target_table]
-                data[column] = target_map.get(old_value)
+                new_value = target_map.get(old_value)
+                if new_value is None and not nullable_by_column[column]:
+                    # The row this FK pointed to was left out by a table cap
+                    # (elsewhere in the plan) — can't insert a required FK as
+                    # NULL, so this row can't be cloned either.
+                    orphaned = True
+                    break
+                data[column] = new_value
+            if orphaned:
+                skipped += 1
+                continue
             if is_polymorphic and data.get("entity_id") is not None:
-                data["entity_id"] = id_maps[data["entity_table"]].get(data["entity_id"])
+                new_entity_id = id_maps[data["entity_table"]].get(data["entity_id"])
+                if new_entity_id is None:
+                    # A polymorphic link/value pointing at nothing real is
+                    # never useful, capped nullable column or not.
+                    skipped += 1
+                    continue
+                data["entity_id"] = new_entity_id
             for column in _USER_FK_COLUMNS:
                 if column in data:
                     data[column] = None
@@ -166,6 +214,16 @@ def clone_organization(
             db.add(new_row)
             db.flush()
             id_map[row.id] = new_row.id
-        id_maps[model.__tablename__] = id_map
+        id_maps[tablename] = id_map
+        if limit is not None:
+            logger.info(
+                "org_clone: %s capped at %d — cloned %d, skipped %d (dangling required FK)",
+                tablename, limit, len(id_map), skipped,
+            )
+        elif skipped:
+            logger.info(
+                "org_clone: %s cloned %d, skipped %d (dangling required FK from a capped table)",
+                tablename, len(id_map), skipped,
+            )
 
     return new_org

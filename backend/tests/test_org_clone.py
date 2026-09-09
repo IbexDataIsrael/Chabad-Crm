@@ -45,14 +45,17 @@ def superadmin_headers(client, db_session):
     return {"Authorization": f"Bearer {token}"}
 
 
-def _clone_payload(name="Clone Target"):
-    return {
+def _clone_payload(name="Clone Target", table_row_limits=None):
+    payload = {
         "organization_name": name,
         "admin_username": "clone_admin",
         "admin_full_name": "מנהל עותק",
         "admin_email": "clone_admin@example.com",
         "admin_password": "pw12345",
     }
+    if table_row_limits is not None:
+        payload["table_row_limits"] = table_row_limits
+    return payload
 
 
 def _build_rich_org(db):
@@ -328,3 +331,108 @@ def test_clone_new_org_isolated_from_source_via_api(client, superadmin_headers, 
     src_ids = {c["id"] for c in src_resp.json()}
     clone_ids = {c["id"] for c in resp.json()}
     assert src_ids.isdisjoint(clone_ids)  # ...but it's a different row, not a shared one
+
+
+def test_clone_table_row_limit_keeps_most_recent_rows(client, superadmin_headers, db_session):
+    """A capped table keeps its highest-id (most recently created) rows —
+    not an arbitrary/first-N slice."""
+    org = _make_org(db_session, "Big Org")
+    area = models.Area(organization_id=org.id, area_name="אזור")
+    db_session.add(area)
+    db_session.flush()
+    building = models.Building(organization_id=org.id, area_id=area.id, building_address="1 Main St")
+    db_session.add(building)
+    db_session.flush()
+    for i in range(1, 6):
+        db_session.add(
+            models.Apartment(organization_id=org.id, building_id=building.id, apartment_name=f"A{i}")
+        )
+    db_session.commit()
+
+    r = client.post(
+        f"/api/admin/organizations/{org.id}/clone",
+        json=_clone_payload(table_row_limits={"apartments": 2}),
+        headers=superadmin_headers,
+    )
+    assert r.status_code == 201
+    new_org_id = r.json()["id"]
+
+    db_session.expire_all()
+    cloned_names = sorted(
+        a.apartment_name
+        for a in db_session.query(models.Apartment).filter(
+            models.Apartment.organization_id == new_org_id
+        )
+    )
+    assert cloned_names == ["A4", "A5"]  # the 2 most recently created, not A1/A2
+    # The building itself wasn't capped — it's still there and correctly targeted.
+    cloned_building = db_session.query(models.Building).filter(
+        models.Building.organization_id == new_org_id
+    ).one()
+    for apt in db_session.query(models.Apartment).filter(
+        models.Apartment.organization_id == new_org_id
+    ):
+        assert apt.building_id == cloned_building.id
+
+
+def test_clone_table_row_limit_drops_rows_with_dangling_required_fk(
+    client, superadmin_headers, db_session
+):
+    """Capping a parent table (buildings) below what a child table
+    (apartments) needs must drop the orphaned child rows, not crash the
+    whole clone with a NOT NULL violation. A nullable reference to the same
+    dropped row (mekurav.apartment_id) degrades to NULL instead."""
+    org = _make_org(db_session, "Org With Two Buildings")
+    area = models.Area(organization_id=org.id, area_name="אזור")
+    db_session.add(area)
+    db_session.flush()
+
+    old_building = models.Building(organization_id=org.id, area_id=area.id, building_address="Old St")
+    db_session.add(old_building)
+    db_session.flush()
+    apt = models.Apartment(organization_id=org.id, building_id=old_building.id, apartment_name="A1")
+    db_session.add(apt)
+    db_session.flush()
+
+    contact = models.Contact(
+        organization_id=org.id, name="מקורב", phone="050-1112222", contact_type="mekurav",
+    )
+    db_session.add(contact)
+    db_session.flush()
+    mekurav = models.ContactMekurav(organization_id=org.id, contact_id=contact.id, apartment_id=apt.id)
+    db_session.add(mekurav)
+    db_session.flush()
+
+    # Created after old_building, so it's the one a limit=1 cap keeps.
+    new_building = models.Building(organization_id=org.id, area_id=area.id, building_address="New St")
+    db_session.add(new_building)
+    db_session.commit()
+
+    r = client.post(
+        f"/api/admin/organizations/{org.id}/clone",
+        json=_clone_payload(table_row_limits={"buildings": 1}),
+        headers=superadmin_headers,
+    )
+    assert r.status_code == 201
+    new_org_id = r.json()["id"]
+
+    db_session.expire_all()
+    cloned_buildings = db_session.query(models.Building).filter(
+        models.Building.organization_id == new_org_id
+    ).all()
+    assert len(cloned_buildings) == 1
+    assert cloned_buildings[0].building_address == "New St"
+
+    # The apartment belonging to the dropped building can't be inserted with
+    # a NOT NULL building_id pointing nowhere — it must be skipped entirely.
+    cloned_apartments = db_session.query(models.Apartment).filter(
+        models.Apartment.organization_id == new_org_id
+    ).all()
+    assert cloned_apartments == []
+
+    # The mekurav itself still clones (contact_id is satisfiable) — its
+    # nullable apartment_id just degrades to NULL rather than dangling.
+    cloned_mekurav = db_session.query(models.ContactMekurav).filter(
+        models.ContactMekurav.organization_id == new_org_id
+    ).one()
+    assert cloned_mekurav.apartment_id is None

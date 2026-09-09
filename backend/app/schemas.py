@@ -346,6 +346,10 @@ class AdminOrgCreate(BaseModel):
     admin_full_name: str
     admin_username: str = "admin"
     admin_password: str
+    # Clone only: caps how many rows are copied for one or more tables
+    # (keyed by table name, e.g. {"apartments": 500}) — see
+    # app.core.org_clone. Ignored by plain org creation.
+    table_row_limits: Optional[dict[str, int]] = None
 
 
 class SignupRequest(BaseModel):
