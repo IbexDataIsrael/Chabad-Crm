@@ -3,6 +3,10 @@ services:
     build: ./backend
     ports:
       - "8001:8000"
+    # Local dev only: the Dockerfile's own CMD dropped --reload (unsafe for
+    # the same image's production use on Render) — restore it here so the
+    # ./backend bind mount below still hot-reloads.
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     env_file:
       - ./backend/.env
     environment:

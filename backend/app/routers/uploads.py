@@ -33,12 +33,20 @@ MAX_LOGO_BYTES = 5 * 1024 * 1024  # 5 MB
 
 # content-type → file extension for locally saved logos (allowlist: anything
 # else is rejected before saving).
+#
+# Security hardening: SVG deliberately excluded. Both /logo and
+# /announcement-image are reachable by an unauthenticated or low-privilege
+# caller and the result is served back from this API's own origin — an SVG
+# can carry a <script> that executes when a browser is navigated to (or
+# embeds) that URL directly, giving a stored-XSS/open-hosting vector on our
+# domain. Sanitizing SVG safely needs a real parser; simplest is to not
+# accept the format at all (PNG/JPEG/GIF/WEBP cover logos and announcement
+# images fine).
 _IMAGE_EXTENSIONS = {
     "image/png": "png",
     "image/jpeg": "jpg",
     "image/gif": "gif",
     "image/webp": "webp",
-    "image/svg+xml": "svg",
 }
 
 

@@ -16,4 +16,9 @@ RUN mkdir -p /app/data
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Security/deploy hardening: no --reload (dev-only file watcher; wastes
+# resources and is explicitly documented by uvicorn as unsafe for production).
+# Shell form so $PORT (injected by some hosts) is honored, falling back to
+# 8000 to match docker-compose's fixed port mapping. Local dev re-adds
+# --reload via docker-compose.yml's `command:` override.
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}

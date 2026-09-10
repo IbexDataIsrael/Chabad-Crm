@@ -32,6 +32,12 @@ def get_current_user(
     user = db.get(models.User, user_id)
     if user is None:
         raise credentials_exception
+    # Security hardening: a token stays cryptographically valid for its full
+    # lifetime even after an admin disables the user or their org — without
+    # this, a disabled account (or a whole disabled org) keeps API access
+    # until the token happens to expire (previously up to 30 days).
+    if not user.is_active or user.organization is None or not user.organization.is_active:
+        raise credentials_exception
     return user
 
 

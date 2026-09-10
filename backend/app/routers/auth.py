@@ -214,6 +214,15 @@ def resend_verification(payload: ResendRequest, db: Session = Depends(get_db)) -
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def register(payload: UserCreate, db: Session = Depends(get_db)) -> models.User:
+    # Security hardening: this legacy/dev path is unauthenticated yet creates
+    # an already-active user (any role, including admin — the caller controls
+    # `payload.role` directly) in a brand-new, already-active org with none of
+    # `/signup`'s superadmin-approval gate. Retired in Phase 9 but never
+    # actually removed; gated off by default (settings.enable_legacy_register)
+    # so it can't be hit on a live deployment. 404, not 403 — a retired route
+    # shouldn't confirm its own existence to a prober.
+    if not settings.enable_legacy_register:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     # Registration creates a brand-new org, so an email existing in *other*
     # orgs is allowed (fixes14: email is unique per organization).
     org = models.Organization(

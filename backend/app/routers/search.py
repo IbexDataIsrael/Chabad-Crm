@@ -40,31 +40,40 @@ def global_search(
     results: list[SearchHit] = []
 
     # --- Contacts (mekurav + shliach) ---
-    contacts = db.query(models.Contact).filter(
-        models.Contact.organization_id == org_id,
-        or_(
-            models.Contact.name.ilike(like),
-            models.Contact.last_name.ilike(like),
-            models.Contact.phone.ilike(like),
-            models.Contact.email.ilike(like),
-        ),
-    )
-    if is_shliach:
-        # fixes10 §3.5: ownership isolation — only contacts assigned to this
-        # shliach (plus their own shliach contact record).
-        own = db.query(models.ContactShliach.contact_id).filter(
-            models.ContactShliach.user_id == current_user.id,
-            models.ContactShliach.is_display.is_(True),
+    # Security hardening: campaign_manager is blocked from the Contacts
+    # router entirely (`forbid_campaign_manager`) — this endpoint used to
+    # skip that check and hand back contact names/phones anyway. Skip the
+    # whole query for them; areas/buildings/apartments below are still fine,
+    # they're within a campaign manager's remit.
+    if current_user.role == "campaign_manager":
+        contacts_iter = []
+    else:
+        contacts = db.query(models.Contact).filter(
+            models.Contact.organization_id == org_id,
+            or_(
+                models.Contact.name.ilike(like),
+                models.Contact.last_name.ilike(like),
+                models.Contact.phone.ilike(like),
+                models.Contact.email.ilike(like),
+            ),
         )
-        contacts = contacts.filter(
-            (models.Contact.assigned_user_id == current_user.guid)
-            | models.Contact.id.in_(own)
-        )
-        # fixes18 §6: without the org's opt-in, mekurav contacts don't
-        # surface in search either.
-        if _shliach_contacts_blocked(db, current_user):
-            contacts = contacts.filter(models.Contact.contact_type == "shliach")
-    for c in contacts.order_by(models.Contact.name).limit(MAX_PER_TYPE).all():
+        if is_shliach:
+            # fixes10 §3.5: ownership isolation — only contacts assigned to
+            # this shliach (plus their own shliach contact record).
+            own = db.query(models.ContactShliach.contact_id).filter(
+                models.ContactShliach.user_id == current_user.id,
+                models.ContactShliach.is_display.is_(True),
+            )
+            contacts = contacts.filter(
+                (models.Contact.assigned_user_id == current_user.guid)
+                | models.Contact.id.in_(own)
+            )
+            # fixes18 §6: without the org's opt-in, mekurav contacts don't
+            # surface in search either.
+            if _shliach_contacts_blocked(db, current_user):
+                contacts = contacts.filter(models.Contact.contact_type == "shliach")
+        contacts_iter = contacts.order_by(models.Contact.name).limit(MAX_PER_TYPE).all()
+    for c in contacts_iter:
         full_name = f"{c.name} {c.last_name}".strip() if c.last_name else c.name
         results.append(
             SearchHit(

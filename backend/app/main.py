@@ -146,6 +146,16 @@ os.makedirs(settings.upload_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
 
 
+@app.middleware("http")
+async def _uploads_nosniff(request, call_next):
+    """Security hardening: user-supplied files served from our own origin
+    should never be MIME-sniffed by the browser into something executable."""
+    response = await call_next(request)
+    if request.url.path.startswith("/uploads/"):
+        response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
 @app.get("/api/health", tags=["health"])
 def health() -> dict[str, str]:
     """Liveness probe used by smoke checks."""

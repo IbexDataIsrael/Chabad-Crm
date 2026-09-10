@@ -10,9 +10,15 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     database_url: str = "sqlite:///./data/crm.sqlite3"
-    secret_key: str = "change-me"
+    # Security hardening: no insecure fallback — every environment (local
+    # .env, Render, tests) must set a real value or the app refuses to start.
+    secret_key: str
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 43200  # 30 days
+    # Security hardening: was 43200 (30 days). A stolen/leaked token stayed
+    # valid for a month, and (combined with get_current_user not re-checking
+    # is_active) a disabled account kept API access until its token expired.
+    # 480 min = 8 hours, matching the Tag Print CRM fork's window.
+    access_token_expire_minutes: int = 480
 
     # Comma-separated list of allowed CORS origins (the frontend's public URL(s)).
     # Defaults to local dev; production sets CORS_ORIGINS to the deployed domain.
@@ -37,7 +43,9 @@ class Settings(BaseSettings):
     # Whether to seed the demo organization + admin + sample data on startup.
     # MUST be false in production (otherwise a known default admin/admin123 and
     # fake contacts land in the live DB). Global localization labels always seed.
-    seed_demo_data: bool = True
+    # Security hardening: no default — every environment must decide this
+    # explicitly instead of silently inheriting "on".
+    seed_demo_data: bool
 
     # Default demo organization + admin seeded on startup (override via env).
     demo_org_name: str = "ארגון הדגמה"
@@ -116,6 +124,13 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_user: str = "ibexprogrammer@gmail.com"
     smtp_password: str = ""
+
+    # Security hardening: `POST /api/auth/register` (legacy/dev path) creates
+    # an immediately-active user + brand-new org with NO approval gate and NO
+    # auth required — unlike `/signup` it lets an anonymous caller pass
+    # role="admin" directly. Off by default everywhere; tests and local dev
+    # opt in explicitly (see backend/.env / conftest.py). Never set on Render.
+    enable_legacy_register: bool = False
 
 
 settings = Settings()

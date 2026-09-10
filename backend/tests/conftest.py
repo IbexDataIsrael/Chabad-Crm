@@ -37,6 +37,18 @@ def _admin_only(_user=Depends(require_admin)):
 
 
 @pytest.fixture(autouse=True)
+def _enable_legacy_register(monkeypatch):
+    """The test suite's auth_headers/admin_headers fixtures (and many tests
+    directly) use POST /api/auth/register as a fast way to create users —
+    that route is gated off by default in real deployments (security
+    hardening: it's an unauthenticated way to mint an active admin), so
+    tests must opt back in explicitly."""
+    from app.config import settings as app_settings
+
+    monkeypatch.setattr(app_settings, "enable_legacy_register", True)
+
+
+@pytest.fixture(autouse=True)
 def _no_real_email(monkeypatch):
     """Force send_email into its dev fallback (log, don't send). The container
     carries real SMTP_* env vars, so without this, tests that create shliach
