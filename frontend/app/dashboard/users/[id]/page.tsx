@@ -374,16 +374,6 @@ export default function UserDetailPage() {
                 />
               </dd>
             </div>
-            {contactId != null && (
-              <div className="sm:col-span-2">
-                <Link
-                  href={`/dashboard/contacts/${contactId}`}
-                  className="text-sm text-primary hover:underline"
-                >
-                  {t("users.view_contact", "צפייה באיש הקשר ›")}
-                </Link>
-              </div>
-            )}
           </dl>
         )}
       </section>

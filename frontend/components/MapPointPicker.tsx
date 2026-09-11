@@ -28,7 +28,7 @@ export function MapPointPicker({
   onChange: (lat: number, lng: number) => void;
   onZoomChange?: (zoom: number) => void;
 }) {
-  const { t } = useLocalization();
+  const { t, lang } = useLocalization();
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -66,7 +66,7 @@ export function MapPointPicker({
     if (!mapsKey || !ref.current) return;
     let cancelled = false;
 
-    loadGoogleMaps()
+    loadGoogleMaps(lang)
       .then(() => {
         if (cancelled || !ref.current) return;
         const g = (window as any).google;
@@ -115,8 +115,10 @@ export function MapPointPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Move the marker when lat/lng change from the numeric inputs (no feedback loop:
-  // skip when the marker is already at that position).
+  // Move the marker when lat/lng change from the numeric inputs or an address
+  // search (no feedback loop: skip when the marker is already at that position).
+  // Also re-centers the map — a typed search result can be far outside the
+  // current viewport, unlike a click or drag which is already on-screen.
   useEffect(() => {
     const g = (window as any).google;
     const map = mapRef.current;
@@ -126,6 +128,7 @@ export function MapPointPicker({
       return;
     }
     placeMarker(g, map, { lat, lng });
+    map.panTo({ lat, lng });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lat, lng]);
 

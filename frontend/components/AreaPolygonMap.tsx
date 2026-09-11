@@ -50,7 +50,7 @@ export function AreaPolygonMap({
 }) {
   // fixes17 §4: the apm.* keys were seeded long ago but this component was
   // hardcoded Hebrew — the English UI now resolves them properly.
-  const { t } = useLocalization();
+  const { t, lang } = useLocalization();
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const polygonRef = useRef<any>(null); // finalized, editable polygon
@@ -85,7 +85,7 @@ export function AreaPolygonMap({
     if (!mapsKey || !ref.current) return;
     let cancelled = false;
 
-    loadGoogleMaps()
+    loadGoogleMaps(lang)
       .then(() => {
         if (cancelled || !ref.current) return;
         const g = (window as any).google;

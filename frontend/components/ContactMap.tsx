@@ -7,12 +7,12 @@ import { useLocalization } from "@/lib/localization";
 
 /** Renders a Google map with a marker via the Maps JavaScript API (no Embed API). */
 export function ContactMap({ lat, lng }: { lat: number; lng: number }) {
-  const { t } = useLocalization();
+  const { t, lang } = useLocalization();
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!mapsKey || !ref.current) return;
-    loadGoogleMaps()
+    loadGoogleMaps(lang)
       .then(() => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const g = (window as any).google;
@@ -27,7 +27,7 @@ export function ContactMap({ lat, lng }: { lat: number; lng: number }) {
       .catch(() => {
         /* ignore */
       });
-  }, [lat, lng]);
+  }, [lat, lng, lang]);
 
   if (!mapsKey) {
     return (

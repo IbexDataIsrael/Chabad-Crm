@@ -221,6 +221,10 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("page", "page.area_has_boundary", "תחום מוגדר", "Boundary set"),
     ("page", "page.area_no_boundary", "ללא תחום", "No boundary"),
     ("page", "page.area_boundary_col", "תחום", "Boundary"),
+    # fixes62 §1.2: the Areas table's row-level link was hardcoded Hebrew via
+    # its t() fallback because this key was never seeded — English mode fell
+    # through to the fallback text regardless of the active language.
+    ("page", "page.show_area", "הצג אזור »", "View area »"),
     ("areas", "areas.generate_all_boundaries", "צור תחומים לכל האזורים", "Generate all area boundaries"),
     ("areas", "areas.generate_all_result", "נוצרו תחומים ל-{ok} אזורים ({skipped} דולגו)", "Generated boundaries for {ok} areas ({skipped} skipped)"),
     ("areas", "areas.generate_all_none", "לא ניתן היה ליצור תחומים (אין מספיק בניינים עם קואורדינטות).", "Could not generate any boundaries (not enough buildings with coordinates)."),
@@ -511,8 +515,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("users", "users.clear_assignments_confirm", "אתה בטוח שברצונך למחוק את כל מספרי הדוח המשויכים לפעילים? פעולה זו בלתי הפיכה", "Are you sure you want to clear all report numbers assigned to activists? This action is irreversible."),
     ("users", "users.no_assignments_to_clear", "אין שיבוצים לניקוי בתצוגה הנוכחית", "No assignments to clear in the current view"),
     ("users", "users.assignments_cleared", "השיבוצים נוקו עבור {n} פעילים", "Assignments cleared for {n} activists"),
-    # --- fixes43 §3.3: merged Users row action (open/edit) ---
-    ("users", "users.view_contact", "צפייה באיש הקשר ›", "View contact ›"),
     # --- fixes7 §2/§3: buildings, floors ---
     ("buildings", "buildings.floors", "קומות", "Floors"),
     ("buildings", "buildings.num_floors", "מספר קומות", "Number of floors"),

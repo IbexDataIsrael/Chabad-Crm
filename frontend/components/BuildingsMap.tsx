@@ -62,7 +62,7 @@ export function BuildingsMap({
   buildings: Building[];
   areas?: Area[];
 }) {
-  const { t } = useLocalization();
+  const { t, lang } = useLocalization();
   const ref = useRef<HTMLDivElement>(null);
 
   const located = useMemo(
@@ -84,7 +84,7 @@ export function BuildingsMap({
 
   useEffect(() => {
     if (!mapsKey || !ref.current || located.length === 0) return;
-    loadGoogleMaps()
+    loadGoogleMaps(lang)
       .then(() => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const g = (window as any).google;
@@ -140,7 +140,7 @@ export function BuildingsMap({
         /* leave the container empty on load failure */
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signature]);
+  }, [signature, lang]);
 
   if (!mapsKey) {
     return (

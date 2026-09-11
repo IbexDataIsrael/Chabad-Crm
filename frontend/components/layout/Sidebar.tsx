@@ -25,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 
+import { useLocalization } from "@/lib/localization";
 import { cn } from "@/lib/utils";
 
 export interface SidebarNavItem {
@@ -92,8 +93,10 @@ export function Sidebar({
   desktopCollapsed?: boolean;
 }) {
   const pathname = usePathname();
+  const { dir } = useLocalization();
   const allHrefs = groups.flatMap((g) => g.items.map((it) => it.href));
   const bestMatch = Math.max(-1, ...allHrefs.map((href) => matchLength(pathname, href)));
+  const isRtl = dir === "rtl";
 
   return (
     <>
@@ -101,11 +104,20 @@ export function Sidebar({
         <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={onClose} />
       )}
       <aside
-        dir="rtl"
+        dir={dir}
         className={cn(
-          "fixed top-0 right-0 z-50 flex h-full w-64 flex-col border-l border-sidebar-border bg-sidebar transition-transform duration-300",
-          open ? "translate-x-0" : "translate-x-full",
-          desktopCollapsed ? "lg:translate-x-full" : "lg:translate-x-0",
+          "fixed top-0 z-50 flex h-full w-64 flex-col bg-sidebar transition-transform duration-300",
+          isRtl ? "right-0 border-l border-sidebar-border" : "left-0 border-r border-sidebar-border",
+          open
+            ? "translate-x-0"
+            : isRtl
+              ? "translate-x-full"
+              : "-translate-x-full",
+          desktopCollapsed
+            ? isRtl
+              ? "lg:translate-x-full"
+              : "lg:-translate-x-full"
+            : "lg:translate-x-0",
         )}
       >
         <div className="flex select-none items-center justify-between border-b border-sidebar-border p-4">

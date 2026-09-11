@@ -52,14 +52,14 @@ export function AddressAutocomplete({
 
   useEffect(() => {
     if (!mapsKey) return;
-    loadGoogleMaps()
+    loadGoogleMaps(language)
       .then(() => {
         ready.current = true;
       })
       .catch(() => {
         /* plain input */
       });
-  }, []);
+  }, [language]);
 
   async function fetchSuggestions(input: string) {
     if (!ready.current || !input.trim()) {

@@ -29,7 +29,7 @@ function geoJSONToPath(geojson: string): { lat: number; lng: number }[] | null {
 /** Read-only map showing an area's polygon boundary. Degrades to a short note
  *  when there's no boundary, no Maps key, or Maps fails to load. */
 export function AreaPolygonView({ polygon }: { polygon: string | null }) {
-  const { t } = useLocalization();
+  const { t, lang } = useLocalization();
   const ref = useRef<HTMLDivElement>(null);
   const [loadError, setLoadError] = useState(false);
   const path = polygon ? geoJSONToPath(polygon) : null;
@@ -38,7 +38,7 @@ export function AreaPolygonView({ polygon }: { polygon: string | null }) {
     if (!mapsKey || !ref.current || !path || path.length < 3) return;
     let cancelled = false;
 
-    loadGoogleMaps()
+    loadGoogleMaps(lang)
       .then(() => {
         if (cancelled || !ref.current) return;
         const g = (window as any).google;
@@ -71,7 +71,7 @@ export function AreaPolygonView({ polygon }: { polygon: string | null }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [polygon]);
+  }, [polygon, lang]);
 
   if (!path || path.length < 3) {
     return (

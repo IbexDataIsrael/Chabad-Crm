@@ -438,7 +438,9 @@ function AreaRow({
           href={`/dashboard/areas/${area.id}`}
           className="font-medium text-primary hover:underline"
         >
-          {area.area_name}
+          {/* fixes62 §2.2: a name like "א13" must not have its digits reordered
+              when this LTR-container cell inherits English/LTR text direction. */}
+          <bdi>{area.area_name}</bdi>
         </Link>
       </td>
       {fields.map((f) => (

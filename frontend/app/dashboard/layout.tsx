@@ -32,7 +32,8 @@ function DashboardChrome({ children }: { children: ReactNode }) {
     "crm.sidebarCollapsed", false,
   );
   const { user, isAdmin, isShliach, isSuperadmin, isCampaignManager, signOut } = useAuth();
-  const { t } = useLocalization();
+  const { t, dir } = useLocalization();
+  const isRtl = dir === "rtl";
   const orgName = user?.organization?.name ?? t("auth.app_title", "מיני CRM");
   const logoUrl = user?.organization?.logo_url ?? null;
   // The browser-tab title comes from TitleManager (fixes9 §1) — not set here.
@@ -191,7 +192,15 @@ function DashboardChrome({ children }: { children: ReactNode }) {
       <div
         className={
           !isSuperadmin
-            ? `flex min-h-screen flex-col ${desktopCollapsed ? "lg:mr-0" : "lg:mr-64"}`
+            ? `flex min-h-screen flex-col ${
+                desktopCollapsed
+                  ? isRtl
+                    ? "lg:mr-0"
+                    : "lg:ml-0"
+                  : isRtl
+                    ? "lg:mr-64"
+                    : "lg:ml-64"
+              }`
             : "flex min-h-screen flex-col"
         }
       >

@@ -51,7 +51,7 @@ export function AreasMap({ areas }: { areas: Area[] }) {
 
   useEffect(() => {
     if (!mapsKey || !ref.current || zones.length === 0) return;
-    loadGoogleMaps()
+    loadGoogleMaps(lang)
       .then(() => {
         if (!ref.current) return;
         const g = (window as any).google;

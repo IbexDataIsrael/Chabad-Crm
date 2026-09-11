@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 
+import { AddressAutocomplete, type PlaceResult } from "@/components/AddressAutocomplete";
 import { BackupRestoreCard } from "@/components/BackupRestoreCard";
 import { LogoUpload } from "@/components/LogoUpload";
 import { MapPointPicker } from "@/components/MapPointPicker";
@@ -45,6 +46,9 @@ export default function SettingsPage() {
   const [lat, setLat] = useState<string>("");
   const [lng, setLng] = useState<string>("");
   const [zoom, setZoom] = useState<string>("13");
+  // fixes62 §3.1: free-text search feeding the map picker below — not a
+  // persisted field, just the current text in the autocomplete input.
+  const [regionSearch, setRegionSearch] = useState("");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -236,6 +240,17 @@ export default function SettingsPage() {
           <p className="text-xs text-muted-foreground">
             {t("page.map_center_hint", "נקודת ההתחלה של מפת האזורים (קו רוחב, קו אורך, מרחק תצוגה).")}
           </p>
+          <AddressAutocomplete
+            value={regionSearch}
+            onChange={setRegionSearch}
+            onPlace={(place: PlaceResult) => {
+              if (place.lat == null || place.lng == null) return;
+              setLat(place.lat.toFixed(6));
+              setLng(place.lng.toFixed(6));
+              setRegionSearch(place.address);
+            }}
+            className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
+          />
           <MapPointPicker
             lat={lat === "" ? null : Number(lat)}
             lng={lng === "" ? null : Number(lng)}
