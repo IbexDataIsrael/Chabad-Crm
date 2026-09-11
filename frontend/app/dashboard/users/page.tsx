@@ -1402,6 +1402,10 @@ function UserForm({
   const [role, setRole] = useState("staff");
   const [password, setPassword] = useState("");
   const [emailValid, setEmailValid] = useState(false);
+  // fixes61 §2: an activist tracked in the system with no login of their
+  // own — the email field stops being required (still validated as a real
+  // address if something is typed into it).
+  const [isManual, setIsManual] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -1418,9 +1422,10 @@ function UserForm({
         method: "POST",
         body: JSON.stringify({
           full_name: fullName,
-          email,
+          email: email.trim() || null,
           role,
           password: password || null,
+          is_manual: isManual,
         }),
       });
       await onSaved();
@@ -1444,10 +1449,29 @@ function UserForm({
             required
           />
         </label>
-        <label className="block space-y-1">
-          <span className="block text-sm font-medium">{t("contacts.email", "אימייל")}</span>
-          <EmailInput value={email} onChange={setEmail} onValidityChange={setEmailValid} required />
-        </label>
+        <div className="block space-y-1">
+          <label htmlFor="new-user-email" className="block text-sm font-medium">
+            {t("contacts.email", "אימייל")}
+          </label>
+          <EmailInput
+            id="new-user-email"
+            value={email}
+            onChange={setEmail}
+            onValidityChange={setEmailValid}
+            required={!isManual}
+          />
+          {/* fixes61 §2: unchecks the email requirement above for an
+              activist tracked in the system with no login of their own. */}
+          <label className="flex items-center gap-2 pt-1 text-sm font-normal cursor-pointer">
+            <input
+              type="checkbox"
+              className="accent-primary"
+              checked={isManual}
+              onChange={(e) => setIsManual(e.target.checked)}
+            />
+            {t("users.manual_user", "משתמש ידני (ללא גישה למערכת)")}
+          </label>
+        </div>
         <label className="block space-y-1">
           <span className="block text-sm font-medium">{t("users.role_label", "תפקיד")}</span>
           <select

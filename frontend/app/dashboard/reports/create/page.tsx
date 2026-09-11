@@ -555,12 +555,28 @@ function CreateReportsInner() {
         y += 10;
       }
 
-      // fixes60 §8: only repeat the table header when a building's table
-      // actually starts on a different physical page than the previous
-      // building's table ended on — two buildings' tables that happen to
-      // share one page previously got a redundant header line printed
-      // between them. -1 guarantees the very first table always shows one.
-      let pageAtLastTableEnd = -1;
+      // fixes61 §6: shrink a column's header font just enough that its
+      // longest unbreakable word still fits the column width, instead of
+      // letting autotable wrap it into single-character vertical text when
+      // the user drags a column very narrow.
+      const fitHeaderFontSize = (
+        label: string,
+        availableWidth: number,
+        baseFontSize: number,
+        minFontSize = 6,
+      ): number => {
+        const words = label.split(/[\s\n]+/).filter(Boolean);
+        if (words.length === 0) return baseFontSize;
+        doc.setFont(HEBREW_FONT, "bold");
+        let size = baseFontSize;
+        while (size > minFontSize) {
+          doc.setFontSize(size);
+          const widest = Math.max(...words.map((w) => doc.getTextWidth(w)));
+          if (widest <= availableWidth) break;
+          size -= 0.5;
+        }
+        return size;
+      };
 
       // One table per building, headed by the building's cleaned
       // "street + number" display string (shared by both modes).
@@ -595,9 +611,8 @@ function CreateReportsInner() {
           y += compact ? 8 : 12;
 
           const body = apts.map((a) => activeReportColumns.map((k) => rowValueFor(a, k)).reverse());
-
-          const pageBeforeTable = doc.getCurrentPageInfo().pageNumber;
-          const showHeader = pageBeforeTable !== pageAtLastTableEnd;
+          const baseFontSize = compact ? 9 : 10;
+          const cellPad = compact ? 3 : CELL_PADDING;
 
           autoTable(doc, {
             startY: y,
@@ -606,15 +621,24 @@ function CreateReportsInner() {
             // Explicit total width — with 'auto' this autotable version logs a
             // spurious "content width could not fit page" warning.
             tableWidth: logicalWidths.reduce((a, b) => a + b, 0),
-            head: showHeader ? [head] : [],
+            // fixes61 §5: always pass the real head so autotable repeats it
+            // on every physical page of ITS OWN internal pagination too.
+            // Previously this was `[]` whenever a building's table started
+            // on the same page the last one ended on (to avoid two header
+            // bars close together) — but that meant a `head: []` table had
+            // nothing to repeat if it later overflowed onto a new page,
+            // leaving that page with no header at all. A header directly
+            // above a new building's own rows is normal table convention,
+            // not a duplicate — so it's always shown now.
+            head: [head],
             body,
             theme: "grid",
             styles: {
               font: HEBREW_FONT,
-              fontSize: compact ? 9 : 10,
+              fontSize: baseFontSize,
               halign: "right",
               valign: "top",
-              cellPadding: compact ? 3 : CELL_PADDING,
+              cellPadding: cellPad,
             },
             headStyles: {
               fontStyle: "bold",
@@ -627,13 +651,30 @@ function CreateReportsInner() {
             // autotable's built-in zebra-stripe mechanism.
             alternateRowStyles: { fillColor: [245, 245, 245] },
             columnStyles,
+            // fixes61 §6: shrink just the header cell's font (never the body's)
+            // when its column is too narrow for the label's longest word,
+            // instead of letting it wrap into single-character vertical text.
+            didParseCell: (data) => {
+              if (data.section !== "head") return;
+              const label = head[data.column.index] ?? "";
+              const availableWidth = visualWidths[data.column.index] - cellPad * 2;
+              data.cell.styles.fontSize = fitHeaderFontSize(
+                label,
+                availableWidth,
+                baseFontSize,
+              );
+            },
           });
           y =
             (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable
               .finalY + (compact ? 8 : 16);
-          pageAtLastTableEnd = doc.getCurrentPageInfo().pageNumber;
         }
       };
+
+      // fixes61 §4: per-report page ranges — [startPage, endPage] of physical
+      // pages each report number occupies — so the footer can count "page 1
+      // of N" scoped to that one report instead of the whole batch document.
+      const reportPageRanges: { label: string; startPage: number; endPage: number }[] = [];
 
       if (mode === "reports") {
         // Group by report number (picker order = name order), then by building.
@@ -657,6 +698,7 @@ function CreateReportsInner() {
             doc.addPage();
             y = PDF_CONTENT_TOP;
           }
+          const startPage = doc.getCurrentPageInfo().pageNumber;
           doc.setFont(HEBREW_FONT, "bold");
           doc.setFontSize(14);
           doc.text(
@@ -668,6 +710,11 @@ function CreateReportsInner() {
           y += 22;
           renderBuildingTables(byReport.get(rn.id)!);
           y += 6;
+          reportPageRanges.push({
+            label: rn.name,
+            startPage,
+            endPage: doc.getCurrentPageInfo().pageNumber,
+          });
         });
       } else {
         // fixes30 §3: hand-picked apartments — building groups only, and rows
@@ -678,28 +725,40 @@ function CreateReportsInner() {
       // fixes26 §1: stamp the org name + logo header onto every page.
       drawPdfHeaders(doc, MARGIN, user?.organization?.name ?? "", headerLogo);
 
-      // fixes60 §8: a footer page number on every page, uniformly across all
-      // 3 generation modes. No persisted report entity exists yet to number
-      // against (fixes60-plan.md decision #9), so the "report id" is just
-      // the last 6 digits of this generation's own timestamp — unique
-      // enough to tell two PDFs' pages apart, not a real record id.
-      const reportShortId = String(Date.now()).slice(-6);
       const totalPages = doc.getNumberOfPages();
-      for (let p = 1; p <= totalPages; p += 1) {
+      const drawFooter = (p: number, label: string, page: number, total: number) => {
         doc.setPage(p);
         doc.setFont(HEBREW_FONT, "normal");
         doc.setFontSize(8);
         doc.setTextColor(120, 120, 120);
         doc.text(
           t("reports.pdf_footer", "דוח #{id} · עמוד {page} מתוך {total}")
-            .replace("{id}", reportShortId)
-            .replace("{page}", String(p))
-            .replace("{total}", String(totalPages)),
+            .replace("{id}", label)
+            .replace("{page}", String(page))
+            .replace("{total}", String(total)),
           pageW / 2,
           pageH - 16,
           { align: "center" },
         );
         doc.setTextColor(0, 0, 0);
+      };
+
+      if (mode === "reports" && reportPageRanges.length > 0) {
+        // fixes61 §4: page numbers reset per report id ("Report #100 - Page
+        // 1 of 2") instead of counting across the whole multi-report batch.
+        for (const range of reportPageRanges) {
+          const totalInReport = range.endPage - range.startPage + 1;
+          for (let p = range.startPage; p <= range.endPage; p += 1) {
+            drawFooter(p, range.label, p - range.startPage + 1, totalInReport);
+          }
+        }
+      } else {
+        // fixes60 §8: hand-picked-apartments mode has no report id to scope
+        // to — a single counter across the whole document, as before.
+        const reportShortId = String(Date.now()).slice(-6);
+        for (let p = 1; p <= totalPages; p += 1) {
+          drawFooter(p, reportShortId, p, totalPages);
+        }
       }
 
       doc.save(`apartments-report-${new Date().toISOString().slice(0, 10)}.pdf`);

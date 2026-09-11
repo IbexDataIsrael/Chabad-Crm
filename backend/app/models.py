@@ -132,6 +132,10 @@ class User(Base):
     role = Column(String(20), ForeignKey("roles.name"), nullable=False, default="staff")
     is_active = Column(Boolean, nullable=False, default=True)
     email_verified = Column(Boolean, nullable=False, default=False)
+    # fixes61 §2: an activist tracked in the system with no login of their
+    # own (no email required, welcome email skipped) — distinct from
+    # is_active, which means "login currently enabled/disabled".
+    is_manual = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     # Relationships

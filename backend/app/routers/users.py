@@ -141,34 +141,55 @@ def create_user(
     db: Session = Depends(get_db),
     admin: models.User = Depends(require_admin),
 ):
-    email = payload.email or ""  # schema-normalized: lowercase, blank → None
-    if not email:
+    email = payload.email or None  # schema-normalized: lowercase, blank → None
+    # fixes61 §2: a manual user (an activist tracked in the system with no
+    # login of their own) doesn't need an email — everyone else still does.
+    if not email and not payload.is_manual:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email is required")
     # fixes14: email is unique per organization (the same email may exist in
     # other organizations — one login account per org). Case-insensitive so a
-    # legacy mixed-case row still counts as a duplicate.
-    dup_email = (
-        db.query(models.User)
-        .filter(
-            models.User.organization_id == admin.organization_id,
-            func.lower(models.User.email) == email,
+    # legacy mixed-case row still counts as a duplicate. Skipped entirely for
+    # a manual user with no email — multiple NULLs don't collide.
+    if email:
+        dup_email = (
+            db.query(models.User)
+            .filter(
+                models.User.organization_id == admin.organization_id,
+                func.lower(models.User.email) == email,
+            )
+            .first()
         )
-        .first()
-    )
-    if dup_email:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email already registered")
+        if dup_email:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email already registered")
 
-    username = (payload.username or email).strip()
-    dup = (
-        db.query(models.User)
-        .filter(
-            models.User.organization_id == admin.organization_id,
-            models.User.username == username,
+    username = (payload.username or email or "").strip()
+    if not username:
+        # No email to default to (manual user, no explicit username) — derive
+        # one from the name, disambiguating against an org collision.
+        base = "_".join(payload.full_name.strip().split()) or "user"
+        username = base
+        suffix = 2
+        while (
+            db.query(models.User)
+            .filter(
+                models.User.organization_id == admin.organization_id,
+                models.User.username == username,
+            )
+            .first()
+        ):
+            username = f"{base}_{suffix}"
+            suffix += 1
+    else:
+        dup = (
+            db.query(models.User)
+            .filter(
+                models.User.organization_id == admin.organization_id,
+                models.User.username == username,
+            )
+            .first()
         )
-        .first()
-    )
-    if dup:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Username already taken")
+        if dup:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Username already taken")
 
     user = models.User(
         organization_id=admin.organization_id,
@@ -180,6 +201,7 @@ def create_user(
         password_hash=hash_password(payload.password) if payload.password else None,
         role=payload.role,
         is_active=True,
+        is_manual=payload.is_manual,
         email_verified=True,  # admin-provisioned accounts are trusted
     )
     db.add(user)
@@ -187,21 +209,23 @@ def create_user(
     db.refresh(user)
 
     # Welcome automation: same transactional template as new shliach accounts.
-    org_name = admin.organization.name if admin.organization else ""
-    first, _, last = payload.full_name.partition(" ")
-    try:
-        send_shliach_welcome(
-            db,
-            to=email,
-            first_name=first,
-            last_name=last,
-            shliach_email=email,
-            org_name=org_name,
-            # fixes17 §1.3: replies go to the admin who created the account.
-            reply_to=admin.email,
-        )
-    except Exception:  # pragma: no cover — email must not block creation
-        logger.exception("Failed to send welcome email to %s", email)
+    # Skipped for a manual user — there's no email (and no login) to welcome.
+    if email:
+        org_name = admin.organization.name if admin.organization else ""
+        first, _, last = payload.full_name.partition(" ")
+        try:
+            send_shliach_welcome(
+                db,
+                to=email,
+                first_name=first,
+                last_name=last,
+                shliach_email=email,
+                org_name=org_name,
+                # fixes17 §1.3: replies go to the admin who created the account.
+                reply_to=admin.email,
+            )
+        except Exception:  # pragma: no cover — email must not block creation
+            logger.exception("Failed to send welcome email to %s", email)
     return user
 
 

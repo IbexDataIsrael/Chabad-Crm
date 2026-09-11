@@ -13,6 +13,7 @@ import { PicklistSelect } from "@/components/PicklistSelect";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { Button } from "@/components/ui/button";
 import { InlineEdit } from "@/components/ui/InlineEdit";
+import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter";
 import { TruncatedText } from "@/components/ui/TruncatedText";
 import { VisitForm } from "@/components/VisitForm";
 import { apiFetch } from "@/lib/api";
@@ -38,6 +39,7 @@ import {
   type AdminArea,
   type Area,
   type Building,
+  type BuildingPage,
   type Contact,
   type ContactBulkUpdateResult,
   type ContactPage,
@@ -282,7 +284,11 @@ export default function ContactsPage() {
   useEffect(() => {
     if (!user) return;
     apiFetch<Area[]>("/api/areas").then(setAreas).catch(() => {});
-    apiFetch<Building[]>("/api/buildings").then(setBuildings).catch(() => {});
+    // fixes61 §3: top 100 only, not the whole org — see searchBuildings
+    // below for the live-search fetch that backs the filter as the admin types.
+    apiFetch<BuildingPage>("/api/buildings/list?page_size=100")
+      .then((res) => setBuildings(res.items))
+      .catch(() => {});
     // fixes35: /api/custom-fields now spans every entity_type — this
     // dropdown is specifically the visit-level boolean checklist filter
     // (mirrors the backend's own entity_type=visit/field_type=boolean scope).
@@ -877,15 +883,20 @@ export default function ContactsPage() {
     }
   }
 
+  const buildingLabel = (b: Building) =>
+    (b.building_address ?? "").split(",")[0].trim() || b.building_name || `#${b.id}`;
+
   const buildingOptions = buildings
     .filter((b) => areaIds.length === 0 || (b.area_id != null && areaIds.includes(b.area_id)))
-    .map((b) => ({
-      id: b.id,
-      label:
-        (b.building_address ?? "").split(",")[0].trim() ||
-        b.building_name ||
-        `#${b.id}`,
-    }));
+    .map((b) => ({ id: b.id, label: buildingLabel(b) }));
+
+  // fixes61 §3: server-side building search backing the filter below —
+  // typing narrows against the full org instead of the top-100 default page.
+  async function searchBuildings(query: string): Promise<{ id: number; label: string }[]> {
+    const params = new URLSearchParams({ q: query, page_size: "100" });
+    const res = await apiFetch<BuildingPage>(`/api/buildings/list?${params}`);
+    return res.items.map((b) => ({ id: b.id, label: buildingLabel(b) }));
+  }
 
   const lastPage = Math.max(1, Math.ceil(total / pageSize));
   const rangeText = t("pager.range", "{from}–{to} מתוך {total}")
@@ -1085,7 +1096,7 @@ export default function ContactsPage() {
             setPage(1);
           }}
         />
-        <MultiSelectFilter
+        <MultiSelectSearchFilter
           allLabel={t("filter.all_buildings", "כל הבניינים")}
           options={buildingOptions}
           value={buildingIds}
@@ -1093,6 +1104,8 @@ export default function ContactsPage() {
             setBuildingIds(ids);
             setPage(1);
           }}
+          searchPlaceholder={t("filter.search_buildings", "חיפוש בניין…")}
+          remoteSearch={searchBuildings}
         />
         {/* fixes18 §3.5: admin-area filter (admin/staff — blocked for shliach). */}
         {!isShliach && (

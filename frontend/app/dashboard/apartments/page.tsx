@@ -35,6 +35,7 @@ import {
   type ApartmentPage,
   type Area,
   type Building,
+  type BuildingPage,
   type CustomFieldDefinition,
   type Floor,
   type PicklistField,
@@ -471,8 +472,13 @@ export default function ApartmentsPage() {
   useEffect(() => {
     if (loading) return;
     apiFetch<Area[]>("/api/areas").then(setAreas).catch(() => setAreas([]));
-    apiFetch<Building[]>("/api/buildings")
-      .then(setBuildings)
+    // fixes61 §3: the top 100 buildings only, not the whole org — with a
+    // few thousand buildings, rendering every one into this dropdown's DOM
+    // on every filter-bar render was the actual lag/freeze source. Typing in
+    // the filter's search box re-fetches server-side instead (see
+    // `searchBuildings` passed as `remoteSearch` below).
+    apiFetch<BuildingPage>("/api/buildings/list?page_size=100")
+      .then((res) => setBuildings(res.items))
       .catch(() => setBuildings([]));
     apiFetch<ReportNumber[]>("/api/report-numbers")
       .then(setReportNumbers)
@@ -1095,6 +1101,14 @@ export default function ApartmentsPage() {
       (buildingIdsForReports === null || buildingIdsForReports.has(b.id)),
   );
 
+  // fixes61 §3: server-side building search backing the filter below —
+  // typing narrows against the full org instead of the top-100 default page.
+  async function searchBuildings(query: string): Promise<{ id: number; label: string }[]> {
+    const params = new URLSearchParams({ q: query, page_size: "100" });
+    const res = await apiFetch<BuildingPage>(`/api/buildings/list?${params}`);
+    return res.items.map((b) => ({ id: b.id, label: buildingDisplayName(b) }));
+  }
+
   // fixes53 §2: the backend now returns every apartment for each building on
   // the page in grouped mode (never a partial building), so the header
   // count is simply how many loaded rows share that building_id — no
@@ -1334,6 +1348,7 @@ export default function ApartmentsPage() {
           value={buildingIds}
           onChange={onBuildingsChange}
           searchPlaceholder={t("filter.search_buildings", "חיפוש בניין…")}
+          remoteSearch={searchBuildings}
         />
         {/* fixes23 §2: multi-select searchable report-number filter.
             fixes33 §5.2: hidden org-wide → no filter control either. */}

@@ -146,6 +146,8 @@ class UserOut(BaseModel):
     phone: Optional[str] = None
     role: str
     is_active: bool = True
+    # fixes61 §2: an activist tracked in the system with no login of their own.
+    is_manual: bool = False
     created_at: datetime
     organization_id: int
     organization: Optional[OrganizationOut] = None
@@ -161,14 +163,19 @@ OrgRole = Literal["admin", "staff", "campaign_manager"]
 
 class OrgUserCreate(BaseModel):
     """An admin provisions a user in their own org. Email is the identity —
-    with no password the account signs in via Google (verified email only)."""
+    with no password the account signs in via Google (verified email only).
+
+    fixes61 §2: `is_manual` covers an activist tracked in the system who never
+    logs in themselves — email (their would-be login identity) is optional
+    for them; the endpoint fills in a username instead of defaulting to it."""
 
     full_name: str
-    email: str
+    email: Optional[str] = None
     role: OrgRole = "staff"
     username: Optional[str] = None  # defaults to the email
     password: Optional[str] = None  # omitted => Google-only account
     phone: Optional[str] = None
+    is_manual: bool = False
 
     _email_lower = field_validator("email")(_normalize_email)
 

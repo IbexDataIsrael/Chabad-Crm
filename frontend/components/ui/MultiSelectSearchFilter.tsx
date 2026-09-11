@@ -16,6 +16,13 @@ import { useLocalization } from "@/lib/localization";
  * (not gated on list length), the panel carries proper listbox semantics, and
  * "select all (filtered) / clear" affordances make bulk selection practical for
  * high-volume lists.
+ *
+ * fixes61 §3: an optional `remoteSearch` (same shape/convention as
+ * `SearchableSelect`'s) swaps the local `options` filter for a debounced
+ * server-side query, for a list too large to load and filter client-side in
+ * one shot (e.g. buildings) — the caller passes a small default/initial
+ * `options` page (e.g. the first 100) and a `remoteSearch` that re-fetches as
+ * the user types.
  */
 export function MultiSelectSearchFilter<Id extends number | string>({
   allLabel,
@@ -27,6 +34,7 @@ export function MultiSelectSearchFilter<Id extends number | string>({
   emptyLabel = "—",
   className = "",
   buttonClassName = "",
+  remoteSearch,
 }: {
   /** Trigger text while nothing is selected, e.g. "כל הבניינים". */
   allLabel: string;
@@ -44,20 +52,74 @@ export function MultiSelectSearchFilter<Id extends number | string>({
   emptyLabel?: string;
   className?: string;
   buttonClassName?: string;
+  /** When set, the dropdown list is fetched server-side per query string
+   *  (debounced) instead of filtering `options` client-side. `options` is
+   *  still used as the initial/default page (before the user has typed) and
+   *  as a label source for already-selected ids. */
+  remoteSearch?: (query: string) => Promise<{ id: Id; label: string }[]>;
 }) {
   const { t } = useLocalization();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [remoteOptions, setRemoteOptions] = useState<{ id: Id; label: string }[]>(options);
+  const [remoteLoading, setRemoteLoading] = useState(false);
+  // fixes61 §3: a selected id can scroll out of the current (small, searched)
+  // result page — this keeps every label ever seen so the trigger button and
+  // checked rows never fall back to a bare id/allLabel once that happens.
+  const [knownLabels, setKnownLabels] = useState<Map<Id, string>>(new Map());
   const rootRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const listboxId = useId();
 
   const visible = useMemo(() => {
+    if (remoteSearch) return remoteOptions;
     const needle = query.trim().toLowerCase();
     return needle
       ? options.filter((o) => o.label.toLowerCase().includes(needle))
       : options;
-  }, [options, query]);
+  }, [options, query, remoteSearch, remoteOptions]);
+
+  useEffect(() => {
+    const src = remoteSearch ? remoteOptions : options;
+    if (src.length === 0) return;
+    setKnownLabels((prev) => {
+      let changed = false;
+      const next = new Map(prev);
+      for (const o of src) {
+        if (next.get(o.id) !== o.label) {
+          next.set(o.id, o.label);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [options, remoteOptions, remoteSearch]);
+
+  // fixes61 §3: debounced server-side fetch, re-run whenever the dropdown is
+  // open and the query changes (including the initial empty query, so the
+  // list reflects a live search rather than staying pinned to `options`).
+  useEffect(() => {
+    if (!remoteSearch || !open) return;
+    let active = true;
+    setRemoteLoading(true);
+    const timer = setTimeout(() => {
+      remoteSearch(query.trim())
+        .then((rows) => {
+          if (active) setRemoteOptions(rows);
+        })
+        .catch(() => {
+          if (active) setRemoteOptions([]);
+        })
+        .finally(() => {
+          if (active) setRemoteLoading(false);
+        });
+    }, 250);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remoteSearch, open, query]);
 
   // Close on outside click; focus the search box when the panel opens.
   useEffect(() => {
@@ -86,10 +148,10 @@ export function MultiSelectSearchFilter<Id extends number | string>({
     if (value.length === 0) return allLabel;
     const selectedText =
       value.length === 1
-        ? options.find((o) => o.id === value[0])?.label ?? allLabel
+        ? (knownLabels.get(value[0]) ?? options.find((o) => o.id === value[0])?.label ?? allLabel)
         : t("filter.n_selected", "{n} נבחרו").replace("{n}", String(value.length));
     return label ? `${label}: ${selectedText}` : selectedText;
-  }, [value, options, allLabel, label, t]);
+  }, [value, options, knownLabels, allLabel, label, t]);
 
   return (
     <div ref={rootRef} className={`relative inline-block ${className}`}>
@@ -124,12 +186,16 @@ export function MultiSelectSearchFilter<Id extends number | string>({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          {/* Bulk affordances for high-volume lists. */}
+          {/* Bulk affordances for high-volume lists. fixes61 §3: in
+              remoteSearch mode `options.length` is just the initial page
+              size, not the org's real total — showing it would be
+              misleading, so the counter is dropped in that mode. */}
           <div className="flex items-center justify-between px-1 pt-2 pb-1 text-xs text-muted-foreground">
             <span>
-              {t("filter.n_of_total", "{n}/{total}")
-                .replace("{n}", String(visible.length))
-                .replace("{total}", String(options.length))}
+              {!remoteSearch &&
+                t("filter.n_of_total", "{n}/{total}")
+                  .replace("{n}", String(visible.length))
+                  .replace("{total}", String(options.length))}
             </span>
             <div className="flex items-center gap-2">
               {visible.length > 0 && (
@@ -159,7 +225,11 @@ export function MultiSelectSearchFilter<Id extends number | string>({
             aria-label={allLabel}
             className="max-h-64 overflow-y-auto space-y-0.5"
           >
-            {options.length === 0 ? (
+            {remoteSearch && remoteLoading ? (
+              <li className="px-2 py-1 text-muted-foreground">
+                {t("action.loading", "טוען…")}
+              </li>
+            ) : options.length === 0 && visible.length === 0 ? (
               <li className="px-2 py-1 text-muted-foreground">{emptyLabel}</li>
             ) : visible.length === 0 ? (
               <li className="px-2 py-1 text-muted-foreground">
