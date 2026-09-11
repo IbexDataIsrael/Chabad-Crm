@@ -67,17 +67,41 @@ export function MultiSelectSearchFilter<Id extends number | string>({
   // result page — this keeps every label ever seen so the trigger button and
   // checked rows never fall back to a bare id/allLabel once that happens.
   const [knownLabels, setKnownLabels] = useState<Map<Id, string>>(new Map());
+  // fixes62 (follow-up): selected items float to the top, but only settle
+  // there between dropdown sessions — the sort order is snapshotted the
+  // moment the dropdown opens and held fixed while it stays open, so
+  // checking an item mid-session doesn't yank it out from under the user's
+  // scroll position. The next time they open it, the snapshot is refreshed
+  // and anything they just checked floats up.
+  const [frozenSelected, setFrozenSelected] = useState<Set<Id>>(new Set());
   const rootRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const listboxId = useId();
 
-  const visible = useMemo(() => {
+  const filtered = useMemo(() => {
     if (remoteSearch) return remoteOptions;
     const needle = query.trim().toLowerCase();
     return needle
       ? options.filter((o) => o.label.toLowerCase().includes(needle))
       : options;
   }, [options, query, remoteSearch, remoteOptions]);
+
+  const visible = useMemo(
+    () =>
+      [...filtered].sort((a, b) => {
+        const aFirst = frozenSelected.has(a.id) ? 0 : 1;
+        const bFirst = frozenSelected.has(b.id) ? 0 : 1;
+        return aFirst - bFirst;
+      }),
+    [filtered, frozenSelected],
+  );
+
+  useEffect(() => {
+    if (open) setFrozenSelected(new Set(value));
+    // Only resnapshot on the open transition, not on every selection change
+    // while it's open — see comment above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   useEffect(() => {
     const src = remoteSearch ? remoteOptions : options;

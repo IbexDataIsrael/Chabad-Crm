@@ -86,6 +86,18 @@ This document details bug fixes and functional enhancements identified during ex
 
 ---
 
+---
+
+## 4. Follow-up: Filter Dropdown Selection Behavior (mid-session clarification) — DONE
+* **Path:** any page using `MultiSelectFilter` or `MultiSelectSearchFilter` (Areas, Apartments, Contacts, Report Numbers, etc.)
+* **Clarification of fixes61 §3's "Dropdown Item Order" item:** that round removed "checked items float to top" entirely because live-reordering-on-every-check felt like the list "jumping" out from under the user mid-scroll. The actual requirement is narrower: (1) selected items should still float to the top, (2) but the view must not jump/reflow while the user is actively scrolling and selecting — they should be able to check several items in a row without the list disrupting itself between clicks.
+
+**Fix:** both `frontend/components/MultiSelectFilter.tsx` and `frontend/components/ui/MultiSelectSearchFilter.tsx` now sort selected items to the top, but the sort key is a **snapshot of the selection taken the moment the dropdown opens**, held fixed for the rest of that open session (a `useEffect` keyed only on `open`, deliberately not on `value`). Checking an item mid-session updates its checkbox instantly but doesn't move it — so scrolling and multi-selecting stays undisturbed. Closing and reopening the dropdown re-snapshots the current selection, floating everything just checked up to the top for the next session.
+
+**Evidence:** live-verified with a headless Chromium drive on two different pages/code paths:
+- `/dashboard/areas`'s area filter (`MultiSelectFilter`, 220 local options): checked the 10th item in the list — it stayed at index 9 immediately after checking (`same item stayed at same slot? True`); closed and reopened the dropdown — it was then the first item shown.
+- `/dashboard/apartments`'s building filter (`MultiSelectSearchFilter` in `remoteSearch` mode, ~2,700 buildings server-side): checked the 6th item in a 100-row search page — same slot immediately after checking, floated to first position on reopen.
+
 ## Verification notes
 - `docker exec sheepsidebay_crm-frontend-1 npx tsc --noEmit` — clean, no errors, after all changes.
 - Backend `pytest` run for regressions (seed.py change is additive-only).

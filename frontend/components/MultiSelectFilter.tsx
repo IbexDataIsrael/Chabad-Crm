@@ -33,14 +33,33 @@ export function MultiSelectFilter<Id extends number | string>({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement | null>(null);
+  // fixes62 (follow-up): selected items float to the top, but only settle
+  // there between dropdown sessions — the sort order is snapshotted the
+  // moment the dropdown opens and held fixed while it stays open, so
+  // checking an item mid-session doesn't yank it out from under the user's
+  // scroll position. The next time they open it, the snapshot is refreshed
+  // and anything they just checked floats up.
+  const [frozenSelected, setFrozenSelected] = useState<Set<Id>>(new Set());
 
   // fixes18 §general: long entity lists (e.g. buildings) are typeable inline.
   const searchable = options.length > 8;
-  const visible = query.trim()
+  const filtered = query.trim()
     ? options.filter((o) =>
         o.label.toLowerCase().includes(query.trim().toLowerCase()),
       )
     : options;
+  const visible = [...filtered].sort((a, b) => {
+    const aFirst = frozenSelected.has(a.id) ? 0 : 1;
+    const bFirst = frozenSelected.has(b.id) ? 0 : 1;
+    return aFirst - bFirst;
+  });
+
+  useEffect(() => {
+    if (open) setFrozenSelected(new Set(value));
+    // Only resnapshot on the open transition, not on every selection change
+    // while it's open — see comment above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
