@@ -54,18 +54,10 @@ export function MultiSelectSearchFilter<Id extends number | string>({
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    const filtered = needle
+    return needle
       ? options.filter((o) => o.label.toLowerCase().includes(needle))
       : options;
-    // fixes60 §4: checked items float to the top — otherwise a selection in
-    // a long, searchable list scrolls out of view the moment it reopens.
-    return [...filtered].sort((a, b) => {
-      const aSelected = value.includes(a.id);
-      const bSelected = value.includes(b.id);
-      if (aSelected === bSelected) return 0;
-      return aSelected ? -1 : 1;
-    });
-  }, [options, query, value]);
+  }, [options, query]);
 
   // Close on outside click; focus the search box when the panel opens.
   useEffect(() => {
