@@ -236,8 +236,8 @@ class TestApartmentSorting17:
         )
         hits = client.get("/api/search?q=לוי", headers=admin_headers).json()["results"]
         apt = [h for h in hits if h["type"] == "apartment"]
-        # fixes21 §2: the title concatenates "[number][floor]" (no separator).
-        assert apt and apt[0]["title"] == "A1"
+        # fixes64 §1: the title is "[floor] [number]", space-separated.
+        assert apt and apt[0]["title"] == "1 A"
 
 
 # --- §1.3 org-branded email + tenant_verification template ---------------------------

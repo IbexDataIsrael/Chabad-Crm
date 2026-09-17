@@ -64,3 +64,38 @@ Spot-checked directly against Neon post-commit: `Haring St 2125` → `building_t
 `is_town_house=True`, apartments `["1", "2", "Haring St 2125"]` (the original pre-existing apartment kept
 alongside the two new ones, per the plan's "apartment dedup is in-file only" decision). This is now live
 on the production site actually served by Render — not just local Docker Postgres.
+
+---
+
+## Follow-up: delete the redundant original apartment (2026-09-17)
+
+The user flagged that leaving the old pre-existing apartment in place (e.g. `Haring St 2125` /
+`Bedford Ave 4195`) alongside the new corrected units was wrong — it should be deleted now that the
+real per-unit apartments exist. Scope: only the **385 buildings reclassified by this run**, not the 9
+that were already `divided_town_house` beforehand (those already had their own correct multi-apartment
+breakdown from earlier work, unrelated to this file).
+
+For each of the 385, the "old" apartment was identified as the single `is_display=true` row whose
+`apartment_name` equalled the building's display name (or that name + `-th`, for the 59 buildings that
+predated the fixes63 `-th`-suffix cleanup) — 385/394 matched this cleanly; the other 9 (pre-existing
+`divided_town_house`) didn't match and were correctly left alone.
+
+Before deleting, checked every candidate for a linked contact (`ContactMekurav.apartment_id`) — **0 of
+385** had one, so no contact record was at risk of being orphaned. Deletion reused the same logic as the
+app's own `DELETE /api/apartments/{id}` endpoint (full version lineage + `PicklistLink` +
+`CustomFieldValue` cleanup, not a raw `DELETE`).
+
+**Known, accepted data loss:** ~109 of the 385 old apartments carried real free-text `apartment_notes`
+from the original 2026-08 canvassing (e.g. "the building was locked, couldn't get in," "gentiles live
+here"). The user was told this explicitly and chose to delete anyway rather than merge the notes into
+the new apartments first — that text is now permanently gone, not migrated.
+
+Ran on local first (dry-run then delete, 385/385 deleted, matched expectations), then identically
+against Neon production (no fresh backup taken for this step — the `pg_dump` from the addition run
+above already covers a full rollback point from before both today's writes). Verified directly on Neon
+post-delete: `Bedford Ave 4195` (building id 9680) now shows only apartments `["1", "2"]`.
+
+| Entity | Before | Change | After |
+|---|---:|---:|---:|
+| Apartments (org 1, local) | 26,650 | −385 | 26,265 |
+| Apartments (org 1, Neon) | 25,568 | −385 | 25,183 |

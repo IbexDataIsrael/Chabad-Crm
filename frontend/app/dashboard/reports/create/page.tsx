@@ -516,11 +516,17 @@ function CreateReportsInner() {
       // Visual order is the reverse of the logical (RTL) column order —
       // autotable lays columns out left-to-right, so קומה must come last to
       // land rightmost.
-      const logicalHeads = activeReportColumns.map((k) => {
-        const subheading = reportColumns.subheadings[k]?.trim();
-        return subheading ? `${columnLabel(k)}\n${subheading}` : columnLabel(k);
-      });
-      const head = [...logicalHeads].reverse();
+      // fixes64 §3: the subheading is now a real second header ROW (not a
+      // second line inside the label's own cell) — it needs its own row to
+      // get a distinct (smaller) font size and to repeat on every page the
+      // same way the label row already does.
+      const logicalLabels = activeReportColumns.map((k) => columnLabel(k));
+      const logicalSubheadings = activeReportColumns.map(
+        (k) => reportColumns.subheadings[k]?.trim() ?? "",
+      );
+      const hasSubheadingRow = logicalSubheadings.some(Boolean);
+      const labelsRow = [...logicalLabels].reverse();
+      const subheadingsRow = [...logicalSubheadings].reverse();
       const visualWidths = [...logicalWidths].reverse();
       const columnStyles = Object.fromEntries(
         visualWidths.map((w, i) => [i, { cellWidth: w }]),
@@ -629,8 +635,11 @@ function CreateReportsInner() {
             // nothing to repeat if it later overflowed onto a new page,
             // leaving that page with no header at all. A header directly
             // above a new building's own rows is normal table convention,
-            // not a duplicate — so it's always shown now.
-            head: [head],
+            // not a duplicate — so it's always shown now. fixes64 §3: the
+            // subheading row (when any column has one) rides along as the
+            // head's 2nd row, so it repeats on every page exactly like the
+            // label row above it.
+            head: hasSubheadingRow ? [labelsRow, subheadingsRow] : [labelsRow],
             body,
             theme: "grid",
             styles: {
@@ -642,8 +651,10 @@ function CreateReportsInner() {
             },
             headStyles: {
               fontStyle: "bold",
-              fillColor: [55, 65, 81],
-              textColor: 255,
+              // fixes64 §3: light grey (was a dark slate background with
+              // white text).
+              fillColor: [229, 231, 235],
+              textColor: [31, 41, 55],
               halign: "right",
             },
             // fixes43 §2: every 2nd body row (Row 2, Row 4, …) gets a light
@@ -654,14 +665,18 @@ function CreateReportsInner() {
             // fixes61 §6: shrink just the header cell's font (never the body's)
             // when its column is too narrow for the label's longest word,
             // instead of letting it wrap into single-character vertical text.
+            // fixes64 §3: the subheading row starts from a smaller base size
+            // than the label row, on top of that same narrow-column shrink.
             didParseCell: (data) => {
               if (data.section !== "head") return;
-              const label = head[data.column.index] ?? "";
+              const isSubheadingRow = hasSubheadingRow && data.row.index === 1;
+              const label =
+                (isSubheadingRow ? subheadingsRow : labelsRow)[data.column.index] ?? "";
               const availableWidth = visualWidths[data.column.index] - cellPad * 2;
               data.cell.styles.fontSize = fitHeaderFontSize(
                 label,
                 availableWidth,
-                baseFontSize,
+                isSubheadingRow ? Math.max(baseFontSize - 2, 6) : baseFontSize,
               );
             },
           });

@@ -130,6 +130,14 @@ export function ContactForm({
     const p = (initial?.phone ?? "").trim();
     return p === "" || isValidPhone(p);
   });
+  // fixes64 §2: an activist with no login of their own — bypasses the email
+  // requirement below (mirrors the Users page's own "manual user" toggle).
+  // Defaults on only when editing an existing activist that already has no
+  // email (so an old email-less record isn't suddenly blocked from saving);
+  // off for a brand-new activist, where email is still the expected default.
+  const [shliachNoLogin, setShliachNoLogin] = useState(
+    () => initial?.id != null && !initial?.email,
+  );
 
   const isMekurav = values.contact_type === "mekurav";
   const isShliach = values.contact_type === "shliach";
@@ -258,7 +266,8 @@ export function ContactForm({
 
       {/* fixes34 §3.1: email is now toggleable too — but a shliach contact's
           email is also their login identity, so it stays force-visible (and
-          required) on a shliach's own form regardless of the org's toggle. */}
+          required, unless the activist has no login — fixes64 §2) on a
+          shliach's own form regardless of the org's toggle. */}
       {(vis("contacts.email") || isShliach) && (
         <Field
           label={
@@ -269,8 +278,19 @@ export function ContactForm({
           <EmailInput
             value={values.email ?? ""}
             onChange={(v) => set("email", v || null)}
-            required={isShliach}
+            required={isShliach && !shliachNoLogin}
           />
+          {isShliach && (
+            <label className="flex items-center gap-2 pt-1 text-sm font-normal cursor-pointer">
+              <input
+                type="checkbox"
+                className="accent-primary"
+                checked={shliachNoLogin}
+                onChange={(e) => setShliachNoLogin(e.target.checked)}
+              />
+              {t("contacts.shliach_no_login", "פעיל ללא גישת התחברות (ללא אימייל)")}
+            </label>
+          )}
         </Field>
       )}
 

@@ -320,17 +320,16 @@ class TestEligibleBuildings:
         assert r.json() == []
 
 
-# --- §5.1 apartment titles (fixes21 §2: number+floor, no separator) -------------------
+# --- §5.1 apartment titles (fixes64 §1: "[floor] [number]", space-separated) ----------
 class TestApartmentTitle:
     def test_number_and_floor_concatenated(self):
-        # fixes21 §2: "[number][floor]" with no separator.
         class A:
             id = 7
             apartment_name = "A"
             floor = "1"
             name = "משפחה"
 
-        assert apartment_title(A()) == "A1"
+        assert apartment_title(A()) == "1 A"
 
     def test_fallbacks(self):
         class A:

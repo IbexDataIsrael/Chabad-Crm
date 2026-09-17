@@ -315,9 +315,12 @@ export function buildingDisplayName(b: {
 }
 
 /**
- * Computed apartment title (fixes21 §2): concatenate "[apartment number][floor]"
- * with no separator — number "A" + floor "2" → "A2". Both present → "A2"; only
- * one → that one; neither → resident name → id. Mirrors backend
+ * Computed apartment title (fixes64 §1): "[floor] [apartment number]",
+ * space-separated — floor "A" + number "2" → "A 2". Handles letter-based
+ * floors combined with numeric apartment numbers unambiguously (the old
+ * no-separator "[number][floor]" form, e.g. "2A", read as a single
+ * apartment label instead of floor A's apartment 2). Both present → "A 2";
+ * only one → that one; neither → resident name → id. Mirrors backend
  * core/display.py apartment_title.
  */
 export function apartmentTitle(a: {
@@ -328,7 +331,7 @@ export function apartmentTitle(a: {
 }): string {
   const label = (a.apartment_name ?? "").trim();
   const floor = (a.floor ?? "").trim();
-  if (label && floor) return `${label}${floor}`;
+  if (label && floor) return `${floor} ${label}`;
   if (label || floor) return label || floor;
   return (a.name ?? "").trim() || `#${a.id}`;
 }

@@ -116,7 +116,7 @@ class TestUnlinkedShliachVisibility:
         assert [a["id"] for a in got] == [area["id"]]
 
 
-# --- §2 no-separator apartment title --------------------------------------------
+# --- §2 apartment title (fixes64 §1: "[floor] [number]", space-separated) --------
 class TestApartmentTitleConcat:
     def test_number_and_floor(self):
         class A:
@@ -125,7 +125,7 @@ class TestApartmentTitleConcat:
             floor = "2"
             name = ""
 
-        assert apartment_title(A()) == "A2"
+        assert apartment_title(A()) == "2 A"
 
     def test_number_only(self):
         class A:
@@ -158,4 +158,4 @@ class TestApartmentTitleConcat:
         )
         hits = client.get("/api/search?q=דוד", headers=admin_headers).json()["results"]
         apt = [h for h in hits if h["type"] == "apartment"]
-        assert apt and apt[0]["title"] == "C4"
+        assert apt and apt[0]["title"] == "4 C"

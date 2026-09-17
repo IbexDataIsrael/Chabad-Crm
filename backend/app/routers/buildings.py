@@ -65,6 +65,15 @@ def _validate_area(area_id: int, org_id: int, db: Session) -> None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "area_id does not exist")
 
 
+def _floor_sort_order_for(name: str, existing: list[models.Floor]) -> int:
+    """fixes52 §3 / fixes64 §1: floor "L" (Lobby) always sorts ahead of every
+    other floor, regardless of when or how it's added — one sort_order below
+    whatever the lowest existing value is (0 when there's nothing yet)."""
+    if name.upper() == "L":
+        return min((f.sort_order for f in existing), default=0) - 1
+    return (existing[-1].sort_order + 1) if existing else 0
+
+
 @router.get("", response_model=list[BuildingListItemOut])
 def list_buildings(
     db: Session = Depends(get_db),
@@ -203,18 +212,24 @@ def create_building(
             )
         )
     else:
-        # Creation hook (fixes7 §3): auto-populate the building's floor records.
-        for index, floor_name in enumerate(payload.floors):
-            if not floor_name.strip():
+        # Creation hook (fixes7 §3): auto-populate the building's floor
+        # records. fixes64 §1: same L-first rule as add_floor() below — the
+        # frontend already sends "L" first in `payload.floors`, but any other
+        # caller (a direct API request, an import script) isn't guaranteed
+        # to, so sort_order can't just be the raw list index.
+        seeded_floors: list[models.Floor] = []
+        for floor_name in payload.floors:
+            name = floor_name.strip()
+            if not name:
                 continue
-            db.add(
-                models.Floor(
-                    organization_id=admin.organization_id,
-                    building_id=b.id,
-                    name=floor_name.strip(),
-                    sort_order=index,
-                )
+            f = models.Floor(
+                organization_id=admin.organization_id,
+                building_id=b.id,
+                name=name,
+                sort_order=_floor_sort_order_for(name, seeded_floors),
             )
+            db.add(f)
+            seeded_floors.append(f)
     db.commit()
     db.refresh(b)
     return b
@@ -286,13 +301,7 @@ def add_floor(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Floor name is required")
     sort_order = payload.sort_order
     if sort_order is None:
-        # fixes52 §3: "L" (Lobby/Level) always sorts ahead of every numbered
-        # floor, regardless of when it's added — there's no drag/reorder UI
-        # for floors, so this auto-placement is the only way to get it right.
-        if name.upper() == "L":
-            sort_order = min((f.sort_order for f in b.floors), default=0) - 1
-        else:
-            sort_order = (b.floors[-1].sort_order + 1) if b.floors else 0
+        sort_order = _floor_sort_order_for(name, b.floors)
     f = models.Floor(
         organization_id=admin.organization_id,
         building_id=b.id,

@@ -206,13 +206,18 @@ class Contact(Base):
     # existing `contact.shliach.x` read/write site keeps working unchanged.
     # No ORM cascade: `ContactShliach.contact_id` cascades at the DB level
     # (ondelete="CASCADE"), which cleans up every version, not just the one
-    # this relationship can see.
+    # this relationship can see. fixes64: `passive_deletes=True` is required
+    # for that DB-level cascade to actually apply — without it, SQLAlchemy's
+    # default one-to-one delete handling still tries to NULL this relationship's
+    # FK on flush (contact_shliach.contact_id is NOT NULL), raising an
+    # IntegrityError on every shliach-contact delete.
     shliach = relationship(
         "ContactShliach",
         back_populates="contact",
         uselist=False,
         primaryjoin="and_(Contact.id==ContactShliach.contact_id, "
         "ContactShliach.is_display==True)",
+        passive_deletes=True,
     )
     # Contact-specific records: removed with the contact (FKs are enforced under
     # PostgreSQL, so these must be cascaded or the delete fails).

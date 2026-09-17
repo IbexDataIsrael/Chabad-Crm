@@ -82,6 +82,11 @@ def cell_text(ws, row, col):
 def floor_sort_order(name, warnings, row):
     if name.isdigit():
         return int(name)
+    # fixes64 §1: "L" (Lobby) always sorts ahead of every other floor,
+    # including the basement below — mirrors the app's own
+    # add_floor()/create_building() rule (app/routers/buildings.py).
+    if name.upper() == "L":
+        return -1000
     if name == "BSMT":
         return -1
     warnings.append(f"row {row}: unexpected floor name '{name}' — sort_order 999")

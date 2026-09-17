@@ -29,15 +29,18 @@ def building_display_name(building) -> str:
 
 
 def apartment_title(apartment) -> str:
-    """Computed title (fixes21 §2): concatenate "[apartment number][floor]" with
-    no separator — number "A" + floor "2" → "A2".
+    """Computed title (fixes64 §1): "[floor] [apartment number]", space-
+    separated — floor "A" + number "2" → "A 2". Handles letter-based floors
+    combined with numeric apartment numbers unambiguously (the old no-
+    separator "[number][floor]" form, e.g. "2A", read as a single apartment
+    label instead of floor A's apartment 2).
 
-    Both present → "A2"; only one → that one; neither → resident name → id.
+    Both present → "A 2"; only one → that one; neither → resident name → id.
     Keep in sync with the frontend twin (frontend/lib/types.ts apartmentTitle)."""
     label = (getattr(apartment, "apartment_name", None) or "").strip()
     floor = (getattr(apartment, "floor", None) or "").strip()
     if label and floor:
-        return f"{label}{floor}"
+        return f"{floor} {label}"
     if label or floor:
         return label or floor
     resident = (getattr(apartment, "name", None) or "").strip()

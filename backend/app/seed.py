@@ -53,6 +53,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("column", "buildings.area_id", "אזור", "Area"),
     ("column", "buildings.building_name", "שם בניין", "Building name"),
     ("column", "buildings.building_address", "כתובת בניין", "Building address"),
+    ("column", "buildings.building_type", "סוג בניין", "Building type"),
     ("column", "apartments.building_id", "בניין", "Building"),
     # fixes13: the apartment label is its NUMBER (was "כותרת"/"Title"; existing
     # rows are updated by a one-off data fix since re-seeding never overwrites).
@@ -297,6 +298,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("column", "contacts.email_for_login", "להתחברות", "for sign-in"),
     ("column", "contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל", "Report numbers covered by the activist"),
     ("column", "contact_shliach.areas", "אזורים באחריות הפעיל", "Areas covered by the activist"),
+    ("action", "contacts.shliach_no_login", "פעיל ללא גישת התחברות (ללא אימייל)", "Activist without login access (no email)"),
     ("msg", "msg.delete_contact_confirm", "למחוק את איש הקשר? פעולה זו אינה הפיכה.", "Delete this contact? This action cannot be undone."),
     ("action", "action.create_contact", "צור איש קשר", "Create contact"),
     ("action", "action.done_to_contact", "סיום — מעבר לכרטיס", "Done — go to contact"),
@@ -498,6 +500,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("users", "users.role_label", "תפקיד", "Role"),
     ("users", "users.password_optional", "סיסמה (לא חובה)", "Password (optional)"),
     ("users", "users.google_only_hint", "ללא סיסמה — המשתמש יתחבר עם Google לפי כתובת האימייל המאומתת.", "Without a password the user signs in with Google using their verified email."),
+    ("users", "users.manual_user", "משתמש ידני (ללא גישה למערכת)", "Manual user (no system access)"),
     ("users", "users.none", "אין משתמשים.", "No users."),
     ("users", "users.created", "המשתמש נוצר ונשלח אליו מייל קבלת פנים", "User created — a welcome email was sent"),
     ("users", "users.updated", "המשתמש עודכן", "User updated"),

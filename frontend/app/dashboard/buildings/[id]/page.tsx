@@ -19,14 +19,21 @@ import {
   type Apartment,
   type Area,
   type Building,
+  type BuildingType,
 } from "@/lib/types";
 
 const inputClass =
   "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
+/** Render a building_type row in the given language (mirrors the buildings
+ *  list page's own displayBuildingType / lib/picklists.ts's displayPicklistValue). */
+function displayBuildingType(bt: BuildingType, lang: string): string {
+  return (lang === "en" ? bt.name_en : bt.name_he) || bt.name_en || bt.id;
+}
+
 export default function BuildingDetailPage() {
   const { isAdmin, loading } = useAuth();
-  const { t } = useLocalization();
+  const { t, lang } = useLocalization();
   const { isFieldVisible } = useFieldSettings();
   const params = useParams<{ id: string }>();
   const buildingId = Number(params.id);
@@ -36,6 +43,8 @@ export default function BuildingDetailPage() {
   const [apartments, setApartments] = useState<Apartment[]>([]);
   // fixes30 §3: option source for the inline area select (admins only).
   const [areas, setAreas] = useState<Area[]>([]);
+  // fixes64 §1: building-type registry, for the type row below.
+  const [buildingTypes, setBuildingTypes] = useState<BuildingType[]>([]);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
 
@@ -63,6 +72,11 @@ export default function BuildingDetailPage() {
       )
       .finally(() => setLoaded(true));
   }, [buildingId, loading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (loading) return;
+    apiFetch<BuildingType[]>("/api/buildings/types").then(setBuildingTypes).catch(() => {});
+  }, [loading]);
 
   useEffect(() => {
     if (loading || !isAdmin) return;
@@ -161,6 +175,20 @@ export default function BuildingDetailPage() {
             <dt className="text-muted-foreground">{t("apartments", "דירות")}</dt>
             <dd className="font-medium">{apartments.length}</dd>
           </div>
+          {/* fixes64 §1: the building's type (building / town_house /
+              divided_town_house) — the list page already shows it as a badge,
+              but the single-building view had no equivalent. */}
+          {building.building_type_id && (
+            <div>
+              <dt className="text-muted-foreground">{t("buildings.building_type", "סוג בניין")}</dt>
+              <dd className="font-medium">
+                {(() => {
+                  const bt = buildingTypes.find((x) => x.id === building.building_type_id);
+                  return bt ? displayBuildingType(bt, lang) : building.building_type_id;
+                })()}
+              </dd>
+            </div>
+          )}
           {isFieldVisible("buildings.building_name") &&
             (building.building_name || isAdmin) && (
               <div>

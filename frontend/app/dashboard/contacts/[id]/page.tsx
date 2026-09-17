@@ -285,20 +285,26 @@ export default function ContactDetailPage() {
         ) : (
           <span />
         )}
-        <div className="flex items-center gap-2">
-          {/* fixes30 §2b: open the segment-order configuration. */}
-          <Button variant="outline" size="sm" onClick={() => setOrderOpen((v) => !v)}>
-            <Settings2 className="h-4 w-4" /> {t("contact.display_order", "סדר תצוגה")}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="border-status-darkred/30 text-status-darkred hover:bg-status-darkred/10"
-            onClick={remove}
-          >
-            <Trash2 className="h-4 w-4" /> {t("action.delete", "מחק")}
-          </Button>
-        </div>
+        {/* fixes64 §4: an activist's own page drops the segment-reorder and
+            delete buttons — reordering is pointless once the mekurav-only
+            segments (visits/dates/donations) are already hidden below, and
+            removing a shliach login belongs on the Users page instead. */}
+        {contact.contact_type !== "shliach" && (
+          <div className="flex items-center gap-2">
+            {/* fixes30 §2b: open the segment-order configuration. */}
+            <Button variant="outline" size="sm" onClick={() => setOrderOpen((v) => !v)}>
+              <Settings2 className="h-4 w-4" /> {t("contact.display_order", "סדר תצוגה")}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-status-darkred/30 text-status-darkred hover:bg-status-darkred/10"
+              onClick={remove}
+            >
+              <Trash2 className="h-4 w-4" /> {t("action.delete", "מחק")}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* fixes30 §2b: reorder the page segments; saved to the account. */}

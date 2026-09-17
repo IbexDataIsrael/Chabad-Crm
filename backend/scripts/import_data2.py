@@ -190,6 +190,11 @@ def floor_sort_order(name, warnings):
     if m:
         return int(m.group(1))
     upper = s.upper()
+    # fixes64 §1: "L" (Lobby) always sorts ahead of every other floor,
+    # including the basement/sub-basement tiers below — mirrors the app's own
+    # add_floor()/create_building() rule (app/routers/buildings.py).
+    if upper == "L":
+        return -1000
     if upper in ("BSMT", "B", "LB") or s == "למטה":
         return -1
     if upper == "LL":
