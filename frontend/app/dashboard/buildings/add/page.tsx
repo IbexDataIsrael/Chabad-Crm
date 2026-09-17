@@ -51,7 +51,7 @@ function AddBuildingInner() {
   // floor at creation time instead of requiring a separate edit-page step.
   const [includeLobby, setIncludeLobby] = useState(false);
   // fixes19 §4: a town house (בית פרטי) skips floor generation entirely — the
-  // server spawns a single "<name>-th" apartment instead.
+  // server spawns a single apartment instead.
   const [isTownHouse, setIsTownHouse] = useState(false);
   const [error, setError] = useState("");
   // Geofence interceptor (fixes7 §7B).

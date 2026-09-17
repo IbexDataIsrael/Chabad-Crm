@@ -361,6 +361,8 @@ class TestTownHouse:
             floors=["1", "2", "3"],  # explicitly ignored for a town house
         )
         assert b["is_town_house"] is True
+        assert b["building_type_id"] == "town_house"
+        assert b["is_townhouse"] is True
         floors = client.get(
             f"/api/buildings/{b['id']}/floors", headers=admin_headers
         ).json()
@@ -369,12 +371,14 @@ class TestTownHouse:
             f"/api/apartments?building_id={b['id']}", headers=admin_headers
         ).json()
         assert len(apartments) == 1
-        assert apartments[0]["apartment_name"] == "12 Private Rd-th"
+        assert apartments[0]["apartment_name"] == "12 Private Rd"
 
     def test_regular_building_unaffected(self, client, admin_headers):
         area = _mk_area(client, admin_headers)
         b = _mk_building(client, admin_headers, area["id"], address="5 Multi St, City")
         assert b["is_town_house"] is False
+        assert b["building_type_id"] == "building"
+        assert b["is_townhouse"] is False
         floors = client.get(
             f"/api/buildings/{b['id']}/floors", headers=admin_headers
         ).json()

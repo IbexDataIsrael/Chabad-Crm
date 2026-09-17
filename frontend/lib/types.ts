@@ -190,13 +190,14 @@ export interface Building {
   building_address: string | null;
   longitude: number | null;
   latitude: number | null;
-  /** fixes19 §4: a town house gets no floors — one auto "<name>-th" unit. */
+  /** fixes19 §4: a town house gets no floors — one auto apartment unit. */
   is_town_house?: boolean;
+  /** fixes63: 'building' | 'town_house' | 'divided_town_house'. */
+  building_type_id?: string;
   floors?: Floor[];
-  /** fixes54 §5: server-computed (not the admin-set flag above) — true when
-   *  this building holds exactly one active apartment whose apartment_name
-   *  contains "-th". Only populated by `/api/buildings/list`; always false
-   *  from the plain `/api/buildings` (pickers/filters never show this icon). */
+  /** fixes63: server-derived from `building_type_id` — true only for a
+   *  plain, undivided town house (false once it's been split into multiple
+   *  apartment units). Drives the small-house icon in the UI. */
   is_townhouse?: boolean;
 }
 

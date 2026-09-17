@@ -285,9 +285,8 @@ function BuildingRow({
             href={`/dashboard/buildings/${building.id}`}
             className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline"
           >
-            {/* fixes54 §5: a small house icon marks a townhouse (exactly one
-                active apartment whose identifier contains "-th") — a
-                standard building icon otherwise. */}
+            {/* fixes63: a small house icon marks a plain (undivided) town
+                house — a standard building icon otherwise. */}
             {building.is_townhouse ? (
               <span title={t("buildings.is_town_house", "בית פרטי")}>
                 <Home className="h-4 w-4 shrink-0" />

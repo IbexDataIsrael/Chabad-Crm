@@ -86,6 +86,13 @@ entities that matter for orienting yourself:
   **also versioned** (same pattern as ContactShliach — editing retires and
   replaces). A Building's `area_id` places it on the map; a Floor gives an
   apartment its natural sort position (with `"L"` sorting before `1`).
+  **BuildingType** (fixes63, global like `Role`) is `building` |
+  `town_house` | `divided_town_house`, backing `Building.building_type_id`.
+  A town house (`is_town_house=True`) gets no floors — one auto apartment
+  instead — and starts as `town_house`; adding a second unit later flips it
+  to `divided_town_house`. `Building.is_townhouse` (derived property,
+  `building_type_id == "town_house"`) drives the small-house vs. standard
+  building icon.
 - **ReportNumber** — an organizational grouping independent of geography;
   both apartments and activists attach to one, and it drives the mandatory
   grid sort order (Report Number → Building → Floor).

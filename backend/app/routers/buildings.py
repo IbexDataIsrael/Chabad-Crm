@@ -64,31 +64,6 @@ def _validate_area(area_id: int, org_id: int, db: Session) -> None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "area_id does not exist")
 
 
-def _townhouse_flags(building_ids: list[int], db: Session) -> dict[int, bool]:
-    """fixes54 §5: a building is a "townhouse" when it holds exactly one
-    active apartment whose identifier (apartment_name) contains "-th" — one
-    extra query over the (small, paginated) set of building ids on the
-    current page, done in Python rather than a DB-side aggregate (`bool_or`
-    is Postgres-only; the test suite runs on SQLite)."""
-    if not building_ids:
-        return {}
-    rows = (
-        db.query(models.Apartment.building_id, models.Apartment.apartment_name)
-        .filter(
-            models.Apartment.building_id.in_(building_ids),
-            models.Apartment.is_display.is_(True),
-        )
-        .all()
-    )
-    by_building: dict[int, list[str]] = {}
-    for building_id, apartment_name in rows:
-        by_building.setdefault(building_id, []).append(apartment_name or "")
-    return {
-        bid: len(names) == 1 and "-th" in names[0].lower()
-        for bid, names in by_building.items()
-    }
-
-
 @router.get("", response_model=list[BuildingListItemOut])
 def list_buildings(
     db: Session = Depends(get_db),
@@ -178,12 +153,7 @@ def list_buildings_paginated(
         .limit(page_size)
         .all()
     )
-    townhouse_flags = _townhouse_flags([b.id for b in rows], db)
-    items = []
-    for b in rows:
-        out = BuildingOut.model_validate(b)
-        out.is_townhouse = townhouse_flags.get(b.id, False)
-        items.append(out)
+    items = [BuildingOut.model_validate(b) for b in rows]
     return BuildingPageOut(items=items, total=total, page=page, page_size=page_size)
 
 
@@ -195,17 +165,21 @@ def create_building(
 ):
     _validate_area(payload.area_id, admin.organization_id, db)
     data = payload.model_dump(exclude={"floors"})
+    if data.get("is_town_house"):
+        # fixes63: the explicit type column is now the source of truth for
+        # "is this a town house" — set it alongside the legacy flag.
+        data["building_type_id"] = "town_house"
     b = models.Building(**data, organization_id=admin.organization_id)
     db.add(b)
     db.flush()
     if b.is_town_house:
         # fixes19 §4: a town house (בית פרטי) gets no floors — spawn exactly
-        # one apartment unit named "<building name>-th" instead.
+        # one apartment unit instead.
         db.add(
             models.Apartment(
                 organization_id=admin.organization_id,
                 building_id=b.id,
-                apartment_name=f"{building_display_name(b)}-th",
+                apartment_name=building_display_name(b),
             )
         )
     else:

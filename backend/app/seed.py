@@ -1849,6 +1849,26 @@ def seed_roles(db: Session) -> None:
         db.commit()
 
 
+_BUILDING_TYPES = [
+    ("building", "Building", "בניין"),
+    ("town_house", "Town house", "בית פרטי"),
+    ("divided_town_house", "Divided town house", "בית מחולק"),
+]
+
+
+def seed_building_types(db: Session) -> None:
+    """fixes63: the fixed building-type set backing `buildings.building_type_id`'s
+    FK. Must run before any building is created/updated. Idempotent."""
+    existing = {r.id for r in db.query(models.BuildingType).all()}
+    dirty = False
+    for id_, name_en, name_he in _BUILDING_TYPES:
+        if id_ not in existing:
+            db.add(models.BuildingType(id=id_, name_en=name_en, name_he=name_he))
+            dirty = True
+    if dirty:
+        db.commit()
+
+
 def seed_superadmin(db: Session) -> None:
     """Seed the platform superadmin into a dedicated System organization.
 
@@ -1950,6 +1970,7 @@ def seed_all(db: Session) -> None:
     so no default admin/admin123 or sample contacts reach the live database.
     """
     seed_roles(db)
+    seed_building_types(db)
     seed_localization(db)
     seed_superadmin(db)
     seed_email_templates(db)

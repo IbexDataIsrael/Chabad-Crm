@@ -626,6 +626,21 @@ class Area(Base):
     )
 
 
+class BuildingType(Base):
+    """fixes63: the fixed set of building type identifiers ('building' |
+    'town_house' | 'divided_town_house'), global like `Role` — every org
+    shares the same small set. Unlike `Role`, display labels live directly on
+    the row (`name_en`/`name_he`) rather than in `field_localization`: this is
+    a small, closed reference list an admin never renames, so there is no
+    separate presentation layer to keep in sync."""
+
+    __tablename__ = "building_type"
+
+    id = Column(String(50), primary_key=True)
+    name_en = Column(String(100), nullable=False)
+    name_he = Column(String(100), nullable=False)
+
+
 class Building(Base):
     __tablename__ = "buildings"
 
@@ -642,13 +657,25 @@ class Building(Base):
     longitude = Column(Float, nullable=True)
     latitude = Column(Float, nullable=True)
     # fixes19 §4: a town house (בית פרטי) gets no floors — creation spawns a
-    # single "<name>-th" apartment instead.
+    # single apartment instead.
     is_town_house = Column(
         Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    # fixes63: explicit categorization, replacing the old "-th"-suffix string
+    # heuristic. Set to 'town_house' at creation alongside is_town_house, then
+    # flipped to 'divided_town_house' if a second apartment unit is later
+    # added (see routers/apartments.py create_apartment).
+    building_type_id = Column(
+        String(50),
+        ForeignKey("building_type.id"),
+        nullable=False,
+        default="building",
+        server_default=text("'building'"),
     )
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     area = relationship("Area", back_populates="buildings")
+    building_type = relationship("BuildingType")
     apartments = relationship(
         "Apartment", back_populates="building", cascade="all, delete-orphan"
     )
@@ -658,6 +685,13 @@ class Building(Base):
         cascade="all, delete-orphan",
         order_by="Floor.sort_order, Floor.id",
     )
+
+    @property
+    def is_townhouse(self) -> bool:
+        """fixes63: true for a plain (undivided) town house — drives the
+        small-house icon in the UI. False for a regular building or a town
+        house that's since been split into multiple apartment units."""
+        return self.building_type_id == "town_house"
 
 
 class Floor(Base):

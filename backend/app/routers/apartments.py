@@ -703,7 +703,13 @@ def create_apartment(
     current_user: models.User = Depends(get_current_user),
 ):
     org_id = current_user.organization_id
-    _validate_building(payload.building_id, org_id, db)
+    building = _validate_building(payload.building_id, org_id, db)
+    if building.building_type_id == "town_house":
+        # fixes63: a second unit means the town house has been split — the
+        # single-"-th"-apartment convention is gone, so this is now the only
+        # signal that distinguishes an undivided town house from one that
+        # isn't.
+        building.building_type_id = "divided_town_house"
     data = payload.model_dump()
     contact_id = data.pop("contact_id", None)
     # fixes51 §2.2: language is multi-select, handled separately from the

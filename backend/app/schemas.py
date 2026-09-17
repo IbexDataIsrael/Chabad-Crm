@@ -723,12 +723,12 @@ class BuildingOut(BaseModel):
     longitude: Optional[float] = None
     latitude: Optional[float] = None
     is_town_house: bool = False
+    # fixes63: 'building' | 'town_house' | 'divided_town_house'.
+    building_type_id: str = "building"
     floors: list[FloorOut] = []
-    # fixes54 §5: derived — true when this building holds exactly one active
-    # apartment and that apartment's identifier (apartment_name) contains
-    # "-th". Computed per-request in the router (not a stored column, unlike
-    # the admin-set `is_town_house` above); drives the small-house vs.
-    # standard-building icon in the UI.
+    # fixes63: derived from `building_type_id` (`Building.is_townhouse`
+    # property) — true only for a plain, undivided town house. Drives the
+    # small-house vs. standard-building icon in the UI.
     is_townhouse: bool = False
 
 
@@ -751,6 +751,7 @@ class BuildingListItemOut(BaseModel):
     longitude: Optional[float] = None
     latitude: Optional[float] = None
     is_town_house: bool = False
+    building_type_id: str = "building"
     is_townhouse: bool = False
 
 
