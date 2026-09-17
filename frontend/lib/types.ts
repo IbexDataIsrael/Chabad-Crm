@@ -181,6 +181,14 @@ export interface Floor {
   sort_order: number;
 }
 
+/** fixes63: a row from the global `building_type` registry — id is the
+ *  stored technical value ('building' | 'town_house' | 'divided_town_house'). */
+export interface BuildingType {
+  id: string;
+  name_en: string;
+  name_he: string;
+}
+
 export interface Building {
   id: number;
   guid: string;

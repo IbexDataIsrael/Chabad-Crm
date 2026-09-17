@@ -62,14 +62,16 @@ def _no_real_email(monkeypatch):
 @pytest.fixture(autouse=True)
 def _setup_db():
     Base.metadata.create_all(bind=engine)
-    # Seed the roles table (users.role FK target) + editable email templates
-    # so admin template tests + the signup emails have their rows (mirrors
+    # Seed the roles table (users.role FK target), the building_type table
+    # (buildings.building_type_id FK target) + editable email templates so
+    # admin template tests + the signup emails have their rows (mirrors
     # seed_all on startup).
-    from app.seed import seed_email_templates, seed_roles
+    from app.seed import seed_building_types, seed_email_templates, seed_roles
 
     db = TestingSessionLocal()
     try:
         seed_roles(db)
+        seed_building_types(db)
         seed_email_templates(db)
     finally:
         db.close()

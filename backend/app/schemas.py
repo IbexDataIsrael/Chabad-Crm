@@ -667,6 +667,14 @@ class FloorUpdate(BaseModel):
     sort_order: Optional[int] = None
 
 
+class BuildingTypeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name_en: str
+    name_he: str
+
+
 class BuildingBase(BaseModel):
     area_id: int
     # fixes7 §2: building_name is optional; the address is the required field.

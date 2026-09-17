@@ -15,6 +15,7 @@ from app.schemas import (
     BuildingListItemOut,
     BuildingOut,
     BuildingPageOut,
+    BuildingTypeOut,
     BuildingUpdate,
     FloorCreate,
     FloorOut,
@@ -82,12 +83,29 @@ def list_buildings(
     return query.order_by(models.Building.building_address).all()
 
 
+_BUILDING_TYPE_ORDER = ["building", "town_house", "divided_town_house"]
+
+
+@router.get("/types", response_model=list[BuildingTypeOut])
+def list_building_types(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """fixes63: the fixed building_type registry (global, not org-scoped) —
+    lets the buildings page show/filter by type without hardcoding labels.
+    No `sort_order` column (matches the table exactly as spec'd) — ordered
+    here by the natural building → town_house → divided_town_house progression."""
+    rows = {r.id: r for r in db.query(models.BuildingType).all()}
+    return [rows[i] for i in _BUILDING_TYPE_ORDER if i in rows]
+
+
 @router.get("/list", response_model=BuildingPageOut)
 def list_buildings_paginated(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
     area_id: Optional[int] = None,
     area_ids: Optional[list[int]] = Query(None),
+    building_type_ids: Optional[list[str]] = Query(None),
     q: Optional[str] = None,
     sort: Literal["address", "name", "area", "created"] = "address",
     dir: Literal["asc", "desc"] = "asc",
@@ -122,6 +140,8 @@ def list_buildings_paginated(
         query = query.filter(models.Building.area_id == area_id)
     if area_ids:
         query = query.filter(models.Building.area_id.in_(area_ids))
+    if building_type_ids:
+        query = query.filter(models.Building.building_type_id.in_(building_type_ids))
     if q and q.strip():
         like = f"%{q.strip()}%"
         query = query.filter(

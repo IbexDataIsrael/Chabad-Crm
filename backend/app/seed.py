@@ -308,6 +308,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("page", "page.need_area_first", "יש להגדיר אזור אחד לפחות לפני הוספת בניין.", "Define at least one area before adding a building."),
     ("page", "page.no_buildings", "אין בניינים להצגה.", "No buildings to show."),
     ("filter", "filter.by_area", "סנן לפי אזור:", "Filter by area:"),
+    ("filter", "filter.by_building_type", "סנן לפי סוג בניין:", "Filter by building type:"),
     ("filter", "filter.all", "הכל", "All"),
     ("msg", "msg.delete_building_confirm", "למחוק את הבניין?", "Delete this building?"),
     ("msg", "msg.select_area", "יש לבחור אזור", "Please select an area"),

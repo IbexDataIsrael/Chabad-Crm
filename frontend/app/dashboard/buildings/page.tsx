@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { isFeatureEnabled, useAuth } from "@/lib/auth";
 import { useFieldSettings } from "@/lib/fieldSettings";
-import { useLocalization } from "@/lib/localization";
+import { useLocalization, type Lang } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 import { useConfirm } from "@/lib/confirm";
@@ -24,18 +24,30 @@ import {
   type Area,
   type Building,
   type BuildingPage,
+  type BuildingType,
 } from "@/lib/types";
+
+/** Render a building_type row in the given language (mirrors
+ *  lib/picklists.ts's displayPicklistValue for the picklist engine). */
+function displayBuildingType(bt: BuildingType, lang: Lang): string {
+  return (lang === "en" ? bt.name_en : bt.name_he) || bt.name_en || bt.id;
+}
 
 type SortKey = "address" | "name" | "area" | "created";
 
 export default function BuildingsPage() {
   const { isAdmin, loading, user } = useAuth();
-  const { t } = useLocalization();
+  const { t, lang } = useLocalization();
   const [areas, setAreas] = useState<Area[]>([]);
+  const [buildingTypes, setBuildingTypes] = useState<BuildingType[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
   // fixes15 §7.1: multi-area filter + sorting; §1.2: everything persisted.
   const [areaIds, setAreaIds] = usePersistentState<number[]>(
     "crm.buildings.areaIds", [],
+  );
+  // fixes63: filter by building type (building / town_house / divided_town_house).
+  const [buildingTypeIds, setBuildingTypeIds] = usePersistentState<string[]>(
+    "crm.buildings.buildingTypeIds", [],
   );
   const [sort, setSort] = usePersistentState<SortKey>("crm.buildings.sort", "address");
   const [dir, setDir] = usePersistentState<"asc" | "desc">("crm.buildings.dir", "asc");
@@ -48,6 +60,7 @@ export default function BuildingsPage() {
   async function reload() {
     const params = new URLSearchParams();
     areaIds.forEach((id) => params.append("area_ids", String(id)));
+    buildingTypeIds.forEach((id) => params.append("building_type_ids", id));
     params.set("sort", sort);
     params.set("dir", dir);
     params.set("page", String(page));
@@ -59,15 +72,21 @@ export default function BuildingsPage() {
 
   useEffect(() => {
     apiFetch<Area[]>("/api/areas").then(setAreas).catch(() => {});
+    apiFetch<BuildingType[]>("/api/buildings/types").then(setBuildingTypes).catch(() => {});
   }, []);
 
   useEffect(() => {
     reload().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [areaIds, sort, dir, page, pageSize]);
+  }, [areaIds, buildingTypeIds, sort, dir, page, pageSize]);
 
   function onAreasChange(ids: number[]) {
     setAreaIds(ids);
+    setPage(1);
+  }
+
+  function onBuildingTypesChange(ids: string[]) {
+    setBuildingTypeIds(ids);
     setPage(1);
   }
 
@@ -87,6 +106,16 @@ export default function BuildingsPage() {
     // "unassign") — area_id is null, not just an unknown id.
     return (id: number | null) => (id == null ? "—" : (map.get(id) ?? "—"));
   }, [areas]);
+
+  const buildingTypeName = useMemo(() => {
+    const map = new Map<string, BuildingType>();
+    buildingTypes.forEach((bt) => map.set(bt.id, bt));
+    return (id: string | null | undefined) => {
+      if (!id) return null;
+      const bt = map.get(id);
+      return bt ? displayBuildingType(bt, lang) : null;
+    };
+  }, [buildingTypes, lang]);
 
   const lastPage = Math.max(1, Math.ceil(total / pageSize));
   const rangeText = t("pager.range", "{from}–{to} מתוך {total}")
@@ -136,6 +165,14 @@ export default function BuildingsPage() {
             options={areas.map((a) => ({ id: a.id, label: a.area_name }))}
             value={areaIds}
             onChange={onAreasChange}
+          />
+          {/* fixes63: filter by building type. */}
+          <span className="text-muted-foreground">{t("filter.by_building_type", "סנן לפי סוג בניין:")}</span>
+          <MultiSelectFilter
+            allLabel={t("filter.all", "הכל")}
+            options={buildingTypes.map((bt) => ({ id: bt.id, label: displayBuildingType(bt, lang) }))}
+            value={buildingTypeIds}
+            onChange={onBuildingTypesChange}
           />
           {/* fixes15 §7.1: full column sorting. */}
           <span className="flex items-center gap-2 text-muted-foreground">
@@ -195,6 +232,7 @@ export default function BuildingsPage() {
             key={b.id}
             building={b}
             areaName={areaName(b.area_id)}
+            buildingTypeName={buildingTypeName(b.building_type_id)}
             isAdmin={isAdmin}
             onDeleted={reload}
           />
@@ -265,11 +303,13 @@ function DeleteButton({
 function BuildingRow({
   building,
   areaName,
+  buildingTypeName,
   isAdmin,
   onDeleted,
 }: {
   building: Building;
   areaName: string;
+  buildingTypeName: string | null;
   isAdmin: boolean;
   onDeleted: () => Promise<void>;
 }) {
@@ -309,6 +349,11 @@ function BuildingRow({
           )}
         </div>
         <Badge variant="secondary">{areaName}</Badge>
+        {/* fixes63: the explicit type (building / town_house / divided_town_house)
+            — distinguishes a divided town house from a plain one, which the
+            icon alone can't (both differ from a regular building icon-wise
+            only when undivided). */}
+        {buildingTypeName && <Badge variant="secondary">{buildingTypeName}</Badge>}
         {(building.floors?.length ?? 0) > 0 && (
           <Badge variant="secondary">
             {building.floors!.length} {t("buildings.floors", "קומות")}

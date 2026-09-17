@@ -1,8 +1,6 @@
 # Migration & Update: Building Type
 
-**Status (2026-09-17): done locally, not deployed/pushed.** Backend only — no
-frontend UI changes were needed (the existing "בית פרטי" checkbox still
-drives creation; `building_type_id` is derived from it server-side).
+**Status (2026-09-17): done locally, not deployed/pushed.**
 
 - [x] `building_type` table created + seeded (`building` / `town_house` /
   `divided_town_house`) — Alembic migration `b3c4d5e6f7a8`
@@ -40,6 +38,39 @@ drives creation; `building_type_id` is derived from it server-side).
   (the ~25k-apartment import dataset, not just SQLite/pytest): backfilled
   844 `building` / 7796 `town_house` / 147 `divided_town_house`, and
   confirmed zero remaining "-th" suffixes anywhere afterward.
+
+## Follow-up: display + filter on the buildings page
+
+User request: "the building type should be displayed on buildings page +
+filter for building type."
+
+- [x] `GET /api/buildings/types` (new, read-only, any authenticated user) —
+  the 3-row `building_type` registry in a fixed display order (`building` →
+  `town_house` → `divided_town_house`; the table has no `sort_order`
+  column, matching the spec'd schema exactly).
+- [x] `GET /api/buildings/list` gained `building_type_ids` (repeated
+  params, same pattern as `area_ids`) — filters the page server-side.
+- [x] `/dashboard/buildings`: a `MultiSelectFilter` next to the area filter
+  ("סנן לפי סוג בניין:"), persisted like the other filters
+  (`crm.buildings.buildingTypeIds`); each row now shows a badge with the
+  building's type name (בניין / בית פרטי / בית מחולק) picked in the
+  current UI language from the registry's `name_he`/`name_en` (mirrors
+  `lib/picklists.ts`'s `displayPicklistValue`) — added because the type
+  badge is the only way to tell a `divided_town_house` apart from a plain
+  `building` in the list (the small-house icon only marks `town_house`).
+- [x] `backend/tests/conftest.py`'s `_setup_db` fixture now also seeds
+  `building_type` (only `roles` was seeded before) — SQLite doesn't enforce
+  the FK so building creation "worked" anyway pre-fix, but
+  `GET /api/buildings/types` legitimately needs the rows to exist.
+- [x] Added `TestBuildingTypeRegistryAndFilter` to `test_fixes63.py` (types
+  order/labels, filter-by-one-type, filter-by-two-types). Full suite: 530
+  passed. `tsc --noEmit` clean.
+- [x] Live-verified in a real browser (Playwright against a throwaway local
+  org, backend on :8001 / frontend on :3001 pointed at `crm_local_postgres`):
+  created a plain building + a town house, confirmed both badges render,
+  the dropdown lists all 3 Hebrew labels, and filtering by "בית פרטי" shows
+  only the town house — screenshots taken, throwaway org deleted via the
+  superadmin API afterward.
 
 **Not done / accepted limitations:**
 - No manual admin UI to reclassify a building's type after creation (e.g.
