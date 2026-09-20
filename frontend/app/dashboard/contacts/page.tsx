@@ -2,11 +2,21 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Mail, Plus, SquarePen, SlidersHorizontal, Settings2, X } from "lucide-react";
+import {
+  Mail,
+  Plus,
+  SquarePen,
+  SlidersHorizontal,
+  Settings2,
+  X,
+} from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ApartmentPicker } from "@/components/ApartmentPicker";
-import { CustomFieldValueDisplay, CustomFieldValueInput } from "@/components/CustomFieldValueInput";
+import {
+  CustomFieldValueDisplay,
+  CustomFieldValueInput,
+} from "@/components/CustomFieldValueInput";
 import { DatePicker } from "@/components/DatePicker";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { PicklistSelect } from "@/components/PicklistSelect";
@@ -79,7 +89,13 @@ const DEFAULT_COLUMNS: ColumnKey[] = ["phone", "owner", "created"];
 // fixes43 §1: "owner" (Assigned To) joins the set.
 // fixes48 §2: "admin_area"/"building" join the set now that they're inline-editable.
 const EDITABLE_COLUMN_KEYS = new Set<ColumnKey>([
-  "phone", "status", "priority", "address", "owner", "admin_area", "building",
+  "phone",
+  "status",
+  "priority",
+  "address",
+  "owner",
+  "admin_area",
+  "building",
 ]);
 
 // fixes48 §2: one grid column, whichever of the 3 kinds it is — feeds the
@@ -95,12 +111,17 @@ function gridColumnSortKey(entry: GridColumn): string {
 
 // fixes49 §1: per-column min-width so short values (dates, badges) don't get
 // squeezed in the RTL grid — free-text-prone columns get the wider floor.
-const WIDE_GRID_COLUMN_KEYS = new Set<ColumnKey>(["address", "owner", "building"]);
+const WIDE_GRID_COLUMN_KEYS = new Set<ColumnKey>([
+  "address",
+  "owner",
+  "building",
+]);
 function gridColumnMinWidth(entry: GridColumn): string {
   if (entry.kind === "cfield") {
     return entry.def.field_type === "text" ? "min-w-[150px]" : "min-w-[120px]";
   }
-  if (entry.kind === "col" && WIDE_GRID_COLUMN_KEYS.has(entry.key)) return "min-w-[150px]";
+  if (entry.kind === "col" && WIDE_GRID_COLUMN_KEYS.has(entry.key))
+    return "min-w-[150px]";
   return "min-w-[120px]";
 }
 
@@ -142,37 +163,47 @@ export default function ContactsPage() {
   const [tzedakaValues, setTzedakaValues] = useState<string[]>([]);
   // fixes15 §1.2: every filter/sort/page selection survives navigation.
   const [statusFilter, setStatusFilter] = usePersistentState(
-    "crm.contacts.status", "",
+    "crm.contacts.status",
+    "",
   );
   // "" = all users. The fixes11 §2.2 default (the logged-in user) is gone:
   // with most contacts owned by one login it silently blanked the list for
   // everyone else — the reported "contacts missing" prod bug. New storage key
   // so browsers that persisted the old auto-default reset once.
   const [assignedFilter, setAssignedFilter] = usePersistentState<string>(
-    "crm.contacts.assigned2", "",
+    "crm.contacts.assigned2",
+    "",
   );
   const [areaIds, setAreaIds] = usePersistentState<number[]>(
-    "crm.contacts.areaIds", [],
+    "crm.contacts.areaIds",
+    [],
   );
   const [buildingIds, setBuildingIds] = usePersistentState<number[]>(
-    "crm.contacts.buildingIds", [],
+    "crm.contacts.buildingIds",
+    [],
   );
   const [adminAreaIds, setAdminAreaIds] = usePersistentState<number[]>(
-    "crm.contacts.adminAreaIds", [],
+    "crm.contacts.adminAreaIds",
+    [],
   );
   const [query, setQuery] = usePersistentState("crm.contacts.q", "");
   // fixes17 §2.2: per-mitzvah checkboxes (AND); fixes18 §3.2: the tzedaka
   // filter is now an exact value picked from the aggregated dropdown.
   const [mitzvotFilter, setMitzvotFilter] = usePersistentState<string[]>(
-    "crm.contacts.mitzvotFields", [],
+    "crm.contacts.mitzvotFields",
+    [],
   );
   const [tzedaka, setTzedaka] = usePersistentState("crm.contacts.tzedaka", "");
   // fixes27 §1: further visit-level filters — torah thought (picklist values,
   // OR), connection-to-the-Rebbe (contains, debounced like the text search).
   const [torahFilter, setTorahFilter] = usePersistentState<string[]>(
-    "crm.contacts.torahThought", [],
+    "crm.contacts.torahThought",
+    [],
   );
-  const [rebbeQuery, setRebbeQuery] = usePersistentState("crm.contacts.rebbe", "");
+  const [rebbeQuery, setRebbeQuery] = usePersistentState(
+    "crm.contacts.rebbe",
+    "",
+  );
   const [debouncedRebbe, setDebouncedRebbe] = useState(rebbeQuery);
   const rebbeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // fixes27 §1: the org's custom fields feed extra מבצעים filter options.
@@ -180,7 +211,9 @@ export default function ContactsPage() {
   // fixes34 §1.1: any admin-added contact picklist beyond the fixed set —
   // same mechanism as the apartments page's `customDefs` (fixes32 §6): each
   // one automatically gets a filter, a column and a CRUD field.
-  const [customPicklistDefs, setCustomPicklistDefs] = useState<PicklistField[]>([]);
+  const [customPicklistDefs, setCustomPicklistDefs] = useState<PicklistField[]>(
+    [],
+  );
   const [customPicklistFilters, setCustomPicklistFilters] = usePersistentState<
     Record<string, string[]>
   >("crm.contacts.customPicklistFilters", {});
@@ -188,11 +221,12 @@ export default function ContactsPage() {
   // means "all of them", so existing users see no change until they
   // explicitly hide one via the column-selector panel (mirrors fixes33 §3.1's
   // apartments.customFields preference).
-  const [visibleCustomPicklistKeys, setVisibleCustomPicklistKeys] = useDbPreference<
-    string[] | null
-  >("contacts.customFields", null);
+  const [visibleCustomPicklistKeys, setVisibleCustomPicklistKeys] =
+    useDbPreference<string[] | null>("contacts.customFields", null);
   // fixes34 §1.1: field-visibility-aware custom picklists + their options.
-  const orgVisibleCustomPicklistDefs = customPicklistDefs.filter((d) => vis(d.field_key));
+  const orgVisibleCustomPicklistDefs = customPicklistDefs.filter((d) =>
+    vis(d.field_key),
+  );
   const customPicklists = usePicklistsMap(
     orgVisibleCustomPicklistDefs.map((d) => d.field_key),
   );
@@ -205,9 +239,9 @@ export default function ContactsPage() {
   const orgVisibleCustomFieldDefs = customFieldDefs.filter((d) =>
     vis(`customfield.contact_mekurav.${d.field_key}`),
   );
-  const [visibleCustomFieldKeys, setVisibleCustomFieldKeys] = useDbPreference<string[] | null>(
-    "contacts.customFieldFields", null,
-  );
+  const [visibleCustomFieldKeys, setVisibleCustomFieldKeys] = useDbPreference<
+    string[] | null
+  >("contacts.customFieldFields", null);
   function toggleCustomFieldColumn(fieldKey: string) {
     setVisibleCustomFieldKeys((prev) => {
       const current = prev ?? orgVisibleCustomFieldDefs.map((d) => d.field_key);
@@ -219,19 +253,26 @@ export default function ContactsPage() {
   // fixes25 §4: visit date range (טווח תאריכי ביקור) — only contacts holding a
   // visit inside the range.
   const [visitFrom, setVisitFrom] = usePersistentState<string | null>(
-    "crm.contacts.visitFrom", null,
+    "crm.contacts.visitFrom",
+    null,
   );
   const [visitTo, setVisitTo] = usePersistentState<string | null>(
-    "crm.contacts.visitTo", null,
+    "crm.contacts.visitTo",
+    null,
   );
   const [sort, setSort] = usePersistentState<SortKey>(
-    "crm.contacts.sort", "created", // fixes11 §2.3 default
+    "crm.contacts.sort",
+    "created", // fixes11 §2.3 default
   );
   const [dir, setDir] = usePersistentState<"asc" | "desc">(
-    "crm.contacts.dir", "desc",
+    "crm.contacts.dir",
+    "desc",
   );
   const [page, setPage] = usePersistentState("crm.contacts.page", 1);
-  const [pageSize, setPageSize] = usePersistentState("crm.contacts.pageSize", 20);
+  const [pageSize, setPageSize] = usePersistentState(
+    "crm.contacts.pageSize",
+    20,
+  );
   // fixes29 §1: the whole filter section can be tucked away (visibility only —
   // hidden filters keep applying to the list).
   const [filtersOpen, setFiltersOpen] = usePersistentState(
@@ -241,7 +282,8 @@ export default function ContactsPage() {
   // fixes17 §1.1: the column selection lives in the DB — follows the account
   // across browsers/devices (localStorage is only the boot cache).
   const [columns, setColumns] = useDbPreference<ColumnKey[]>(
-    "contacts.columns", DEFAULT_COLUMNS,
+    "contacts.columns",
+    DEFAULT_COLUMNS,
   );
   // fixes48 §2: one relative order spanning fixed AND custom (picklist +
   // field) columns — a permutation of gridColumnSortKey values. Empty until
@@ -249,7 +291,8 @@ export default function ContactsPage() {
   // (fixed-then-picklist-then-field) position, so existing saved layouts are
   // unaffected until someone opts in.
   const [columnOrder, setColumnOrder] = useDbPreference<string[]>(
-    "contacts.columnOrder", [],
+    "contacts.columnOrder",
+    [],
   );
   const [columnsOpen, setColumnsOpen] = useState(false);
   // fixes39: SortableJS-backed reorder, mobile-first (native HTML5
@@ -267,8 +310,12 @@ export default function ContactsPage() {
   // admin-areas directory feeds the new filter (blocked for shliach, fixes10).
   useEffect(() => {
     if (isShliach || !user) return;
-    apiFetch<UserSummary[]>("/api/users").then(setUsers).catch(() => {});
-    apiFetch<AdminArea[]>("/api/admin-areas").then(setAdminAreas).catch(() => {});
+    apiFetch<UserSummary[]>("/api/users")
+      .then(setUsers)
+      .catch(() => {});
+    apiFetch<AdminArea[]>("/api/admin-areas")
+      .then(setAdminAreas)
+      .catch(() => {});
   }, [isShliach, user]);
 
   // fixes18 §3.2: aggregate the org's existing tzedaka-potential values.
@@ -283,7 +330,9 @@ export default function ContactsPage() {
   // fixes27 §1: the active custom-field definitions feed the מבצעים dropdown.
   useEffect(() => {
     if (!user) return;
-    apiFetch<Area[]>("/api/areas").then(setAreas).catch(() => {});
+    apiFetch<Area[]>("/api/areas")
+      .then(setAreas)
+      .catch(() => {});
     // fixes61 §3: top 100 only, not the whole org — see searchBuildings
     // below for the live-search fetch that backs the filter as the admin types.
     apiFetch<BuildingPage>("/api/buildings/list?page_size=100")
@@ -293,7 +342,9 @@ export default function ContactsPage() {
     // dropdown is specifically the visit-level boolean checklist filter
     // (mirrors the backend's own entity_type=visit/field_type=boolean scope).
     apiFetch<CustomFieldDefinition[]>("/api/custom-fields?entity_type=visit")
-      .then((defs) => setCustomDefs(defs.filter((d) => d.field_type === "boolean")))
+      .then((defs) =>
+        setCustomDefs(defs.filter((d) => d.field_type === "boolean")),
+      )
       .catch(() => {});
     // fixes34 §1.1 / fixes37: any admin-added contact picklist — entity_type
     // is real data now, not a prefix guess (excludes the fixed contact ones
@@ -323,7 +374,8 @@ export default function ContactsPage() {
   // fixes40 §2: when "Activists may view contacts" is off, shliach-role
   // users drop out of the owner-filter options entirely (they're not valid
   // "contact owners" to filter by in that mode).
-  const activistsMayViewContacts = user?.organization?.shliach_can_view_contacts ?? false;
+  const activistsMayViewContacts =
+    user?.organization?.shliach_can_view_contacts ?? false;
   const ownerOptions = visibleOwnerOptions(users, activistsMayViewContacts);
 
   // fixes17 §5.1 (admin/staff): a persisted owner guid that no longer matches
@@ -333,7 +385,10 @@ export default function ContactsPage() {
   // re-created the invisible-subset trap this round removed.
   useEffect(() => {
     if (isShliach || !user || users.length === 0) return;
-    if (assignedFilter && !ownerOptions.some((u) => u.guid === assignedFilter)) {
+    if (
+      assignedFilter &&
+      !ownerOptions.some((u) => u.guid === assignedFilter)
+    ) {
       setAssignedFilter("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -359,7 +414,9 @@ export default function ContactsPage() {
   const visibleMitzvahIds = new Set<string>(
     customDefs.map((d) => `${CF_PREFIX}${d.field_key}`),
   );
-  const effectiveMitzvot = mitzvotFilter.filter((m) => visibleMitzvahIds.has(m));
+  const effectiveMitzvot = mitzvotFilter.filter((m) =>
+    visibleMitzvahIds.has(m),
+  );
   const effectiveTorah = vis("visits.torah_thought") ? torahFilter : [];
   // fixes39: connection_to_rebbe is a custom field now, not a field_settings
   // toggle — always shown (same as any other text-search filter).
@@ -375,7 +432,9 @@ export default function ContactsPage() {
     orgVisibleCustomPicklistDefs.map((d) => d.field_key),
   );
   const effectiveCustomPicklistFilters = Object.fromEntries(
-    Object.entries(customPicklistFilters).filter(([k]) => visibleCustomPicklistKeySet.has(k)),
+    Object.entries(customPicklistFilters).filter(([k]) =>
+      visibleCustomPicklistKeySet.has(k),
+    ),
   );
 
   // The list can be narrowed while the controls are collapsed (fixes29 §1) —
@@ -393,7 +452,10 @@ export default function ContactsPage() {
     (visitFrom || visitTo ? 1 : 0) +
     (effectiveStatus ? 1 : 0) +
     (assignedFilter ? 1 : 0) +
-    Object.values(effectiveCustomPicklistFilters).reduce((n, v) => n + v.length, 0);
+    Object.values(effectiveCustomPicklistFilters).reduce(
+      (n, v) => n + v.length,
+      0,
+    );
 
   function clearAllFilters() {
     setQuery("");
@@ -423,7 +485,9 @@ export default function ContactsPage() {
     areaIds.forEach((id) => params.append("area_ids", String(id)));
     buildingIds.forEach((id) => params.append("building_ids", String(id)));
     // fixes18 §3.5: admin-area filter.
-    effectiveAdminAreaIds.forEach((id) => params.append("admin_area_ids", String(id)));
+    effectiveAdminAreaIds.forEach((id) =>
+      params.append("admin_area_ids", String(id)),
+    );
     // fixes17 §2.2: individual mitzvah checkboxes (fixes39: every option is
     // an entity_type="visit" boolean custom field, sent as `custom_fields`).
     // fixes18 §3.2: the tzedaka value is an exact selection from the
@@ -445,7 +509,9 @@ export default function ContactsPage() {
     if (visitTo) params.set("visit_to", visitTo);
     // fixes34 §1.1: dynamic contact-picklist filters, "field_key:value" pairs
     // (OR within a field_key, AND across) — mirrors the apartments page.
-    for (const [fieldKey, values] of Object.entries(effectiveCustomPicklistFilters)) {
+    for (const [fieldKey, values] of Object.entries(
+      effectiveCustomPicklistFilters,
+    )) {
       values.forEach((v) => params.append("picklist", `${fieldKey}:${v}`));
     }
     return params;
@@ -481,13 +547,26 @@ export default function ContactsPage() {
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    user, fieldsLoading, effectiveStatus, assignedFilter, debouncedQ,
-    areaIds, buildingIds,
+    user,
+    fieldsLoading,
+    effectiveStatus,
+    assignedFilter,
+    debouncedQ,
+    areaIds,
+    buildingIds,
     // fixes28 §3: the effective (visibility-pruned) selections drive the
     // fetch; joined because they are re-derived arrays, not state.
-    effectiveAdminAreaIds.join(","), effectiveMitzvot.join(","), tzedaka,
-    effectiveTorah.join(","), effectiveRebbe,
-    visitFrom, visitTo, sort, dir, page, pageSize,
+    effectiveAdminAreaIds.join(","),
+    effectiveMitzvot.join(","),
+    tzedaka,
+    effectiveTorah.join(","),
+    effectiveRebbe,
+    visitFrom,
+    visitTo,
+    sort,
+    dir,
+    page,
+    pageSize,
     // fixes34 §1.1: custom picklist filter selections.
     JSON.stringify(effectiveCustomPicklistFilters),
   ]);
@@ -499,12 +578,16 @@ export default function ContactsPage() {
         `/api/contacts/emails?${listParams()}`,
       );
       if (emails.length === 0) {
-        toastError(t("msg.no_emails_in_list", "אין כתובות אימייל ברשימה המסוננת."));
+        toastError(
+          t("msg.no_emails_in_list", "אין כתובות אימייל ברשימה המסוננת."),
+        );
         return;
       }
       window.location.href = `mailto:?bcc=${encodeURIComponent(emails.join(","))}`;
     } catch {
-      toastError(t("msg.no_emails_in_list", "אין כתובות אימייל ברשימה המסוננת."));
+      toastError(
+        t("msg.no_emails_in_list", "אין כתובות אימייל ברשימה המסוננת."),
+      );
     }
   }
 
@@ -540,10 +623,15 @@ export default function ContactsPage() {
     if (entry.kind === "col") return columnLabels[entry.key];
     if (entry.kind === "pl") {
       const d = entry.def;
-      return (lang === "en" ? d.english_label || d.label : d.label) || d.field_key;
+      return (
+        (lang === "en" ? d.english_label || d.label : d.label) || d.field_key
+      );
     }
     const d = entry.def;
-    return (lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) || d.field_key;
+    return (
+      (lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
+      d.field_key
+    );
   }
   function toggleColumn(k: ColumnKey) {
     setColumns((prev) =>
@@ -571,17 +659,22 @@ export default function ContactsPage() {
     if (entry.kind === "col") return columns.includes(entry.key);
     if (entry.kind === "pl") {
       return (
-        visibleCustomPicklistKeys == null || visibleCustomPicklistKeys.includes(entry.key)
+        visibleCustomPicklistKeys == null ||
+        visibleCustomPicklistKeys.includes(entry.key)
       );
     }
-    return visibleCustomFieldKeys == null || visibleCustomFieldKeys.includes(entry.key);
+    return (
+      visibleCustomFieldKeys == null ||
+      visibleCustomFieldKeys.includes(entry.key)
+    );
   }
 
   function toggleGridColumn(entry: GridColumn) {
     if (entry.kind === "col") return toggleColumn(entry.key);
     if (entry.kind === "pl") {
       setVisibleCustomPicklistKeys((prev) => {
-        const current = prev ?? orgVisibleCustomPicklistDefs.map((d) => d.field_key);
+        const current =
+          prev ?? orgVisibleCustomPicklistDefs.map((d) => d.field_key);
         return current.includes(entry.key)
           ? current.filter((k) => k !== entry.key)
           : [...current, entry.key];
@@ -597,8 +690,10 @@ export default function ContactsPage() {
   // a stable sort preserves allGridColumns' own order for ties.
   const columnOrderIndex = new Map(columnOrder.map((k, i) => [k, i]));
   const sortedGridColumns = [...allGridColumns].sort((a, b) => {
-    const ai = columnOrderIndex.get(gridColumnSortKey(a)) ?? Number.MAX_SAFE_INTEGER;
-    const bi = columnOrderIndex.get(gridColumnSortKey(b)) ?? Number.MAX_SAFE_INTEGER;
+    const ai =
+      columnOrderIndex.get(gridColumnSortKey(a)) ?? Number.MAX_SAFE_INTEGER;
+    const bi =
+      columnOrderIndex.get(gridColumnSortKey(b)) ?? Number.MAX_SAFE_INTEGER;
     return ai - bi;
   });
   const orderedActiveColumns = sortedGridColumns.filter(isGridColumnActive);
@@ -666,7 +761,9 @@ export default function ContactsPage() {
       method: "PATCH",
       body: JSON.stringify(body),
     });
-    setContacts((prev) => prev.map((it) => (it.id === c.id ? { ...it, ...saved } : it)));
+    setContacts((prev) =>
+      prev.map((it) => (it.id === c.id ? { ...it, ...saved } : it)),
+    );
   }
 
   const inlineTextCell = (
@@ -703,7 +800,9 @@ export default function ContactsPage() {
       value={c.priority_score != null ? String(c.priority_score) : ""}
       display={c.priority_score ?? "—"}
       onSave={(v) =>
-        saveField(c, { priority_score: v.trim() === "" ? null : Number(v.trim()) })
+        saveField(c, {
+          priority_score: v.trim() === "" ? null : Number(v.trim()),
+        })
       }
       editor={(draft, setDraft) => (
         <input
@@ -729,7 +828,9 @@ export default function ContactsPage() {
         <select
           className={inputClass}
           value={draft ?? ""}
-          onChange={(e) => commit(e.target.value === "" ? null : e.target.value)}
+          onChange={(e) =>
+            commit(e.target.value === "" ? null : e.target.value)
+          }
         >
           <option value="">—</option>
           {users.map((u) => (
@@ -756,7 +857,9 @@ export default function ContactsPage() {
         <select
           className={inputClass}
           value={draft ?? ""}
-          onChange={(e) => commit(e.target.value === "" ? null : Number(e.target.value))}
+          onChange={(e) =>
+            commit(e.target.value === "" ? null : Number(e.target.value))
+          }
         >
           <option value="">—</option>
           {adminAreas.map((aa) => (
@@ -803,13 +906,22 @@ export default function ContactsPage() {
       value={c.picklist_values?.[d.field_key] ?? null}
       display={
         <TruncatedText
-          text={customPicklists.labelFor(d.field_key, c.picklist_values?.[d.field_key]) || "—"}
+          text={
+            customPicklists.labelFor(
+              d.field_key,
+              c.picklist_values?.[d.field_key],
+            ) || "—"
+          }
         />
       }
       commitOnBlur={false}
       onSave={(v) => saveField(c, { picklist_values: { [d.field_key]: v } })}
       editor={(draft, _setDraft, commit) => (
-        <PicklistSelect fieldKey={d.field_key} value={draft} onChange={commit} />
+        <PicklistSelect
+          fieldKey={d.field_key}
+          value={draft}
+          onChange={commit}
+        />
       )}
     />
   );
@@ -828,13 +940,17 @@ export default function ContactsPage() {
           )
         }
         commitOnBlur={d.field_type === "text" || d.field_type === "number"}
-        onSave={(v) => saveField(c, { custom_field_values: { [d.field_key]: v } })}
+        onSave={(v) =>
+          saveField(c, { custom_field_values: { [d.field_key]: v } })
+        }
         editor={(draft, setDraft, commit) => (
           <CustomFieldValueInput
             fieldType={d.field_type}
             value={draft}
             onChange={
-              d.field_type === "boolean" || d.field_type === "date" ? commit : setDraft
+              d.field_type === "boolean" || d.field_type === "date"
+                ? commit
+                : setDraft
             }
           />
         )}
@@ -872,7 +988,9 @@ export default function ContactsPage() {
         );
       case "created":
         return (
-          <span dir="ltr">{new Date(c.created_at).toLocaleDateString("he-IL")}</span>
+          <span dir="ltr">
+            {new Date(c.created_at).toLocaleDateString("he-IL")}
+          </span>
         );
       case "status":
         return inlineStatusCell(c);
@@ -884,15 +1002,23 @@ export default function ContactsPage() {
   }
 
   const buildingLabel = (b: Building) =>
-    (b.building_address ?? "").split(",")[0].trim() || b.building_name || `#${b.id}`;
+    (b.building_address ?? "").split(",")[0].trim() ||
+    b.building_name ||
+    `#${b.id}`;
 
   const buildingOptions = buildings
-    .filter((b) => areaIds.length === 0 || (b.area_id != null && areaIds.includes(b.area_id)))
+    .filter(
+      (b) =>
+        areaIds.length === 0 ||
+        (b.area_id != null && areaIds.includes(b.area_id)),
+    )
     .map((b) => ({ id: b.id, label: buildingLabel(b) }));
 
   // fixes61 §3: server-side building search backing the filter below —
   // typing narrows against the full org instead of the top-100 default page.
-  async function searchBuildings(query: string): Promise<{ id: number; label: string }[]> {
+  async function searchBuildings(
+    query: string,
+  ): Promise<{ id: number; label: string }[]> {
     const params = new URLSearchParams({ q: query, page_size: "100" });
     const res = await apiFetch<BuildingPage>(`/api/buildings/list?${params}`);
     return res.items.map((b) => ({ id: b.id, label: buildingLabel(b) }));
@@ -911,7 +1037,7 @@ export default function ContactsPage() {
   // this closes the direct-URL gap the backend's own `forbid_campaign_manager`
   // 403 leaves open at the page-shell level (found via a live drive, not a
   // hole the approved plan called out by name).
-  if (isCampaignManager) {
+  if (isShliach || isCampaignManager) {
     return (
       <p className="text-status-darkred">
         {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
@@ -931,13 +1057,20 @@ export default function ContactsPage() {
               (the empty-state button below only covers the zero-results case). */}
           {activeFilterCount > 0 && (
             <Button type="button" variant="outline" onClick={clearAllFilters}>
-              <X className="h-4 w-4" /> {t("filter.clear_all", "נקה את כל הסינונים")}
+              <X className="h-4 w-4" />{" "}
+              {t("filter.clear_all", "נקה את כל הסינונים")}
             </Button>
           )}
           {/* fixes29 §1: show/hide the whole filter block below. */}
-          <Button type="button" variant="outline" onClick={() => setFiltersOpen((v) => !v)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setFiltersOpen((v) => !v)}
+          >
             <SlidersHorizontal className="h-4 w-4" />
-            {filtersOpen ? t("filter.hide_filters", "הסתר סינון") : t("filter.show_filters", "הצג סינון")}
+            {filtersOpen
+              ? t("filter.hide_filters", "הסתר סינון")
+              : t("filter.show_filters", "הצג סינון")}
             {/* Collapsed filters keep applying — surface how many are active. */}
             {!filtersOpen && activeFilterCount > 0 && (
               <span className="ms-1 inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground text-xs px-1.5 py-0.5 leading-none">
@@ -947,8 +1080,13 @@ export default function ContactsPage() {
           </Button>
           {/* fixes38 §1.1: the columns toggle lives outside the filtersOpen
               block so collapsing filters never hides it. */}
-          <Button type="button" variant="outline" onClick={() => setColumnsOpen((v) => !v)}>
-            <Settings2 className="h-4 w-4" /> {t("columns.configure", "התאמת עמודות")}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setColumnsOpen((v) => !v)}
+          >
+            <Settings2 className="h-4 w-4" />{" "}
+            {t("columns.configure", "התאמת עמודות")}
           </Button>
           <Button
             type="button"
@@ -956,7 +1094,8 @@ export default function ContactsPage() {
             className="border-primary text-primary hover:bg-primary/10"
             onClick={bulkEmail}
           >
-            <Mail className="h-4 w-4" /> {t("action.bulk_email", "מייל לכל התוצאות")}
+            <Mail className="h-4 w-4" />{" "}
+            {t("action.bulk_email", "מייל לכל התוצאות")}
           </Button>
           {/* fixes43 §1: bulk "Assigned To" edit — a shliach can't reassign
               ownership, same guard as the inline per-row edit. */}
@@ -968,13 +1107,15 @@ export default function ContactsPage() {
               onClick={() => setBulkOpen(true)}
               disabled={total === 0}
             >
-              <SquarePen className="h-4 w-4" /> {t("bulkedit.open", "עריכה מרובה")}
+              <SquarePen className="h-4 w-4" />{" "}
+              {t("bulkedit.open", "עריכה מרובה")}
             </Button>
           )}
           {/* fixes10 §3.3: shliach users create (their own) contacts too. */}
           <Button asChild>
             <Link href="/dashboard/contacts/new">
-              <Plus className="h-4 w-4" /> {t("page.new_contact", "איש קשר חדש")}
+              <Plus className="h-4 w-4" />{" "}
+              {t("page.new_contact", "איש קשר חדש")}
             </Link>
           </Button>
         </div>
@@ -986,7 +1127,9 @@ export default function ContactsPage() {
       {columnsOpen && (
         <div className="bg-card border border-border rounded-xl shadow-sm p-4 space-y-2">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">{t("columns.title", "עמודות מוצגות")}</h3>
+            <h3 className="text-sm font-semibold">
+              {t("columns.title", "עמודות מוצגות")}
+            </h3>
             <button
               type="button"
               onClick={() => setColumns(DEFAULT_COLUMNS)}
@@ -1002,7 +1145,10 @@ export default function ContactsPage() {
             )}
           </p>
           <p className="text-xs text-muted-foreground">
-            {t("columns.reorder_hint", "גרור עמודה פעילה כדי לשנות את סדר ההצגה.")}
+            {t(
+              "columns.reorder_hint",
+              "גרור עמודה פעילה כדי לשנות את סדר ההצגה.",
+            )}
           </p>
           {/* fixes39 §3 / fixes48 §2: one real SortableJS-managed container
               for every chip — fixed AND custom, active or not (mobile-first
@@ -1018,7 +1164,11 @@ export default function ContactsPage() {
             {orderedActiveColumns.map((entry, activeIdx) => {
               const key = gridColumnSortKey(entry);
               return (
-                <span key={key} data-sort-key={key} className="inline-flex items-center gap-0.5">
+                <span
+                  key={key}
+                  data-sort-key={key}
+                  className="inline-flex items-center gap-0.5"
+                >
                   <button
                     type="button"
                     onClick={withClickGuard(() => toggleGridColumn(entry))}
@@ -1052,21 +1202,23 @@ export default function ContactsPage() {
                 </span>
               );
             })}
-            {sortedGridColumns.filter((entry) => !isGridColumnActive(entry)).map((entry) => {
-              const key = gridColumnSortKey(entry);
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  data-sort-key={key}
-                  data-sortable-disabled=""
-                  onClick={() => toggleGridColumn(entry)}
-                  className="rounded-md border px-3 py-1.5 text-sm border-border text-muted-foreground hover:bg-accent"
-                >
-                  {gridColumnLabel(entry)}
-                </button>
-              );
-            })}
+            {sortedGridColumns
+              .filter((entry) => !isGridColumnActive(entry))
+              .map((entry) => {
+                const key = gridColumnSortKey(entry);
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    data-sort-key={key}
+                    data-sortable-disabled=""
+                    onClick={() => toggleGridColumn(entry)}
+                    className="rounded-md border px-3 py-1.5 text-sm border-border text-muted-foreground hover:bg-accent"
+                  >
+                    {gridColumnLabel(entry)}
+                  </button>
+                );
+              })}
           </div>
         </div>
       )}
@@ -1075,233 +1227,257 @@ export default function ContactsPage() {
           fixes29 §1: both filter rows unmount while the header toggle is off;
           the persisted filter state is untouched, so they keep filtering the
           list. */}
-      {filtersOpen && (<>
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <MultiSelectFilter
-          allLabel={t("filter.all_areas", "כל האזורים")}
-          options={areas.map((a) => ({ id: a.id, label: a.area_name }))}
-          value={areaIds}
-          onChange={(ids) => {
-            setAreaIds(ids);
-            // Drop building selections that fall outside the chosen areas.
-            setBuildingIds((prev) =>
-              ids.length === 0
-                ? prev
-                : prev.filter((bid) =>
-                    buildings.some(
-                      (b) => b.id === bid && b.area_id != null && ids.includes(b.area_id),
-                    ),
-                  ),
-            );
-            setPage(1);
-          }}
-        />
-        <MultiSelectSearchFilter
-          allLabel={t("filter.all_buildings", "כל הבניינים")}
-          options={buildingOptions}
-          value={buildingIds}
-          onChange={(ids) => {
-            setBuildingIds(ids);
-            setPage(1);
-          }}
-          searchPlaceholder={t("filter.search_buildings", "חיפוש בניין…")}
-          remoteSearch={searchBuildings}
-        />
-        {/* fixes18 §3.5: admin-area filter (admin/staff — blocked for shliach). */}
-        {!isShliach && (
-          <MultiSelectFilter
-            allLabel={t("filter.all_admin_areas", "כל אזורי המנהל")}
-            options={adminAreas.map((a) => ({ id: a.id, label: a.name }))}
-            value={adminAreaIds}
-            onChange={(ids) => {
-              setAdminAreaIds(ids);
-              setPage(1);
-            }}
-          />
-        )}
-        {/* fixes34 §1.1: one filter per admin-added contact picklist (an
-            org-hidden one is excluded via orgVisibleCustomPicklistDefs). */}
-        {orgVisibleCustomPicklistDefs.map((d) => {
-          const opts = customPicklists.map[d.field_key] ?? [];
-          return (
+      {filtersOpen && (
+        <>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
             <MultiSelectFilter
-              key={d.field_key}
-              allLabel={(lang === "en" ? d.english_label || d.label : d.label) || d.field_key}
-              options={opts.map((o) => ({ id: o.value, label: customPicklists.display(o) }))}
-              value={customPicklistFilters[d.field_key] ?? []}
-              onChange={(vals) => {
-                setCustomPicklistFilters((prev) => ({ ...prev, [d.field_key]: vals }));
+              allLabel={t("filter.all_areas", "כל האזורים")}
+              options={areas.map((a) => ({ id: a.id, label: a.area_name }))}
+              value={areaIds}
+              onChange={(ids) => {
+                setAreaIds(ids);
+                // Drop building selections that fall outside the chosen areas.
+                setBuildingIds((prev) =>
+                  ids.length === 0
+                    ? prev
+                    : prev.filter((bid) =>
+                        buildings.some(
+                          (b) =>
+                            b.id === bid &&
+                            b.area_id != null &&
+                            ids.includes(b.area_id),
+                        ),
+                      ),
+                );
                 setPage(1);
               }}
             />
-          );
-        })}
-        <input
-          className={`${selectClass} flex-1 min-w-[12rem]`}
-          placeholder={t("filter.search_contacts", "חיפוש לפי שם, טלפון או אימייל…")}
-          value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
-        />
-        {/* fixes17 §2.2: one checkbox per mitzvah (fixes25: visit-level
+            <MultiSelectSearchFilter
+              allLabel={t("filter.all_buildings", "כל הבניינים")}
+              options={buildingOptions}
+              value={buildingIds}
+              onChange={(ids) => {
+                setBuildingIds(ids);
+                setPage(1);
+              }}
+              searchPlaceholder={t("filter.search_buildings", "חיפוש בניין…")}
+              remoteSearch={searchBuildings}
+            />
+            {/* fixes18 §3.5: admin-area filter (admin/staff — blocked for shliach). */}
+            {!isShliach && (
+              <MultiSelectFilter
+                allLabel={t("filter.all_admin_areas", "כל אזורי המנהל")}
+                options={adminAreas.map((a) => ({ id: a.id, label: a.name }))}
+                value={adminAreaIds}
+                onChange={(ids) => {
+                  setAdminAreaIds(ids);
+                  setPage(1);
+                }}
+              />
+            )}
+            {/* fixes34 §1.1: one filter per admin-added contact picklist (an
+            org-hidden one is excluded via orgVisibleCustomPicklistDefs). */}
+            {orgVisibleCustomPicklistDefs.map((d) => {
+              const opts = customPicklists.map[d.field_key] ?? [];
+              return (
+                <MultiSelectFilter
+                  key={d.field_key}
+                  allLabel={
+                    (lang === "en" ? d.english_label || d.label : d.label) ||
+                    d.field_key
+                  }
+                  options={opts.map((o) => ({
+                    id: o.value,
+                    label: customPicklists.display(o),
+                  }))}
+                  value={customPicklistFilters[d.field_key] ?? []}
+                  onChange={(vals) => {
+                    setCustomPicklistFilters((prev) => ({
+                      ...prev,
+                      [d.field_key]: vals,
+                    }));
+                    setPage(1);
+                  }}
+                />
+              );
+            })}
+            <input
+              className={`${selectClass} flex-1 min-w-[12rem]`}
+              placeholder={t(
+                "filter.search_contacts",
+                "חיפוש לפי שם, טלפון או אימייל…",
+              )}
+              value={query}
+              onChange={(e) => onQueryChange(e.target.value)}
+            />
+            {/* fixes17 §2.2: one checkbox per mitzvah (fixes25: visit-level
             flags; fixes39: every option — migrated or admin-added — is an
             active entity_type="visit" boolean custom field, so deactivated
             ones already drop out of `customDefs` server-side). */}
-        <MultiSelectFilter
-          allLabel={t("filter.all_mitzvot", "מבצעים")}
-          options={customDefs.map((d) => ({
-            id: `${CF_PREFIX}${d.field_key}`,
-            label: d.hebrew_label,
-          }))}
-          value={effectiveMitzvot}
-          onChange={(ids) => {
-            setMitzvotFilter(ids);
-            setPage(1);
-          }}
-        />
-        {/* fixes27 §1: torah-thought filter (any visit carries the value). */}
-        {vis("visits.torah_thought") && (
-          <MultiSelectFilter
-            allLabel={t("filter.all_torah_thoughts", "דבר תורה")}
-            options={torahPicklist.options.map((o) => ({
-              id: o.value,
-              label: torahPicklist.display(o),
-            }))}
-            value={effectiveTorah}
-            onChange={(ids) => {
-              setTorahFilter(ids);
-              setPage(1);
-            }}
-          />
-        )}
-        {/* fixes27 §1: connection-to-the-Rebbe contains-filter. */}
-        {vis("visits.connection_to_rebbe") && (
-          <input
-            className={`${selectClass} w-44`}
-            placeholder={t("filter.rebbe_ph", "קשר לרבי…")}
-            value={rebbeQuery}
-            onChange={(e) => {
-              setRebbeQuery(e.target.value);
-              setPage(1);
-              if (rebbeDebounceRef.current) clearTimeout(rebbeDebounceRef.current);
-              rebbeDebounceRef.current = setTimeout(
-                () => setDebouncedRebbe(e.target.value),
-                300,
-              );
-            }}
-          />
-        )}
-        {/* fixes18 §3.2: tzedaka-potential dropdown over the org's values. */}
-        <SearchableSelect
-          className="w-44"
-          value={tzedaka === "" ? null : tzedaka}
-          onChange={(v) => {
-            setTzedaka(v ?? "");
-            setPage(1);
-          }}
-          options={[...new Set([...tzedakaValues, ...(tzedaka ? [tzedaka] : [])])].map(
-            (v) => ({ id: v, label: v }),
-          )}
-          placeholder={t("filter.tzedaka_ph", "פוטנציאל לצדקה…")}
-          emptyLabel={t("filter.all_tzedaka", "כל פוטנציאל לצדקה")}
-        />
-        {/* fixes25 §4: visit date-range filter (טווח תאריכי ביקור). */}
-        <span className="flex items-center gap-2">
-          <span className="text-muted-foreground">{t("visits.date_range", "טווח תאריכי ביקור")}:</span>
-          <DatePicker
-            value={visitFrom}
-            onChange={(v) => {
-              setVisitFrom(v);
-              setPage(1);
-            }}
-            className={`${selectClass} w-36`}
-            placeholder={t("visits.date_from", "מתאריך")}
-          />
-          <DatePicker
-            value={visitTo}
-            onChange={(v) => {
-              setVisitTo(v);
-              setPage(1);
-            }}
-            className={`${selectClass} w-36`}
-            placeholder={t("visits.date_to", "עד תאריך")}
-          />
-          {/* fixes28 §1: one-click reset of the visit date range. */}
-          {(visitFrom || visitTo) && (
-            <button
-              type="button"
-              onClick={() => {
-                setVisitFrom(null);
-                setVisitTo(null);
+            <MultiSelectFilter
+              allLabel={t("filter.all_mitzvot", "מבצעים")}
+              options={customDefs.map((d) => ({
+                id: `${CF_PREFIX}${d.field_key}`,
+                label: d.hebrew_label,
+              }))}
+              value={effectiveMitzvot}
+              onChange={(ids) => {
+                setMitzvotFilter(ids);
                 setPage(1);
               }}
-              className="text-primary hover:underline"
-            >
-              ✕ {t("action.clear", "נקה")}
-            </button>
-          )}
-        </span>
-      </div>
+            />
+            {/* fixes27 §1: torah-thought filter (any visit carries the value). */}
+            {vis("visits.torah_thought") && (
+              <MultiSelectFilter
+                allLabel={t("filter.all_torah_thoughts", "דבר תורה")}
+                options={torahPicklist.options.map((o) => ({
+                  id: o.value,
+                  label: torahPicklist.display(o),
+                }))}
+                value={effectiveTorah}
+                onChange={(ids) => {
+                  setTorahFilter(ids);
+                  setPage(1);
+                }}
+              />
+            )}
+            {/* fixes27 §1: connection-to-the-Rebbe contains-filter. */}
+            {vis("visits.connection_to_rebbe") && (
+              <input
+                className={`${selectClass} w-44`}
+                placeholder={t("filter.rebbe_ph", "קשר לרבי…")}
+                value={rebbeQuery}
+                onChange={(e) => {
+                  setRebbeQuery(e.target.value);
+                  setPage(1);
+                  if (rebbeDebounceRef.current)
+                    clearTimeout(rebbeDebounceRef.current);
+                  rebbeDebounceRef.current = setTimeout(
+                    () => setDebouncedRebbe(e.target.value),
+                    300,
+                  );
+                }}
+              />
+            )}
+            {/* fixes18 §3.2: tzedaka-potential dropdown over the org's values. */}
+            <SearchableSelect
+              className="w-44"
+              value={tzedaka === "" ? null : tzedaka}
+              onChange={(v) => {
+                setTzedaka(v ?? "");
+                setPage(1);
+              }}
+              options={[
+                ...new Set([...tzedakaValues, ...(tzedaka ? [tzedaka] : [])]),
+              ].map((v) => ({ id: v, label: v }))}
+              placeholder={t("filter.tzedaka_ph", "פוטנציאל לצדקה…")}
+              emptyLabel={t("filter.all_tzedaka", "כל פוטנציאל לצדקה")}
+            />
+            {/* fixes25 §4: visit date-range filter (טווח תאריכי ביקור). */}
+            <span className="flex items-center gap-2">
+              <span className="text-muted-foreground">
+                {t("visits.date_range", "טווח תאריכי ביקור")}:
+              </span>
+              <DatePicker
+                value={visitFrom}
+                onChange={(v) => {
+                  setVisitFrom(v);
+                  setPage(1);
+                }}
+                className={`${selectClass} w-36`}
+                placeholder={t("visits.date_from", "מתאריך")}
+              />
+              <DatePicker
+                value={visitTo}
+                onChange={(v) => {
+                  setVisitTo(v);
+                  setPage(1);
+                }}
+                className={`${selectClass} w-36`}
+                placeholder={t("visits.date_to", "עד תאריך")}
+              />
+              {/* fixes28 §1: one-click reset of the visit date range. */}
+              {(visitFrom || visitTo) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVisitFrom(null);
+                    setVisitTo(null);
+                    setPage(1);
+                  }}
+                  className="text-primary hover:underline"
+                >
+                  ✕ {t("action.clear", "נקה")}
+                </button>
+              )}
+            </span>
+          </div>
 
-      <div className="flex flex-wrap gap-3">
-        {availability.status && (
-          <select
-            className={selectClass}
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="">{t("filter.all_statuses", "כל הסטטוסים")}</option>
-            {statusOptions.map((o) => (
-              <option key={o.id} value={o.value}>
-                {statusDisplay(o)}
-              </option>
-            ))}
-          </select>
-        )}
-        {/* fixes11 §2.2: owner filter, defaulting to the logged-in user.
+          <div className="flex flex-wrap gap-3">
+            {availability.status && (
+              <select
+                className={selectClass}
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">
+                  {t("filter.all_statuses", "כל הסטטוסים")}
+                </option>
+                {statusOptions.map((o) => (
+                  <option key={o.id} value={o.value}>
+                    {statusDisplay(o)}
+                  </option>
+                ))}
+              </select>
+            )}
+            {/* fixes11 §2.2: owner filter, defaulting to the logged-in user.
             fixes40 §2: searchable, and restricted to admin/staff options
             when activists may not view contacts. */}
-        {!isShliach && ownerOptions.length > 0 && (
-          <span className="flex items-center gap-2 text-sm text-muted-foreground">
-            {t("filter.by_assigned", "משויך ל:")}
-            <SearchableSelect
-              className="w-48"
-              value={assignedFilter || null}
-              onChange={(guid) => {
-                setAssignedFilter(guid ?? "");
-                setPage(1);
-              }}
-              options={ownerOptions.map((u) => ({ id: u.guid, label: u.full_name }))}
-              placeholder={t("filter.all_users", "כל המשתמשים")}
-              emptyLabel={t("filter.all_users", "כל המשתמשים")}
-            />
-          </span>
-        )}
-        {/* fixes54 §3.1: the standalone sort select + direction button are
+            {!isShliach && ownerOptions.length > 0 && (
+              <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                {t("filter.by_assigned", "משויך ל:")}
+                <SearchableSelect
+                  className="w-48"
+                  value={assignedFilter || null}
+                  onChange={(guid) => {
+                    setAssignedFilter(guid ?? "");
+                    setPage(1);
+                  }}
+                  options={ownerOptions.map((u) => ({
+                    id: u.guid,
+                    label: u.full_name,
+                  }))}
+                  placeholder={t("filter.all_users", "כל המשתמשים")}
+                  emptyLabel={t("filter.all_users", "כל המשתמשים")}
+                />
+              </span>
+            )}
+            {/* fixes54 §3.1: the standalone sort select + direction button are
             gone — sorting now happens via clickable column-header arrows
             (the "שם" header and, when active, the "created" column). */}
-        <span className="ms-auto flex items-center gap-2 text-sm text-muted-foreground">
-          {t("pager.page_size", "בעמוד:")}
-          <select
-            className={selectClass}
-            value={pageSize}
-            onChange={(e) => {
-              setPageSize(Number(e.target.value));
-              setPage(1);
-            }}
-          >
-            {[20, 50, 100].map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </span>
-      </div>
-
-      </>)}
+            <span className="ms-auto flex items-center gap-2 text-sm text-muted-foreground">
+              {t("pager.page_size", "בעמוד:")}
+              <select
+                className={selectClass}
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+              >
+                {[20, 50, 100].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </span>
+          </div>
+        </>
+      )}
 
       {/* fixes30 §2a: quick visit modal — the shared VisitForm pinned to the
           row's contact, saving through the per-contact endpoint (open to any
@@ -1310,8 +1486,12 @@ export default function ContactsPage() {
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-2xl bg-card rounded-xl shadow-xl p-5 space-y-3 max-h-[90vh] overflow-y-auto">
             <div>
-              <h2 className="text-lg font-bold">{t("page.add_visit", "ביקור חדש")}</h2>
-              <p className="text-sm text-muted-foreground">{contactFullName(visitFor)}</p>
+              <h2 className="text-lg font-bold">
+                {t("page.add_visit", "ביקור חדש")}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {contactFullName(visitFor)}
+              </p>
             </div>
             <VisitForm
               contacts={[]}
@@ -1347,7 +1527,9 @@ export default function ContactsPage() {
             area_ids: areaIds,
             building_ids: buildingIds,
             admin_area_ids: effectiveAdminAreaIds,
-            custom_fields: effectiveMitzvot.map((m) => m.slice(CF_PREFIX.length)),
+            custom_fields: effectiveMitzvot.map((m) =>
+              m.slice(CF_PREFIX.length),
+            ),
             tzedaka_potential: tzedaka.trim() || undefined,
             torah_thought: effectiveTorah,
             connection_to_rebbe: effectiveRebbe.trim() || undefined,
@@ -1365,7 +1547,9 @@ export default function ContactsPage() {
             params.set("dir", dir);
             params.set("page", String(page));
             params.set("page_size", String(pageSize));
-            const res = await apiFetch<ContactPage>(`/api/contacts/list?${params}`);
+            const res = await apiFetch<ContactPage>(
+              `/api/contacts/list?${params}`,
+            );
             setContacts(res.items);
             setTotal(res.total);
           }}
@@ -1393,13 +1577,18 @@ export default function ContactsPage() {
                   column carries a data-type-dependent min-width floor so RTL
                   headers don't squeeze. */}
               {orderedActiveColumns.map((entry) => {
-                const sortable = entry.kind === "col" && entry.key === "created";
+                const sortable =
+                  entry.kind === "col" && entry.key === "created";
                 return (
                   <th
                     key={gridColumnSortKey(entry)}
-                    onClick={sortable ? () => onHeaderSortClick("created") : undefined}
+                    onClick={
+                      sortable ? () => onHeaderSortClick("created") : undefined
+                    }
                     className={`px-3 py-1.5 font-medium w-px whitespace-nowrap ${gridColumnMinWidth(entry)} ${
-                      sortable ? "cursor-pointer select-none hover:bg-accent" : ""
+                      sortable
+                        ? "cursor-pointer select-none hover:bg-accent"
+                        : ""
                     }`}
                   >
                     {gridColumnLabel(entry)}
@@ -1421,7 +1610,10 @@ export default function ContactsPage() {
               </tr>
             ) : contacts.length === 0 ? (
               <tr>
-                <td colSpan={colCount} className="px-4 py-6 text-center text-muted-foreground">
+                <td
+                  colSpan={colCount}
+                  className="px-4 py-6 text-center text-muted-foreground"
+                >
                   {/* An empty page with active filters is almost never "no
                       data" — say which, and offer a one-click way out. */}
                   {activeFilterCount > 0 ? (
@@ -1477,7 +1669,8 @@ export default function ContactsPage() {
                       key={gridColumnSortKey(entry)}
                       className={`px-3 py-1.5 max-w-[14rem] break-words ${gridColumnMinWidth(entry)}`}
                       onClick={
-                        entry.kind === "col" && !EDITABLE_COLUMN_KEYS.has(entry.key)
+                        entry.kind === "col" &&
+                        !EDITABLE_COLUMN_KEYS.has(entry.key)
                           ? undefined
                           : (e) => e.stopPropagation()
                       }
@@ -1616,7 +1809,11 @@ function ContactNameCell({
       await onSave(next);
       setEditing(false);
     } catch (err) {
-      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+      toastError(
+        err instanceof Error
+          ? err.message
+          : t("msg.save_failed", "שמירה נכשלה"),
+      );
     } finally {
       setSaving(false);
     }
@@ -1733,7 +1930,9 @@ function ContactBulkEditModal({
       await onDone();
     } catch (err) {
       const msg =
-        err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה");
+        err instanceof Error
+          ? err.message
+          : t("msg.save_failed", "שמירה נכשלה");
       setError(msg);
       toastError(msg);
     } finally {
@@ -1782,7 +1981,9 @@ function ContactBulkEditModal({
             disabled={busy || total === 0}
             className="rounded-md bg-primary text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
-            {busy ? t("action.saving", "שומר…") : t("bulkedit.apply", "החל שינויים")}
+            {busy
+              ? t("action.saving", "שומר…")
+              : t("bulkedit.apply", "החל שינויים")}
           </button>
           <button
             type="button"
