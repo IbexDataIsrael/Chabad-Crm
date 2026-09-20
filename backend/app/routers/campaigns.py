@@ -69,27 +69,42 @@ def campaign_active_stats(
     )
     if not campaigns:
         return []
-    counts = dict(
+    task_filter = [
+        models.Task.campaign_id.in_([c.id for c in campaigns]),
+        models.Task.status == "ACTIVE",
+    ]
+    if current_user.role == "shliach":
+        task_filter.append(models.Task.volunteer_user_id == current_user.id)
+
+    rows = (
         db.query(
             models.Task.campaign_id,
-            func.count(func.distinct(models.TaskReportNumber.report_number_id)),
+            models.ReportNumber.name,
         )
         .join(models.TaskReportNumber, models.TaskReportNumber.task_id == models.Task.id)
-        .filter(
-            models.Task.campaign_id.in_([c.id for c in campaigns]),
-            models.Task.status == "ACTIVE",
-        )
-        .group_by(models.Task.campaign_id)
+        .join(models.ReportNumber, models.ReportNumber.id == models.TaskReportNumber.report_number_id)
+        .filter(*task_filter)
+        .distinct()
+        .order_by(models.ReportNumber.name)
         .all()
     )
+    report_numbers: dict[int, list[str]] = {c.id: [] for c in campaigns}
+    for campaign_id, report_number_name in rows:
+        report_numbers[campaign_id].append(report_number_name)
+
     return [
         CampaignActiveStat(
             id=c.id,
             name=c.name,
-            custom_stats_text=c.custom_stats_text,
-            count=counts.get(c.id, 0),
+            custom_stats_text=(
+                "מספרי דוח: " + ", ".join(report_numbers[c.id])
+                if current_user.role == "shliach"
+                else c.custom_stats_text
+            ),
+            count=len(report_numbers[c.id]),
         )
         for c in campaigns
+        if current_user.role != "shliach" or report_numbers[c.id]
     ]
 
 
