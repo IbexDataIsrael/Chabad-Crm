@@ -8,7 +8,11 @@ import { dotStyle } from "@/lib/colors";
 import { useCustomFieldDefs } from "@/lib/customFields";
 import { sortByFieldOrder, useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
-import { FIXED_CONTACT_PICKLIST_KEYS, usePicklist, usePicklistsMap } from "@/lib/picklists";
+import {
+  FIXED_CONTACT_PICKLIST_KEYS,
+  usePicklist,
+  usePicklistsMap,
+} from "@/lib/picklists";
 import {
   apartmentTitle,
   formatCoords,
@@ -23,12 +27,20 @@ import {
   type ShliachVersion,
   type UserSummary,
 } from "@/lib/types";
-import { isValidEmail, isValidPhone, EMAIL_HINT, PHONE_HINT } from "@/lib/validation";
+import {
+  isValidEmail,
+  isValidPhone,
+  EMAIL_HINT,
+  PHONE_HINT,
+} from "@/lib/validation";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ApartmentPicker } from "./ApartmentPicker";
 import { AreaMultiSelect } from "./AreaMultiSelect";
 import { ContactMap } from "./ContactMap";
-import { CustomFieldValueDisplay, CustomFieldValueInput } from "./CustomFieldValueInput";
+import {
+  CustomFieldValueDisplay,
+  CustomFieldValueInput,
+} from "./CustomFieldValueInput";
 import { DatePicker } from "./DatePicker";
 import { PicklistSelect } from "./PicklistSelect";
 import { InlineEdit } from "./ui/InlineEdit";
@@ -58,7 +70,11 @@ export type ContactPatch = Record<string, unknown>;
 // of admin config — integrity-sensitive (login identity / self-reassigning
 // your own coverage). Matches the backend's own hard-coded strip in
 // contacts.py's update_contact.
-const MANDATORY_SELF_EDIT_LOCKS = new Set(["email", "shliach.areas", "shliach.report_numbers"]);
+const MANDATORY_SELF_EDIT_LOCKS = new Set([
+  "email",
+  "shliach.areas",
+  "shliach.report_numbers",
+]);
 
 export function ContactView({
   contact,
@@ -121,7 +137,9 @@ export function ContactView({
   const [adminAreas, setAdminAreas] = useState<AdminArea[]>([]);
   useEffect(() => {
     if (!canEdit || !isMekurav || isShliachUser) return;
-    apiFetch<AdminArea[]>("/api/admin-areas").then(setAdminAreas).catch(() => {});
+    apiFetch<AdminArea[]>("/api/admin-areas")
+      .then(setAdminAreas)
+      .catch(() => {});
   }, [canEdit, isMekurav, isShliachUser]);
 
   // fixes34 §1.1 / fixes37: any admin-added contact picklist beyond the fixed
@@ -160,15 +178,21 @@ export function ContactView({
     (d) => d.field_type !== "select",
   );
   // fixes35 §5 / fixes37: contact_shliach's own select-type custom picklists.
-  const [shliachPicklistDefs, setShliachPicklistDefs] = useState<PicklistField[]>([]);
+  const [shliachPicklistDefs, setShliachPicklistDefs] = useState<
+    PicklistField[]
+  >([]);
   useEffect(() => {
     apiFetch<PicklistField[]>("/api/picklists")
       .then((defs) =>
-        setShliachPicklistDefs(defs.filter((d) => d.entity_type === "contact_shliach")),
+        setShliachPicklistDefs(
+          defs.filter((d) => d.entity_type === "contact_shliach"),
+        ),
       )
       .catch(() => setShliachPicklistDefs([]));
   }, []);
-  const shliachPicklists = usePicklistsMap(shliachPicklistDefs.map((d) => d.field_key));
+  const shliachPicklists = usePicklistsMap(
+    shliachPicklistDefs.map((d) => d.field_key),
+  );
 
   /** Inline text/textarea editor for a top-level or nested string column. */
   function inlineText(
@@ -202,7 +226,9 @@ export function ContactView({
         onSave={(v) => {
           const next = v.trim() === "" ? null : v.trim();
           return onPatch(
-            opts.nested ? { [opts.nested]: { [field]: next } } : { [field]: next },
+            opts.nested
+              ? { [opts.nested]: { [field]: next } }
+              : { [field]: next },
           );
         }}
         editor={(draft, setDraft) =>
@@ -256,7 +282,9 @@ export function ContactView({
     fieldType: "text" | "number" | "boolean" | "date",
     value: string | number | boolean | null,
   ): ReactNode {
-    const displayNode = <CustomFieldValueDisplay fieldType={fieldType} value={value} />;
+    const displayNode = (
+      <CustomFieldValueDisplay fieldType={fieldType} value={value} />
+    );
     if (!onPatch) return displayNode;
     if (isLocked(fieldKey)) return lockedNode(displayNode);
     return (
@@ -269,7 +297,11 @@ export function ContactView({
           <CustomFieldValueInput
             fieldType={fieldType}
             value={draft}
-            onChange={fieldType === "boolean" || fieldType === "date" ? commit : setDraft}
+            onChange={
+              fieldType === "boolean" || fieldType === "date"
+                ? commit
+                : setDraft
+            }
           />
         )}
       />
@@ -278,7 +310,9 @@ export function ContactView({
 
   const nameNode = inlineText("name", contact.name, {
     validate: (v) =>
-      v.trim() === "" ? t("validation.name_required", "יש להזין שם פרטי") : null,
+      v.trim() === ""
+        ? t("validation.name_required", "יש להזין שם פרטי")
+        : null,
   });
   const lastNameNode = inlineText("last_name", contact.last_name);
   const phoneNode = inlineText("phone", contact.phone, {
@@ -297,7 +331,9 @@ export function ContactView({
         : t("validation.email_hint", EMAIL_HINT),
   });
   const createdNode = (
-    <span dir="ltr">{new Date(contact.created_at).toLocaleDateString("he-IL")}</span>
+    <span dir="ltr">
+      {new Date(contact.created_at).toLocaleDateString("he-IL")}
+    </span>
   );
 
   const assignedNode =
@@ -312,7 +348,9 @@ export function ContactView({
           <select
             className={inputClass}
             value={draft ?? ""}
-            onChange={(e) => commit(e.target.value === "" ? null : e.target.value)}
+            onChange={(e) =>
+              commit(e.target.value === "" ? null : e.target.value)
+            }
           >
             <option value="">—</option>
             {users.map((u) => (
@@ -324,11 +362,15 @@ export function ContactView({
         )}
       />
     ) : (
-      assignee?.full_name ?? "—"
+      (assignee?.full_name ?? "—")
     );
 
   const addressNode = onPatch ? (
-    <InlineEdit<{ address: string | null; latitude: number | null; longitude: number | null }>
+    <InlineEdit<{
+      address: string | null;
+      latitude: number | null;
+      longitude: number | null;
+    }>
       value={{
         address: contact.address,
         latitude: contact.latitude,
@@ -342,7 +384,11 @@ export function ContactView({
           value={draft.address ?? ""}
           onChange={(address) =>
             // Manual typing clears coords so the server geocodes on save.
-            setDraft({ address: address || null, latitude: null, longitude: null })
+            setDraft({
+              address: address || null,
+              latitude: null,
+              longitude: null,
+            })
           }
           onPlace={(p) =>
             commit({
@@ -367,44 +413,52 @@ export function ContactView({
     ["contacts.last_name", t("contacts.last_name", "שם משפחה"), lastNameNode],
     [null, t("contacts.phone", "טלפון"), phoneNode],
     [null, t("contacts.email", "אימייל"), emailNode],
-    [null, t("contacts.contact_type", "סוג איש קשר"), contactType.labelFor(contact.contact_type) || "—"],
+    [
+      null,
+      t("contacts.contact_type", "סוג איש קשר"),
+      contactType.labelFor(contact.contact_type) || "—",
+    ],
     // fixes38 §3.1: created_at is now toggleable (was always shown, key null).
-    ["contacts.created_at", t("contacts.created_at", "נוצר בתאריך"), createdNode],
+    [
+      "contacts.created_at",
+      t("contacts.created_at", "נוצר בתאריך"),
+      createdNode,
+    ],
     // fixes35 §5: any admin-added shliach.* custom picklist.
-    ...shliachPicklistDefs.map(
-      (d): [string | null, string, ReactNode] => {
-        const displayLabel =
-          shliachPicklists.labelFor(d.field_key, contact.picklist_values?.[d.field_key]) || "—";
-        // fixes51 §3: manager_jewish_status is admin-only to edit — every
-        // other role only ever sees the plain label, never the picker.
-        const isAdminOnly =
-          d.field_key === "contact_shliach.manager_jewish_status" && !isAdmin;
-        return [
+    ...shliachPicklistDefs.map((d): [string | null, string, ReactNode] => {
+      const displayLabel =
+        shliachPicklists.labelFor(
           d.field_key,
-          (lang === "en" ? d.english_label || d.label : d.label) || d.field_key,
-          isAdminOnly
-            ? displayLabel
-            : inlinePicklist(
-                d.field_key,
-                contact.picklist_values?.[d.field_key] ?? null,
-                displayLabel,
-                (v) => ({ picklist_values: { [d.field_key]: v } }),
-              ),
-        ];
-      },
-    ),
+          contact.picklist_values?.[d.field_key],
+        ) || "—";
+      // fixes51 §3: manager_jewish_status is admin-only to edit — every
+      // other role only ever sees the plain label, never the picker.
+      const isAdminOnly =
+        d.field_key === "contact_shliach.manager_jewish_status" && !isAdmin;
+      return [
+        d.field_key,
+        (lang === "en" ? d.english_label || d.label : d.label) || d.field_key,
+        isAdminOnly
+          ? displayLabel
+          : inlinePicklist(
+              d.field_key,
+              contact.picklist_values?.[d.field_key] ?? null,
+              displayLabel,
+              (v) => ({ picklist_values: { [d.field_key]: v } }),
+            ),
+      ];
+    }),
     // fixes35: any non-select custom field for shliach contacts.
-    ...shliachCustomFieldDefs.map(
-      (d): [string | null, string, ReactNode] => [
-        `customfield.contact_shliach.${d.field_key}`,
-        (lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) || d.field_key,
-        inlineCustomField(
-          d.field_key,
-          d.field_type as "text" | "number" | "boolean" | "date",
-          contact.custom_field_values?.[d.field_key] ?? null,
-        ),
-      ],
-    ),
+    ...shliachCustomFieldDefs.map((d): [string | null, string, ReactNode] => [
+      `customfield.contact_shliach.${d.field_key}`,
+      (lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
+        d.field_key,
+      inlineCustomField(
+        d.field_key,
+        d.field_type as "text" | "number" | "boolean" | "date",
+        contact.custom_field_values?.[d.field_key] ?? null,
+      ),
+    ]),
   ];
 
   // Each entry: [fieldKey | null, label, value]. null = always shown (required).
@@ -415,8 +469,16 @@ export function ContactView({
     // permanently visible; this round reverses that per an explicit ask).
     ["contacts.phone", t("contacts.phone", "טלפון"), phoneNode],
     ["contacts.email", t("contacts.email", "אימייל"), emailNode],
-    [null, t("contacts.contact_type", "סוג איש קשר"), contactType.labelFor(contact.contact_type) || "—"],
-    ["contacts.assigned_user_id", t("contacts.assigned_user_id", "משויך ל"), assignedNode],
+    [
+      null,
+      t("contacts.contact_type", "סוג איש קשר"),
+      contactType.labelFor(contact.contact_type) || "—",
+    ],
+    [
+      "contacts.assigned_user_id",
+      t("contacts.assigned_user_id", "משויך ל"),
+      assignedNode,
+    ],
     [
       "contacts.pipeline_status",
       t("contacts.pipeline_status", "סטטוס"),
@@ -452,7 +514,9 @@ export function ContactView({
       t("contacts.priority_score", "ציון עדיפות"),
       onPatch ? (
         <InlineEdit<string>
-          value={contact.priority_score == null ? "" : String(contact.priority_score)}
+          value={
+            contact.priority_score == null ? "" : String(contact.priority_score)
+          }
           display={contact.priority_score ?? "—"}
           onSave={(v) =>
             onPatch({ priority_score: v.trim() === "" ? null : Number(v) })
@@ -467,12 +531,16 @@ export function ContactView({
           )}
         />
       ) : (
-        contact.priority_score ?? "—"
+        (contact.priority_score ?? "—")
       ),
     ],
     ["contacts.address", t("contacts.address", "כתובת"), addressNode],
     // fixes38 §3.1: created_at is now toggleable (was always shown, key null).
-    ["contacts.created_at", t("contacts.created_at", "נוצר בתאריך"), createdNode],
+    [
+      "contacts.created_at",
+      t("contacts.created_at", "נוצר בתאריך"),
+      createdNode,
+    ],
   ];
 
   // fixes20 §2: coordinates ride their own (default-hidden) toggle; they come
@@ -483,7 +551,9 @@ export function ContactView({
           [
             "contacts.coordinates",
             t("contacts.coordinates", "קואורדינטות"),
-            <span dir="ltr" key="co">{formatCoords(contact.latitude, contact.longitude) || "—"}</span>,
+            <span dir="ltr" key="co">
+              {formatCoords(contact.latitude, contact.longitude) || "—"}
+            </span>,
           ],
         ]
       : [];
@@ -516,11 +586,18 @@ export function ContactView({
               <InlineEdit<string | null>
                 value={mk.first_visit}
                 display={
-                  mk.first_visit ? new Date(mk.first_visit).toLocaleString("he-IL") : "—"
+                  mk.first_visit
+                    ? new Date(mk.first_visit).toLocaleString("he-IL")
+                    : "—"
                 }
                 onSave={(v) => onPatch({ mekurav: { first_visit: v } })}
                 editor={(draft, setDraft) => (
-                  <DatePicker value={draft} onChange={setDraft} withTime className={inputClass} />
+                  <DatePicker
+                    value={draft}
+                    onChange={setDraft}
+                    withTime
+                    className={inputClass}
+                  />
                 )}
               />
             ) : mk.first_visit ? (
@@ -542,7 +619,9 @@ export function ContactView({
           [
             "contact_mekurav.tzedaka_potential",
             t("contact_mekurav.tzedaka_potential", "פוטנציאל לצדקה"),
-            inlineText("tzedaka_potential", mk.tzedaka_potential, { nested: "mekurav" }),
+            inlineText("tzedaka_potential", mk.tzedaka_potential, {
+              nested: "mekurav",
+            }),
           ],
           [
             "contact_mekurav.recommendations",
@@ -567,8 +646,10 @@ export function ContactView({
               inlinePicklist(
                 key,
                 contact.picklist_values?.[key] ?? null,
-                ({ Jewish_status: jewishStatus, affiliation, language }[key] ?? jewishStatus)
-                  .labelFor(contact.picklist_values?.[key]) || "—",
+                (
+                  { Jewish_status: jewishStatus, affiliation, language }[key] ??
+                  jewishStatus
+                ).labelFor(contact.picklist_values?.[key]) || "—",
                 (v) => ({ picklist_values: { [key]: v } }),
               ),
             ],
@@ -576,25 +657,27 @@ export function ContactView({
           // fixes34 §1.1: any admin-added custom contact picklist (the later
           // `allFields.filter` below applies `vis(d.field_key)`, same as
           // every other entry keyed by a real field_key).
-          ...customDefs.map(
-            (d): [string | null, string, ReactNode] => [
+          ...customDefs.map((d): [string | null, string, ReactNode] => [
+            d.field_key,
+            (lang === "en" ? d.english_label || d.label : d.label) ||
               d.field_key,
-              (lang === "en" ? d.english_label || d.label : d.label) || d.field_key,
-              inlinePicklist(
+            inlinePicklist(
+              d.field_key,
+              contact.picklist_values?.[d.field_key] ?? null,
+              customPicklists.labelFor(
                 d.field_key,
-                contact.picklist_values?.[d.field_key] ?? null,
-                customPicklists.labelFor(d.field_key, contact.picklist_values?.[d.field_key]) ||
-                  "—",
-                (v) => ({ picklist_values: { [d.field_key]: v } }),
-              ),
-            ],
-          ),
+                contact.picklist_values?.[d.field_key],
+              ) || "—",
+              (v) => ({ picklist_values: { [d.field_key]: v } }),
+            ),
+          ]),
           // fixes35: any non-select custom field for mekurav contacts.
           ...mekuravCustomFieldDefs.map(
             (d): [string | null, string, ReactNode] => [
               `customfield.contact_mekurav.${d.field_key}`,
-              (lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
-                d.field_key,
+              (lang === "en"
+                ? d.english_label || d.hebrew_label
+                : d.hebrew_label) || d.field_key,
               inlineCustomField(
                 d.field_key,
                 d.field_type as "text" | "number" | "boolean" | "date",
@@ -624,7 +707,9 @@ export function ContactView({
                   className={inputClass}
                   value={draft ?? ""}
                   onChange={(e) =>
-                    commit(e.target.value === "" ? null : Number(e.target.value))
+                    commit(
+                      e.target.value === "" ? null : Number(e.target.value),
+                    )
                   }
                 >
                   <option value="">—</option>
@@ -667,8 +752,13 @@ export function ContactView({
           out as a minor detail, not the point. */}
       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {allFields.map(([, label, value]) => (
-          <div key={label} className="flex flex-col gap-1 rounded-lg border-2 border-primary/25 p-3 transition-colors hover:border-primary/50 hover:bg-primary/5">
-            <dt className={dtClass} style={dtStyle}>{label}</dt>
+          <div
+            key={label}
+            className="flex flex-col gap-1 rounded-lg border-2 border-primary/25 p-3 transition-colors hover:border-primary/50 hover:bg-primary/5"
+          >
+            <dt className={dtClass} style={dtStyle}>
+              {label}
+            </dt>
             <dd className="text-sm">{value}</dd>
           </div>
         ))}
@@ -676,7 +766,9 @@ export function ContactView({
           <>
             {vis("contact_shliach.areas") && (
               <div className="flex flex-col gap-1 rounded-lg border-2 border-primary/25 p-3 transition-colors hover:border-primary/50 hover:bg-primary/5">
-                <dt className={dtClass} style={dtStyle}>{t("contact_shliach.areas", "אזורים באחריות הפעיל")}</dt>
+                <dt className={dtClass} style={dtStyle}>
+                  {t("contact_shliach.areas", "אזורים באחריות הפעיל")}
+                </dt>
                 <dd className="text-sm">
                   {onPatch && isLocked("shliach.areas") ? (
                     lockedNode(<AreaNames ids={contact.shliach.area_ids} />)
@@ -714,7 +806,10 @@ export function ContactView({
             {vis("contact_shliach.report_numbers") && (
               <div className="flex flex-col gap-1 rounded-lg border-2 border-primary/25 p-3 transition-colors hover:border-primary/50 hover:bg-primary/5">
                 <dt className={dtClass} style={dtStyle}>
-                  {t("contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל")}
+                  {t(
+                    "contact_shliach.report_numbers",
+                    "מספרי דוח באחריות הפעיל",
+                  )}
                 </dt>
                 <dd className="text-sm space-y-1">
                   <ReportNumbersLabel ids={contact.shliach.report_number_ids} />
@@ -727,9 +822,11 @@ export function ContactView({
                 </dd>
               </div>
             )}
-            {vis("contact_shliach.notes") && (
+            {!isSelfEdit && vis("contact_shliach.notes") && (
               <div className="flex flex-col gap-1 rounded-lg border-2 border-primary/25 p-3 transition-colors hover:border-primary/50 hover:bg-primary/5">
-                <dt className={dtClass} style={dtStyle}>{t("contact_shliach.notes", "הערות")}</dt>
+                <dt className={dtClass} style={dtStyle}>
+                  {t("contact_shliach.notes", "הערות")}
+                </dt>
                 <dd className="text-sm">
                   {inlineText("notes", contact.shliach.notes, {
                     nested: "shliach",
@@ -779,54 +876,67 @@ export function ContactView({
       {/* fixes45: shliach version history (admin-only) — same full-row
           snapshot history view as the Apartments module's (see model
           docstring): each entry is a complete past version, not a diff. */}
-      {isAdmin && contact.contact_type === "shliach" && shliachHistory.length > 0 && (
-        <div className="rounded-lg border border-border p-4 space-y-2">
-          <h3 className="text-xs font-semibold text-muted-foreground">
-            {t("contact_shliach.history", "היסטוריית שינויים")}
-          </h3>
-          <ul className="text-sm space-y-1.5">
-            {shliachHistory.map((v) => (
-              <li key={v.id} className="text-muted-foreground">
-                <span className="text-xs text-muted-foreground">
-                  {(v.editor_name || t("apt.history_unknown_editor", "עורך לא ידוע")) +
-                    " — " +
-                    (v.last_edit ? new Date(v.last_edit).toLocaleString("he-IL") : "")}
-                </span>
-                <br />
-                {v.full_name || "—"}
-                {v.email && <span dir="ltr"> · {v.email}</span>}
-                {v.phone && <span dir="ltr"> · {v.phone}</span>}
-                <br />
-                <span className="text-xs">
-                  {t("contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל")}:{" "}
-                  <ReportNumbersLabel ids={v.report_number_ids} />
-                  {" · "}
-                  {t("contact_shliach.areas", "אזורים באחריות הפעיל")}:{" "}
-                  <AreaNames ids={v.area_ids} />
-                  {v.notes && (
-                    <>
-                      {" · "}
-                      {t("contact_shliach.notes", "הערות")}: {v.notes}
-                    </>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {isAdmin &&
+        contact.contact_type === "shliach" &&
+        shliachHistory.length > 0 && (
+          <div className="rounded-lg border border-border p-4 space-y-2">
+            <h3 className="text-xs font-semibold text-muted-foreground">
+              {t("contact_shliach.history", "היסטוריית שינויים")}
+            </h3>
+            <ul className="text-sm space-y-1.5">
+              {shliachHistory.map((v) => (
+                <li key={v.id} className="text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
+                    {(v.editor_name ||
+                      t("apt.history_unknown_editor", "עורך לא ידוע")) +
+                      " — " +
+                      (v.last_edit
+                        ? new Date(v.last_edit).toLocaleString("he-IL")
+                        : "")}
+                  </span>
+                  <br />
+                  {v.full_name || "—"}
+                  {v.email && <span dir="ltr"> · {v.email}</span>}
+                  {v.phone && <span dir="ltr"> · {v.phone}</span>}
+                  <br />
+                  <span className="text-xs">
+                    {t(
+                      "contact_shliach.report_numbers",
+                      "מספרי דוח באחריות הפעיל",
+                    )}
+                    : <ReportNumbersLabel ids={v.report_number_ids} />
+                    {" · "}
+                    {t("contact_shliach.areas", "אזורים באחריות הפעיל")}:{" "}
+                    <AreaNames ids={v.area_ids} />
+                    {v.notes && (
+                      <>
+                        {" · "}
+                        {t("contact_shliach.notes", "הערות")}: {v.notes}
+                      </>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
       {/* Map goes with the (mekurav) address — shliach profiles skip it. */}
       {isMekurav && hasCoords && (
-        <ContactMap lat={contact.latitude as number} lng={contact.longitude as number} />
+        <ContactMap
+          lat={contact.latitude as number}
+          lng={contact.longitude as number}
+        />
       )}
 
       {/* fixes25: the Mivtzoim checklist + custom fields moved to the visit
           log (each visit records what happened on it). */}
 
-      <p className="text-xs text-muted-foreground" dir="ltr">
-        GUID: {contact.guid}
-      </p>
+      {!isSelfEdit && (
+        <p className="text-xs text-muted-foreground" dir="ltr">
+          GUID: {contact.guid}
+        </p>
+      )}
     </div>
   );
 }
@@ -932,4 +1042,4 @@ function AreaLabel({ id }: { id: number }) {
   }, [id]);
 
   return <>{label ?? "…"}</>;
-}
+                                          }
