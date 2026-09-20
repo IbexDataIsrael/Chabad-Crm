@@ -135,6 +135,24 @@ function gridColumnMinWidth(entry: GridColumn): string {
 const CF_PREFIX = "cf:";
 
 export default function ContactsPage() {
+  return <ContactsPageContent />;
+}
+
+function ContactsPageContent() {
+  const { t } = useLocalization();
+  const { isShliach, isCampaignManager } = useAuth();
+  if (isShliach || isCampaignManager) {
+    return (
+      <p className="text-status-darkred">
+        {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
+      </p>
+    );
+  }
+
+  return <AuthorizedContactsPage />;
+}
+
+function AuthorizedContactsPage() {
   const router = useRouter();
   const { t, lang } = useLocalization();
   const { user, isShliach, isCampaignManager } = useAuth();
@@ -1037,14 +1055,6 @@ export default function ContactsPage() {
   // this closes the direct-URL gap the backend's own `forbid_campaign_manager`
   // 403 leaves open at the page-shell level (found via a live drive, not a
   // hole the approved plan called out by name).
-  if (isShliach || isCampaignManager) {
-    return (
-      <p className="text-status-darkred">
-        {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
-      </p>
-    );
-  }
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1996,4 +2006,4 @@ function ContactBulkEditModal({
       </div>
     </div>
   );
-}
+        }
