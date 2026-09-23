@@ -157,6 +157,44 @@ def get_area(
     return area
 
 
+@router.get("/{area_id}/building-report-numbers", response_model=dict[int, list[str]])
+def area_building_report_numbers(
+    area_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Report numbers (מספרי דוח) per building in this area, for the area page.
+    A building has no direct report link — it's the distinct report numbers of
+    its active apartments (`is_display`). Buildings with none are omitted.
+    Same access rule as `get_area`: a shliach only for an area they cover."""
+    area = _get_or_404(area_id, current_user.organization_id, db)
+    if current_user.role == "shliach" and area.id not in _shliach_area_ids(
+        current_user, db
+    ):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Area not found")
+    rows = (
+        db.query(models.Apartment.building_id, models.ReportNumber.name)
+        .join(models.Building, models.Building.id == models.Apartment.building_id)
+        .join(
+            models.ReportNumber,
+            models.ReportNumber.id == models.Apartment.report_number_id,
+        )
+        .filter(
+            models.Building.area_id == area.id,
+            models.Building.organization_id == current_user.organization_id,
+            models.Apartment.is_display.is_(True),
+        )
+        .distinct()
+        .all()
+    )
+    result: dict[int, list[str]] = {}
+    for building_id, name in rows:
+        result.setdefault(building_id, []).append(name)
+    for names in result.values():
+        names.sort(key=natural_sort_key)
+    return result
+
+
 @router.put("/{area_id}", response_model=AreaOut)
 def update_area(
     area_id: int,

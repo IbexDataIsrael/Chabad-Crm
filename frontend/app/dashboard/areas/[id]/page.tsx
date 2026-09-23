@@ -32,6 +32,8 @@ export default function AreaDetailPage() {
   const [area, setArea] = useState<Area | null>(null);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [shluchim, setShluchim] = useState<Contact[]>([]);
+  // Report numbers per building id (from the building's apartments).
+  const [buildingReports, setBuildingReports] = useState<Record<string, string[]>>({});
   // fixes18 §4.2/§4.3: sources for the add-activist / add-building dropdowns.
   const [allShluchim, setAllShluchim] = useState<Contact[]>([]);
   const [eligibleBuildings, setEligibleBuildings] = useState<Building[]>([]);
@@ -41,14 +43,18 @@ export default function AreaDetailPage() {
   const [loaded, setLoaded] = useState(false);
 
   async function load() {
-    const [a, b, s] = await Promise.all([
+    const [a, b, s, r] = await Promise.all([
       apiFetch<Area>(`/api/areas/${areaId}`),
       apiFetch<Building[]>("/api/buildings").catch(() => [] as Building[]),
       apiFetch<Contact[]>(`/api/areas/${areaId}/shluchim`).catch(() => [] as Contact[]),
+      apiFetch<Record<string, string[]>>(`/api/areas/${areaId}/building-report-numbers`).catch(
+        () => ({}) as Record<string, string[]>,
+      ),
     ]);
     setArea(a);
     setBuildings(b.filter((x) => x.area_id === areaId));
     setShluchim(s);
+    setBuildingReports(r);
     if (isAdmin) {
       apiFetch<Contact[]>("/api/contacts?contact_type=shliach")
         .then(setAllShluchim)
@@ -235,6 +241,10 @@ export default function AreaDetailPage() {
                   ) : (
                     <div className="text-sm text-muted-foreground">{b.building_address}</div>
                   ))}
+                <div className="text-sm text-muted-foreground">
+                  {t("page.report_numbers", "מספרי דוח")}:{" "}
+                  {buildingReports[String(b.id)]?.join(", ") || "—"}
+                </div>
               </li>
             ))}
           </ul>
