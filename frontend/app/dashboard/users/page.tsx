@@ -49,6 +49,10 @@ export interface OrgUser {
   phone: string | null;
   role: string;
   is_active: boolean;
+  /** fixes61 §2: paper-only activist, no login. */
+  is_manual?: boolean;
+  /** fixes65 §7: 'public' | 'qr' for a self-registered activist. */
+  registration_source?: string | null;
   created_at: string;
   // fixes46: the linked ContactShliach (role='shliach' only), resolved
   // server-side by the real user_id FK — see schemas.UserOut.shliach.
@@ -237,6 +241,16 @@ export default function UsersPage() {
   // field) columns — see the Contacts page's identical mechanism.
   const [columnOrder, setColumnOrder] = useDbPreference<string[]>("users.columnOrder", []);
   const [columnsOpen, setColumnsOpen] = useState(false);
+  // fixes65 §7: arriving from the dashboard's "N new activists signed up"
+  // card — show only those self-registrations ("all" = never dismissed).
+  // URL-driven, deliberately not persisted.
+  const [signupsSince, setSignupsSince] = useState<string | null>(null);
+  useEffect(() => {
+    const since = new URLSearchParams(window.location.search).get("new_signups_since");
+    setSignupsSince(since);
+    if (since) setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // fixes60 §4: same "Clear all filters" convention as Apartments/Contacts.
   // `showInactive` is deliberately excluded — it's an opt-in to see *more*
@@ -248,8 +262,14 @@ export default function UsersPage() {
     buildingIds.length +
     reportNumberIds.length +
     Object.values(shliachPicklistFilters).filter((v) => v.length > 0).length +
-    Object.values(shliachFieldFilters).filter((v) => v).length;
+    Object.values(shliachFieldFilters).filter((v) => v).length +
+    (signupsSince ? 1 : 0);
+  function clearNewSignupsFilter() {
+    setSignupsSince(null);
+    router.replace("/dashboard/users");
+  }
   function clearAllFilters() {
+    if (signupsSince) clearNewSignupsFilter();
     setRoleFilter([]);
     setAreaIds([]);
     setBuildingIds([]);
@@ -448,6 +468,12 @@ export default function UsersPage() {
   const activistSystemEnabled = isFeatureEnabled(me?.organization, "activist_system_enabled");
   const allRows: UnifiedRow[] = [...userRows, ...missingRows].filter((r) => {
     if (r.role === "shliach" && !activistSystemEnabled) return false;
+    if (signupsSince) {
+      if (r.kind !== "user" || !r.raw.registration_source) return false;
+      if (signupsSince !== "all" && Date.parse(r.created_at) <= Date.parse(signupsSince)) {
+        return false;
+      }
+    }
     if (roleFilter.length > 0 && !roleFilter.includes(r.role)) return false;
     if (!showInactive && !r.is_active) return false;
     if (geoFilterActive && r.role === "shliach" && r.kind === "user") {
@@ -1114,6 +1140,19 @@ export default function UsersPage() {
               }}
             />
           ),
+        )}
+        {signupsSince && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-sm text-primary">
+            {t("users.new_signups_filter", "פעילים שנרשמו לאחרונה")}
+            <button
+              type="button"
+              onClick={clearNewSignupsFilter}
+              className="rounded-full px-1 hover:bg-primary/15"
+              aria-label={t("filter.clear_all", "נקה את כל הסינונים")}
+            >
+              ×
+            </button>
+          </span>
         )}
         {activeFilterCount > 0 && (
           <Button type="button" variant="outline" onClick={clearAllFilters}>

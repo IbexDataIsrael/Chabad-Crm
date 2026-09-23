@@ -532,3 +532,30 @@ export const aiQuery = (prompt: string): Promise<AiQueryResponse> =>
     method: "POST",
     body: JSON.stringify({ prompt }),
   });
+
+/** fixes65 §1: upload one photo into the org's public landing-page gallery
+ * (admin-only, org-scoped — same storage path as announcement images). */
+export async function uploadGalleryImage(file: File): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${API_URL}/api/uploads/gallery-image`, {
+    method: "POST",
+    body: form,
+    headers,
+  });
+  if (!res.ok) {
+    let detail = "Image upload failed";
+    try {
+      const data = await res.json();
+      detail = data.detail || detail;
+    } catch {
+      /* keep default */
+    }
+    throw new ApiError(res.status, detail);
+  }
+  const data = await res.json();
+  return data.url as string;
+}

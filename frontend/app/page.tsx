@@ -8,6 +8,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { ApiError, getToken, resendVerification } from "@/lib/api";
 import { useAuth, type LoginOrgOption } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
+import { pendingClaimToken } from "@/lib/pendingClaim";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,9 @@ function loginTarget(): string {
   if (typeof window === "undefined") return "/dashboard";
   const target = new URLSearchParams(window.location.search).get("redirect");
   if (target && target.startsWith("/") && !target.startsWith("//")) return target;
+  // fixes65 §4: a QR claim interrupted by a trip to this login screen.
+  const claimToken = pendingClaimToken();
+  if (claimToken) return `/tasks/claim/${encodeURIComponent(claimToken)}`;
   return "/dashboard";
 }
 

@@ -395,6 +395,9 @@ def _sync_user_email(db: Session, user: models.User, email: Optional[str]) -> No
         if not username_taken:
             user.username = email
     user.email = email
+    # fixes65 §5: a paper-only activist who now has an email is a regular
+    # (Google-or-password) login from here on.
+    user.is_manual = False
 
 
 def _provision_shliach_user(
@@ -406,9 +409,40 @@ def _provision_shliach_user(
     The reuse lookup is org-scoped (fixes14): the same email in another
     organization is a different account and must never be linked across
     tenants. A same-org user already serving a different shliach contact
-    is rejected — one login per shliach."""
+    is rejected — one login per shliach.
+
+    fixes65 §5: an activist with no email (the admin's "No email" checkbox —
+    a paper-only activist who never logs in) still gets a User row, marked
+    `is_manual` with no email/password, so they appear in the org's user
+    list and can be assigned tasks / credited on paper entries. Adding an
+    email later upgrades this same user (see `_sync_user_email`)."""
     if not contact.email:
-        return None
+        full_name = " ".join(filter(None, [contact.last_name, contact.name])) or contact.name
+        base = "_".join(full_name.split())[:40] or "activist"
+        username, suffix = base, 2
+        while (
+            db.query(models.User.id)
+            .filter(models.User.organization_id == org_id, models.User.username == username)
+            .first()
+        ):
+            username = f"{base}_{suffix}"
+            suffix += 1
+        user = models.User(
+            organization_id=org_id,
+            username=username,
+            full_name=full_name,
+            first_name=contact.name,
+            last_name=contact.last_name,
+            phone=contact.phone,
+            password_hash=None,
+            role="shliach",
+            is_active=True,
+            is_manual=True,
+            email_verified=True,
+        )
+        db.add(user)
+        db.flush()
+        return user
     existing = (
         db.query(models.User)
         .filter(

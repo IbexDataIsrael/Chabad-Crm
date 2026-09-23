@@ -23,6 +23,7 @@ import {
 } from "recharts";
 
 import { Badge } from "@/components/ui/badge";
+import { NewSignupsCard } from "@/components/NewSignupsCard";
 import { Card } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
 import { COLOR_HEX } from "@/lib/colors";
@@ -191,6 +192,8 @@ export function AdminDashboardHome() {
           ))}
         </div>
       </div>
+
+      <NewSignupsCard />
 
       {loading && !data ? (
         <div className="flex justify-center py-16">

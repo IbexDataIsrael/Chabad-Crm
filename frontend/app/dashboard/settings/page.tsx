@@ -6,6 +6,7 @@ import { AddressAutocomplete, type PlaceResult } from "@/components/AddressAutoc
 import { BackupRestoreCard } from "@/components/BackupRestoreCard";
 import { LogoUpload } from "@/components/LogoUpload";
 import { MapPointPicker } from "@/components/MapPointPicker";
+import { PublicPageSettingsCard } from "@/components/PublicPageSettingsCard";
 import { apiFetch, changePassword } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
@@ -299,6 +300,9 @@ export default function SettingsPage() {
       </form>
       </Card>
       )}
+
+      {/* fixes65 §1: branded public page + self-registration (admin-only). */}
+      {isAdmin && <PublicPageSettingsCard />}
 
       {/* fixes16: backup & restore points (admin-only). */}
       {isAdmin && <BackupRestoreCard />}

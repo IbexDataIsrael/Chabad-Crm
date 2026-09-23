@@ -44,7 +44,8 @@ export function TaskQuickCreateForm({
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [reportNumbers, setReportNumbers] = useState<ReportNumber[]>([]);
   const [activists, setActivists] = useState<ActivistOption[]>([]);
-  const [selectedVolunteerId, setSelectedVolunteerId] = useState<number | "">(
+  // fixes65 §2: "later" = Assign Later — the task enters the orphan pool.
+  const [selectedVolunteerId, setSelectedVolunteerId] = useState<number | "" | "later">(
     volunteerUserId ?? "",
   );
   const [campaignId, setCampaignId] = useState<number | "">("");
@@ -96,7 +97,7 @@ export function TaskQuickCreateForm({
         method: "POST",
         body: JSON.stringify({
           campaign_id: campaignId,
-          volunteer_user_id: selectedVolunteerId,
+          volunteer_user_id: selectedVolunteerId === "later" ? null : selectedVolunteerId,
           report_number_ids: reportNumberIds,
           custom_date_value_id: customDateValueId === "" ? null : customDateValueId,
           status,
@@ -128,17 +129,28 @@ export function TaskQuickCreateForm({
               className={inputClass}
               value={selectedVolunteerId}
               onChange={(e) =>
-                setSelectedVolunteerId(e.target.value ? Number(e.target.value) : "")
+                setSelectedVolunteerId(
+                  e.target.value === "later" ? "later" : e.target.value ? Number(e.target.value) : "",
+                )
               }
               required
             >
               <option value="">{t("task.select_activist", "בחר פעיל")}</option>
+              <option value="later">{t("task.assign_later", "שיוך מאוחר יותר (מאגר משימות פתוחות)")}</option>
               {activists.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.full_name}
                 </option>
               ))}
             </select>
+            {selectedVolunteerId === "later" && (
+              <span className="block text-xs text-muted-foreground">
+                {t(
+                  "task.assign_later_hint",
+                  "המשימה תמתין במאגר המשימות הפתוחות. הדפיסו אותה — הדף יכלול קוד QR שדרכו פעיל יוכל לקחת אותה.",
+                )}
+              </span>
+            )}
           </label>
         )}
 

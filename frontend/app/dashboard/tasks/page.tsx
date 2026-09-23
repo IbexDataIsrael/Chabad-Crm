@@ -1,6 +1,20 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Plus, Trash2, X } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardPen,
+  Loader2,
+  Plus,
+  Printer,
+  QrCode,
+  Trash2,
+  UserMinus,
+  X,
+} from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
@@ -10,13 +24,23 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { InlineEdit } from "@/components/ui/InlineEdit";
 import { TruncatedText } from "@/components/ui/TruncatedText";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useConfirm } from "@/lib/confirm";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
-import type { Campaign, Task, TaskPage, TaskStatus } from "@/lib/types";
+import { generateTaskPdf } from "@/lib/taskPdf";
+import type { Campaign, Task, TaskPage, TaskPrintData, TaskStatus } from "@/lib/types";
+
+type AssignmentFilter = "" | "orphan" | "assigned";
+
+interface ActivistOption {
+  id: number;
+  full_name: string;
+  role: string;
+  is_active: boolean;
+}
 
 const inputClass =
   "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
@@ -30,7 +54,7 @@ const STATUS_OPTIONS: TaskStatus[] = ["ACTIVE", "COMPLETED", "PAUSED"];
  *  fields the spec calls out; everything else is set at creation via the
  *  Users-page quick action and isn't re-editable here). */
 export default function TasksPage() {
-  const { isAdmin, isCampaignManager, loading } = useAuth();
+  const { isAdmin, isCampaignManager, loading, user } = useAuth();
   const { t } = useLocalization();
   const confirmDialog = useConfirm();
   const { success, error: toastError } = useToast();
@@ -43,6 +67,12 @@ export default function TasksPage() {
   const [q, setQ] = usePersistentState("crm.tasks.q", "");
   const [statusFilter, setStatusFilter] = usePersistentState<string[]>("crm.tasks.status", []);
   const [campaignFilter, setCampaignFilter] = usePersistentState<number[]>("crm.tasks.campaign", []);
+  // fixes65 §8: the orphan pool (printed, unclaimed) vs. assigned tasks.
+  const [assignmentFilter, setAssignmentFilter] = usePersistentState<AssignmentFilter>(
+    "crm.tasks.assignment", "",
+  );
+  const [activists, setActivists] = useState<ActivistOption[]>([]);
+  const [printingId, setPrintingId] = useState<number | null>(null);
   const [sort, setSort] = usePersistentState<SortKey>("crm.tasks.sort", "created_at");
   const [dir, setDir] = usePersistentState<"asc" | "desc">("crm.tasks.dir", "desc");
   const [page, setPage] = usePersistentState("crm.tasks.page", 1);
@@ -52,10 +82,12 @@ export default function TasksPage() {
   const [creating, setCreating] = useState(false);
 
   // fixes60 §4: same "Clear all filters" convention as Apartments/Contacts.
-  const activeFilterCount = statusFilter.length + campaignFilter.length + (q.trim() ? 1 : 0);
+  const activeFilterCount =
+    statusFilter.length + campaignFilter.length + (q.trim() ? 1 : 0) + (assignmentFilter ? 1 : 0);
   function clearAllFilters() {
     setStatusFilter([]);
     setCampaignFilter([]);
+    setAssignmentFilter("");
     setQ("");
     setPage(1);
   }
@@ -68,12 +100,16 @@ export default function TasksPage() {
 
   useEffect(() => {
     apiFetch<Campaign[]>("/api/campaigns").then(setCampaigns).catch(() => setCampaigns([]));
+    apiFetch<ActivistOption[]>("/api/users")
+      .then((rows) => setActivists(rows.filter((u) => u.role === "shliach" && u.is_active)))
+      .catch(() => setActivists([]));
   }, []);
 
   function reload() {
     const params = new URLSearchParams();
     statusFilter.forEach((s) => params.append("status", s));
     campaignFilter.forEach((id) => params.append("campaign_id", String(id)));
+    if (assignmentFilter) params.set("assignment", assignmentFilter);
     if (q.trim()) params.set("q", q.trim());
     params.set("sort", sort);
     params.set("dir", dir);
@@ -95,7 +131,7 @@ export default function TasksPage() {
   useEffect(() => {
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, statusFilter, campaignFilter, sort, dir, page, pageSize]);
+  }, [q, statusFilter, campaignFilter, assignmentFilter, sort, dir, page, pageSize]);
 
   function sortHeader(key: SortKey, label: string) {
     const active = sort === key;
@@ -133,11 +169,97 @@ export default function TasksPage() {
     await reload();
   }
 
+  // fixes65 §3: the printable task sheet (QR only while unassigned).
+  async function printTask(task: Task) {
+    if (task.apartment_count === 0) return;
+    setPrintingId(task.id);
+    try {
+      const data = await apiFetch<TaskPrintData>(`/api/tasks/${task.id}/print-data`);
+      await generateTaskPdf({
+        data,
+        orgName: user?.organization?.name ?? "",
+        orgLogoUrl: user?.organization?.logo_url,
+        claimBaseUrl: window.location.origin,
+        t,
+      });
+    } catch (err) {
+      toastError(
+        err instanceof ApiError && err.status === 409
+          ? t("task.print_no_apartments", "אין דירות במשימה — אין מה להדפיס.")
+          : err instanceof Error
+            ? err.message
+            : t("msg.save_failed", "שמירה נכשלה"),
+      );
+    } finally {
+      setPrintingId(null);
+    }
+  }
+
+  // fixes65 §4: admin override — back to the orphan pool (printouts stay valid).
+  async function unassign(task: Task) {
+    if (
+      !(await confirmDialog({
+        message: t("task.unassign_confirm", "להחזיר את המשימה למאגר המשימות הפתוחות?"),
+        detail: t(
+          "task.unassign_detail",
+          "הדפים שכבר הודפסו ימשיכו לעבוד — הפעיל הבא שיסרוק את הקוד יקבל את המשימה.",
+        ),
+      }))
+    ) {
+      return;
+    }
+    await apiFetch(`/api/tasks/${task.id}/unassign`, { method: "POST" });
+    await reload();
+    success(t("task.unassigned_toast", "המשימה הוחזרה למאגר"));
+  }
+
+  function volunteerCell(task: Task) {
+    const current = task.volunteer_user_id;
+    const display = task.is_orphan ? (
+      <span className="inline-flex items-center gap-1 rounded-full border border-status-orange/40 bg-status-orange/10 px-2 py-0.5 text-xs font-medium text-status-orange">
+        {t("task.orphan_badge", "לא משויך")}
+      </span>
+    ) : current == null ? (
+      <span className="text-muted-foreground">{t("task.office_handled", "בטיפול המשרד")}</span>
+    ) : (
+      <span className="inline-flex items-center gap-1">
+        {task.volunteer_name}
+        {task.claimed_via === "qr" && (
+          <span title={t("task.claimed_via_qr", "נלקחה בסריקת קוד QR")}>
+            <QrCode className="h-3.5 w-3.5 text-muted-foreground" />
+          </span>
+        )}
+      </span>
+    );
+    return (
+      <InlineEdit<number | "">
+        value={current ?? ""}
+        display={display}
+        onSave={(v) => (v === "" ? Promise.resolve() : saveField(task, { volunteer_user_id: v }))}
+        editor={(draft, _setDraft, commit) => (
+          <select
+            className={inputClass}
+            value={draft}
+            onChange={(e) => commit(e.target.value ? Number(e.target.value) : "")}
+            autoFocus
+          >
+            <option value="">{t("task.select_activist", "בחר פעיל")}</option>
+            {activists.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.full_name}
+              </option>
+            ))}
+          </select>
+        )}
+      />
+    );
+  }
+
   async function remove(task: Task) {
     if (
       !(await confirmDialog({
         message: t("msg.delete_task_confirm", "למחוק את המשימה?"),
-        detail: `${task.volunteer_name} — ${task.campaign_name}`,
+        detail: `${task.volunteer_name || t("task.orphan_badge", "לא משויך")} — ${task.campaign_name}`,
       }))
     ) {
       return;
@@ -187,6 +309,19 @@ export default function TasksPage() {
             setPage(1);
           }}
         />
+        <select
+          className={`${inputClass} w-auto`}
+          value={assignmentFilter}
+          aria-label={t("task.assignment", "שיוך")}
+          onChange={(e) => {
+            setAssignmentFilter(e.target.value as AssignmentFilter);
+            setPage(1);
+          }}
+        >
+          <option value="">{t("filter.all_assignments", "כל המשימות")}</option>
+          <option value="orphan">{t("filter.orphan_tasks", "יתומות / לא משויכות")}</option>
+          <option value="assigned">{t("filter.assigned_tasks", "משויכות")}</option>
+        </select>
         <MultiSelectFilter
           allLabel={t("filter.all_campaigns", "כל הקמפיינים")}
           label={t("task.campaign", "קמפיין")}
@@ -234,7 +369,7 @@ export default function TasksPage() {
             ) : (
               items.map((task) => (
                 <tr key={task.id}>
-                  <td className="px-3 py-2">{task.volunteer_name}</td>
+                  <td className="px-3 py-2">{volunteerCell(task)}</td>
                   <td className="px-3 py-2">{task.campaign_name}</td>
                   <td className="px-3 py-2">{task.report_number_names.join(", ") || "—"}</td>
                   <td className="px-3 py-2">
@@ -278,14 +413,55 @@ export default function TasksPage() {
                     {task.created_at ? new Date(task.created_at).toLocaleDateString("he-IL") : "—"}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-status-darkred/40 text-status-darkred hover:bg-status-darkred/10"
-                      onClick={() => remove(task)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={task.apartment_count === 0 || printingId === task.id}
+                        title={
+                          task.apartment_count === 0
+                            ? t("task.print_no_apartments", "אין דירות במשימה — אין מה להדפיס.")
+                            : t("task.print", "הדפסת משימה")
+                        }
+                        aria-label={t("task.print", "הדפסת משימה")}
+                        onClick={() => printTask(task)}
+                      >
+                        {printingId === task.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Printer className="h-3.5 w-3.5" />
+                        )}
+                      </Button>
+                      <Button size="sm" variant="outline" asChild>
+                        <Link
+                          href={`/dashboard/tasks/${task.id}/paper-entry`}
+                          title={t("task.paper_entry", "הזנת נתונים מדף מודפס")}
+                          aria-label={t("task.paper_entry", "הזנת נתונים מדף מודפס")}
+                        >
+                          <ClipboardPen className="h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
+                      {!task.is_orphan && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          title={t("task.unassign", "החזרה למאגר")}
+                          aria-label={t("task.unassign", "החזרה למאגר")}
+                          onClick={() => unassign(task)}
+                        >
+                          <UserMinus className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-status-darkred/40 text-status-darkred hover:bg-status-darkred/10"
+                        aria-label={t("action.delete", "מחק")}
+                        onClick={() => remove(task)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))

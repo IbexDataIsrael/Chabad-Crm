@@ -157,20 +157,21 @@ async def upload_logo(request: Request, file: UploadFile = File(...)) -> dict:
 # admin-only and strictly scoped to the caller's own organization: each org
 # gets its own Cloudinary folder / local subfolder, so one org can never
 # list or upload into another org's image gallery.
-def _announcement_folder(org_id: int) -> str:
-    return f"orgs/{org_id}/announcements"
+def _announcement_folder(org_id: int, kind: str = "announcements") -> str:
+    return f"orgs/{org_id}/{kind}"
 
 
 def _save_announcement_image_locally(
-    data: bytes, content_type: str, request: Request, org_id: int
+    data: bytes, content_type: str, request: Request, org_id: int,
+    kind: str = "announcements",
 ) -> str:
     ext = _IMAGE_EXTENSIONS.get(content_type, "png")
-    folder = os.path.join(settings.upload_dir, "announcements", str(org_id))
+    folder = os.path.join(settings.upload_dir, kind, str(org_id))
     os.makedirs(folder, exist_ok=True)
     filename = f"{uuid.uuid4().hex}.{ext}"
     with open(os.path.join(folder, filename), "wb") as f:
         f.write(data)
-    return f"{str(request.base_url).rstrip('/')}/uploads/announcements/{org_id}/{filename}"
+    return f"{str(request.base_url).rstrip('/')}/uploads/{kind}/{org_id}/{filename}"
 
 
 def _list_announcement_images_locally(request: Request, org_id: int) -> list[dict]:
@@ -242,7 +243,23 @@ async def upload_announcement_image(
 ) -> dict:
     """Upload one image into the caller's own org folder. Admin-only (unlike
     /logo, this always has an authenticated org to scope to)."""
-    org_id = admin.organization_id
+    return await _upload_org_image(request, file, admin.organization_id, "announcements")
+
+
+@router.post("/gallery-image")
+async def upload_gallery_image(
+    request: Request,
+    file: UploadFile = File(...),
+    admin: models.User = Depends(require_admin),
+) -> dict:
+    """fixes65 §1: one photo for the org's public landing-page gallery —
+    same admin-only, org-scoped storage as announcement images, own folder."""
+    return await _upload_org_image(request, file, admin.organization_id, "gallery")
+
+
+async def _upload_org_image(
+    request: Request, file: UploadFile, org_id: int, kind: str
+) -> dict:
     content_type = file.content_type or ""
     if content_type not in _IMAGE_EXTENSIONS:
         raise HTTPException(
@@ -256,9 +273,11 @@ async def upload_announcement_image(
         )
 
     if not settings.cloudinary_configured:
-        return {"url": _save_announcement_image_locally(data, content_type, request, org_id)}
+        return {
+            "url": _save_announcement_image_locally(data, content_type, request, org_id, kind)
+        }
 
-    folder = _announcement_folder(org_id)
+    folder = _announcement_folder(org_id, kind)
     timestamp = int(time.time())
     signed_params = {"folder": folder, "timestamp": str(timestamp)}
     signature = _sign(signed_params, settings.cloudinary_api_secret)
@@ -278,12 +297,16 @@ async def upload_announcement_image(
         logger.warning(
             "Cloudinary unreachable — falling back to local announcement-image storage"
         )
-        return {"url": _save_announcement_image_locally(data, content_type, request, org_id)}
+        return {
+            "url": _save_announcement_image_locally(data, content_type, request, org_id, kind)
+        }
 
     if not resp.ok:
         logger.warning(
             "Cloudinary upload failed (%s) — falling back to local announcement-image storage",
             resp.status_code,
         )
-        return {"url": _save_announcement_image_locally(data, content_type, request, org_id)}
+        return {
+            "url": _save_announcement_image_locally(data, content_type, request, org_id, kind)
+        }
     return {"url": resp.json()["secure_url"]}

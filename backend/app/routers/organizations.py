@@ -9,6 +9,8 @@ from app.schemas import OrganizationOut, OrganizationUpdate
 
 router = APIRouter(prefix="/api/organizations", tags=["organizations"])
 
+MAX_GALLERY_IMAGES = 24
+
 
 @router.get("/me", response_model=OrganizationOut)
 def get_my_org(
@@ -67,9 +69,38 @@ def update_my_org(
         "label_font_family",
         # fixes51 §4: the Shliach Role Configuration Panel's settings blob.
         "shliach_view_config",
+        # fixes65 §1: the public landing page's subtitle.
+        "public_subtitle",
     ):
         if field in data:
             setattr(org, field, data[field])
+    # fixes65 §1: public landing page slug (unique across all orgs) + gallery
+    # + the self-registration switch.
+    if "slug" in data:
+        slug = data["slug"]
+        if slug:
+            taken = (
+                db.query(models.Organization.id)
+                .filter(models.Organization.slug == slug, models.Organization.id != org.id)
+                .first()
+            )
+            if taken:
+                raise HTTPException(status.HTTP_409_CONFLICT, "This page address is already taken")
+        org.slug = slug
+    if "public_gallery" in data:
+        gallery = [
+            u.strip()
+            for u in (data["public_gallery"] or [])
+            if isinstance(u, str) and u.strip().startswith(("https://", "http://"))
+        ]
+        if len(gallery) > MAX_GALLERY_IMAGES:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"A gallery holds at most {MAX_GALLERY_IMAGES} images",
+            )
+        org.public_gallery = gallery
+    if data.get("self_registration_enabled") is not None:
+        org.self_registration_enabled = data["self_registration_enabled"]
     db.commit()
     db.refresh(org)
     return org

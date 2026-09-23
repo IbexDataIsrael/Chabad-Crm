@@ -45,6 +45,11 @@ export interface Organization {
    *  activist_system_enabled/ai_query_enabled. A key absent here (e.g. a
    *  cached session from before this shipped) should read as enabled. */
   feature_flags?: Record<string, boolean>;
+  /** fixes65 §1: public landing page (/org/<slug>) + self-registration. */
+  slug?: string | null;
+  public_subtitle?: string | null;
+  public_gallery?: string[] | null;
+  self_registration_enabled?: boolean;
 }
 
 /** fixes54 §8: reads one of `Organization.feature_flags` — missing/absent
@@ -122,6 +127,9 @@ interface AuthContextValue {
   signUp: (username: string, fullName: string, password: string) => Promise<void>;
   signOut: () => void;
   refresh: () => Promise<void>;
+  /** fixes65: adopt a token issued outside the login endpoints (public
+   *  self-registration returns one directly). */
+  signInWithToken: (token: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -179,6 +187,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signIn(username, password);
   }
 
+  async function signInWithToken(token: string) {
+    setToken(token);
+    setUser(await apiFetch<User>("/api/auth/me"));
+  }
+
   function signOut() {
     clearToken();
     setUser(null);
@@ -208,6 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signUp,
         signOut,
         refresh,
+        signInWithToken,
       }}
     >
       {children}

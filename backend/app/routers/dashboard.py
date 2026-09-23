@@ -17,7 +17,9 @@ inserts a new active row carrying the same `created_at` forward. That means:
   `_jewish_status_changes` below.
 """
 import datetime
+import json
 from collections import defaultdict
+from typing import Optional
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, or_
@@ -26,7 +28,7 @@ from sqlalchemy.orm import Session
 from app import models, picklist_utils
 from app.core.jewish_status import JEWISH_STATUS_FIELD_KEY
 from app.database import get_db
-from app.deps import require_staff_or_admin
+from app.deps import require_admin, require_staff_or_admin
 from app.schemas import (
     DashboardActivistActivity,
     DashboardJewishStatusBreakdownItem,
@@ -34,6 +36,7 @@ from app.schemas import (
     DashboardStat,
     DashboardSummaryOut,
     DashboardTrendPoint,
+    NewSignupsOut,
 )
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -267,3 +270,66 @@ def dashboard_summary(
         jewish_status_breakdown=jewish_status_breakdown,
         recent_jewish_changes=recent_jewish_changes,
     )
+
+
+# --- fixes65 §7: "N new activists signed up" alert card ---------------------
+
+_SIGNUPS_DISMISSED_KEY = "dashboard.new_signups_dismissed_at"
+
+
+def _signups_dismissed_at(db: Session, user: models.User) -> Optional[datetime.datetime]:
+    pref = (
+        db.query(models.UserPreference)
+        .filter(
+            models.UserPreference.user_id == user.id,
+            models.UserPreference.key == _SIGNUPS_DISMISSED_KEY,
+        )
+        .first()
+    )
+    if pref is None:
+        return None
+    try:
+        value = json.loads(pref.value)
+        return datetime.datetime.fromisoformat(value) if value else None
+    except (TypeError, ValueError):
+        return None
+
+
+@router.get("/new-signups", response_model=NewSignupsOut)
+def new_signups(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin),
+):
+    """Self-registered activists (public page or QR) since this admin last
+    dismissed the card — per admin, so one admin dismissing it doesn't hide
+    it from the others."""
+    since = _signups_dismissed_at(db, current_user)
+    query = db.query(func.count(models.User.id)).filter(
+        models.User.organization_id == current_user.organization_id,
+        models.User.registration_source.isnot(None),
+    )
+    if since is not None:
+        query = query.filter(models.User.created_at > since)
+    return NewSignupsOut(count=query.scalar() or 0, since=since)
+
+
+@router.post("/new-signups/dismiss", response_model=NewSignupsOut)
+def dismiss_new_signups(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin),
+):
+    now = datetime.datetime.utcnow()
+    pref = (
+        db.query(models.UserPreference)
+        .filter(
+            models.UserPreference.user_id == current_user.id,
+            models.UserPreference.key == _SIGNUPS_DISMISSED_KEY,
+        )
+        .first()
+    )
+    if pref is None:
+        pref = models.UserPreference(user_id=current_user.id, key=_SIGNUPS_DISMISSED_KEY)
+        db.add(pref)
+    pref.value = json.dumps(now.isoformat())
+    db.commit()
+    return NewSignupsOut(count=0, since=now)

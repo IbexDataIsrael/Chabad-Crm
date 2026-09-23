@@ -11,7 +11,8 @@ the other way around.
 or changes a cross-cutting rule. Small in-page tweaks (a new button, a
 reworded label) don't need an entry.
 
-Last updated: 2026-08-31 (through fixes54; verified against fixes1-20 archive).
+Last updated: 2026-09-23 (through fixes54; campaigns/tasks + fixes65 public
+registration/orphan tasks added; verified against fixes1-20 archive).
 
 ---
 
@@ -62,6 +63,19 @@ directly as today. Roles gate almost everything:
 - **staff** — like admin minus user/org management.
 - **shliach** (activist) — scoped to their own coverage (see §6); lands on
   their own dedicated home page, not the general dashboard.
+- **campaign_manager** — Apartments/Tasks/Campaigns/Users management, no
+  Contacts/Visits/global settings.
+
+**Public activist self-registration (fixes65).** Besides admin-provisioned
+accounts, an org can publish a branded public page at `/org/<slug>`
+(`Organization.slug`/`public_subtitle`/`public_gallery`, edited in
+Settings) with inline sign-in and — when `self_registration_enabled` is on —
+activist registration (`/api/public/*`, no auth, instant access, no email
+verification). A registration creates the same Contact + ContactShliach +
+`role=shliach` User trio an admin would, marks `User.registration_source`
+(`public`|`qr`), and emails the org's admins from a background task. A
+valid QR claim token (below) also authorizes registration, regardless of
+the switch.
 
 ## 4. Core data model
 
@@ -128,6 +142,18 @@ entities that matter for orienting yourself:
   a standalone switch. Effective flags ride along on `/api/auth/me` as
   `organization.feature_flags`, gating the sidebar nav and each module's own
   page (`isFeatureEnabled` helper in `lib/auth.tsx`).
+- **Campaign → Task → TaskReportNumber** (fixes58) — a Task gives one
+  activist (`volunteer_user_id`, a real `users.id`) apartment access to its
+  report numbers while ACTIVE under an active Campaign
+  (`routers/apartments.py::_shliach_apartment_ids`). fixes65: the volunteer
+  is nullable — an **orphan** task sits in an unassigned pool until someone
+  claims it by scanning the QR on its printed sheet (`/tasks/claim/<token>`,
+  token = task guid + HMAC, nothing stored; dead once the task is COMPLETED
+  or deleted), or the office enters the paper results (`claimed_via='paper'`
+  locks it). `claimed_at`/`claimed_via` audit the claim; unassign returns it
+  to the pool and old printouts keep working. **TaskPaperEntry** logs each
+  office data-entry session with who performed the work (registered user /
+  free-text name / unknown).
 - **ShliachReportCompletion / ShliachSystemComment / ShliachAnnouncement** —
   the activist self-service loop: activists submit the first two, admins
   author the third (see §6).
@@ -162,7 +188,14 @@ entities that matter for orienting yourself:
 - **`/dashboard/reports/create`** — RTL PDF report generation (jsPDF, with a
   logical-mode bidi patch — never hand-reverse Hebrew for it).
 - **`/dashboard/users`** — unified directory of logins + activist contacts;
-  admin-only.
+  admin-only. An email-less ("No email") activist still gets a `User` with
+  `is_manual=True` (no login) so they can be assigned tasks.
+- **`/dashboard/campaigns`**, **`/dashboard/tasks`** — campaigns and tasks;
+  the Tasks grid filters the orphan pool, prints a task sheet PDF
+  (`lib/taskPdf.ts`, QR only while unassigned, disabled for 0 apartments),
+  unassigns/assigns, and links to `/dashboard/tasks/<id>/paper-entry`.
+- **`/org/<slug>`**, **`/tasks/claim/<token>`** — the two public (no-login)
+  pages; see §3.
 - **`/dashboard/activist`** — an activist's own dedicated landing page:
   links to their own profile edit + apartments, "Report completed"/
   "Comments about the system" actions, admin-announcement feed.

@@ -80,6 +80,11 @@ class OrganizationOut(BaseModel):
     # column on Organization. Defaults all-True so a session built before this
     # was wired up (or a code path that never sets it) fails open, not closed.
     feature_flags: dict[str, bool] = {}
+    # fixes65 §1: public landing page + self-registration switch.
+    slug: Optional[str] = None
+    public_subtitle: Optional[str] = None
+    public_gallery: Optional[list[str]] = None
+    self_registration_enabled: bool = False
 
 
 class OrganizationUpdate(BaseModel):
@@ -95,6 +100,27 @@ class OrganizationUpdate(BaseModel):
     label_font_size: Optional[int] = None
     label_color: Optional[str] = None
     label_font_family: Optional[str] = None
+    # fixes65 §1
+    slug: Optional[str] = None
+    public_subtitle: Optional[str] = None
+    public_gallery: Optional[list[str]] = None
+    self_registration_enabled: Optional[bool] = None
+
+    @field_validator("slug")
+    @classmethod
+    def _check_slug(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        v = v.strip().lower()
+        if not v:
+            return None
+        import re
+
+        if not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,78}[a-z0-9])?", v):
+            raise ValueError(
+                "Slug may contain only lowercase English letters, digits and dashes"
+            )
+        return v
 
 
 class ShliachData(BaseModel):
@@ -148,6 +174,8 @@ class UserOut(BaseModel):
     is_active: bool = True
     # fixes61 §2: an activist tracked in the system with no login of their own.
     is_manual: bool = False
+    # fixes65 §7: 'public' | 'qr' for a self-registered activist.
+    registration_source: Optional[str] = None
     created_at: datetime
     organization_id: int
     organization: Optional[OrganizationOut] = None
@@ -1602,7 +1630,8 @@ class CampaignOut(BaseModel):
 
 class TaskCreate(BaseModel):
     campaign_id: int
-    volunteer_user_id: int
+    # fixes65 §2: None = "Assign Later" — the task enters the orphan pool.
+    volunteer_user_id: Optional[int] = None
     custom_date_value_id: Optional[int] = None
     report_number_ids: list[int] = []
     status: TaskStatus = "ACTIVE"
@@ -1611,6 +1640,8 @@ class TaskCreate(BaseModel):
 
 class TaskUpdate(BaseModel):
     campaign_id: Optional[int] = None
+    # fixes65 §4: assign an orphan / reassign (unassign has its own endpoint).
+    volunteer_user_id: Optional[int] = None
     custom_date_value_id: Optional[int] = None
     report_number_ids: Optional[list[int]] = None
     status: Optional[TaskStatus] = None
@@ -1624,7 +1655,7 @@ class TaskOut(BaseModel):
     guid: str
     campaign_id: int
     campaign_name: str
-    volunteer_user_id: int
+    volunteer_user_id: Optional[int] = None
     volunteer_name: str
     custom_date_value_id: Optional[int] = None
     # Raw picklist token (e.g. "first_candle_hanukkah"), matching every other
@@ -1640,8 +1671,139 @@ class TaskOut(BaseModel):
     # no task_id) — see routers/tasks.py::_latest_reports_by_volunteer.
     latest_report_status: Optional[str] = None
     latest_report_notes: Optional[str] = None
+    # fixes65 §4: claim audit + derived pool state.
+    claimed_at: Optional[datetime] = None
+    claimed_via: Optional[str] = None
+    is_orphan: bool = False
+    apartment_count: int = 0
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+
+# --- fixes65: public landing page, self-registration, QR claim, paper entry --
+
+
+class PublicOrgOut(BaseModel):
+    id: int
+    slug: str
+    name: str
+    subtitle: Optional[str] = None
+    logo_url: Optional[str] = None
+    gallery: list[str] = []
+    self_registration_enabled: bool = False
+
+
+class PublicRegisterRequest(BaseModel):
+    """Activist self-registration — from an org landing page (`org_slug`) or
+    the QR claim flow (`claim_token`; the org is the task's). Email is the
+    login and is always required on this path."""
+
+    full_name: str
+    email: str
+    password: str
+    phone: Optional[str] = None
+    org_slug: Optional[str] = None
+    claim_token: Optional[str] = None
+
+    _email_lower = field_validator("email")(_normalize_email)
+
+    @field_validator("full_name")
+    @classmethod
+    def _check_name(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Full name is required")
+        return " ".join(v.split())
+
+
+class PublicGoogleRegisterRequest(BaseModel):
+    credential: str
+    phone: Optional[str] = None
+    org_slug: Optional[str] = None
+    claim_token: Optional[str] = None
+
+
+class PublicRegisterResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    # Result of the atomic auto-claim when a claim_token rode along.
+    claim_state: Optional[str] = None
+
+
+ClaimState = Literal["available", "claimed", "yours", "taken", "invalid"]
+
+
+class ClaimInfoOut(BaseModel):
+    state: ClaimState
+    organization_id: Optional[int] = None
+    organization_name: Optional[str] = None
+    organization_slug: Optional[str] = None
+    organization_logo_url: Optional[str] = None
+    campaign_name: Optional[str] = None
+    report_number_names: list[str] = []
+    apartment_count: int = 0
+
+
+class ClaimResultOut(BaseModel):
+    state: ClaimState
+    task_id: Optional[int] = None
+    detail: Optional[str] = None
+
+
+class TaskPrintApartment(BaseModel):
+    id: int
+    building_id: int
+    building_name: Optional[str] = None
+    building_address: Optional[str] = None
+    floor: Optional[str] = None
+    apartment_name: Optional[str] = None
+    name: Optional[str] = None
+    report_number_name: Optional[str] = None
+
+
+class TaskPrintOut(BaseModel):
+    task: TaskOut
+    # Only for an orphan task — the frontend turns it into the QR's URL.
+    claim_token: Optional[str] = None
+    apartments: list[TaskPrintApartment] = []
+
+
+class PaperEntryApartmentUpdate(BaseModel):
+    apartment_id: int
+    jewish_status: Optional[str] = None
+    mezuzah_status: Optional[str] = None
+    language: Optional[list[str]] = None
+    apartment_notes: Optional[str] = None
+    # Which of the above were actually filled in on the sheet — unlisted
+    # keys are left untouched (a blank cell is not "clear this value").
+    fields: list[str] = []
+
+
+PerformerType = Literal["user", "name", "unknown"]
+
+
+class PaperEntryCreate(BaseModel):
+    performer_type: PerformerType
+    performer_user_id: Optional[int] = None
+    performer_name: Optional[str] = None
+    notes: Optional[str] = None
+    apartments: list[PaperEntryApartmentUpdate] = []
+
+
+class PaperEntryOut(BaseModel):
+    id: int
+    task_id: int
+    performer_type: PerformerType
+    performer_user_id: Optional[int] = None
+    performer_name: Optional[str] = None
+    entered_by_name: Optional[str] = None
+    apartment_count: int
+    notes: Optional[str] = None
+    created_at: datetime
+
+
+class NewSignupsOut(BaseModel):
+    count: int
+    since: Optional[datetime] = None
 
 
 class GeneratePolygonResult(BaseModel):

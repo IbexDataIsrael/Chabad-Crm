@@ -447,6 +447,11 @@ export interface OrgDetails {
   label_font_family: string | null;
   /** fixes51 §4: the Shliach Role Configuration Panel's settings blob. */
   shliach_view_config?: Record<string, unknown> | null;
+  /** fixes65 §1: public landing page + self-registration switch. */
+  slug?: string | null;
+  public_subtitle?: string | null;
+  public_gallery?: string[] | null;
+  self_registration_enabled?: boolean;
 }
 
 /** One org restore point (fixes16) — metadata only, the blob stays server-side. */
@@ -501,7 +506,8 @@ export interface Task {
   guid: string;
   campaign_id: number;
   campaign_name: string;
-  volunteer_user_id: number;
+  /** fixes65 §2: null = orphan ("Assign Later") task. */
+  volunteer_user_id: number | null;
   volunteer_name: string;
   custom_date_value_id: number | null;
   custom_date_value: string | null;
@@ -513,8 +519,80 @@ export interface Task {
   // see backend routers/tasks.py::_latest_reports_by_volunteer.
   latest_report_status: ReportCompletionStatus | null;
   latest_report_notes: string | null;
+  /** fixes65 §4: claim audit ('qr' | 'paper') + derived pool state. */
+  claimed_at: string | null;
+  claimed_via: string | null;
+  is_orphan: boolean;
+  apartment_count: number;
   created_at: string | null;
   updated_at: string | null;
+}
+
+// --- fixes65: public landing page, QR claim, printing, paper entry ---------
+
+export interface PublicOrg {
+  id: number;
+  slug: string;
+  name: string;
+  subtitle: string | null;
+  logo_url: string | null;
+  gallery: string[];
+  self_registration_enabled: boolean;
+}
+
+export type ClaimState = "available" | "claimed" | "yours" | "taken" | "invalid";
+
+export interface ClaimInfo {
+  state: ClaimState;
+  organization_id: number | null;
+  organization_name: string | null;
+  organization_slug: string | null;
+  organization_logo_url: string | null;
+  campaign_name: string | null;
+  report_number_names: string[];
+  apartment_count: number;
+}
+
+export interface ClaimResult {
+  state: ClaimState;
+  task_id: number | null;
+  detail: string | null;
+}
+
+export interface PublicRegisterResponse {
+  access_token: string;
+  claim_state: ClaimState | null;
+}
+
+export interface TaskPrintApartment {
+  id: number;
+  building_id: number;
+  building_name: string | null;
+  building_address: string | null;
+  floor: string | null;
+  apartment_name: string | null;
+  name: string | null;
+  report_number_name: string | null;
+}
+
+export interface TaskPrintData {
+  task: Task;
+  claim_token: string | null;
+  apartments: TaskPrintApartment[];
+}
+
+export type PerformerType = "user" | "name" | "unknown";
+
+export interface PaperEntry {
+  id: number;
+  task_id: number;
+  performer_type: PerformerType;
+  performer_user_id: number | null;
+  performer_name: string | null;
+  entered_by_name: string | null;
+  apartment_count: number;
+  notes: string | null;
+  created_at: string;
 }
 
 export interface TaskPage {

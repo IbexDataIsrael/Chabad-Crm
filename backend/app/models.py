@@ -97,6 +97,15 @@ class Organization(Base):
     approval_status = Column(
         String(20), nullable=False, default="approved", server_default=text("'approved'")
     )
+    # fixes65 §1: the org's branded public landing page (/org/<slug>) —
+    # subtitle + photo gallery (list of image URLs) + the self-registration
+    # switch (default off). slug is null until an admin publishes the page.
+    slug = Column(String(80), nullable=True, unique=True, index=True)
+    public_subtitle = Column(Text, nullable=True)
+    public_gallery = Column(JSON, nullable=True)
+    self_registration_enabled = Column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     users = relationship("User", back_populates="organization")
@@ -136,6 +145,9 @@ class User(Base):
     # own (no email required, welcome email skipped) — distinct from
     # is_active, which means "login currently enabled/disabled".
     is_manual = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    # fixes65 §5/§7: 'public' (org landing page) | 'qr' (task claim flow) for
+    # a self-registered activist; null for every admin-provisioned account.
+    registration_source = Column(String(20), nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     # Relationships
@@ -518,8 +530,10 @@ class Task(Base):
     # No ondelete cascade: a Campaign with live Tasks can't be hard-deleted
     # (soft-delete only), matching Campaign's own soft-delete design.
     campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False, index=True)
+    # fixes65 §2: nullable — a task created with "Assign Later" is an
+    # orphan in the unassigned pool until claimed (QR) or assigned by an admin.
     volunteer_user_id = Column(
-        Integer, ForeignKey("users.id"), nullable=False, index=True
+        Integer, ForeignKey("users.id"), nullable=True, index=True
     )
     # fixes58 §3.3: an admin-defined picklist option under entity_type="task"
     # (e.g. "First Candle of Hanukkah") — a PicklistValue row, not a
@@ -529,6 +543,11 @@ class Task(Base):
     )
     status = Column(String(20), nullable=False, default="ACTIVE")
     volunteer_report_summary = Column(Text, nullable=True)
+    # fixes65 §4 claim audit: when/how the task left the orphan pool —
+    # 'qr' (scanned printout), 'paper' (office entered the paper sheet; locks
+    # the task even with no registered performer). Cleared on unassign.
+    claimed_at = Column(DateTime, nullable=True)
+    claimed_via = Column(String(20), nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(
         DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
@@ -540,6 +559,41 @@ class Task(Base):
     report_numbers = relationship(
         "TaskReportNumber", back_populates="task", cascade="all, delete-orphan"
     )
+
+
+class TaskPaperEntry(Base):
+    """fixes65 §6: one office data-entry session from a physical task sheet.
+    Attribution is exactly one of: a registered user (`performer_user_id`),
+    a free-text name (`performer_name` — no user account is created), or
+    `performer_unknown`. The apartment edits themselves are ordinary
+    versioned apartment updates (editor = the entering admin)."""
+
+    __tablename__ = "task_paper_entries"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    task_id = Column(
+        Integer, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    performer_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    performer_name = Column(String(150), nullable=True)
+    performer_unknown = Column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    entered_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    apartment_count = Column(Integer, nullable=False, default=0, server_default="0")
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+    performer = relationship("User", foreign_keys=[performer_user_id])
+    entered_by = relationship("User", foreign_keys=[entered_by_user_id])
 
 
 class TaskReportNumber(Base):
