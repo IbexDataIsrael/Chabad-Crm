@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>שלום ישראל ניימן</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{height:100vh;overflow:hidden;display:flex;flex-direction:column;justify-content:center;align-items:center;font-family:system-ui;background:linear-gradient(270deg,#0f2027,#203a43,#2c5364,#8e2de2,#4a00e0);background-size:1000% 1000%;animation:bg 18s ease infinite}
+@keyframes bg{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+h1{font-size:clamp(3rem,14vw,9rem);text-align:center;background:linear-gradient(90deg,#ffd700,#ff6b6b,#4ecdc4,#ffd700);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 4s linear infinite,bounce 2s ease-in-out infinite}
+@keyframes shine{to{background-position:300% 0}}
+@keyframes bounce{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-20px) scale(1.05)}}
+.star{position:fixed;top:-10vh;animation:fall linear infinite;z-index:0}
+@keyframes fall{to{transform:translateY(120vh) rotate(360deg)}}
+.train{position:fixed;bottom:8vh;font-size:4rem;animation:ride 7s linear infinite}
+@keyframes ride{from{left:-20%}to{left:110%}}
+p{color:#fff;font-size:clamp(1rem,4vw,1.6rem);margin-top:2rem;opacity:.9}
+</style>
+</head>
+<body>
+<h1>שלום ישראל ניימן!</h1>
+<p>האתר הזה נולד ברכבת לתל אביב 🚂</p>
+<div class="train">🚂💨</div>
+<script>
+const e=['⭐','✨','🎈','🎉','💫'];
+for(let i=0;i<25;i++){const s=document.createElement('div');s.className='star';s.textContent=e[i%5];s.style.left=Math.random()*100+'vw';s.style.animationDuration=(4+Math.random()*6)+'s';s.style.animationDelay=(Math.random()*6)+'s';s.style.fontSize=(1+Math.random()*2)+'rem';document.body.appendChild(s)}
+</script>
+</body>
+</html>
