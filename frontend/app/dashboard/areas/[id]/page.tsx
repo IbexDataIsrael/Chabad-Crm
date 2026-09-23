@@ -217,31 +217,37 @@ export default function AreaDetailPage() {
         ) : (
           <ul className="divide-y divide-border">
             {buildings.map((b) => (
-              <li key={b.id} className="py-2">
-                <Link
-                  href={`/dashboard/buildings/${b.id}`}
-                  className="font-medium text-primary hover:underline"
-                >
-                  {buildingDisplayName(b)}
-                </Link>
-                {b.building_address &&
-                  // fixes30 §4: the shluchim display navigates via Maps.
-                  (isShliach ? (
-                    <div className="text-sm">
-                      <a
-                        href={mapsHref(b.building_address)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title={t("apt.navigate", "ניווט בגוגל מפות")}
-                        className="text-primary hover:underline"
-                      >
-                        📍 {b.building_address}
-                      </a>
-                    </div>
-                  ) : (
-                    <div className="text-sm text-muted-foreground">{b.building_address}</div>
-                  ))}
-                <div className="text-sm text-muted-foreground">
+              <li
+                key={b.id}
+                className="py-2 flex flex-wrap items-start justify-between gap-x-4 gap-y-1"
+              >
+                <div className="min-w-0">
+                  <Link
+                    href={`/dashboard/buildings/${b.id}`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    {buildingDisplayName(b)}
+                  </Link>
+                  {b.building_address &&
+                    // fixes30 §4: the shluchim display navigates via Maps.
+                    (isShliach ? (
+                      <div className="text-sm">
+                        <a
+                          href={mapsHref(b.building_address)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={t("apt.navigate", "ניווט בגוגל מפות")}
+                          className="text-primary hover:underline"
+                        >
+                          📍 {b.building_address}
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">{b.building_address}</div>
+                    ))}
+                </div>
+                {/* Report numbers sit at the row's end side (left in RTL) instead of a new line. */}
+                <div className="text-sm text-muted-foreground text-end">
                   {t("page.report_numbers", "מספרי דוח")}:{" "}
                   {buildingReports[String(b.id)]?.join(", ") || "—"}
                 </div>
