@@ -15,9 +15,10 @@ import { buildingDisplayName, type TaskPrintApartment, type TaskPrintData } from
  * header), laid out for plain black-and-white office printers: white cells,
  * solid black rules, no grey fills or zebra striping, tall rows to write in.
  *
- * An unassigned (orphan) task gets its signed claim QR on every page, so
- * any page of the printout is enough to claim it; an assigned task prints
- * without one.
+ * Every page carries the task's signed QR (fixes66 §1). On an unassigned
+ * (orphan) task it claims the task (quick registration binds it
+ * automatically); on an assigned task the same link is the activist's door
+ * into the system — they sign in and land on their task.
  */
 
 const MARGIN = 36;
@@ -53,6 +54,14 @@ export async function generateTaskPdf(opts: {
       color: { dark: "#000000", light: "#ffffff" },
     });
   }
+
+  const assigned = Boolean(task.volunteer_user_id);
+  const qrCaption = assigned
+    ? t("task_pdf.qr_caption_assigned", "סרקו את הקוד כדי להיכנס למערכת")
+    : t("task_pdf.qr_caption", "סרקו את הקוד כדי לקחת את המשימה");
+  const qrSubcaption = assigned
+    ? t("task_pdf.qr_subcaption_assigned", "התחברו לחשבון שלכם והמשימה תיפתח לפניכם")
+    : t("task_pdf.qr_subcaption", "הרשמה מהירה, והמשימה משויכת אליכם אוטומטית");
 
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   await prepareHebrewPdf(doc);
@@ -210,7 +219,7 @@ export async function generateTaskPdf(opts: {
       doc.setFont(HEBREW_FONT, "bold");
       doc.setFontSize(10);
       doc.text(
-        t("task_pdf.qr_caption", "סרקו את הקוד כדי לקחת את המשימה"),
+        qrCaption,
         MARGIN + QR_SIZE + 10,
         qrY + QR_SIZE / 2 - 2,
         { align: "left" },
@@ -218,7 +227,7 @@ export async function generateTaskPdf(opts: {
       doc.setFont(HEBREW_FONT, "normal");
       doc.setFontSize(8);
       doc.text(
-        t("task_pdf.qr_subcaption", "הרשמה מהירה, והמשימה משויכת אליכם אוטומטית"),
+        qrSubcaption,
         MARGIN + QR_SIZE + 10,
         qrY + QR_SIZE / 2 + 11,
         { align: "left" },

@@ -263,7 +263,7 @@ def test_claim_flow_states(client, admin_headers, task_setup, org_id, db_session
     assert token and len(printed["apartments"]) == 1
 
     info = client.get(f"/api/public/claim/{token}").json()
-    assert info["state"] == "available"
+    assert info["state"] == "available" and info["has_activist"] is False
     assert info["report_number_names"] == ["RN65"]
 
     alice = _login(client, _mk_shliach(db_session, org_id, "alice").username)
@@ -277,8 +277,12 @@ def test_claim_flow_states(client, admin_headers, task_setup, org_id, db_session
 
     claimed = client.get("/api/tasks/list", headers=admin_headers).json()["items"][0]
     assert claimed["claimed_via"] == "qr" and claimed["claimed_at"]
-    # Assigned now → no QR on reprints.
-    assert client.get(f"/api/tasks/{task['id']}/print-data", headers=admin_headers).json()["claim_token"] is None
+    # fixes66 §1: assigned now → reprints still carry the same QR (the
+    # activist's door into the system); signed out it reads as an
+    # activist-owned task, so the claim page offers sign-in.
+    assert client.get(f"/api/tasks/{task['id']}/print-data", headers=admin_headers).json()["claim_token"] == token
+    public = client.get(f"/api/public/claim/{token}").json()
+    assert public["state"] == "taken" and public["has_activist"] is True
 
     # Admin unassign → same printout works for the next claimant.
     r = client.post(f"/api/tasks/{task['id']}/unassign", headers=admin_headers).json()

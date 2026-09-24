@@ -110,6 +110,7 @@ def get_claim_info(token: str, request: Request, db: Session = Depends(get_db)):
         campaign_name=task.campaign.name if task.campaign else None,
         report_number_names=sorted(rn.report_number.name for rn in task.report_numbers),
         apartment_count=task_apartment_count(db, task.id),
+        has_activist=task.volunteer_user_id is not None,
     )
 
 

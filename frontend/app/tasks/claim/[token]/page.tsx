@@ -19,6 +19,9 @@ type Outcome = ClaimState | "wrong_org" | "not_activist";
 /** fixes65 §4: where an orphan task sheet's QR code lands.
  *  - signed out → task summary + register (auto-claims) or sign in;
  *  - signed-in activist of the task's org → claimed on arrival;
+ *  - fixes66 §2: an assigned task's sheet carries the same QR as the
+ *    activist's door into the system — signed out, it offers sign-in and
+ *    the owner lands on "this task is yours";
  *  - already theirs / someone else's / office-handled / expired → a clear
  *    final message. */
 export default function ClaimTaskPage() {
@@ -80,6 +83,10 @@ export default function ClaimTaskPage() {
         if (!active) return;
         setInfo(res);
         if (outcomeRef.current === "claimed") return;
+        // fixes66 §2: signed out on an activist's own task — offer sign-in
+        // (below) instead of the "taken" dead end; once signed in, the
+        // re-fetch answers "yours" (the owner) or "taken" (anyone else).
+        if (res.state === "taken" && res.has_activist && !user) return;
         if (res.state !== "available") {
           settle(res.state);
           return;
@@ -146,6 +153,24 @@ export default function ClaimTaskPage() {
           {t("claim.open_my_tasks", "למשימות שלי")}
         </Link>
       </Notice>
+    );
+  } else if (outcome === null && info.state === "taken" && info.has_activist && !user) {
+    // fixes66 §2: signed out on an assigned task — the activist's way in.
+    body = (
+      <section className="rounded-2xl bg-white p-5 shadow-[0_12px_40px_-12px_rgba(14,59,74,0.35)]">
+        <h2 className="text-lg font-semibold text-[#0E3B4A]">
+          {t("claim.assigned_signin_title", "המשימה משויכת לפעיל — התחברו כדי לפתוח אותה")}
+        </h2>
+        <p className="mt-1 text-sm text-[#13232B]/70">
+          {t(
+            "claim.assigned_signin_hint",
+            "זו המשימה שלכם? התחברו עם החשבון שלכם ותגיעו ישר לדירות של המשימה.",
+          )}
+        </p>
+        <div className="mt-4">
+          <OrgSignInForm organizationId={info.organization_id!} onSignedIn={() => undefined} />
+        </div>
+      </section>
     );
   } else if (outcome === "taken") {
     body = (

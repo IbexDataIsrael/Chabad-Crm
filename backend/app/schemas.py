@@ -1745,6 +1745,10 @@ class ClaimInfoOut(BaseModel):
     campaign_name: Optional[str] = None
     report_number_names: list[str] = []
     apartment_count: int = 0
+    # fixes66 §2: a "taken" task that belongs to an activist (vs the office
+    # handling it from paper) — its QR is that activist's door into the
+    # system, so the claim page offers sign-in instead of a dead end.
+    has_activist: bool = False
 
 
 class ClaimResultOut(BaseModel):

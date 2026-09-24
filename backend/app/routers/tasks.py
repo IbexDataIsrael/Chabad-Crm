@@ -526,8 +526,10 @@ def task_print_data(
     current_user: models.User = Depends(require_admin_or_campaign_manager),
 ):
     """Spec §3: everything the client-side PDF needs — the task, its
-    apartments (grouped/sorted client-side like the apartments report) and,
-    only for an unassigned task, the signed claim token for the QR."""
+    apartments (grouped/sorted client-side like the apartments report) and
+    the signed task token for the QR. fixes66 §1: every sheet gets it, not
+    only unassigned ones — on an assigned task the same link is the
+    activist's way into the system (the claim page offers sign-in)."""
     org_id = current_user.organization_id
     task = _get_or_404(task_id, org_id, db)
     rows = (
@@ -549,7 +551,7 @@ def task_print_data(
         raise HTTPException(status.HTTP_409_CONFLICT, "This task has no apartments to print")
     return TaskPrintOut(
         task=_single_out(db, org_id, task),
-        claim_token=make_claim_token(task.guid) if is_orphan(task) else None,
+        claim_token=make_claim_token(task.guid),
         apartments=[
             TaskPrintApartment(
                 id=a.id,

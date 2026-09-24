@@ -555,6 +555,8 @@ export interface ClaimInfo {
   campaign_name: string | null;
   report_number_names: string[];
   apartment_count: number;
+  /** fixes66 §2: a taken task that belongs to an activist (not the office). */
+  has_activist: boolean;
 }
 
 export interface ClaimResult {

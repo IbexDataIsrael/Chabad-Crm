@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 
+import { ConfirmModal } from "@/components/ConfirmModal";
 import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
@@ -44,10 +45,12 @@ export function TaskQuickCreateForm({
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [reportNumbers, setReportNumbers] = useState<ReportNumber[]>([]);
   const [activists, setActivists] = useState<ActivistOption[]>([]);
-  // fixes65 §2: "later" = Assign Later — the task enters the orphan pool.
-  const [selectedVolunteerId, setSelectedVolunteerId] = useState<number | "" | "later">(
+  // fixes66 §3: "" = no activist — the task enters the orphan (open) pool,
+  // after a confirm. (Replaces fixes65's separate "assign later" choice.)
+  const [selectedVolunteerId, setSelectedVolunteerId] = useState<number | "">(
     volunteerUserId ?? "",
   );
+  const [confirmNoActivist, setConfirmNoActivist] = useState(false);
   const [campaignId, setCampaignId] = useState<number | "">("");
   const [reportNumberIds, setReportNumberIds] = useState<number[]>([]);
   const [customDateValueId, setCustomDateValueId] = useState<number | "">("");
@@ -80,7 +83,7 @@ export function TaskQuickCreateForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function save(e: FormEvent) {
+  function save(e: FormEvent) {
     e.preventDefault();
     setError("");
     if (campaignId === "") {
@@ -88,16 +91,21 @@ export function TaskQuickCreateForm({
       return;
     }
     if (selectedVolunteerId === "") {
-      setError(t("validation.activist_required", "יש לבחור פעיל"));
+      setConfirmNoActivist(true);
       return;
     }
+    void create();
+  }
+
+  async function create() {
+    setConfirmNoActivist(false);
     setBusy(true);
     try {
       await apiFetch("/api/tasks", {
         method: "POST",
         body: JSON.stringify({
           campaign_id: campaignId,
-          volunteer_user_id: selectedVolunteerId === "later" ? null : selectedVolunteerId,
+          volunteer_user_id: selectedVolunteerId === "" ? null : selectedVolunteerId,
           report_number_ids: reportNumberIds,
           custom_date_value_id: customDateValueId === "" ? null : customDateValueId,
           status,
@@ -128,22 +136,16 @@ export function TaskQuickCreateForm({
             <select
               className={inputClass}
               value={selectedVolunteerId}
-              onChange={(e) =>
-                setSelectedVolunteerId(
-                  e.target.value === "later" ? "later" : e.target.value ? Number(e.target.value) : "",
-                )
-              }
-              required
+              onChange={(e) => setSelectedVolunteerId(e.target.value ? Number(e.target.value) : "")}
             >
-              <option value="">{t("task.select_activist", "בחר פעיל")}</option>
-              <option value="later">{t("task.assign_later", "שיוך מאוחר יותר (מאגר משימות פתוחות)")}</option>
+              <option value="">{t("task.no_activist", "ללא פעיל (מאגר משימות פתוחות)")}</option>
               {activists.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.full_name}
                 </option>
               ))}
             </select>
-            {selectedVolunteerId === "later" && (
+            {selectedVolunteerId === "" && (
               <span className="block text-xs text-muted-foreground">
                 {t(
                   "task.assign_later_hint",
@@ -224,6 +226,17 @@ export function TaskQuickCreateForm({
           </Button>
         </div>
       </form>
+      {confirmNoActivist && (
+        <ConfirmModal
+          message={t(
+            "task.confirm_no_activist",
+            "אתם עומדים ליצור משימה ללא פעיל. האם אתם בטוחים?",
+          )}
+          busy={busy}
+          onConfirm={() => void create()}
+          onCancel={() => setConfirmNoActivist(false)}
+        />
+      )}
     </div>
   );
 }
