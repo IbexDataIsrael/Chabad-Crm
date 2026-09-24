@@ -56,6 +56,7 @@ from app.routers import (
     custom_fields,
     dashboard,
     donations,
+    instinct,
     field_settings,
     localization,
     metadata,
@@ -141,6 +142,7 @@ app.include_router(ai_query.router)
 app.include_router(campaigns.router)
 app.include_router(tasks.router)
 app.include_router(public.router)
+app.include_router(instinct.router)
 
 # fixes25 §6: locally stored uploads (logo fallback when Cloudinary is
 # unavailable) are served straight from the data volume.
