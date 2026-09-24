@@ -74,9 +74,11 @@ export function drawPdfHeaders(
   logo: PdfHeaderLogo | null,
 ): void {
   const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
   const pages = doc.getNumberOfPages();
   for (let p = 1; p <= pages; p += 1) {
     doc.setPage(p);
+    drawPdfCredits(doc, pageW, pageH);
     if (orgName) {
       doc.setFont(HEBREW_FONT, "bold");
       doc.setFontSize(12);
@@ -98,6 +100,23 @@ export function drawPdfHeaders(
     doc.line(margin, 48, pageW - margin, 48);
   }
   doc.setPage(pages);
+}
+
+/** fixes67: fixed credits on every page of every PDF — a dedication centered
+ *  at the very top (above the org header) and the builder credit at the very
+ *  bottom (below every generator's own page-number footer). Deliberately not
+ *  localized: the same fixed text in both UI languages. */
+const PDF_DEDICATION = `לעילוי נשמת הרה"ג ר' אברהם יצחק שלוסברג זצ"ל`;
+const PDF_BUILT_BY = "Built by zvi.naiman@gmail.com";
+
+function drawPdfCredits(doc: jsPDF, pageW: number, pageH: number): void {
+  doc.setFont(HEBREW_FONT, "normal");
+  doc.setTextColor(110, 110, 110);
+  doc.setFontSize(8);
+  doc.text(PDF_DEDICATION, pageW / 2, 14, { align: "center" });
+  doc.setFontSize(6.5);
+  doc.text(PDF_BUILT_BY, pageW / 2, pageH - 6, { align: "center" });
+  doc.setTextColor(0);
 }
 
 // Bidi-engine flags consumed by jsPDF's postProcessText hook (they ride on

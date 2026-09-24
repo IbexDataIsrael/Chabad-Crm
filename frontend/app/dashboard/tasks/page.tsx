@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardPen,
+  Eye,
   Loader2,
   Plus,
   Printer,
@@ -24,14 +25,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { InlineEdit } from "@/components/ui/InlineEdit";
 import { TruncatedText } from "@/components/ui/TruncatedText";
-import { apiFetch, ApiError } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useConfirm } from "@/lib/confirm";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
-import { generateTaskPdf } from "@/lib/taskPdf";
-import type { Campaign, Task, TaskPage, TaskPrintData, TaskStatus } from "@/lib/types";
+import { printTaskSheet } from "@/lib/taskPrint";
+import type { Campaign, Task, TaskPage, TaskStatus } from "@/lib/types";
 
 type AssignmentFilter = "" | "orphan" | "assigned";
 
@@ -50,9 +51,8 @@ type SortKey = "volunteer_name" | "created_at" | "report_number";
 const STATUS_OPTIONS: TaskStatus[] = ["ACTIVE", "COMPLETED", "PAUSED"];
 
 /** fixes58 §3.4: Tasks management grid — search/filter/sort/paginate, with
- *  inline-edit for status and the volunteer's report summary (the two
- *  fields the spec calls out; everything else is set at creation via the
- *  Users-page quick action and isn't re-editable here). */
+ *  inline-edit for the activist and status. fixes67: every row opens its
+ *  own page (/dashboard/tasks/{id}) where every field is inline-editable. */
 export default function TasksPage() {
   const { isAdmin, isCampaignManager, loading, user } = useAuth();
   const { t } = useLocalization();
@@ -173,26 +173,14 @@ export default function TasksPage() {
   async function printTask(task: Task) {
     if (task.apartment_count === 0) return;
     setPrintingId(task.id);
-    try {
-      const data = await apiFetch<TaskPrintData>(`/api/tasks/${task.id}/print-data`);
-      await generateTaskPdf({
-        data,
-        orgName: user?.organization?.name ?? "",
-        orgLogoUrl: user?.organization?.logo_url,
-        claimBaseUrl: window.location.origin,
-        t,
-      });
-    } catch (err) {
-      toastError(
-        err instanceof ApiError && err.status === 409
-          ? t("task.print_no_apartments", "אין דירות במשימה — אין מה להדפיס.")
-          : err instanceof Error
-            ? err.message
-            : t("msg.save_failed", "שמירה נכשלה"),
-      );
-    } finally {
-      setPrintingId(null);
-    }
+    const err = await printTaskSheet({
+      taskId: task.id,
+      orgName: user?.organization?.name ?? "",
+      orgLogoUrl: user?.organization?.logo_url,
+      t,
+    });
+    setPrintingId(null);
+    if (err) toastError(err);
   }
 
   // fixes65 §4: admin override — back to the orphan pool (printouts stay valid).
@@ -370,7 +358,12 @@ export default function TasksPage() {
               items.map((task) => (
                 <tr key={task.id}>
                   <td className="px-3 py-2">{volunteerCell(task)}</td>
-                  <td className="px-3 py-2">{task.campaign_name}</td>
+                  <td className="px-3 py-2">
+                    {/* fixes67: the row's way into its own task page. */}
+                    <Link href={`/dashboard/tasks/${task.id}`} className="text-primary hover:underline">
+                      {task.campaign_name}
+                    </Link>
+                  </td>
                   <td className="px-3 py-2">{task.report_number_names.join(", ") || "—"}</td>
                   <td className="px-3 py-2">
                     <InlineEdit<TaskStatus>
@@ -414,6 +407,15 @@ export default function TasksPage() {
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     <div className="flex items-center gap-1.5">
+                      <Button size="sm" variant="outline" asChild>
+                        <Link
+                          href={`/dashboard/tasks/${task.id}`}
+                          title={t("task.open", "פתיחת משימה")}
+                          aria-label={t("task.open", "פתיחת משימה")}
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
                       <Button
                         size="sm"
                         variant="outline"

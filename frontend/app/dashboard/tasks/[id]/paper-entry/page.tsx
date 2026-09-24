@@ -206,11 +206,12 @@ export default function PaperEntryPage() {
 
   return (
     <form onSubmit={save} className="space-y-5">
+      {/* fixes67: back to this task's own page (was the task list). */}
       <Link
-        href="/dashboard/tasks"
+        href={`/dashboard/tasks/${taskId}`}
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:underline"
       >
-        <ArrowRight className="h-4 w-4" /> {t("paper.back_to_tasks", "חזרה למשימות")}
+        <ArrowRight className="h-4 w-4" /> {t("paper.back_to_task", "חזרה למשימה")}
       </Link>
       <div>
         <h1 className="text-2xl font-bold">{t("paper.title", "הזנת נתונים מדף משימה מודפס")}</h1>
