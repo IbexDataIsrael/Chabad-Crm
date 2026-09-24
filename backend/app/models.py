@@ -203,6 +203,9 @@ class Contact(Base):
     status = Column(
         String(20), nullable=False, default="active", server_default="active", index=True
     )
+    # Instinct phase 2 (docs/system_api_part2.md §4/§7): free-text parking
+    # lot — appended to (timestamped lines), never overwritten.
+    notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(
         DateTime,
@@ -831,6 +834,12 @@ class Apartment(Base):
         nullable=True,
         index=True,
     )
+    # Instinct phase 2 (docs/system_api_part2.md §5): same draft-first pair as
+    # contacts.source/status. Carried across versions (_VERSIONED_COLUMNS).
+    source = Column(String(20), nullable=False, default="crm", server_default="crm")
+    status = Column(
+        String(20), nullable=False, default="active", server_default="active", index=True
+    )
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     building = relationship("Building", back_populates="apartments")
@@ -934,6 +943,13 @@ class VisitHistory(Base):
         # being the primary date-range filter (visits_summary, the contacts
         # date-range filter) — always combined with organization_id.
         Index("ix_visit_history_org_visit_date", "organization_id", "visit_date"),
+        # Instinct phase 2: the daily summary's open-follow-ups query.
+        Index(
+            "ix_visit_history_org_followup",
+            "organization_id",
+            "followup_done",
+            postgresql_where=text("followup_task IS NOT NULL"),
+        ),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -956,6 +972,21 @@ class VisitHistory(Base):
     # (CustomFieldDefinition/CustomFieldValue), the same mechanism org-added
     # checklist items ("mezuzah" etc.) already used. See
     # app.seed.seed_visit_mivtzoim_custom_fields.
+    # Instinct phase 2 (docs/system_api_part2.md §3): the apartment visited
+    # (SET NULL so an apartment delete never blocks on its visit log; follows
+    # the active version on a versioned apartment edit) and a lightweight
+    # follow-up ("bring mezuza") — the campaign-scoped Task entity is the
+    # wrong shape for it.
+    apartment_id = Column(
+        Integer,
+        ForeignKey("apartments.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    followup_task = Column(Text, nullable=True)
+    followup_done = Column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     contact = relationship("Contact", back_populates="visits")

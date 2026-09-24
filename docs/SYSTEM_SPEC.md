@@ -214,6 +214,18 @@ entities that matter for orienting yourself:
   platform superadmin tenant management, including per-org feature toggles
   (Area/Building/Apartment/Activist display cascade + AI query — fixes54
   §8, see OrganizationPreference in §4).
+- **Instinct API** (`backend/app/routers/instinct/`, no UI route) — a
+  shared-key (`X-Instinct-Key`) machine API for a WhatsApp/voice assistant,
+  scoped to env `INSTINCT_ORG_ID`: contact search/create, visits with a
+  lightweight follow-up (`visit_history.followup_task`/`followup_done`,
+  `visit_history.apartment_id`), contact/visit custom-field writes, apartment
+  search/create/versioned-edit, daily stats. Draft-first: contacts and
+  apartments it creates carry `source='instinct'`, `status='draft'` and stay
+  out of the regular lists until approved (contacts: the Pending approval
+  section; apartments: API `status='active'` only so far). Unmappable input
+  is parked in notes (`contacts.notes`, `visit_history.notes`,
+  `apartments.apartment_notes`). Specs: `docs/system_api.md`,
+  `docs/system_api_part2.md`.
 
 ## 6. The activist ("shliach") experience, end to end
 

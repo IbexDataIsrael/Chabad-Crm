@@ -30,11 +30,12 @@ def test_create_contact(client, org_id, db_session):
     r = client.post(
         "/api/instinct/contacts",
         headers=KEY,
-        json={"first_name": "John", "last_name": "Doe", "phone": "+1 718 555 0100"},
+        json={"first_name": "John", "last_name": "Doe", "phone": "050-123-4567"},
     )
     assert r.status_code == 201, r.text
     body = r.json()
     assert body["id"] and body["first_name"] == "John" and body["last_name"] == "Doe"
+    assert body["phone"] == "0501234567"  # phase 2 §2: stored normalized
 
     c = db_session.get(models.Contact, body["id"])
     assert c.organization_id == org_id and c.contact_type == "mekurav"
@@ -43,8 +44,9 @@ def test_create_contact(client, org_id, db_session):
     dup = client.post(
         "/api/instinct/contacts",
         headers=KEY,
-        json={"first_name": "Jane", "last_name": "Doe", "phone": "+1 718 555 0100"},
+        json={"first_name": "Jane", "last_name": "Doe", "phone": "+972 50 123 4567"},
     )
+    # Same number in another spelling normalizes to a duplicate.
     assert dup.status_code == 400
 
 

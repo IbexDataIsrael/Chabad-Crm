@@ -263,6 +263,7 @@ def list_apartments(
     query = db.query(models.Apartment).filter(
         models.Apartment.organization_id == current_user.organization_id,
         models.Apartment.is_display.is_(True),  # active versions only (fixes19)
+        models.Apartment.status == "active",  # Instinct drafts stay out of pickers
     )
     # fixes11 §1.2: a shliach only gets the apartments they cover (the enriched
     # /list endpoint was already scoped; the plain list feeds the pickers).
@@ -461,11 +462,16 @@ def _apply_apartment_filters(
     language: Optional[list[str]] = None,
     custom_picklists: Optional[dict[str, list[str]]] = None,
     custom_field_filters: Optional[dict[str, str]] = None,
+    record_status: Optional[str] = "active",
 ):
     """Apply the shared apartment-list filters (fixes8/15/18/20/23). The caller's
     query must already be joined to `models.Building` (area/street filters need
     it). Used by both the paged list and the bulk-update endpoint so they always
-    resolve to the same set of rows."""
+    resolve to the same set of rows. Instinct phase 2: `record_status` keeps
+    API-created drafts out of every list/aggregate/bulk set by default, the
+    same way contacts do (None = no status filter)."""
+    if record_status is not None:
+        query = query.filter(models.Apartment.status == record_status)
     if building_id is not None:
         query = query.filter(models.Apartment.building_id == building_id)
     # fixes23 §2: multi-select building filter (repeated ?building_ids=… params).
@@ -551,6 +557,9 @@ def list_apartments_enriched(
     dir: Literal["asc", "desc"] = "asc",
     page: int = Query(1, ge=1),
     page_size: int = Query(20),
+    # Instinct phase 2 (mirrors contacts' list): drafts only on request.
+    # `status` itself would shadow fastapi.status inside this function.
+    record_status: Literal["active", "draft"] = Query("active", alias="status"),
 ):
     """One page of apartments enriched with building/area + linked contact, for
     the apartments page. Shliach users see only the apartments they cover.
@@ -607,6 +616,8 @@ def list_apartments_enriched(
         language=language,
         custom_picklists=custom_picklists,
         custom_field_filters=custom_field_filters,
+        # A single-apartment lookup (the detail page) resolves drafts too.
+        record_status=record_status if apartment_id is None else None,
     )
     if sort in ("hierarchy", "report_number"):
         # fixes53 §2 / fixes54 §1.1: the Report Number tier/column needs the
@@ -952,6 +963,11 @@ def _bulk_versioned_update(
         ).update(
             {models.ContactMekurav.apartment_id: new.id}, synchronize_session=False
         )
+        db.query(models.VisitHistory).filter(
+            models.VisitHistory.apartment_id == active.id
+        ).update(
+            {models.VisitHistory.apartment_id: new.id}, synchronize_session=False
+        )
         picklist_utils.copy_links(db, "apartments", active.id, new.id)
         for field_key, value in picklist_changes.items():
             picklist_utils.set_value(
@@ -1057,6 +1073,10 @@ _VERSIONED_COLUMNS = (
     "phone",
     "email",
     "report_number_id",
+    # Instinct phase 2: a draft stays a draft (and keeps its origin) across
+    # an edit — only an explicit status change approves it.
+    "source",
+    "status",
 )
 
 
@@ -1220,6 +1240,9 @@ def _apply_versioned_update(
     db.query(models.ContactMekurav).filter(
         models.ContactMekurav.apartment_id == active.id
     ).update({models.ContactMekurav.apartment_id: new.id}, synchronize_session=False)
+    db.query(models.VisitHistory).filter(
+        models.VisitHistory.apartment_id == active.id
+    ).update({models.VisitHistory.apartment_id: new.id}, synchronize_session=False)
     picklist_utils.copy_links(db, "apartments", active.id, new.id)
     for field_key, value in picklist_changes.items():
         picklist_utils.set_value(db, org_id, "apartments", new.id, field_key, value)
