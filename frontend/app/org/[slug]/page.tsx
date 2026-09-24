@@ -11,6 +11,7 @@ import { WaveRule } from "@/components/public/WaveRule";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
+import { setPageOrg } from "@/lib/pageOrg";
 import type { PublicOrg } from "@/lib/types";
 
 type Mode = "join" | "signin";
@@ -39,9 +40,11 @@ export default function PublicOrgPage() {
       });
   }, [slug]);
 
+  // The browser tab shows this org's name + logo (TitleManager owns both).
   useEffect(() => {
-    if (org?.name) document.title = org.name;
-  }, [org?.name]);
+    setPageOrg(org ? { name: org.name, logoUrl: org.logo_url } : null);
+    return () => setPageOrg(null);
+  }, [org]);
 
   if (missing) {
     return (

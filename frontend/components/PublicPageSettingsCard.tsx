@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { apiFetch, uploadGalleryImage } from "@/lib/api";
+import { apiFetch, ApiError, uploadGalleryImage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
@@ -30,6 +30,31 @@ export function PublicPageSettingsCard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  // Live uniqueness check of the address against every other org.
+  const [slugStatus, setSlugStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
+
+  const cleanSlug = slug.trim().toLowerCase();
+  const slugFormatOk = !cleanSlug || SLUG_RE.test(cleanSlug);
+
+  useEffect(() => {
+    if (!cleanSlug || !slugFormatOk || cleanSlug === savedSlug) {
+      setSlugStatus("idle");
+      return;
+    }
+    setSlugStatus("checking");
+    let active = true;
+    const handle = setTimeout(() => {
+      apiFetch<{ available: boolean }>(
+        `/api/organizations/slug-available?slug=${encodeURIComponent(cleanSlug)}`,
+      )
+        .then((r) => active && setSlugStatus(r.available ? "available" : "taken"))
+        .catch(() => active && setSlugStatus("idle"));
+    }, 350);
+    return () => {
+      active = false;
+      clearTimeout(handle);
+    };
+  }, [cleanSlug, slugFormatOk, savedSlug]);
 
   useEffect(() => {
     apiFetch<OrgDetails>("/api/organizations/me")
@@ -73,9 +98,12 @@ export function PublicPageSettingsCard() {
   async function save(e: FormEvent) {
     e.preventDefault();
     setError("");
-    const cleanSlug = slug.trim().toLowerCase();
-    if (cleanSlug && !SLUG_RE.test(cleanSlug)) {
+    if (!slugFormatOk) {
       setError(t("public_settings.slug_invalid", "כתובת הדף יכולה להכיל רק אותיות באנגלית, ספרות ומקפים."));
+      return;
+    }
+    if (slugStatus === "taken") {
+      setError(t("public_settings.slug_taken", "כתובת זו כבר בשימוש על ידי ארגון אחר. יש לבחור כתובת אחרת."));
       return;
     }
     setBusy(true);
@@ -94,7 +122,13 @@ export function PublicPageSettingsCard() {
       await refresh();
       success(t("msg.saved", "נשמר בהצלחה"));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה");
+      const msg =
+        err instanceof ApiError && err.status === 409
+          ? t("public_settings.slug_taken", "כתובת זו כבר בשימוש על ידי ארגון אחר. יש לבחור כתובת אחרת.")
+          : err instanceof Error
+            ? err.message
+            : t("msg.save_failed", "שמירה נכשלה");
+      if (err instanceof ApiError && err.status === 409) setSlugStatus("taken");
       setError(msg);
       toastError(msg);
     } finally {
@@ -126,9 +160,32 @@ export function PublicPageSettingsCard() {
               dir="ltr"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
-              placeholder="sheepshead-bay"
+              placeholder="my-organization"
+              aria-invalid={!slugFormatOk || slugStatus === "taken"}
+              className={
+                !slugFormatOk || slugStatus === "taken"
+                  ? "border-status-darkred focus-visible:ring-status-darkred"
+                  : undefined
+              }
             />
           </div>
+          {!slugFormatOk ? (
+            <p className="text-xs text-status-darkred">
+              {t("public_settings.slug_invalid", "כתובת הדף יכולה להכיל רק אותיות באנגלית, ספרות ומקפים.")}
+            </p>
+          ) : slugStatus === "taken" ? (
+            <p className="text-xs text-status-darkred">
+              {t("public_settings.slug_taken", "כתובת זו כבר בשימוש על ידי ארגון אחר. יש לבחור כתובת אחרת.")}
+            </p>
+          ) : slugStatus === "available" ? (
+            <p className="text-xs text-success">
+              {t("public_settings.slug_available", "הכתובת פנויה ✓")}
+            </p>
+          ) : slugStatus === "checking" ? (
+            <p className="text-xs text-muted-foreground">
+              {t("public_settings.slug_checking", "בודק זמינות…")}
+            </p>
+          ) : null}
           {publicUrl && (
             <a
               href={publicUrl}
@@ -227,7 +284,10 @@ export function PublicPageSettingsCard() {
         </p>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
-        <Button type="submit" disabled={busy || uploading > 0}>
+        <Button
+          type="submit"
+          disabled={busy || uploading > 0 || !slugFormatOk || slugStatus === "taken" || slugStatus === "checking"}
+        >
           {busy ? t("action.saving", "שומר…") : t("action.save", "שמור")}
         </Button>
       </form>

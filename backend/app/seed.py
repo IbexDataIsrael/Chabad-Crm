@@ -1328,6 +1328,9 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("page", "public_settings.self_registration", "פתיחת הרשמה עצמית לפעילים", "Open activist self-registration"),
     ("page", "public_settings.self_registration_hint", "כאשר פעיל, כל אחד יכול להירשם כפעיל מדף הארגון ולקבל גישה מיידית. המנהלים יקבלו הודעה במייל על כל הרשמה.", "When on, anyone can register as an activist from the organization page and get immediate access. Admins are emailed about every registration."),
     ("page", "public_settings.slug", "כתובת הדף", "Page address"),
+    ("page", "public_settings.slug_taken", "כתובת זו כבר בשימוש על ידי ארגון אחר. יש לבחור כתובת אחרת.", "This address is already used by another organization. Choose a different one."),
+    ("page", "public_settings.slug_available", "הכתובת פנויה ✓", "Address available ✓"),
+    ("page", "public_settings.slug_checking", "בודק זמינות…", "Checking availability…"),
     ("page", "public_settings.slug_invalid", "כתובת הדף יכולה להכיל רק אותיות באנגלית, ספרות ומקפים.", "The page address may contain only English letters, digits and dashes."),
     ("page", "public_settings.subtitle", "כותרת משנה", "Subtitle"),
     ("page", "public_settings.title", "דף הארגון הציבורי", "Public organization page"),
@@ -1472,18 +1475,30 @@ PICKLIST_ENGLISH_DISPLAY: dict[str, str] = {
 # Platform title configuration (fixes9 §1). The metadata endpoint falls back to
 # these values when the rows are missing, so a fresh/un-seeded DB still works.
 SYSTEM_SETTING_DEFAULTS: dict[str, str] = {
-    "system_title_template": "{public.organizations.name} CRM",
+    # fixes65: the browser tab is just the organization's name.
+    "system_title_template": "{public.organizations.name}",
     "system_fallback_org_name": "Jewish Points CRM",
+}
+
+# Superseded default values: a stored row still holding one of these was never
+# customized by the superadmin, so it's moved to the current default.
+_SYSTEM_SETTING_OLD_DEFAULTS: dict[str, set[str]] = {
+    "system_title_template": {"{public.organizations.name} CRM"},
 }
 
 
 def seed_system_settings(db: Session) -> None:
-    """Insert any missing system_settings rows (idempotent, never overwrites)."""
-    existing = {r.key for r in db.query(models.SystemSetting.key).all()}
+    """Insert any missing system_settings rows, and upgrade rows still on a
+    superseded default (a customized value is never overwritten)."""
+    rows = {r.key: r for r in db.query(models.SystemSetting).all()}
     dirty = False
     for key, value in SYSTEM_SETTING_DEFAULTS.items():
-        if key not in existing:
+        row = rows.get(key)
+        if row is None:
             db.add(models.SystemSetting(key=key, value=value))
+            dirty = True
+        elif row.value in _SYSTEM_SETTING_OLD_DEFAULTS.get(key, set()):
+            row.value = value
             dirty = True
     if dirty:
         db.commit()

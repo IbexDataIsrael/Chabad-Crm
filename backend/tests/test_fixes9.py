@@ -54,7 +54,7 @@ class TestSystemTitleConfig:
         r = client.get("/api/metadata/system-config")
         assert r.status_code == 200, r.text
         body = r.json()
-        assert body["title_template"] == "{public.organizations.name} CRM"
+        assert body["title_template"] == "{public.organizations.name}"
         assert body["fallback_name"] == "Jewish Points CRM"
 
     def test_superadmin_updates_config(self, client, superadmin_headers):

@@ -113,6 +113,13 @@ def test_slug_validation_and_uniqueness(client, admin_headers, public_org, org_i
     )
     r = client.put("/api/organizations/me", json={"slug": "test-org"}, headers=other)
     assert r.status_code == 409
+    # Case-insensitive, and the live check agrees with the PUT.
+    r = client.put("/api/organizations/me", json={"slug": "TEST-ORG"}, headers=other)
+    assert r.status_code == 409
+    assert client.get("/api/organizations/slug-available?slug=test-org", headers=other).json()["available"] is False
+    assert client.get("/api/organizations/slug-available?slug=free-one", headers=other).json()["available"] is True
+    # An org's own current slug counts as available to itself.
+    assert client.get("/api/organizations/slug-available?slug=test-org", headers=admin_headers).json()["available"] is True
 
 
 def test_self_registration_toggle_default_off(client, admin_headers):

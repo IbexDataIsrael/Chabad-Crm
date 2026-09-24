@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.database import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, require_admin
 from app.schemas import OrganizationOut, OrganizationUpdate
 
 router = APIRouter(prefix="/api/organizations", tags=["organizations"])
@@ -21,6 +21,28 @@ def get_my_org(
     if not org:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Organization not found")
     return org
+
+
+@router.get("/slug-available")
+def slug_available(
+    slug: str,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+) -> dict:
+    """fixes65 §1: live check for the Settings page — is this public-page
+    address free (not used by any *other* org)? The PUT below enforces the
+    same rule, and the DB's unique index backs both against races."""
+    cleaned = (slug or "").strip().lower()
+    taken = (
+        db.query(models.Organization.id)
+        .filter(
+            models.Organization.slug == cleaned,
+            models.Organization.id != admin.organization_id,
+        )
+        .first()
+        is not None
+    )
+    return {"slug": cleaned, "available": bool(cleaned) and not taken}
 
 
 @router.put("/me", response_model=OrganizationOut)

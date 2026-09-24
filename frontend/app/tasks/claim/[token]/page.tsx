@@ -10,6 +10,7 @@ import { WaveRule } from "@/components/public/WaveRule";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
+import { setPageOrg } from "@/lib/pageOrg";
 import { forgetClaimToken, rememberClaimToken } from "@/lib/pendingClaim";
 import type { ClaimInfo, ClaimResult, ClaimState } from "@/lib/types";
 
@@ -36,6 +37,16 @@ export default function ClaimTaskPage() {
   useEffect(() => {
     rememberClaimToken(token);
   }, [token]);
+
+  // The browser tab shows the task's org name + logo (TitleManager owns both).
+  useEffect(() => {
+    setPageOrg(
+      info?.organization_name
+        ? { name: info.organization_name, logoUrl: info.organization_logo_url }
+        : null,
+    );
+    return () => setPageOrg(null);
+  }, [info?.organization_name, info?.organization_logo_url]);
 
   const settle = useCallback((o: Outcome) => {
     outcomeRef.current = o;
