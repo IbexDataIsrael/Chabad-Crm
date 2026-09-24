@@ -249,7 +249,15 @@ export default function AreaDetailPage() {
                 {/* Report numbers sit at the row's end side (left in RTL) instead of a new line. */}
                 <div className="text-sm text-muted-foreground text-end">
                   {t("page.report_numbers", "מספרי דוח")}:{" "}
-                  {buildingReports[String(b.id)]?.join(", ") || "—"}
+                  {/* <bdi> keeps each Hebrew report name (e.g. "359 א") intact in LTR/English. */}
+                  {buildingReports[String(b.id)]?.length
+                    ? buildingReports[String(b.id)].map((name, i) => (
+                        <span key={name}>
+                          {i > 0 && ", "}
+                          <bdi>{name}</bdi>
+                        </span>
+                      ))
+                    : "—"}
                 </div>
               </li>
             ))}
