@@ -9,6 +9,7 @@ import { useLocalization } from "@/lib/localization";
 
 const DETAIL_PATH: Record<SearchHitType, string> = {
   contact: "/dashboard/contacts",
+  user: "/dashboard/users",
   area: "/dashboard/areas",
   building: "/dashboard/buildings",
   apartment: "/dashboard/apartments",
@@ -23,10 +24,11 @@ function hitHref(h: SearchHit): string {
   return `${DETAIL_PATH[h.type]}/${h.id}`;
 }
 
-const GROUP_ORDER: SearchHitType[] = ["contact", "area", "building", "apartment"];
+const GROUP_ORDER: SearchHitType[] = ["contact", "user", "area", "building", "apartment"];
 
 const TYPE_ICON: Record<SearchHitType, string> = {
   contact: "👤",
+  user: "🔑",
   area: "🗺️",
   building: "🏢",
   apartment: "🚪",
@@ -49,6 +51,7 @@ export function GlobalSearch() {
 
   const groupLabel: Record<SearchHitType, string> = {
     contact: t("search.group.contacts", "אנשי קשר"),
+    user: t("search.group.users", "משתמשים"),
     area: t("search.group.areas", "אזורים"),
     building: t("search.group.buildings", "בניינים"),
     apartment: t("search.group.apartments", "דירות"),

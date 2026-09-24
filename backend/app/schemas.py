@@ -1519,7 +1519,7 @@ class DonationOut(BaseModel):
 class SearchHit(BaseModel):
     """One result row. `type` tells the frontend which detail page to link to."""
 
-    type: str  # 'contact' | 'area' | 'building' | 'apartment'
+    type: str  # 'contact' | 'user' | 'area' | 'building' | 'apartment'
     id: int
     title: str
     subtitle: Optional[str] = None

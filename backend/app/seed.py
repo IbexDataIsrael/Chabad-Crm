@@ -1363,6 +1363,8 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("action", "contacts.approve", "אישור", "Approve"),
     ("msg", "msg.contact_approved", "איש הקשר אושר", "Contact approved"),
     ("msg", "msg.contact_approve_failed", "אישור איש הקשר נכשל", "Approving the contact failed"),
+    # Global search: users (login accounts) group.
+    ("search", "search.group.users", "משתמשים", "Users"),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)

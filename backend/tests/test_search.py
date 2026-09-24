@@ -125,3 +125,62 @@ def test_search_is_tenant_isolated(client):
     # Org B finds nothing from Org A's data.
     for q in ("הפרחים", "הורדים", "דירת גן", "יוסי"):
         assert _search(client, b, q) == []
+
+
+def _user_hits(results):
+    return [h for h in results if h["type"] == "user"]
+
+
+def test_search_finds_users_by_email_and_name(client, admin_headers):
+    # A staff user has no contact record — only the users section can find them.
+    uid = client.post(
+        "/api/users",
+        json={"full_name": "רבקה מזכירה", "email": "rivka.office@example.com", "role": "staff"},
+        headers=admin_headers,
+    ).json()["id"]
+
+    for q in ("rivka.office", "RIVKA.OFFICE@EXAMPLE", "רבקה"):
+        hits = _user_hits(_search(client, admin_headers, q))
+        assert [h["id"] for h in hits] == [uid], q
+    assert hits[0]["title"] == "רבקה מזכירה"
+    assert hits[0]["subtitle"] == "rivka.office@example.com"
+
+
+def test_user_search_is_tenant_isolated(client):
+    a = _admin_of(client, "users_a", "Users Org A")
+    b = _admin_of(client, "users_b", "Users Org B")
+    client.post(
+        "/api/users",
+        json={"full_name": "Hidden Person", "email": "hidden.person@example.com", "role": "staff"},
+        headers=a,
+    )
+    assert _user_hits(_search(client, a, "hidden.person"))
+    assert _user_hits(_search(client, b, "hidden.person")) == []
+
+
+def test_shliach_gets_no_user_hits(client, db_session, admin_headers):
+    from app import models
+    from app.core.security import hash_password
+
+    org_id = client.get("/api/auth/me", headers=admin_headers).json()["organization_id"]
+    db_session.add(
+        models.User(
+            organization_id=org_id,
+            username="shliach_search",
+            full_name="שליח חיפוש",
+            email="shliach.search@example.com",
+            password_hash=hash_password("pw12345"),
+            role="shliach",
+            is_active=True,
+            email_verified=True,
+        )
+    )
+    db_session.commit()
+    token = client.post(
+        "/api/auth/token", data={"username": "shliach_search", "password": "pw12345"}
+    ).json()["access_token"]
+    shliach = {"Authorization": f"Bearer {token}"}
+
+    # The admin can find the shliach's account; the shliach can't search users.
+    assert _user_hits(_search(client, admin_headers, "shliach.search"))
+    assert _user_hits(_search(client, shliach, "shliach.search")) == []

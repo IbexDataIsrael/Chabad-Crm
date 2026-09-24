@@ -499,7 +499,7 @@ export const adminVerifyUser = (userId: number): Promise<AdminUser> =>
   apiFetch(`/api/admin/users/${userId}/verify`, { method: "POST" });
 
 // --- Global search ----------------------------------------------------------
-export type SearchHitType = "contact" | "area" | "building" | "apartment";
+export type SearchHitType = "contact" | "user" | "area" | "building" | "apartment";
 
 export interface SearchHit {
   type: SearchHitType;

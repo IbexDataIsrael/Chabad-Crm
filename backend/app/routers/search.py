@@ -1,8 +1,10 @@
-"""Global search across areas, buildings, apartments, and contacts (org-scoped).
+"""Global search across areas, buildings, apartments, contacts and users (org-scoped).
 
 One endpoint powers the header search box: case-insensitive "contains" match,
 capped per entity type. A shliach user only gets results inside their coverage
 (same rules as the areas/contacts routers); admin/staff see the whole org.
+Users (login accounts) are searched only for the roles that may open the Users
+directory (admin / staff / campaign_manager — same as GET /api/users).
 """
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import or_
@@ -84,6 +86,38 @@ def global_search(
                 contact_type=c.contact_type,
             )
         )
+
+    # --- Users (login accounts) ---
+    # Same audience as the Users directory (require_staff_admin_or_campaign_manager);
+    # a shliach gets none. Admin/staff users have no contact record, so without
+    # this section they were unfindable by name or email.
+    if current_user.role in ("admin", "staff", "campaign_manager"):
+        users = (
+            db.query(models.User)
+            .filter(
+                models.User.organization_id == org_id,
+                or_(
+                    models.User.full_name.ilike(like),
+                    models.User.first_name.ilike(like),
+                    models.User.last_name.ilike(like),
+                    models.User.username.ilike(like),
+                    models.User.email.ilike(like),
+                    models.User.phone.ilike(like),
+                ),
+            )
+            .order_by(models.User.full_name)
+            .limit(MAX_PER_TYPE)
+            .all()
+        )
+        for u in users:
+            results.append(
+                SearchHit(
+                    type="user",
+                    id=u.id,
+                    title=u.full_name or u.username,
+                    subtitle=u.email or u.username,
+                )
+            )
 
     # --- Areas ---
     areas = db.query(models.Area).filter(
