@@ -143,6 +143,10 @@ export interface Contact {
   /** fixes27 §3: /list enrichment for shliach rows — the login account's
    *  state, driving the row-level suspended notice. */
   login_status?: "active" | "disabled" | "missing" | null;
+  /** Where the contact came from ('crm' | 'instinct') and whether it is
+   *  approved ('active') or an Instinct draft awaiting approval ('draft'). */
+  source?: string;
+  status?: "active" | "draft";
 }
 
 /** One server-side page of the contacts list (fixes8 §2C pattern). */

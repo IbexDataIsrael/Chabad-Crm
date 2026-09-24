@@ -46,3 +46,71 @@ def test_create_contact(client, org_id, db_session):
         json={"first_name": "Jane", "last_name": "Doe", "phone": "+1 718 555 0100"},
     )
     assert dup.status_code == 400
+
+
+def test_create_contact_with_email(client, org_id, db_session):
+    r = client.post(
+        "/api/instinct/contacts",
+        headers=KEY,
+        json={"first_name": "John", "last_name": "Doe", "email": "  John.Doe@Example.com "},
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["email"] == "john.doe@example.com"
+    assert db_session.get(models.Contact, r.json()["id"]).email == "john.doe@example.com"
+
+    bad = client.post(
+        "/api/instinct/contacts",
+        headers=KEY,
+        json={"first_name": "Jane", "last_name": "Doe", "email": "not-an-email"},
+    )
+    assert bad.status_code == 422
+
+
+def _list_ids(client, headers, **params):
+    r = client.get("/api/contacts/list", headers=headers, params=params)
+    assert r.status_code == 200, r.text
+    return [c["id"] for c in r.json()["items"]]
+
+
+def test_api_contact_lands_as_draft(client, org_id, admin_headers, db_session):
+    # source/status in the body are ignored — the server always sets them.
+    r = client.post(
+        "/api/instinct/contacts",
+        headers=KEY,
+        json={"first_name": "Draft", "last_name": "Doe", "source": "crm", "status": "active"},
+    )
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["source"] == "instinct" and body["status"] == "draft"
+    c = db_session.get(models.Contact, body["id"])
+    assert (c.source, c.status) == ("instinct", "draft")
+
+    # Kept out of the regular list, shown only in the draft list.
+    assert body["id"] not in _list_ids(client, admin_headers)
+    assert body["id"] in _list_ids(client, admin_headers, status="draft")
+
+
+def test_ui_contact_stays_active_crm(client, admin_headers):
+    r = client.post(
+        "/api/contacts",
+        headers=admin_headers,
+        json={"name": "Regular", "phone": "0501234599", "source": "instinct", "status": "draft"},
+    )
+    assert r.status_code in (200, 201), r.text
+    assert (r.json()["source"], r.json()["status"]) == ("crm", "active")
+    assert r.json()["id"] in _list_ids(client, admin_headers)
+
+
+def test_approve_flips_draft_to_active(client, org_id, admin_headers):
+    cid = client.post(
+        "/api/instinct/contacts", headers=KEY, json={"first_name": "Pending", "last_name": "Doe"}
+    ).json()["id"]
+
+    r = client.post(f"/api/contacts/{cid}/approve", headers=admin_headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "active" and r.json()["source"] == "instinct"
+
+    assert cid in _list_ids(client, admin_headers)
+    assert cid not in _list_ids(client, admin_headers, status="draft")
+    # Idempotent.
+    assert client.post(f"/api/contacts/{cid}/approve", headers=admin_headers).status_code == 200

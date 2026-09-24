@@ -1167,6 +1167,10 @@ class ContactOut(ContactBase):
     guid: str
     created_at: datetime
     updated_at: datetime
+    # Read-only here (not on ContactBase, so no create/update payload can set
+    # them): 'crm' | 'instinct', and 'active' | 'draft' (docs/system_api.md).
+    source: str = "crm"
+    status: str = "active"
     # Enriched by /list only (fixes15 §5.1 optional grid columns): the mekurav
     # apartment's building display name + its area name (+ fixes18: the linked
     # admin-area name). None elsewhere.

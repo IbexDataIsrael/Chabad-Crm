@@ -1356,6 +1356,13 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("task", "task_pdf.unassigned", "טרם שויך — לסריקת הקוד בתחתית הדף", "Not assigned yet — scan the code at the bottom of the page"),
     ("page", "users.new_signups_filter", "פעילים שנרשמו לאחרונה", "Recently registered activists"),
     ("validation", "validation.campaign_required", "יש לבחור קמפיין", "Select a campaign"),
+    # Instinct API drafts (docs/system_api.md): the contacts page's pending section.
+    ("page", "contacts.pending_approval", "ממתינים לאישור", "Pending approval"),
+    ("page", "contacts.draft_badge", "טיוטה", "Draft"),
+    ("page", "contacts.source_instinct", "נוסף דרך Instinct", "Added via Instinct"),
+    ("action", "contacts.approve", "אישור", "Approve"),
+    ("msg", "msg.contact_approved", "איש הקשר אושר", "Contact approved"),
+    ("msg", "msg.contact_approve_failed", "אישור איש הקשר נכשל", "Approving the contact failed"),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)

@@ -19,6 +19,7 @@ import {
 } from "@/components/CustomFieldValueInput";
 import { DatePicker } from "@/components/DatePicker";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
+import { PendingApprovalContacts } from "@/components/PendingApprovalContacts";
 import { PicklistSelect } from "@/components/PicklistSelect";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { Button } from "@/components/ui/button";
@@ -540,6 +541,9 @@ function AuthorizedContactsPage() {
   // meaningless before they load, and firing early sends a request whose
   // late response can overwrite the corrected one.
   const fetchSeq = useRef(0);
+  // Bumped when a pending (draft) contact is approved — it now belongs in
+  // the main list, so refetch the current page.
+  const [reloadKey, setReloadKey] = useState(0);
   useEffect(() => {
     if (!user || fieldsLoading) return; // session/visibility not resolved yet
     const seq = ++fetchSeq.current;
@@ -587,6 +591,7 @@ function AuthorizedContactsPage() {
     pageSize,
     // fixes34 §1.1: custom picklist filter selections.
     JSON.stringify(effectiveCustomPicklistFilters),
+    reloadKey,
   ]);
 
   // fixes15 §5.2: mass email to the WHOLE filtered set via mailto: BCC.
@@ -1130,6 +1135,11 @@ function AuthorizedContactsPage() {
           </Button>
         </div>
       </div>
+      {/* Instinct drafts: their own section, never mixed into the grid.
+          Activists never see unowned drafts, so the section is hidden. */}
+      {!isShliach && (
+        <PendingApprovalContacts onApproved={() => setReloadKey((k) => k + 1)} />
+      )}
 
       {/* fixes15 §5.1: user-selected grid columns (persisted per browser).
           fixes38 §1.1: deliberately OUTSIDE the filtersOpen fragment below,

@@ -33,7 +33,12 @@ from app.core.shliach import (
     validate_report_number,
 )
 from app.database import get_db
-from app.deps import forbid_campaign_manager, get_current_user, require_admin
+from app.deps import (
+    forbid_campaign_manager,
+    get_current_user,
+    require_admin,
+    require_staff_or_admin,
+)
 from app.picklist_utils import validate_picklist_value
 from app.schemas import (
     ContactBulkUpdate,
@@ -514,6 +519,7 @@ def _contacts_query(
     connection_to_rebbe: Optional[str] = None,
     custom_fields: Optional[list[str]] = None,
     picklist: Optional[list[str]] = None,
+    record_status: str = "active",
 ):
     """The org-scoped, filtered, shliach-aware contacts query (shared by the
     plain list, the paginated list and the bulk-email address list).
@@ -533,7 +539,11 @@ def _contacts_query(
     the fields it names are just custom fields, so it absorbed that job
     instead of the app carrying two params that do the same query."""
     query = db.query(models.Contact).filter(
-        models.Contact.organization_id == current_user.organization_id
+        models.Contact.organization_id == current_user.organization_id,
+        # Instinct drafts stay out of every regular list (and the bulk-email /
+        # bulk-update sets built on this query) until approved — the contacts
+        # page fetches them separately via /list?status=draft.
+        models.Contact.status == record_status,
     )
     if pipeline_status is not None:
         query = query.filter(
@@ -985,6 +995,8 @@ def list_contacts_paginated(
     dir: Literal["asc", "desc"] = "asc",
     page: int = Query(1, ge=1),
     page_size: int = Query(20),
+    # `status` itself would shadow fastapi.status inside this function.
+    record_status: Literal["active", "draft"] = Query("active", alias="status"),
 ):
     """One server-side page of contacts (same fixes8 §2C pattern as the
     apartments list) — the contacts page uses this instead of the full dump.
@@ -1001,7 +1013,7 @@ def list_contacts_paginated(
         tzedaka_potential=tzedaka_potential,
         admin_area_ids=admin_area_ids, visit_from=visit_from, visit_to=visit_to,
         torah_thought=torah_thought, connection_to_rebbe=connection_to_rebbe,
-        custom_fields=custom_fields, picklist=picklist,
+        custom_fields=custom_fields, picklist=picklist, record_status=record_status,
     )
     total = query.count()
     if sort == "created":
@@ -1310,6 +1322,22 @@ def create_contact(
 
     db.commit()
     db.refresh(contact)
+    return _build_detail(contact, db)
+
+
+@router.post("/{contact_id}/approve", response_model=ContactDetailOut)
+def approve_contact(
+    contact_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_staff_or_admin),
+):
+    """Approve an Instinct draft: status 'draft' -> 'active', which moves it
+    into the regular contacts lists. Idempotent on an already-active contact."""
+    contact = _get_contact_or_404(contact_id, current_user, db)
+    if contact.status != "active":
+        contact.status = "active"
+        db.commit()
+        db.refresh(contact)
     return _build_detail(contact, db)
 
 

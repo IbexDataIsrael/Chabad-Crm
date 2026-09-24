@@ -195,6 +195,14 @@ class Contact(Base):
     longitude = Column(Float, nullable=True)
     # fixes32: pipeline_status/color_tag (picklist-backed) moved to PicklistLink.
     priority_score = Column(Integer, nullable=True)
+    # Where the contact came from: 'crm' (created in the app) | 'instinct'
+    # (the Instinct API, docs/system_api.md).
+    source = Column(String(20), nullable=False, default="crm", server_default="crm")
+    # 'active' | 'draft'. Instinct-created contacts land as 'draft' and stay out
+    # of the regular contacts lists until approved (POST /api/contacts/{id}/approve).
+    status = Column(
+        String(20), nullable=False, default="active", server_default="active", index=True
+    )
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(
         DateTime,
