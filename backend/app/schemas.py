@@ -570,6 +570,14 @@ class JewishCounts(BaseModel):
     engaged: int
 
 
+class ReportNumberAreaOut(BaseModel):
+    """fixes68: one area associated (via its apartments' buildings) with a
+    report number — powers the Report Numbers grid's optional Area column."""
+
+    id: int
+    area_name: str
+
+
 class ShliachSummary(BaseModel):
     """fixes43 §4.2/4.3: a shliach contact already covering an area/report
     number — powers the reassignment conflict warning on the shliach edit

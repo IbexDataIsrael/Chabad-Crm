@@ -629,6 +629,13 @@ export interface JewishCounts {
   engaged: number;
 }
 
+/** fixes68: one area associated with a report number (via its apartments'
+ *  buildings) — powers the Report Numbers grid's optional Area column. */
+export interface ReportNumberArea {
+  id: number;
+  area_name: string;
+}
+
 /** fixes53 §7/§9: an activist's "Report completed" self-edit submission —
  *  read on /dashboard/messages-from-activists. */
 export type ReportCompletionStatus = "completed" | "not_completed" | "partial";

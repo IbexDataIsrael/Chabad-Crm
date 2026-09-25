@@ -16,7 +16,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { InlineEdit } from "@/components/ui/InlineEdit";
 import { Input } from "@/components/ui/input";
-import type { Campaign, JewishCounts, ReportNumber, TaskStatus, TaskStatusWithId } from "@/lib/types";
+import type {
+  Campaign,
+  JewishCounts,
+  ReportNumber,
+  ReportNumberArea,
+  TaskStatus,
+  TaskStatusWithId,
+} from "@/lib/types";
 
 const STATUS_OPTIONS: TaskStatus[] = ["ACTIVE", "COMPLETED", "PAUSED"];
 const selectClass =
@@ -27,7 +34,7 @@ const selectClass =
 // assignment) is retired — coverage is now shown per active campaign
 // instead, as its own always-on set of columns below (not part of this
 // toggle system, since which campaigns exist is dynamic, not a fixed list).
-const OPTIONAL_COLUMNS = ["jews", "engaged", "created_at"] as const;
+const OPTIONAL_COLUMNS = ["area", "jews", "engaged", "created_at"] as const;
 type OptionalColumn = (typeof OPTIONAL_COLUMNS)[number];
 type SortKey = "name" | OptionalColumn;
 
@@ -49,6 +56,9 @@ export default function ReportNumbersPage() {
   const { success } = useToast();
   const [items, setItems] = useState<ReportNumber[]>([]);
   const [jewishCounts, setJewishCounts] = useState<Record<number, JewishCounts>>({});
+  // fixes68: area(s) each report number's active apartments' buildings sit
+  // in — {} (falls back to "—" per-row) if the backend predates this route.
+  const [areas, setAreas] = useState<Record<number, ReportNumberArea[]>>({});
   // fixes58 §3.5: one colored badge column per currently-active campaign,
   // replacing the old "activist" assignment column.
   const [activeCampaigns, setActiveCampaigns] = useState<Campaign[]>([]);
@@ -61,7 +71,7 @@ export default function ReportNumbersPage() {
   const [query, setQuery] = useState("");
   const [fieldsOpen, setFieldsOpen] = useState(false);
   const [fields, setFields] = usePersistentState<OptionalColumn[]>(
-    "crm.reportNumbers.fields", ["jews", "engaged"],
+    "crm.reportNumbers.fields", ["area", "jews", "engaged"],
   );
   // fixes54 §2: "Customize Columns" parity with Contacts — a persisted
   // relative order spanning every optional column (a permutation of
@@ -111,18 +121,24 @@ export default function ReportNumbersPage() {
   const [pageSize, setPageSize] = usePersistentState("crm.reportNumbers.pageSize", 20);
 
   async function reload() {
-    const [rns, counts, campaigns, taskStatus] = await Promise.all([
+    const [rns, counts, campaigns, taskStatus, rnAreas] = await Promise.all([
       apiFetch<ReportNumber[]>("/api/report-numbers"),
       apiFetch<Record<number, JewishCounts>>("/api/report-numbers/jewish-counts"),
       apiFetch<Campaign[]>("/api/campaigns?active=true"),
       apiFetch<Record<number, Record<number, TaskStatusWithId>>>(
         "/api/report-numbers/campaign-task-status",
       ),
+      // fixes68: tolerate a backend deployed before this route (older
+      // Render release) — the Area column just shows "—" everywhere.
+      apiFetch<Record<number, ReportNumberArea[]>>("/api/report-numbers/areas").catch(
+        () => ({}) as Record<number, ReportNumberArea[]>,
+      ),
     ]);
     setItems(rns);
     setJewishCounts(counts);
     setActiveCampaigns(campaigns);
     setCampaignTaskStatus(taskStatus);
+    setAreas(rnAreas);
   }
 
   useEffect(() => {
@@ -182,6 +198,14 @@ export default function ReportNumbersPage() {
   const sign = sortDir === "asc" ? 1 : -1;
   rows.sort((a, b) => {
     switch (sortKey) {
+      case "area":
+        return (
+          sign *
+          naturalCompare(
+            areas[a.rn.id]?.[0]?.area_name ?? "",
+            areas[b.rn.id]?.[0]?.area_name ?? "",
+          )
+        );
       case "jews":
         return sign * (a.jews - b.jews);
       case "engaged":
@@ -203,6 +227,7 @@ export default function ReportNumbersPage() {
     .replace("{total}", String(rows.length));
 
   const columnLabels: Record<OptionalColumn, string> = {
+    area: t("sort.area", "אזור"),
     jews: t("report.jews_count", "מספר יהודים"),
     engaged: t("report.engaged_jews_count", "מספר יהודים מעוניינים"),
     created_at: t("sort.created", "תאריך יצירה"),
@@ -452,6 +477,25 @@ export default function ReportNumbersPage() {
                   <td className="px-3 py-2 font-medium">{rn.name}</td>
                   {orderedActiveFields.map((f) => (
                     <td key={f} className="px-3 py-2">
+                      {f === "area" && (
+                        areas[rn.id]?.length ? (
+                          <span className="flex flex-wrap gap-x-1">
+                            {areas[rn.id].map((a, i) => (
+                              <span key={a.id}>
+                                <Link
+                                  href={`/dashboard/areas/${a.id}`}
+                                  className="text-primary hover:underline"
+                                >
+                                  <bdi>{a.area_name}</bdi>
+                                </Link>
+                                {i < areas[rn.id].length - 1 && ","}
+                              </span>
+                            ))}
+                          </span>
+                        ) : (
+                          "—"
+                        )
+                      )}
                       {f === "jews" && jews}
                       {f === "engaged" && engaged}
                       {f === "created_at" &&

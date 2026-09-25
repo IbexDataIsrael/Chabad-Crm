@@ -36,7 +36,14 @@ import {
   type ReportNumber,
   type Shliach,
 } from "@/lib/types";
-import { EMAIL_HINT, PHONE_HINT, isValidEmail, isValidPhone } from "@/lib/validation";
+import {
+  EMAIL_HINT,
+  PASSWORD_HINT,
+  PHONE_HINT,
+  isMediumPassword,
+  isValidEmail,
+  isValidPhone,
+} from "@/lib/validation";
 
 export interface OrgUser {
   id: number;
@@ -1455,6 +1462,10 @@ function UserForm({
       setError(t("msg.invalid_email", "כתובת אימייל לא תקינה"));
       return;
     }
+    if (password.trim() && !isMediumPassword(password)) {
+      setError(t("validation.password_hint", PASSWORD_HINT));
+      return;
+    }
     setBusy(true);
     try {
       await apiFetch("/api/users", {
@@ -1536,6 +1547,9 @@ function UserForm({
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="new-password"
           />
+          <span className="block text-xs text-muted-foreground">
+            {t("validation.password_hint", PASSWORD_HINT)}
+          </span>
           <span className="block text-xs text-muted-foreground">
             {t(
               "users.google_only_hint",

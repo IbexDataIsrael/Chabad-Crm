@@ -6,6 +6,7 @@ Deleting a report number detaches it from apartments (FK nulled); shliach
 links cascade with the bridge rows.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app import models
@@ -15,6 +16,7 @@ from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.schemas import (
     JewishCounts,
+    ReportNumberAreaOut,
     ReportNumberCreate,
     ReportNumberOut,
     ReportNumberUpdate,
@@ -143,6 +145,42 @@ def report_number_jewish_counts(
     return apartment_jewish_counts_by(
         db, current_user.organization_id, models.Apartment.report_number_id
     )
+
+
+@router.get("/areas", response_model=dict[int, list[ReportNumberAreaOut]])
+def report_number_areas(
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+):
+    """fixes68: for each report number, the area(s) its active apartments'
+    buildings sit in — keyed by report_number_id, most-buildings-first.
+    Declared before `/{report_number_id}` so that route doesn't swallow this
+    path first."""
+    building_count = func.count(func.distinct(models.Building.id))
+    rows = (
+        db.query(
+            models.Apartment.report_number_id,
+            models.Area.id,
+            models.Area.area_name,
+            building_count,
+        )
+        .join(models.Building, models.Building.id == models.Apartment.building_id)
+        .join(models.Area, models.Area.id == models.Building.area_id)
+        .filter(
+            models.Apartment.organization_id == admin.organization_id,
+            models.Apartment.is_display.is_(True),
+            models.Apartment.report_number_id.isnot(None),
+        )
+        .group_by(models.Apartment.report_number_id, models.Area.id, models.Area.area_name)
+        .order_by(models.Apartment.report_number_id, building_count.desc())
+        .all()
+    )
+    result: dict[int, list[ReportNumberAreaOut]] = {}
+    for report_number_id, area_id, area_name, _count in rows:
+        result.setdefault(report_number_id, []).append(
+            ReportNumberAreaOut(id=area_id, area_name=area_name)
+        )
+    return result
 
 
 @router.post("", response_model=ReportNumberOut, status_code=status.HTTP_201_CREATED)

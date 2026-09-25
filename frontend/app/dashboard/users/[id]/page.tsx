@@ -17,7 +17,14 @@ import { useConfirm } from "@/lib/confirm";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
 import type { Area, ReportNumber, ShliachVersion } from "@/lib/types";
-import { EMAIL_HINT, PHONE_HINT, isValidEmail, isValidPhone } from "@/lib/validation";
+import {
+  EMAIL_HINT,
+  PASSWORD_HINT,
+  PHONE_HINT,
+  isMediumPassword,
+  isValidEmail,
+  isValidPhone,
+} from "@/lib/validation";
 import type { OrgUser } from "../page";
 
 const inputClass =
@@ -46,6 +53,7 @@ export default function UserDetailPage() {
   const [snapshot, setSnapshot] = useState<ShliachVersion | null>(null);
   const [password, setPassword] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
 
   useEffect(() => {
     if (!loading && !isAdmin) router.replace("/dashboard");
@@ -120,6 +128,11 @@ export default function UserDetailPage() {
 
   async function setNewPassword() {
     if (!password.trim()) return;
+    if (!isMediumPassword(password)) {
+      setPasswordError(t("validation.password_hint", PASSWORD_HINT));
+      return;
+    }
+    setPasswordError("");
     setPasswordBusy(true);
     try {
       await patchUser({ password });
@@ -288,23 +301,30 @@ export default function UserDetailPage() {
             <dt className="text-xs text-muted-foreground">
               {t("users.password_optional", "סיסמה (לא חובה)")}
             </dt>
-            <dd className="text-sm flex items-center gap-2">
-              <input
-                type="password"
-                className={inputClass}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="new-password"
-              />
-              <Button
-                type="button"
-                size="sm"
-                onClick={setNewPassword}
-                disabled={passwordBusy || !password.trim()}
-                className="whitespace-nowrap"
-              >
-                {passwordBusy ? t("action.saving", "שומר…") : t("action.save", "שמור")}
-              </Button>
+            <dd className="text-sm space-y-1">
+              <div className="flex items-center gap-2">
+                <input
+                  type="password"
+                  className={inputClass}
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setPasswordError("");
+                  }}
+                  autoComplete="new-password"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={setNewPassword}
+                  disabled={passwordBusy || !password.trim()}
+                  className="whitespace-nowrap"
+                >
+                  {passwordBusy ? t("action.saving", "שומר…") : t("action.save", "שמור")}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">{t("validation.password_hint", PASSWORD_HINT)}</p>
+              {passwordError && <p className="text-xs text-status-darkred">{passwordError}</p>}
             </dd>
           </div>
         </dl>
