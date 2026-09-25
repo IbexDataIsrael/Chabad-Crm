@@ -1384,6 +1384,29 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("msg", "msg.contact_approve_failed", "אישור איש הקשר נכשל", "Approving the contact failed"),
     # Global search: users (login accounts) group.
     ("search", "search.group.users", "משתמשים", "Users"),
+    # apt.contact was already referenced by ApartmentDetailPage's t() call with
+    # no seed row backing it (a pre-existing gap, not introduced here) — added
+    # now since the new /dashboard/street page uses the same key.
+    ("apt", "apt.contact", "איש קשר", "Contact"),
+    # /dashboard/street: mobile "door" reskin of the apartments list, same
+    # data/fields as /dashboard/apartments (docs/fixes68_b.md).
+    ("street", "street.title", "המסלול שלי", "My route"),
+    ("street", "street.visits_title", "ביקורים", "Visits"),
+    ("street", "street.visits_soon", "בקרוב", "Coming soon"),
+    (
+        "street",
+        "street.visits_hint",
+        "רשימת הביקורים לדירה תופיע כאן כשהמערכת תתמוך בזה.",
+        "This apartment's visit history will appear here once supported.",
+    ),
+    ("street", "street.extra_fields", "שדות נוספים", "Extra fields"),
+    ("apt", "apt.no_options", "אין אפשרויות מוגדרות בשדה הזה.", "No options are defined for this field."),
+    (
+        "street",
+        "street.footnote",
+        "כל שדה מהמערכת הקיימת מופיע כאן — שום דבר לא הלך לאיבוד.",
+        "Every field from the current system appears here — nothing was lost.",
+    ),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)
