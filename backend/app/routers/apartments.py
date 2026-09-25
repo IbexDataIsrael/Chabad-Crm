@@ -33,9 +33,12 @@ from app.schemas import (
     ApartmentOut,
     ApartmentPageOut,
     ApartmentRestoreField,
+    ApartmentRouteItem,
     ApartmentUpdate,
     ApartmentVersionOut,
     BuildingAggregate,
+    DoorOutcomeIn,
+    DoorOutcomeOut,
     ReportNumberBuildingLink,
 )
 
@@ -294,6 +297,107 @@ def list_apartments(
         )
         for a in rows
     ]
+
+
+def _latest_door_outcomes(
+    db: Session, org_id: int, apartment_ids: list[int]
+) -> dict[int, tuple[str, datetime.datetime]]:
+    """fixes68 §B1: the most recent visit.door_outcome per apartment (newest
+    visit first, first one carrying an outcome link wins). `apartment_ids` is
+    always a small (activist-scoped) route set, so one ordered fetch + one
+    bulk picklist lookup is cheap — no need for a per-apartment query."""
+    if not apartment_ids:
+        return {}
+    visits = (
+        db.query(models.VisitHistory)
+        .filter(
+            models.VisitHistory.organization_id == org_id,
+            models.VisitHistory.apartment_id.in_(apartment_ids),
+        )
+        .order_by(models.VisitHistory.visit_date.desc())
+        .all()
+    )
+    picklist_map = picklist_utils.get_values_bulk(
+        db, org_id, "visit_history", [v.id for v in visits]
+    )
+    result: dict[int, tuple[str, datetime.datetime]] = {}
+    for v in visits:
+        if v.apartment_id in result:
+            continue
+        outcome = picklist_map.get(v.id, {}).get("visit.door_outcome")
+        if outcome:
+            result[v.apartment_id] = (outcome, v.visit_date)
+    return result
+
+
+@router.get("/my-route", response_model=list[ApartmentRouteItem])
+def my_route(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """fixes68 §1/§B1: one trimmed, pre-sorted payload for the activist's
+    door-to-door route (Feature 1) — assigned apartments only, UI fields
+    only. Replaces building the route on the plain GET /api/apartments dump
+    (unpaginated, full-field, ~25k rows / 9.7MB org-wide — see the spec's
+    SPEED PROBLEM note); this is the activist's own set, tens to low hundreds
+    of rows. Must stay registered before GET "/{apartment_id}" below — that
+    route has no `:int` path converter, so "my-route" would otherwise match
+    it first and 422 on the int conversion.
+
+    Order is the same mandatory hierarchy sort as `sort=hierarchy` on /list
+    (report number -> building -> floor -> label) — the frontend never
+    re-sorts, "next door" is just index+1."""
+    org_id = current_user.organization_id
+    query = (
+        db.query(models.Apartment)
+        .join(models.Building, models.Building.id == models.Apartment.building_id)
+        .outerjoin(
+            models.ReportNumber,
+            models.ReportNumber.id == models.Apartment.report_number_id,
+        )
+        .filter(
+            models.Apartment.organization_id == org_id,
+            models.Apartment.is_display.is_(True),
+            models.Apartment.status == "active",
+        )
+    )
+    if current_user.role == "shliach":
+        ids = _shliach_apartment_ids(db, current_user)
+        if not ids:
+            return []
+        query = query.filter(models.Apartment.id.in_(ids))
+    rows = query.order_by(*_sort_keys("hierarchy", db)).all()
+    picklist_map = picklist_utils.get_values_bulk(
+        db, org_id, "apartments", [r.id for r in rows]
+    )
+    outcomes = _latest_door_outcomes(db, org_id, [r.id for r in rows])
+    items = []
+    for a in rows:
+        values = picklist_map.get(a.id, {})
+        building = a.building
+        last_outcome, last_outcome_at = outcomes.get(a.id, (None, None))
+        items.append(
+            ApartmentRouteItem(
+                id=a.id,
+                guid=a.guid,
+                building_id=a.building_id,
+                building_name=building.building_name if building else None,
+                building_address=building.building_address if building else None,
+                area_name=(building.area.area_name if building and building.area else None),
+                report_number_name=a.report_number.name if a.report_number else None,
+                floor=a.floor,
+                apartment_name=a.apartment_name,
+                name=a.name,
+                phone=a.phone,
+                apartment_notes=a.apartment_notes,
+                jewish_status=values.get("apartment.Jewish_status"),
+                mezuzah_status=values.get("apartment.mezuzah_status"),
+                status=a.status,
+                last_outcome=last_outcome,
+                last_outcome_at=last_outcome_at,
+            )
+        )
+    return items
 
 
 def _natural(col, db: Session):
@@ -1315,6 +1419,119 @@ def update_apartment(
             db, a, data, picklist_changes, current_user, custom_field_changes,
             language_values=language_values,
         ),
+    )
+
+
+# fixes68 §3/§B2: "jewish"/"not_jewish" are recorded as door_outcome
+# "answered" (the door WAS answered) plus a Jewish-status change.
+_DOOR_OUTCOME_TO_JEWISH_STATUS = {"jewish": "jewish", "not_jewish": "not_jewish"}
+
+
+@router.post("/{apartment_id}/door-outcome", response_model=DoorOutcomeOut)
+def record_door_outcome(
+    apartment_id: int,
+    payload: DoorOutcomeIn,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """fixes68 §3/§8/§B2: one tap from the activist route — logs a door visit
+    and, for jewish/not_jewish, updates the apartment's Jewish status too.
+
+    Idempotent on client_uuid (fixes68 §8's offline outbox retries a POST
+    whose response was lost, e.g. a stairwell dropping mid-flush): a repeat
+    is matched and returned as-is rather than logged twice.
+
+    A jewish/not_jewish mark goes through the normal versioned apartment
+    update (`_apply_versioned_update`), not a bare in-place picklist write —
+    apartments are versioned (fixes19 §3) and the admin dashboard's "recent
+    Jewish-status changes" panel (routers/dashboard.py::_jewish_status_changes)
+    detects a change by diffing a retired row against its successor. A
+    direct write would update the value correctly but leave it invisible to
+    that panel and with no editor_id/last_edit audit stamp — the spec's own
+    wording ("via the existing _apply_picklist_fields path") undersells this;
+    that helper is read-only serialization, not a write path.
+
+    The route's cached `apartment_id` can go stale mid-session: a jewish/
+    not_jewish mark retires the row and hands the client a new one (see
+    lib/activistRoute.ts's `applyLocalOutcome` — it patches the cached
+    item's outcome fields in place, it never rewrites `id`), and a second
+    mark on the same door before the next full route refresh — e.g. the
+    activist correcting a jewish/not_jewish tap, or reopening at the door
+    they left via "back" — would otherwise resubmit the retired id. Resolve
+    forward to the lineage's current active row first (same lineage lookup
+    `delete_apartment` uses), the same way the system already forwards
+    VisitHistory/ContactMekurav references on every versioned update —
+    never operate on a retired snapshot, which would silently mint a second
+    is_display=True row for the lineage instead of updating the real one."""
+    org_id = current_user.organization_id
+    a = _get_or_404(apartment_id, org_id, db)
+    if not a.is_display:
+        root_id = a.root_id or a.id
+        a = (
+            db.query(models.Apartment)
+            .filter(
+                models.Apartment.organization_id == org_id,
+                models.Apartment.is_display.is_(True),
+                or_(models.Apartment.root_id == root_id, models.Apartment.id == root_id),
+            )
+            .first()
+        ) or a
+    if current_user.role == "shliach" and a.id not in _shliach_apartment_ids(
+        db, current_user
+    ):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not your apartment")
+
+    existing = (
+        db.query(models.VisitHistory)
+        .filter(
+            models.VisitHistory.organization_id == org_id,
+            models.VisitHistory.client_uuid == payload.client_uuid,
+        )
+        .first()
+    )
+    if existing is not None:
+        values = picklist_utils.get_values(db, org_id, "visit_history", existing.id)
+        return DoorOutcomeOut(
+            id=existing.id,
+            apartment_id=existing.apartment_id or a.id,
+            client_uuid=existing.client_uuid,
+            outcome=values.get("visit.door_outcome") or payload.outcome,
+            visit_date=existing.visit_date,
+        )
+
+    door_outcome = "answered" if payload.outcome in _DOOR_OUTCOME_TO_JEWISH_STATUS else payload.outcome
+    validate_picklist_value(db, org_id, "visit.door_outcome", door_outcome)
+    jewish_status = _DOOR_OUTCOME_TO_JEWISH_STATUS.get(payload.outcome)
+    target = a
+    if jewish_status:
+        validate_picklist_value(db, org_id, "apartment.Jewish_status", jewish_status)
+        target = _apply_versioned_update(
+            db, a, {}, {"apartment.Jewish_status": jewish_status}, current_user
+        )
+
+    mekurav = target.mekuravim[0] if target.mekuravim else None
+    v = models.VisitHistory(
+        organization_id=org_id,
+        apartment_id=target.id,
+        contact_id=mekurav.contact_id if mekurav else None,
+        visit_date=datetime.datetime.utcnow(),
+        notes=payload.notes,
+        client_uuid=payload.client_uuid,
+    )
+    db.add(v)
+    db.flush()
+    picklist_utils.set_value(db, org_id, "visit_history", v.id, "visit.type", "home")
+    picklist_utils.set_value(
+        db, org_id, "visit_history", v.id, "visit.door_outcome", door_outcome
+    )
+    db.commit()
+    db.refresh(v)
+    return DoorOutcomeOut(
+        id=v.id,
+        apartment_id=target.id,
+        client_uuid=v.client_uuid,
+        outcome=door_outcome,
+        visit_date=v.visit_date,
     )
 
 

@@ -1031,6 +1031,57 @@ class ApartmentBulkUpdateResult(BaseModel):
     updated: int
 
 
+# --- fixes68 §1/§B1: activist door-to-door route -----------------------------
+class ApartmentRouteItem(BaseModel):
+    """One door on an activist's route (GET /api/apartments/my-route) — a
+    trimmed, UI-only projection of ApartmentListOut. Pre-sorted server-side
+    (hierarchy: report number -> building -> floor -> label); the client
+    never re-sorts."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    guid: str
+    building_id: int
+    building_name: Optional[str] = None
+    building_address: Optional[str] = None
+    area_name: Optional[str] = None
+    report_number_name: Optional[str] = None
+    floor: Optional[str] = None
+    apartment_name: Optional[str] = None
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    apartment_notes: Optional[str] = None
+    jewish_status: Optional[str] = None
+    mezuzah_status: Optional[str] = None
+    status: str
+    # Most recent visit.door_outcome for this door, if any (fixes68 §B1).
+    last_outcome: Optional[str] = None
+    last_outcome_at: Optional[datetime] = None
+
+
+# --- fixes68 §3/§8/§B2: one-tap door outcome ---------------------------------
+DoorOutcome = Literal["answered", "not_home", "jewish", "not_jewish", "come_back_later"]
+
+
+class DoorOutcomeIn(BaseModel):
+    outcome: DoorOutcome
+    # Client-generated (crypto.randomUUID()) — the outbox's idempotency key,
+    # so a retried POST after a flaky connection can never double-log a visit.
+    client_uuid: str
+    notes: Optional[str] = None
+
+
+class DoorOutcomeOut(BaseModel):
+    id: int
+    apartment_id: int
+    client_uuid: str
+    # The stored visit.door_outcome value ("jewish"/"not_jewish" collapse to
+    # "answered" here — see routers/apartments.py).
+    outcome: str
+    visit_date: datetime
+
+
 # --- Significant dates + reminders -----------------------------------------
 class ReminderIn(BaseModel):
     offset_minutes: int = 0

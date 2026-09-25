@@ -884,6 +884,8 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
         "picklist_def", "picklist_def.contact_shliach.manager_jewish_status",
         "סטטוס יהדות מנהל", "Manager Jewish status",
     ),
+    # fixes68 §B2/B3.
+    ("picklist_def", "picklist_def.visit.door_outcome", "תוצאת דלת", "Door outcome"),
     ("common", "common.hebrew_label", "עברית", "Hebrew"),
     ("common", "common.english_label", "English", "English"),
     # fixes48 §3: boolean custom-field column filter (Users page).
@@ -1384,6 +1386,59 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("msg", "msg.contact_approve_failed", "אישור איש הקשר נכשל", "Approving the contact failed"),
     # Global search: users (login accounts) group.
     ("search", "search.group.users", "משתמשים", "Users"),
+    # --- fixes68 §9/§B4: activist door-to-door route flow ---
+    ("activist_route", "activist_route.title", "התחל סיבוב", "Start route"),
+    ("activist_route", "activist_route.outcome.answered", "נענו", "Answered"),
+    ("activist_route", "activist_route.outcome.not_home", "לא בבית", "Not home"),
+    ("activist_route", "activist_route.outcome.jewish", "יהודי", "Jewish"),
+    ("activist_route", "activist_route.outcome.not_jewish", "לא יהודי", "Not Jewish"),
+    (
+        "activist_route", "activist_route.outcome.come_back_later",
+        "לחזור מאוחר יותר", "Come back later",
+    ),
+    (
+        "activist_route", "activist_route.do_not_knock",
+        "לא לדפוק - דייר לא יהודי", "DO NOT KNOCK - non-Jewish resident",
+    ),
+    (
+        "activist_route", "activist_route.mixed_household",
+        "משפחה מעורבת (כולל יהודי)", "Mixed household (includes a Jew)",
+    ),
+    ("activist_route", "activist_route.progress", "{done} / {total} דלתות", "{done} / {total} doors"),
+    ("activist_route", "activist_route.synced", "עודכן {time}", "Updated {time}"),
+    (
+        "activist_route", "activist_route.offline",
+        "לא מקוון - מציג נתונים מ-{time}", "Offline - showing data from {time}",
+    ),
+    (
+        "activist_route", "activist_route.outbox_pending",
+        "{n} סימונים ממתינים לסנכרון", "{n} marks waiting to sync",
+    ),
+    ("activist_route", "activist_route.undo", "בטל - עוד לא סונכרן", "Undo - not synced yet"),
+    ("activist_route", "activist_route.undo_action", "בטל", "Undo"),
+    ("activist_route", "activist_route.divider.building", "בניין {address}", "Building {address}"),
+    ("activist_route", "activist_route.divider.floor", "קומה {floor}", "Floor {floor}"),
+    ("activist_route", "activist_route.divider.remaining", "{n} דירות נותרו", "{n} doors left"),
+    ("activist_route", "activist_route.continue", "המשך", "Continue"),
+    (
+        "activist_route", "activist_route.complete",
+        "סיימת את כל הדלתות - כל הכבוד!", "All doors done - well done!",
+    ),
+    ("activist_route", "activist_route.marked", "סומן: {outcome}, {time}", "Marked: {outcome}, {time}"),
+    ("activist_route", "activist_route.view_cards", "תצוגת כרטיסים", "Card view"),
+    ("activist_route", "activist_route.view_grid", "תצוגת רשימה", "Grid view"),
+    ("activist_route", "activist_route.back", "חזרה", "Back"),
+    ("activist_route", "activist_route.refresh", "רענון", "Refresh"),
+    ("activist_route", "activist_route.no_doors", "אין דלתות בסיבוב שלך", "No doors in your route"),
+    ("activist_route", "activist_route.load_failed", "טעינת הסיבוב נכשלה", "Failed to load your route"),
+    ("activist_route", "activist_route.call", "התקשר", "Call"),
+    ("activist_route", "activist_route.celebration_static", "כל הכבוד!", "Well done!"),
+    ("activist_route", "activist_route.grid.not_marked", "טרם סומן", "Not marked yet"),
+    ("activist_route", "activist_route.grid.do_not_knock", "לא לדפוק", "Don't knock"),
+    (
+        "activist_home", "activist_home.start_route_hint",
+        "סיבוב דלת אחר דלת לדירות המשויכות לך", "Door-by-door route for your assigned apartments",
+    ),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)
@@ -1468,6 +1523,14 @@ PICKLISTS: list[tuple[str, str, str, str | None, int, bool]] = [
         "contact_shliach.manager_jewish_status", "jewish_shtumtz",
         "יהודי שתומצ", None, 5, False,
     ),
+    # fixes68 §B3: "not Jewish" — the don't-knock marker (Feature 5). Sort
+    # order 6 continues the apartment.Jewish_status block above.
+    ("apartment.Jewish_status", "not_jewish", "לא יהודי", None, 6, False),
+    # fixes68 §B2/B3: one-tap door outcomes (Feature 3). "jewish"/"not_jewish"
+    # are recorded as door_outcome "answered" — see routers/apartments.py.
+    ("visit.door_outcome", "answered", "נענו", None, 0, False),
+    ("visit.door_outcome", "not_home", "לא בבית", None, 1, False),
+    ("visit.door_outcome", "come_back_later", "לחזור מאוחר יותר", None, 2, False),
 ]
 
 # English display for picklist OPTION values, keyed by (field_key, value).
@@ -1484,6 +1547,11 @@ PICKLIST_ENGLISH_VALUES: dict[tuple[str, str], str] = {
     ("language", "english"): "English",
     ("language", "russian"): "Russian",
     ("language", "yiddish"): "Yiddish",
+    # fixes68 §B3.
+    ("apartment.Jewish_status", "not_jewish"): "Not Jewish",
+    ("visit.door_outcome", "answered"): "Answered",
+    ("visit.door_outcome", "not_home"): "Not home",
+    ("visit.door_outcome", "come_back_later"): "Come back later",
 }
 
 # Picklist definition display names (he from PICKLIST_FIELDS; en where known per spec).
@@ -1497,6 +1565,7 @@ PICKLIST_ENGLISH_DISPLAY: dict[str, str] = {
     "apartment.mezuzah_status": "Mezuzah",
     "apartment.language": "Language",
     "contact_shliach.manager_jewish_status": "Manager Jewish status",
+    "visit.door_outcome": "Door outcome",
 }
 
 

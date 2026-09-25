@@ -43,6 +43,8 @@ PICKLIST_FIELDS: dict[str, tuple[str, str]] = {
     # fixes58 §3.3/§3.6: admin-defined task custom-date options (e.g. "First
     # Candle of Hanukkah") — Task.custom_date_value_id points at one of these.
     "task.custom_date": ("תאריך מותאם", "task"),
+    # fixes68 §B2/B3: one-tap door outcome from the activist route flow.
+    "visit.door_outcome": ("תוצאת דלת", "visit"),
 }
 
 # fixes51 §2.2: which of the fields above allow more than one selected value

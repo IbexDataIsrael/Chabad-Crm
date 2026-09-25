@@ -987,6 +987,11 @@ class VisitHistory(Base):
     followup_done = Column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    # fixes68 §8/§B2: the activist route's offline outbox idempotency key — a
+    # retried POST /api/apartments/{id}/door-outcome after a dropped response
+    # matches this instead of inserting a duplicate visit. Nullable: only
+    # door-outcome visits set it (a unique index still allows many NULLs).
+    client_uuid = Column(String(36), nullable=True, unique=True, index=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     contact = relationship("Contact", back_populates="visits")

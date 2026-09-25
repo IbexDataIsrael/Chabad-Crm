@@ -696,6 +696,47 @@ export function roundCoord(n: number | null | undefined): number | null {
   return n == null ? null : Number(n.toFixed(5));
 }
 
+// --- fixes68 §1/§B1: activist door-to-door route ----------------------------
+
+/** One door on an activist's route (GET /api/apartments/my-route) — a
+ *  trimmed, UI-only projection of Apartment/ApartmentListItem. Pre-sorted
+ *  server-side (hierarchy: report number -> building -> floor -> label); the
+ *  client never re-sorts. */
+export interface ApartmentRouteItem {
+  id: number;
+  guid: string;
+  building_id: number;
+  building_name: string | null;
+  building_address: string | null;
+  area_name: string | null;
+  report_number_name: string | null;
+  floor: string | null;
+  apartment_name: string | null;
+  name: string | null;
+  phone: string | null;
+  apartment_notes: string | null;
+  jewish_status: string | null;
+  mezuzah_status: string | null;
+  status: string;
+  last_outcome: DoorOutcome | null;
+  last_outcome_at: string | null;
+}
+
+export type DoorOutcome =
+  | "answered"
+  | "not_home"
+  | "jewish"
+  | "not_jewish"
+  | "come_back_later";
+
+export interface DoorOutcomeResult {
+  id: number;
+  apartment_id: number;
+  client_uuid: string;
+  outcome: string;
+  visit_date: string;
+}
+
 // --- Admin dashboard summary (GET /api/dashboard/summary) --------------------
 export interface DashboardStat {
   value: number;
