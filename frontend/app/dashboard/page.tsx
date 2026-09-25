@@ -31,7 +31,7 @@ export default function DashboardHome() {
       ? user?.shliach?.contact_id
         ? "/dashboard/activist"
         : shliachBlocked
-          ? "/dashboard/apartments"
+          ? "/dashboard/street"
           : "/dashboard/contacts"
       : null; // admin/staff: no redirect, render the dashboard below
 

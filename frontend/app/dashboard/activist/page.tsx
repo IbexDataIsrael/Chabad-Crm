@@ -178,7 +178,7 @@ export default function ActivistLandingPage() {
             </Button>
           </Card>
         ) : (
-          <Link href="/dashboard/apartments">
+          <Link href="/dashboard/street">
             <Card className="border-2 border-foreground/70 p-5 transition-colors hover:bg-accent">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground">

@@ -110,8 +110,18 @@ function DashboardChrome({ children }: { children: ReactNode }) {
     ...(isFeatureEnabled(org, "building_display_enabled")
       ? [{ href: "/dashboard/buildings", label: t("nav.buildings", "בניינים"), admin: true }]
       : []),
+    // docs/fixes68_b.md: /dashboard/street (the mobile door/street reskin) is
+    // now the default "Apartments" landing page; the classic grid moves to
+    // its own "Apartment management" entry at its same /dashboard/apartments
+    // URL — untouched, still the fallback for filters/bulk-edit/admin work.
     ...(isFeatureEnabled(org, "apartment_display_enabled")
-      ? [{ href: "/dashboard/apartments", label: t("nav.apartments", "דירות") }]
+      ? [
+          { href: "/dashboard/street", label: t("nav.apartments", "דירות") },
+          {
+            href: "/dashboard/apartments",
+            label: t("nav.apartments_grid", "ניהול דירות"),
+          },
+        ]
       : []),
   ]);
   // fixes24 §2: dedicated Reports group — PDF generation plus the

@@ -1401,6 +1401,9 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ),
     ("street", "street.extra_fields", "שדות נוספים", "Extra fields"),
     ("apt", "apt.no_options", "אין אפשרויות מוגדרות בשדה הזה.", "No options are defined for this field."),
+    # /dashboard/street is now the default "Apartments" nav entry; the
+    # classic grid gets its own sidebar label at its same URL.
+    ("nav", "nav.apartments_grid", "ניהול דירות", "Apartment management"),
     (
         "street",
         "street.footnote",
