@@ -12,11 +12,19 @@ import { RouteGrid } from "@/components/activist/RouteGrid";
 import { RouteProgress } from "@/components/activist/RouteProgress";
 import { Button } from "@/components/ui/button";
 import { useActivistRoute } from "@/lib/activistRoute";
+import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useCustomFieldDefs } from "@/lib/customFields";
 import { useLocalization } from "@/lib/localization";
 import { enqueueOutcome, startOutboxSync, undoOutcome, useOutbox } from "@/lib/outbox";
 import { usePersistentState } from "@/lib/persist";
-import { buildingDisplayName, type ApartmentRouteItem, type DoorOutcome } from "@/lib/types";
+import { FIXED_APARTMENT_PICKLIST_KEYS, usePicklistsMap } from "@/lib/picklists";
+import {
+  buildingDisplayName,
+  type ApartmentRouteItem,
+  type DoorOutcome,
+  type PicklistField,
+} from "@/lib/types";
 
 // fixes68 §6.3: fire a star burst the first time each threshold is crossed.
 const MILESTONES = [25, 50, 75];
@@ -68,6 +76,28 @@ export default function ActivistRoutePage() {
   const { t } = useLocalization();
   const route = useActivistRoute();
   const outbox = useOutbox();
+
+  // fixes68: every apartment field must show, including any admin-added
+  // apartment.* picklist or custom field — fetched once (org-wide, not
+  // per-door) and looked up by DoorCard.
+  const customFieldDefs = useCustomFieldDefs("apartment");
+  const [picklistFields, setPicklistFields] = useState<PicklistField[]>([]);
+  useEffect(() => {
+    apiFetch<PicklistField[]>("/api/picklists")
+      .then(setPicklistFields)
+      .catch(() => setPicklistFields([]));
+  }, []);
+  const dynamicPicklistFields = useMemo(
+    () =>
+      picklistFields
+        .filter((f) => f.entity_type === "apartment" && !FIXED_APARTMENT_PICKLIST_KEYS.includes(f.field_key))
+        .map((f) => ({ field_key: f.field_key, label: f.label, english_label: f.english_label })),
+    [picklistFields],
+  );
+  const { labelFor: picklistLabelFor } = usePicklistsMap([
+    ...FIXED_APARTMENT_PICKLIST_KEYS,
+    ...dynamicPicklistFields.map((f) => f.field_key),
+  ]);
 
   const [view, setView] = usePersistentState<"cards" | "grid">("crm.activist.view", "cards");
   const [position, setPosition] = usePersistentState<RoutePosition>(
@@ -295,7 +325,12 @@ export default function ActivistRoutePage() {
             </button>
           )}
           <div className="min-h-[45vh]">
-            <DoorCard item={currentItem} />
+            <DoorCard
+              item={currentItem}
+              picklistLabelFor={picklistLabelFor}
+              dynamicPicklistFields={dynamicPicklistFields}
+              customFieldDefs={customFieldDefs}
+            />
           </div>
           <OutcomeButtons onMark={handleMark} />
         </div>

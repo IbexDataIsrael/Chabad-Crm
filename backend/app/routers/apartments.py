@@ -335,14 +335,18 @@ def my_route(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """fixes68 §1/§B1: one trimmed, pre-sorted payload for the activist's
-    door-to-door route (Feature 1) — assigned apartments only, UI fields
-    only. Replaces building the route on the plain GET /api/apartments dump
-    (unpaginated, full-field, ~25k rows / 9.7MB org-wide — see the spec's
-    SPEED PROBLEM note); this is the activist's own set, tens to low hundreds
-    of rows. Must stay registered before GET "/{apartment_id}" below — that
-    route has no `:int` path converter, so "my-route" would otherwise match
-    it first and 422 on the int conversion.
+    """fixes68 §1/§B1: one pre-sorted payload for the activist's door-to-door
+    route (Feature 1) — assigned apartments only, but every field, built via
+    the same `_enrich()` the admin apartments grid uses (fixed columns,
+    dynamic picklist_values, custom_field_values, linked contact) so the
+    activist sees the same full picture an admin does, not a trimmed
+    subset. Still nowhere near the plain GET /api/apartments dump's size
+    (unpaginated, org-wide, ~25k rows / 9.7MB — see the spec's SPEED PROBLEM
+    note): this is the activist's own set, tens to low hundreds of rows, and
+    every field on that set is still a small payload. Must stay registered
+    before GET "/{apartment_id}" below — that route has no `:int` path
+    converter, so "my-route" would otherwise match it first and 422 on the
+    int conversion.
 
     Order is the same mandatory hierarchy sort as `sort=hierarchy` on /list
     (report number -> building -> floor -> label) — the frontend never
@@ -367,32 +371,25 @@ def my_route(
             return []
         query = query.filter(models.Apartment.id.in_(ids))
     rows = query.order_by(*_sort_keys("hierarchy", db)).all()
-    picklist_map = picklist_utils.get_values_bulk(
-        db, org_id, "apartments", [r.id for r in rows]
+    row_ids = [r.id for r in rows]
+    picklist_map = picklist_utils.get_values_bulk(db, org_id, "apartments", row_ids)
+    language_map = picklist_utils.get_multi_values_bulk(
+        db, org_id, "apartments", row_ids, _APARTMENT_LANGUAGE_FIELD_KEY
     )
-    outcomes = _latest_door_outcomes(db, org_id, [r.id for r in rows])
+    custom_field_map = custom_field_utils.get_values_bulk(db, org_id, "apartment", row_ids)
+    outcomes = _latest_door_outcomes(db, org_id, row_ids)
     items = []
     for a in rows:
-        values = picklist_map.get(a.id, {})
-        building = a.building
+        enriched = _enrich(
+            a,
+            picklist_map.get(a.id, {}),
+            custom_field_map.get(a.id, {}),
+            language_map.get(a.id, []),
+        )
         last_outcome, last_outcome_at = outcomes.get(a.id, (None, None))
         items.append(
             ApartmentRouteItem(
-                id=a.id,
-                guid=a.guid,
-                building_id=a.building_id,
-                building_name=building.building_name if building else None,
-                building_address=building.building_address if building else None,
-                area_name=(building.area.area_name if building and building.area else None),
-                report_number_name=a.report_number.name if a.report_number else None,
-                floor=a.floor,
-                apartment_name=a.apartment_name,
-                name=a.name,
-                phone=a.phone,
-                apartment_notes=a.apartment_notes,
-                jewish_status=values.get("apartment.Jewish_status"),
-                mezuzah_status=values.get("apartment.mezuzah_status"),
-                status=a.status,
+                **enriched.model_dump(),
                 last_outcome=last_outcome,
                 last_outcome_at=last_outcome_at,
             )

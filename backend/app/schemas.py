@@ -1032,29 +1032,15 @@ class ApartmentBulkUpdateResult(BaseModel):
 
 
 # --- fixes68 §1/§B1: activist door-to-door route -----------------------------
-class ApartmentRouteItem(BaseModel):
-    """One door on an activist's route (GET /api/apartments/my-route) — a
-    trimmed, UI-only projection of ApartmentListOut. Pre-sorted server-side
-    (hierarchy: report number -> building -> floor -> label); the client
-    never re-sorts."""
+class ApartmentRouteItem(ApartmentListOut):
+    """One door on an activist's route (GET /api/apartments/my-route).
 
-    model_config = ConfigDict(from_attributes=True)
+    Carries every field ApartmentListOut does (fixed columns, dynamic
+    picklist_values, custom_field_values, linked contact) — an activist
+    needs the same full picture an admin gets on the apartments grid, not a
+    trimmed subset. Pre-sorted server-side (hierarchy: report number ->
+    building -> floor -> label); the client never re-sorts."""
 
-    id: int
-    guid: str
-    building_id: int
-    building_name: Optional[str] = None
-    building_address: Optional[str] = None
-    area_name: Optional[str] = None
-    report_number_name: Optional[str] = None
-    floor: Optional[str] = None
-    apartment_name: Optional[str] = None
-    name: Optional[str] = None
-    phone: Optional[str] = None
-    apartment_notes: Optional[str] = None
-    jewish_status: Optional[str] = None
-    mezuzah_status: Optional[str] = None
-    status: str
     # Most recent visit.door_outcome for this door, if any (fixes68 §B1).
     last_outcome: Optional[str] = None
     last_outcome_at: Optional[datetime] = None

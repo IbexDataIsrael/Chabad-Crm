@@ -45,7 +45,7 @@ export function OutcomeButtons({ onMark, disabled }: OutcomeButtonsProps) {
         <Button
           key={o.value}
           type="button"
-          variant={o.value === "not_jewish" ? "destructive" : "outline"}
+          variant="outline"
           disabled={disabled}
           onClick={() => handleTap(o.value)}
           className={`h-14 text-lg font-semibold ${
