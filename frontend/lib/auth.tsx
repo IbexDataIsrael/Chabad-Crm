@@ -193,9 +193,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function signOut() {
+    // fixes69 Bug 3: land on the org's own page (self-registration/sign-in),
+    // not the generic root — org-scoped from the session that's ending, so a
+    // shared-org staff member's browser doesn't need a bookmark for it.
+    const orgSlug = user?.organization?.slug;
     clearToken();
     setUser(null);
-    if (typeof window !== "undefined") window.location.href = "/";
+    if (typeof window !== "undefined") {
+      window.location.href = orgSlug ? `/org/${orgSlug}` : "/";
+    }
   }
 
   async function refresh() {
