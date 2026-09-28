@@ -125,6 +125,13 @@ function DashboardChrome({ children }: { children: ReactNode }) {
             label: t("nav.apartments", "דירות"),
             roles: ["staff", "shliach", "campaign_manager"],
           },
+          // docs/fixes70_street_v2.md: card-based v2 of the street page, under
+          // review — same access rule as street itself (hidden from admin).
+          {
+            href: "/dashboard/street2",
+            label: t("nav.street2", "רחוב 2 (בטא)"),
+            roles: ["staff", "shliach", "campaign_manager"],
+          },
           {
             href: "/dashboard/apartments",
             label: t("nav.apartments_grid", "ניהול דירות"),

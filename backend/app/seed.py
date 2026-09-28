@@ -71,6 +71,8 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("nav", "nav.areas", "אזורים", "Areas"),
     ("nav", "nav.buildings", "בניינים", "Buildings"),
     ("nav", "nav.apartments", "דירות", "Apartments"),
+    # docs/fixes70_street_v2.md: card-based v2 of /dashboard/street, under review.
+    ("nav", "nav.street2", "רחוב 2 (בטא)", "Street V2 (beta)"),
     ("nav", "nav.picklists", "רשימות בחירה", "Picklists"),
     ("nav", "nav.custom_fields", "שדות מותאמים", "Custom fields"),
     ("nav", "nav.localization", "תרגומים", "Translations"),
@@ -1421,6 +1423,29 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
         "כל שדה מהמערכת הקיימת מופיע כאן — שום דבר לא הלך לאיבוד.",
         "Every field from the current system appears here — nothing was lost.",
     ),
+    # docs/fixes70_street_v2.md: /dashboard/street2, a card-based v2 of the
+    # street page above — same data/fields, new layout + completion game.
+    ("street2", "street2.title", "המסלול שלי — גרסה 2", "My route — v2"),
+    (
+        "street2",
+        "street2.building_x_of_y",
+        "בניין {x} מתוך {y}",
+        "Building {x} of {y}",
+    ),
+    (
+        "street2",
+        "street2.buildings_done_of_total",
+        "{done} מתוך {total} בניינים הושלמו",
+        "{done} of {total} buildings completed",
+    ),
+    (
+        "street2",
+        "street2.apartments_done_of_total",
+        "{done} מתוך {total} דירות",
+        "{done} of {total} apartments",
+    ),
+    ("street2", "street2.mark_done", "סמן כבוצע", "Mark done"),
+    ("street2", "street2.done_label", "בוצע", "Done"),
     # --- fixes68 §9/§B4: activist door-to-door route flow ---
     ("activist_route", "activist_route.title", "התחל סיבוב", "Start route"),
     ("activist_route", "activist_route.outcome.answered", "נענו", "Answered"),

@@ -1,0 +1,85 @@
+{
+  "quotes": [
+    {
+      "id": 1,
+      "he": "אוֹר קָטָן דּוֹחֶה הַרְבֵּה חֹשֶׁךְ.",
+      "en": "A little light dispels a great deal of darkness.",
+      "ref": "The Rebbe, repeated in his talks and published letters (Igros Kodesh; see L'Chaim Weekly translations)"
+    },
+    {
+      "id": 2,
+      "he": "וְהַמַּעֲשֶׂה הוּא הָעִיקָר.",
+      "en": "The deed is the essential thing.",
+      "ref": "The Rebbe's constant directive, rooted in Likkutei Dibburim of the Rebbe Rayatz (cf. Avos 1:17)"
+    },
+    {
+      "id": 3,
+      "he": "שִׂמְחָה פּוֹרֶצֶת גְּדֵרִים.",
+      "en": "Joy breaks through all barriers.",
+      "ref": "A hallmark of the Rebbe's farbrengens, rooted in the Talmud's teaching on joy (Shabbos 30b)"
+    },
+    {
+      "id": 4,
+      "he": "כָּל יְהוּדִי הוּא עוֹלָם מָלֵא.",
+      "en": "Every Jew is an entire world.",
+      "ref": "The Rebbe's frequent call to count and value every Jew, based on Mishnah Sanhedrin 4:5"
+    },
+    {
+      "id": 5,
+      "he": "חֲשׁוֹב טוֹב, וְיִהְיֶה טוֹב.",
+      "en": "Think good, and it will be good.",
+      "ref": "The Tzemach Tzedek's assurance (Kuntres HaShemidah), constantly quoted by the Rebbe"
+    },
+    {
+      "id": 6,
+      "he": "כָּל אֶחָד צָרִיךְ לִהְיוֹת מַדְלִיק נֵרוֹת - לְהָאִיר אֶת הַנְּשָׁמָה שֶׁבְּכָל אָדָם.",
+      "en": "Each of us must be a lamplighter, kindling the soul in every person.",
+      "ref": "A signature image of the Rebbe's sichos: the Jew as a lamplighter"
+    },
+    {
+      "id": 7,
+      "he": "יוֹדֵעַ 'אָלֶף' - לְלַמֵּד 'אָלֶף'!",
+      "en": "If you know Aleph, teach Aleph.",
+      "ref": "The Rebbe Rayatz's call, made the banner of outreach by the Rebbe"
+    },
+    {
+      "id": 8,
+      "he": "מִצְוָה אַחַת מַטָּה אֶת הָאָדָם וְאֶת כָּל הָעוֹלָם כֻּלּוֹ לְכַף זְכוּת.",
+      "en": "A single mitzvah can tip a person, and the entire world, to the side of merit.",
+      "ref": "Rambam, Mishneh Torah, Hilchos Teshuvah 3:4 - a teaching the Rebbe repeated constantly"
+    },
+    {
+      "id": 9,
+      "he": "וּפָרַצְתָּ יָמָּה וָקֵדְמָה וְצָפֹנָה וָנֶגְבָּה.",
+      "en": "You shall spread out to the west and to the east, to the north and to the south.",
+      "ref": "Bereishis 28:14 - the verse the Rebbe made the call of Jewish outreach"
+    },
+    {
+      "id": 10,
+      "he": "כְּשֶׁסּוֹפְרִים יְהוּדִים, אֵין גָּדוֹל וְאֵין קָטָן - כָּל אֶחָד נֶחְשָׁב.",
+      "en": "When Jews are counted, no one is greater and no one is lesser - every single one counts.",
+      "ref": "The Rebbe's sichos on counting the Jewish people (Parshas Ki Sisa)"
+    },
+    {
+      "id": 11,
+      "he": "כָּל הַמַּתְחִיל בְּמִצְוָה - אוֹמְרִים לוֹ: גְּמוֹר!",
+      "en": "One who begins a mitzvah is told: finish it!",
+      "ref": "Midrash Rabbah (Bereishis 85:3; Vayikra 11:7), often quoted by the Rebbe"
+    },
+    {
+      "id": 12,
+      "he": "כָּל נְשָׁמָה הִיא חֵלֶק אֱלוֹקַ מִמַּעַל מָמָשׁ.",
+      "en": "Every soul is literally a part of G-d above.",
+      "ref": "Tanya, ch. 2 (quoting Iyov 31:2) - the foundation of the Rebbe's love for every Jew"
+    },
+    {
+      "id": 13,
+      "he": "כָּל מַעֲשֶׂה טוֹב מוֹסִיף לְבֵנָה בַּדִּירָה שֶׁאָנוּ בּוֹנִים לְהַקָּדוֹשׁ בָּרוּךְ הוּא.",
+      "en": "Every good deed adds a brick to the dwelling we build for G-d.",
+      "ref": "Based on the Rebbe's first maamar, Basi L'Gani 5711 (1951): making this world a dwelling for G-d"
+    }
+  ],
+  "images": {
+    "note": "The celebration overlay shows a photo of the Lubavitcher Rebbe from /rebbe/<n>.jpg. The component picks a random number n between 1 and REBBE_IMAGE_COUNT (default 10). Fill public/rebbe/ with real photos named 1.jpg, 2.jpg, ... and set REBBE_IMAGE_COUNT to how many you added. If an image is missing the photo hides itself and the quote still shows. Use photos you have the right to use."
+  }
+}
