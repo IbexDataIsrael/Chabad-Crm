@@ -29,6 +29,12 @@ services:
       - "3001:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8001
+      # Server-side-only (generateMetadata, etc.): NEXT_PUBLIC_API_URL above is
+      # host-relative and unreachable from inside this container — reach the
+      # backend by its compose service name instead. Not set in production,
+      # where the frontend and backend aren't on the same docker network;
+      # lib/serverApi.ts falls back to NEXT_PUBLIC_API_URL there.
+      - INTERNAL_API_URL=http://backend:8000
       - NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-}
       - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       # Cloudinary signed upload (org logo): the browser only needs the public
