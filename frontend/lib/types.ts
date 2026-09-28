@@ -579,6 +579,10 @@ export interface TaskPrintApartment {
   apartment_name: string | null;
   name: string | null;
   report_number_name: string | null;
+  jewish_status: string | null;
+  mezuzah_status: string | null;
+  language: string[];
+  apartment_notes: string | null;
 }
 
 export interface TaskPrintData {

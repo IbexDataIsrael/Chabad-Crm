@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app import models
+from app import models, picklist_utils
 from app.core.claim_token import make_claim_token
 from app.core.task_claim import claim, is_orphan, task_from_token
 from app.database import get_db
@@ -549,6 +549,16 @@ def task_print_data(
     )
     if not rows:
         raise HTTPException(status.HTTP_409_CONFLICT, "This task has no apartments to print")
+    apartment_ids = [a.id for a, _b, _rn in rows]
+    # fixes69 §Admin3a: whatever's already on file (Jewish status, mezuzah,
+    # language, notes) prints in the box instead of a blank one.
+    picklist_map = picklist_utils.get_values_bulk(
+        db, org_id, "apartments", apartment_ids,
+        ["apartment.Jewish_status", "apartment.mezuzah_status"],
+    )
+    language_map = picklist_utils.get_multi_values_bulk(
+        db, org_id, "apartments", apartment_ids, "apartment.language"
+    )
     return TaskPrintOut(
         task=_single_out(db, org_id, task),
         claim_token=make_claim_token(task.guid),
@@ -562,6 +572,10 @@ def task_print_data(
                 apartment_name=a.apartment_name,
                 name=a.name,
                 report_number_name=rn.name,
+                jewish_status=picklist_map.get(a.id, {}).get("apartment.Jewish_status"),
+                mezuzah_status=picklist_map.get(a.id, {}).get("apartment.mezuzah_status"),
+                language=language_map.get(a.id, []),
+                apartment_notes=a.apartment_notes,
             )
             for a, b, rn in rows
         ],

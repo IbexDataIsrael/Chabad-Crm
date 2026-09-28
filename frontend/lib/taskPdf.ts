@@ -1,3 +1,4 @@
+import { apiFetch } from "@/lib/api";
 import { naturalCompare } from "@/lib/naturalSort";
 import {
   drawPdfHeaders,
@@ -6,7 +7,10 @@ import {
   PDF_CONTENT_TOP,
   prepareHebrewPdf,
 } from "@/lib/pdfRtl";
+import { displayPicklistValue } from "@/lib/picklists";
 import { buildingDisplayName, type TaskPrintApartment, type TaskPrintData } from "@/lib/types";
+import type { PicklistValue } from "@/lib/types";
+import type { Lang } from "@/lib/localization";
 
 /**
  * fixes65 §3: a printable task sheet — the field worksheet an activist
@@ -34,15 +38,29 @@ export async function generateTaskPdf(opts: {
   orgLogoUrl: string | null | undefined;
   claimBaseUrl: string;
   t: Translate;
+  lang: Lang;
 }): Promise<void> {
-  const { data, orgName, orgLogoUrl, claimBaseUrl, t } = opts;
+  const { data, orgName, orgLogoUrl, claimBaseUrl, t, lang } = opts;
   const { task } = data;
 
-  const [{ jsPDF }, { default: autoTable }, headerLogo] = await Promise.all([
-    import("jspdf"),
-    import("jspdf-autotable"),
-    loadHeaderLogo(orgLogoUrl),
-  ]);
+  // fixes69 §Admin3a: whatever's already on file prints in the box instead of
+  // a blank one — same "fetch labels imperatively, not via a hook" reasoning
+  // as the apartments report's PDF (a fast click right after page load must
+  // never print a raw technical value).
+  const [{ jsPDF }, { default: autoTable }, headerLogo, jewishOpts, mezuzahOpts, languageOpts] =
+    await Promise.all([
+      import("jspdf"),
+      import("jspdf-autotable"),
+      loadHeaderLogo(orgLogoUrl),
+      apiFetch<PicklistValue[]>("/api/picklists/apartment.Jewish_status"),
+      apiFetch<PicklistValue[]>("/api/picklists/apartment.mezuzah_status"),
+      apiFetch<PicklistValue[]>("/api/picklists/apartment.language"),
+    ]);
+  const labelFor = (options: PicklistValue[], value: string | null): string => {
+    if (value == null) return "";
+    const o = options.find((opt) => opt.value === value);
+    return o ? displayPicklistValue(o, lang) : value;
+  };
   let qrDataUrl: string | null = null;
   const claimUrl = data.claim_token ? `${claimBaseUrl}/tasks/claim/${data.claim_token}` : null;
   if (claimUrl) {
@@ -114,7 +132,13 @@ export async function generateTaskPdf(opts: {
   doc.line(MARGIN + 150, y + 6, right - doc.getTextWidth(performedLabel) - 8, y + 6);
   y += 24;
 
-  // --- One table per report number → building --------------------------------
+  // --- One continuous table for the whole sheet -----------------------------
+  // fixes69 §Admin3b: a separate autoTable() call per building repeated the
+  // column header at every building's own start, not just once per physical
+  // page (5x on one real printed page). One continuous table lets autotable
+  // repeat the head on page breaks it manages itself; each building/report
+  // group becomes a full-width divider row inside the same table's body
+  // instead of a table of its own.
   const head = [
     t("reports.floor", "קומה"),
     t("reports.apartment_name", "מספר דירה"),
@@ -131,6 +155,15 @@ export async function generateTaskPdf(opts: {
   const visualWidths = [...logicalWidths].reverse();
   const columnStyles = Object.fromEntries(visualWidths.map((w, i) => [i, { cellWidth: w }]));
 
+  type Cell = string | { content: string; colSpan: number; styles?: Record<string, unknown> };
+  const divider = (label: string): Cell[] => [
+    {
+      content: label,
+      colSpan: head.length,
+      styles: { fontStyle: "bold", fontSize: 12, halign: "right", minCellHeight: 20 },
+    },
+  ];
+
   const byReport = new Map<string, TaskPrintApartment[]>();
   for (const a of data.apartments) {
     const key = a.report_number_name ?? "";
@@ -139,6 +172,7 @@ export async function generateTaskPdf(opts: {
   const reportKeys = [...byReport.keys()].sort(naturalCompare);
   const multiReport = reportKeys.length > 1;
 
+  const body: Cell[][] = [];
   for (const rk of reportKeys) {
     const byBuilding = new Map<string, TaskPrintApartment[]>();
     for (const a of byReport.get(rk)!) {
@@ -157,55 +191,54 @@ export async function generateTaskPdf(opts: {
             naturalCompare(a.floor ?? "", b.floor ?? "") ||
             naturalCompare(a.apartment_name ?? "", b.apartment_name ?? ""),
         );
-      if (y + 70 > pageH - bottomReserve) {
-        doc.addPage();
-        y = PDF_CONTENT_TOP;
-      }
-      doc.setFont(HEBREW_FONT, "bold");
-      doc.setFontSize(12);
-      doc.text(
-        multiReport ? `${bk}  (${t("apartments.report_number_id", "מספר דוח")} ${rk})` : bk,
-        right,
-        y + 4,
-        { align: "right" },
+      body.push(
+        divider(multiReport ? `${bk}  (${t("apartments.report_number_id", "מספר דוח")} ${rk})` : bk),
       );
-      y += 10;
-
-      autoTable(doc, {
-        startY: y,
-        margin: { left: MARGIN, right: MARGIN, top: PDF_CONTENT_TOP, bottom: bottomReserve },
-        tableWidth: usable,
-        head: [visualHead],
-        // Only the identity columns are pre-filled; the rest are for the pen.
-        body: apts.map((a) =>
-          [a.floor ?? "", a.apartment_name ?? "", a.name ?? "", "", "", "", ""].reverse(),
-        ),
-        theme: "grid",
-        styles: {
-          font: HEBREW_FONT,
-          fontSize: 10,
-          halign: "right",
-          valign: "middle",
-          cellPadding: 4,
-          minCellHeight: 24,
-          textColor: BLACK,
-          fillColor: WHITE,
-          lineColor: BLACK,
-          lineWidth: 0.6,
-        },
-        headStyles: {
-          fontStyle: "bold",
-          fillColor: WHITE,
-          textColor: BLACK,
-          lineColor: BLACK,
-          lineWidth: 1.1,
-          minCellHeight: 18,
-        },
-        columnStyles,
-      });
-      y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 18;
+      for (const a of apts) {
+        body.push(
+          [
+            a.floor ?? "",
+            a.apartment_name ?? "",
+            a.name ?? "",
+            labelFor(jewishOpts, a.jewish_status),
+            labelFor(mezuzahOpts, a.mezuzah_status),
+            a.language.map((v) => labelFor(languageOpts, v)).join(", "),
+            a.apartment_notes ?? "",
+          ].reverse(),
+        );
+      }
     }
   }
+
+  autoTable(doc, {
+    startY: y,
+    margin: { left: MARGIN, right: MARGIN, top: PDF_CONTENT_TOP, bottom: bottomReserve },
+    tableWidth: usable,
+    head: [visualHead],
+    body,
+    theme: "grid",
+    styles: {
+      font: HEBREW_FONT,
+      fontSize: 10,
+      halign: "right",
+      valign: "middle",
+      cellPadding: 4,
+      minCellHeight: 24,
+      textColor: BLACK,
+      fillColor: WHITE,
+      lineColor: BLACK,
+      lineWidth: 0.6,
+    },
+    headStyles: {
+      fontStyle: "bold",
+      fillColor: WHITE,
+      textColor: BLACK,
+      lineColor: BLACK,
+      lineWidth: 1.1,
+      minCellHeight: 18,
+    },
+    columnStyles,
+  });
 
   // --- Per-page chrome: org header, QR strip, footer ----------------------------
   drawPdfHeaders(doc, MARGIN, orgName, headerLogo);

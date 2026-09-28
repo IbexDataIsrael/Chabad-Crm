@@ -44,7 +44,7 @@ export default function TaskDetailPage() {
   const params = useParams<{ id: string }>();
   const taskId = Number(params.id);
   const router = useRouter();
-  const { t } = useLocalization();
+  const { t, lang } = useLocalization();
   const confirmDialog = useConfirm();
   const { user, isAdmin, isCampaignManager, loading } = useAuth();
   const { success, error: toastError } = useToast();
@@ -91,6 +91,7 @@ export default function TaskDetailPage() {
       orgName: user?.organization?.name ?? "",
       orgLogoUrl: user?.organization?.logo_url,
       t,
+      lang,
     });
     setPrinting(false);
     if (err) toastError(err);

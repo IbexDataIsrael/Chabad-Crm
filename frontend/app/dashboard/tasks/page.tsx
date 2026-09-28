@@ -55,7 +55,7 @@ const STATUS_OPTIONS: TaskStatus[] = ["ACTIVE", "COMPLETED", "PAUSED"];
  *  own page (/dashboard/tasks/{id}) where every field is inline-editable. */
 export default function TasksPage() {
   const { isAdmin, isCampaignManager, loading, user } = useAuth();
-  const { t } = useLocalization();
+  const { t, lang } = useLocalization();
   const confirmDialog = useConfirm();
   const { success, error: toastError } = useToast();
 
@@ -178,6 +178,7 @@ export default function TasksPage() {
       orgName: user?.organization?.name ?? "",
       orgLogoUrl: user?.organization?.logo_url,
       t,
+      lang,
     });
     setPrintingId(null);
     if (err) toastError(err);

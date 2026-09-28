@@ -1811,6 +1811,13 @@ class TaskPrintApartment(BaseModel):
     apartment_name: Optional[str] = None
     name: Optional[str] = None
     report_number_name: Optional[str] = None
+    # fixes69 §Admin3a: whatever's already on file prints in the box instead
+    # of a blank one — technical picklist values; the client resolves the
+    # Hebrew label the same way reports/create's PDF already does.
+    jewish_status: Optional[str] = None
+    mezuzah_status: Optional[str] = None
+    language: list[str] = []
+    apartment_notes: Optional[str] = None
 
 
 class TaskPrintOut(BaseModel):
