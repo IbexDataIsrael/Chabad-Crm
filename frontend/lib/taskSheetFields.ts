@@ -71,13 +71,27 @@ const STORAGE_KEY = "crm.taskSheet.fields";
 let cached: TaskSheetFieldsConfig | null = null;
 const listeners = new Set<() => void>();
 
+const VALID_KEYS = new Set<string>(TASK_SHEET_FIELD_KEYS);
+
 function readStore(): TaskSheetFieldsConfig {
   if (cached) return cached;
   if (typeof window === "undefined") return DEFAULT_TASK_SHEET_FIELDS;
   let resolved = DEFAULT_TASK_SHEET_FIELDS;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw) resolved = { ...DEFAULT_TASK_SHEET_FIELDS, ...JSON.parse(raw) };
+    if (raw) {
+      const parsed = { ...DEFAULT_TASK_SHEET_FIELDS, ...JSON.parse(raw) };
+      // Defense in depth: a column key that isn't one of the 7 known ones
+      // (leftover from a future rename, or corrupted storage) would fall
+      // through generateTaskPdf's switch with no matching case, pushing
+      // `undefined` into the PDF's table body and crashing autotable's
+      // layout ("Cannot read properties of undefined") instead of just
+      // skipping that one column.
+      const columns = Array.isArray(parsed.columns)
+        ? parsed.columns.filter((k: unknown): k is TaskSheetFieldKey => VALID_KEYS.has(k as string))
+        : DEFAULT_TASK_SHEET_FIELDS.columns;
+      resolved = { ...parsed, columns: columns.length > 0 ? columns : DEFAULT_TASK_SHEET_FIELDS.columns };
+    }
   } catch {
     /* fall back to the default */
   }

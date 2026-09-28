@@ -170,7 +170,7 @@ export async function generateTaskPdf(opts: {
       case "mezuzah_status":
         return labelFor(mezuzahOpts, a.mezuzah_status);
       case "language":
-        return a.language.map((v) => labelFor(languageOpts, v)).join(", ");
+        return (a.language ?? []).map((v) => labelFor(languageOpts, v)).join(", ");
       case "notes":
         return a.apartment_notes ?? "";
     }
