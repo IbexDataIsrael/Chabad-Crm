@@ -1978,12 +1978,72 @@ def seed_visit_mivtzoim_custom_fields(db: Session, organization_id: int) -> None
         db.commit()
 
 
+APARTMENT_DEFAULT_CUSTOM_FIELDS: list[tuple[str, str, str, str, int]] = [
+    # docs/fixes70_street_v2.md: requested as a default for every org, not
+    # just the one it was first added to — same shape/pattern as
+    # VISIT_MIVTZOIM_CUSTOM_FIELDS above.
+    ("to_knock", "boolean", "לדפוק", "To knock", 0),
+]
+
+
+def seed_apartment_custom_fields(db: Session, organization_id: int) -> None:
+    """Idempotently create/reactivate the default apartment custom fields for
+    one org. Matched by (org, entity_type="apartment", field_key) — an
+    existing row is updated in place, never duplicated. Mirrors
+    seed_visit_mivtzoim_custom_fields exactly."""
+    existing = {
+        row.field_key: row
+        for row in db.query(models.CustomFieldDefinition).filter(
+            models.CustomFieldDefinition.organization_id == organization_id,
+            models.CustomFieldDefinition.entity_type == "apartment",
+            models.CustomFieldDefinition.field_key.in_(
+                [key for key, *_ in APARTMENT_DEFAULT_CUSTOM_FIELDS]
+            ),
+        )
+    }
+    changed = False
+    for field_key, field_type, hebrew_label, english_label, sort_order in (
+        APARTMENT_DEFAULT_CUSTOM_FIELDS
+    ):
+        row = existing.get(field_key)
+        if row is None:
+            db.add(
+                models.CustomFieldDefinition(
+                    organization_id=organization_id,
+                    entity_type="apartment",
+                    field_key=field_key,
+                    field_type=field_type,
+                    hebrew_label=hebrew_label,
+                    english_label=english_label,
+                    sort_order=sort_order,
+                    is_active=True,
+                )
+            )
+            changed = True
+        elif (
+            row.field_type != field_type
+            or row.hebrew_label != hebrew_label
+            or row.english_label != english_label
+            or row.sort_order != sort_order
+            or not row.is_active
+        ):
+            row.field_type = field_type
+            row.hebrew_label = hebrew_label
+            row.english_label = english_label
+            row.sort_order = sort_order
+            row.is_active = True
+            changed = True
+    if changed:
+        db.commit()
+
+
 def provision_org(db: Session, organization_id: int) -> None:
     """Set up a newly activated organization with its default picklists and
     default visit custom fields (fixes39)."""
     seed_picklists(db, organization_id)
     seed_picklist_definitions(db, organization_id)
     seed_visit_mivtzoim_custom_fields(db, organization_id)
+    seed_apartment_custom_fields(db, organization_id)
 
 
 def _seed_sample_data(db: Session, org: models.Organization, admin: models.User) -> None:
@@ -2245,6 +2305,7 @@ def seed_all(db: Session) -> None:
         seed_default_options_for_empty_lists(db, org_id)
         backfill_picklist_english_values(db, org_id)
         seed_visit_mivtzoim_custom_fields(db, org_id)
+        seed_apartment_custom_fields(db, org_id)
 
     if not settings.seed_demo_data:
         return
@@ -2295,4 +2356,5 @@ def seed_all(db: Session) -> None:
     seed_picklists(db, org.id)
     seed_picklist_definitions(db, org.id)
     seed_visit_mivtzoim_custom_fields(db, org.id)
+    seed_apartment_custom_fields(db, org.id)
     _seed_sample_data(db, org, admin)
