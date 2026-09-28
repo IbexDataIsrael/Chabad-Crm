@@ -116,7 +116,15 @@ function DashboardChrome({ children }: { children: ReactNode }) {
     // URL — untouched, still the fallback for filters/bulk-edit/admin work.
     ...(isFeatureEnabled(org, "apartment_display_enabled")
       ? [
-          { href: "/dashboard/street", label: t("nav.apartments", "דירות") },
+          // fixes69 §Admin2: an admin manages apartments from the classic
+          // grid below, not the mobile door-by-door flow — street stays the
+          // default landing page for everyone else (staff/shliach/campaign
+          // manager) per fixes68_b.md.
+          {
+            href: "/dashboard/street",
+            label: t("nav.apartments", "דירות"),
+            roles: ["staff", "shliach", "campaign_manager"],
+          },
           {
             href: "/dashboard/apartments",
             label: t("nav.apartments_grid", "ניהול דירות"),
