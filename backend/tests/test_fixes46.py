@@ -124,6 +124,38 @@ class TestUsersShliachEdit:
         ).json()
         assert len(hist) == 1
 
+    def test_full_name_edit_updates_the_contact_and_login_display_name(
+        self, client, admin_headers
+    ):
+        """fixes69 Bug 1: editing full_name here versioned ContactShliach and
+        User.full_name, but never touched the underlying Contact row that
+        GET /api/auth/me's display_name (the header/greeting the shliach
+        actually sees) is resolved from — so the rename never visibly stuck."""
+        sh = _mk_shliach(client, admin_headers, "u46g@example.com")
+        user_id = sh["shliach"]["user_id"]
+
+        r = client.put(
+            f"/api/users/{user_id}",
+            json={"full_name": "טסט כהן"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 200, r.text
+
+        contact = client.get(f"/api/contacts/{sh['id']}", headers=admin_headers).json()
+        assert contact["name"] == "טסט"
+        assert contact["last_name"] == "כהן"
+
+        login = client.post(
+            "/api/auth/token",
+            data={"username": "u46g@example.com", "password": "pw12345"},
+        )
+        assert login.status_code == 200, login.text
+        me = client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {login.json()['access_token']}"},
+        ).json()
+        assert me["display_name"] == "טסט כהן"
+
     def test_partial_edit_does_not_wipe_other_shliach_fields(self, client, admin_headers):
         area = _mk_area(client, admin_headers, "אזור-46e")
         rn = _mk_report_number(client, admin_headers, "RN-46e")

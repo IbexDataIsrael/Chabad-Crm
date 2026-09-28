@@ -309,6 +309,18 @@ def update_user(
         user.phone = phone
         if linked and linked.contact:
             linked.contact.phone = phone
+    if "full_name" in data:
+        full_name = data.pop("full_name")
+        user.full_name = full_name
+        # GET /api/auth/me's display_name (dashboard header, activist landing
+        # greeting) is resolved from Contact.name/last_name, not from this
+        # User row (see auth._resolve_display_name) — without this, renaming
+        # an activist here updated the login record but the name shown
+        # everywhere else never moved.
+        if linked and linked.contact:
+            first, _, last = full_name.partition(" ")
+            linked.contact.name = first
+            linked.contact.last_name = last or None
 
     for field, value in data.items():
         setattr(user, field, value)
