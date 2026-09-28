@@ -71,8 +71,8 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("nav", "nav.areas", "אזורים", "Areas"),
     ("nav", "nav.buildings", "בניינים", "Buildings"),
     ("nav", "nav.apartments", "דירות", "Apartments"),
-    # docs/fixes70_street_v2.md: card-based v2 of /dashboard/street, under review.
-    ("nav", "nav.street2", "רחוב 2 (בטא)", "Street V2 (beta)"),
+    # docs/fixes70_street_v2.md: card-based v2 of /dashboard/street, activist-only, under review.
+    ("nav", "nav.street2", "דירות בטא", "Apartments Beta"),
     ("nav", "nav.picklists", "רשימות בחירה", "Picklists"),
     ("nav", "nav.custom_fields", "שדות מותאמים", "Custom fields"),
     ("nav", "nav.localization", "תרגומים", "Translations"),

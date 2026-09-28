@@ -126,11 +126,12 @@ function DashboardChrome({ children }: { children: ReactNode }) {
             roles: ["staff", "shliach", "campaign_manager"],
           },
           // docs/fixes70_street_v2.md: card-based v2 of the street page, under
-          // review — same access rule as street itself (hidden from admin).
+          // review — activist (shliach) only per explicit request, unlike
+          // street itself which staff/campaign_manager also get.
           {
             href: "/dashboard/street2",
-            label: t("nav.street2", "רחוב 2 (בטא)"),
-            roles: ["staff", "shliach", "campaign_manager"],
+            label: t("nav.street2", "דירות בטא"),
+            roles: ["shliach"],
           },
           {
             href: "/dashboard/apartments",
