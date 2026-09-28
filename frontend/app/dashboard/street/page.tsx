@@ -4,11 +4,14 @@ import Link from "next/link";
 import { Lock, MapPin, Pencil } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
+import { CustomFieldValueDisplay } from "@/components/CustomFieldValueInput";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { mapsHref } from "@/lib/contactActions";
+import { useCustomFieldDefs } from "@/lib/customFields";
+import { sortByFieldOrder, useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
-import { usePicklist } from "@/lib/picklists";
+import { FIXED_APARTMENT_PICKLIST_KEYS, usePicklist, usePicklistsMap } from "@/lib/picklists";
 import {
   EMAIL_HINT,
   PHONE_HINT,
@@ -21,6 +24,8 @@ import {
   type Apartment,
   type ApartmentPage,
   type ApartmentListItem,
+  type ApartmentVersion,
+  type PicklistField as PicklistFieldDef,
   type PicklistValue,
 } from "@/lib/types";
 
@@ -50,8 +55,8 @@ const TEXT_FIELD_LOCK_KEY: Record<TextField, string> = {
 };
 
 export default function StreetPage() {
-  const { loading: authLoading, isShliach, user } = useAuth();
-  const { t } = useLocalization();
+  const { loading: authLoading, isAdmin, isShliach, user } = useAuth();
+  const { t, lang } = useLocalization();
 
   const [items, setItems] = useState<ApartmentListItem[]>([]);
   const [busy, setBusy] = useState(true);
@@ -68,6 +73,29 @@ export default function StreetPage() {
   const campaign = usePicklist("apartment.campaign_status");
   const mezuzah = usePicklist("apartment.mezuzah_status");
   const language = usePicklist("apartment.language");
+
+  // fixes69 §Activist_a: every admin-added apartment field must show here
+  // too, not just the fixed 4 picklists — the read-only "Extra fields" dump
+  // below used to print raw technical keys/values (e.g. "apartment.
+  // chanukah_campaign: yes" instead of "מבצע חנוכה: כן") with no visibility
+  // gate, same custom-picklist/custom-field resolution the admin apartment
+  // page (dashboard/apartments/[id]) already does.
+  const { isFieldVisible: vis, orderFor } = useFieldSettings();
+  const [customDefs, setCustomDefs] = useState<PicklistFieldDef[]>([]);
+  const customFieldDefs = useCustomFieldDefs("apartment").filter((d) => d.field_type !== "select");
+  const { labelFor: customLabel } = usePicklistsMap(customDefs.map((d) => d.field_key));
+
+  useEffect(() => {
+    apiFetch<PicklistFieldDef[]>("/api/picklists")
+      .then((defs) =>
+        setCustomDefs(
+          defs.filter(
+            (d) => d.entity_type === "apartment" && !FIXED_APARTMENT_PICKLIST_KEYS.includes(d.field_key),
+          ),
+        ),
+      )
+      .catch(() => {});
+  }, []);
 
   // fixes51 §4 / fixes54 §6: the same org-wide "disable edit" + per-field
   // "Edit Lock" settings the desktop apartments grid honors — a shliach
@@ -136,6 +164,20 @@ export default function StreetPage() {
   }, [items]);
 
   const openApt = items.find((a) => a.id === openId) ?? null;
+
+  // fixes69 §Activist_a: the same edit history the admin apartment page
+  // shows — read-only here (no restore controls; that stays a desktop admin
+  // action) and, matching that page's own gate, admin-only.
+  const [history, setHistory] = useState<ApartmentVersion[]>([]);
+  useEffect(() => {
+    if (!isAdmin || openId == null) {
+      setHistory([]);
+      return;
+    }
+    apiFetch<ApartmentVersion[]>(`/api/apartments/${openId}/history`)
+      .then(setHistory)
+      .catch(() => setHistory([]));
+  }, [isAdmin, openId]);
 
   function beginEdit(field: string) {
     if (!openApt) return;
@@ -283,7 +325,10 @@ export default function StreetPage() {
                     <div className={styles.dFloor}>
                       {a.floor ? `${t("apartments.floor", "קומה")} ${a.floor}` : " "}
                     </div>
-                    <div className={styles.dName}>{a.name || ""}</div>
+                    {/* fixes69 §Activist_b: the door row's headline is the
+                        Jewish status, not the resident's name — the status is
+                        what an activist scans the row for door to door. */}
+                    <div className={styles.dName}>{jewish.labelFor(a.jewish_status)}</div>
                   </button>
                 ))}
               </div>
@@ -566,27 +611,62 @@ export default function StreetPage() {
             </div>
 
             {(() => {
-              const extras: { key: string; value: string }[] = [];
-              const pv = openApt.picklist_values ?? {};
-              Object.entries(pv).forEach(([k, v]) => {
-                if (v != null && v !== "") extras.push({ key: k, value: String(v) });
-              });
-              const cf = openApt.custom_field_values ?? {};
-              Object.entries(cf).forEach(([k, v]) => {
-                if (v != null && v !== "") extras.push({ key: k, value: String(v) });
-              });
+              // fixes69 §Activist_a: same field set/labels/order/visibility
+              // the admin apartment page shows — an admin-hidden field must
+              // stay hidden here too, and a shown one needs its real Hebrew
+              // label and resolved value, not its raw technical key.
+              type Extra = { key: string; label: string; node: ReactNode };
+              const extras: Extra[] = [
+                ...customDefs
+                  .filter((d) => vis(d.field_key))
+                  .map((d): Extra => ({
+                    key: d.field_key,
+                    label: (lang === "en" ? d.english_label || d.label : d.label) || d.field_key,
+                    node: customLabel(d.field_key, openApt.picklist_values?.[d.field_key]) || "—",
+                  })),
+                ...customFieldDefs
+                  .filter((d) => vis(`customfield.apartment.${d.field_key}`))
+                  .map((d): Extra => ({
+                    key: `customfield.apartment.${d.field_key}`,
+                    label:
+                      (lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
+                      d.field_key,
+                    node: (
+                      <CustomFieldValueDisplay
+                        fieldType={d.field_type}
+                        value={openApt.custom_field_values?.[d.field_key] ?? null}
+                      />
+                    ),
+                  })),
+              ];
               if (extras.length === 0) return null;
               return (
                 <div className={styles.section}>
                   <h3>{t("street.extra_fields", "שדות נוספים")}</h3>
-                  {extras.map((e) => (
+                  {sortByFieldOrder(extras, (e) => e.key, orderFor).map((e) => (
                     <div key={e.key} className={styles.roExtra}>
-                      <b>{e.key}:</b> {e.value}
+                      <b>{e.label}:</b> {e.node}
                     </div>
                   ))}
                 </div>
               );
             })()}
+
+            {isAdmin && history.length > 0 && (
+              <div className={styles.section}>
+                <h3>{t("apt.history", "היסטוריית שינויים")}</h3>
+                {history.map((v) => (
+                  <div key={v.id} className={styles.roExtra}>
+                    {new Date(v.last_edit ?? "").toLocaleString("he-IL", {
+                      dateStyle: "short",
+                      timeStyle: "short",
+                    })}
+                    {" — "}
+                    {v.editor_name || t("apt.history_unknown_editor", "עורך לא ידוע")}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className={styles.section}>
               <h3>
