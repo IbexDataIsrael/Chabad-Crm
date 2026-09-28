@@ -29,6 +29,7 @@ import {
   type PicklistField,
   type PicklistValue,
   type ReportNumber,
+  type ReportNumberArea,
 } from "@/lib/types";
 
 /** PDF geometry (A4 portrait, points). */
@@ -414,12 +415,19 @@ function CreateReportsInner() {
       // fixes26 §1: the org logo rides along for the per-page header.
       // fixes40 §5: campaign_status joins the other 3 fixed apartment
       // picklists now that it's a selectable report column.
-      const [jewish, mezuzah, language, campaign, headerLogo] = await Promise.all([
+      // fixes69 §Admin4a: the area(s) each report number's apartments sit in
+      // — same admin-only endpoint the Report Numbers grid's own Area column
+      // uses. Backward-compat with an older backend: falls back to no areas
+      // rather than failing the whole print.
+      const [jewish, mezuzah, language, campaign, headerLogo, reportAreas] = await Promise.all([
         apiFetch<PicklistValue[]>("/api/picklists/apartment.Jewish_status"),
         apiFetch<PicklistValue[]>("/api/picklists/apartment.mezuzah_status"),
         apiFetch<PicklistValue[]>("/api/picklists/apartment.language"),
         apiFetch<PicklistValue[]>("/api/picklists/apartment.campaign_status"),
         loadHeaderLogo(user?.organization?.logo_url),
+        apiFetch<Record<number, ReportNumberArea[]>>("/api/report-numbers/areas").catch(
+          () => ({}) as Record<number, ReportNumberArea[]>,
+        ),
       ]);
       const labelFor = (opts: PicklistValue[], value: string | null): string => {
         if (value == null) return "";
@@ -584,8 +592,17 @@ function CreateReportsInner() {
         return size;
       };
 
-      // One table per building, headed by the building's cleaned
-      // "street + number" display string (shared by both modes).
+      // fixes69 §Admin4b: one continuous table for the whole group (a report
+      // number's buildings, or the whole hand-picked set), not a separate
+      // autoTable() call per building — the column header repeated at every
+      // building's own start, not just once per physical page, the same bug
+      // fixed in the task-sheet PDF (lib/taskPdf.ts). Each building becomes a
+      // full-width divider row inside the one table's body instead of a
+      // table of its own; autotable now repeats the head only on the page
+      // breaks it manages itself.
+      type ReportCell =
+        | string
+        | { content: string; colSpan: number; styles?: Record<string, unknown> };
       const renderBuildingTables = (group: ApartmentListItem[]) => {
         const byBuilding = new Map<string, ApartmentListItem[]>();
         for (const a of group) {
@@ -601,89 +618,96 @@ function CreateReportsInner() {
         // fixes52 §6: natural sort — "רחוב 10" must not sort before "רחוב 2".
         const buildingKeys = [...byBuilding.keys()].sort(naturalCompare);
 
+        const body: ReportCell[][] = [];
+        // fixes60 §8 preserved: a small building (under 4 apartments) still
+        // gets a slightly smaller/tighter row — tracked per row now instead
+        // of per autoTable() call (`null` marks a divider row).
+        const rowCompact: (boolean | null)[] = [];
         for (const buildingKey of buildingKeys) {
           const apts = byBuilding.get(buildingKey)!;
-          // fixes60 §8: a small building (under 4 apartments) gets a
-          // compact inline header and tighter spacing instead of the full
-          // section break a large building gets — proportionate to size.
           const compact = apts.length < 4;
-          if (y + (compact ? 40 : 60) > bottom) {
-            doc.addPage();
-            y = PDF_CONTENT_TOP;
+          body.push([
+            {
+              content: buildingKey,
+              colSpan: labelsRow.length,
+              styles: {
+                fontStyle: "bold",
+                fontSize: compact ? 10 : 12,
+                halign: "right",
+                fillColor: [255, 255, 255],
+                minCellHeight: compact ? 16 : 20,
+              },
+            },
+          ]);
+          rowCompact.push(null);
+          for (const a of apts) {
+            body.push(activeReportColumns.map((k) => rowValueFor(a, k)).reverse());
+            rowCompact.push(compact);
           }
-          doc.setFont(HEBREW_FONT, "bold");
-          doc.setFontSize(compact ? 10 : 12);
-          doc.text(buildingKey, pageW - MARGIN, y + (compact ? 3 : 4), { align: "right" });
-          y += compact ? 8 : 12;
+        }
 
-          const body = apts.map((a) => activeReportColumns.map((k) => rowValueFor(a, k)).reverse());
-          const baseFontSize = compact ? 9 : 10;
-          const cellPad = compact ? 3 : CELL_PADDING;
-
-          autoTable(doc, {
-            startY: y,
-            // top must clear the per-page org header on flowed pages (fixes26 §1).
-            margin: { left: MARGIN, right: MARGIN, top: PDF_CONTENT_TOP, bottom: MARGIN },
-            // Explicit total width — with 'auto' this autotable version logs a
-            // spurious "content width could not fit page" warning.
-            tableWidth: logicalWidths.reduce((a, b) => a + b, 0),
-            // fixes61 §5: always pass the real head so autotable repeats it
-            // on every physical page of ITS OWN internal pagination too.
-            // Previously this was `[]` whenever a building's table started
-            // on the same page the last one ended on (to avoid two header
-            // bars close together) — but that meant a `head: []` table had
-            // nothing to repeat if it later overflowed onto a new page,
-            // leaving that page with no header at all. A header directly
-            // above a new building's own rows is normal table convention,
-            // not a duplicate — so it's always shown now. fixes64 §3: the
-            // subheading row (when any column has one) rides along as the
-            // head's 2nd row, so it repeats on every page exactly like the
-            // label row above it.
-            head: hasSubheadingRow ? [labelsRow, subheadingsRow] : [labelsRow],
-            body,
-            theme: "grid",
-            styles: {
-              font: HEBREW_FONT,
-              fontSize: baseFontSize,
-              halign: "right",
-              valign: "top",
-              cellPadding: cellPad,
-            },
-            headStyles: {
-              fontStyle: "bold",
-              // fixes64 §3: light grey (was a dark slate background with
-              // white text).
-              fillColor: [229, 231, 235],
-              textColor: [31, 41, 55],
-              halign: "right",
-            },
-            // fixes43 §2: every 2nd body row (Row 2, Row 4, …) gets a light
-            // grey background so it reads distinctly from Row 1 — jspdf-
-            // autotable's built-in zebra-stripe mechanism.
-            alternateRowStyles: { fillColor: [245, 245, 245] },
-            columnStyles,
-            // fixes61 §6: shrink just the header cell's font (never the body's)
-            // when its column is too narrow for the label's longest word,
-            // instead of letting it wrap into single-character vertical text.
-            // fixes64 §3: the subheading row starts from a smaller base size
-            // than the label row, on top of that same narrow-column shrink.
-            didParseCell: (data) => {
-              if (data.section !== "head") return;
+        autoTable(doc, {
+          startY: y,
+          // top must clear the per-page org header on flowed pages (fixes26 §1).
+          margin: { left: MARGIN, right: MARGIN, top: PDF_CONTENT_TOP, bottom: MARGIN },
+          // Explicit total width — with 'auto' this autotable version logs a
+          // spurious "content width could not fit page" warning.
+          tableWidth: logicalWidths.reduce((a, b) => a + b, 0),
+          // fixes64 §3: the subheading row (when any column has one) rides
+          // along as the head's 2nd row, so it repeats on every page exactly
+          // like the label row above it.
+          head: hasSubheadingRow ? [labelsRow, subheadingsRow] : [labelsRow],
+          body,
+          theme: "grid",
+          styles: {
+            font: HEBREW_FONT,
+            fontSize: 10,
+            halign: "right",
+            valign: "top",
+            cellPadding: CELL_PADDING,
+          },
+          headStyles: {
+            fontStyle: "bold",
+            // fixes64 §3: light grey (was a dark slate background with
+            // white text).
+            fillColor: [229, 231, 235],
+            textColor: [31, 41, 55],
+            halign: "right",
+          },
+          // fixes43 §2: every 2nd body row (Row 2, Row 4, …) gets a light
+          // grey background so it reads distinctly from Row 1 — jspdf-
+          // autotable's built-in zebra-stripe mechanism. A divider row's own
+          // white fillColor (above) takes precedence over this regardless of
+          // its row index's parity.
+          alternateRowStyles: { fillColor: [245, 245, 245] },
+          columnStyles,
+          // fixes61 §6: shrink just the header cell's font (never the body's)
+          // when its column is too narrow for the label's longest word,
+          // instead of letting it wrap into single-character vertical text.
+          // fixes64 §3: the subheading row starts from a smaller base size
+          // than the label row. fixes60 §8: a compact building's own rows
+          // get the same smaller font/padding a separate compact table used
+          // to set at the table level.
+          didParseCell: (data) => {
+            if (data.section === "head") {
               const isSubheadingRow = hasSubheadingRow && data.row.index === 1;
               const label =
                 (isSubheadingRow ? subheadingsRow : labelsRow)[data.column.index] ?? "";
-              const availableWidth = visualWidths[data.column.index] - cellPad * 2;
+              const availableWidth = visualWidths[data.column.index] - CELL_PADDING * 2;
               data.cell.styles.fontSize = fitHeaderFontSize(
                 label,
                 availableWidth,
-                isSubheadingRow ? Math.max(baseFontSize - 2, 6) : baseFontSize,
+                isSubheadingRow ? Math.max(10 - 2, 6) : 10,
               );
-            },
-          });
-          y =
-            (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable
-              .finalY + (compact ? 8 : 16);
-        }
+              return;
+            }
+            if (data.section === "body" && rowCompact[data.row.index]) {
+              data.cell.styles.fontSize = 9;
+              data.cell.styles.cellPadding = 3;
+            }
+          },
+        });
+        y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 16;
       };
 
       // fixes61 §4: per-report page ranges — [startPage, endPage] of physical
@@ -723,6 +747,21 @@ function CreateReportsInner() {
             { align: "right" },
           );
           y += 22;
+          // fixes69 §Admin4a: the report number's own area(s), right under
+          // its header — same source/order (highest building count first)
+          // as the Report Numbers grid's Area column.
+          const areaNames = (reportAreas[rn.id] ?? []).map((a) => a.area_name);
+          if (areaNames.length > 0) {
+            doc.setFont(HEBREW_FONT, "normal");
+            doc.setFontSize(10);
+            doc.text(
+              t("reports.pdf_area_label", "אזור {name}").replace("{name}", areaNames.join(", ")),
+              pageW - MARGIN,
+              y,
+              { align: "right" },
+            );
+            y += 16;
+          }
           renderBuildingTables(byReport.get(rn.id)!);
           y += 6;
           reportPageRanges.push({

@@ -829,6 +829,8 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("reports", "reports.apartment_notes", "הערות", "Notes"),
     ("reports", "reports.no_data", "לא נמצאו נתונים עבור הדוחות שנבחרו", "No data found for the selected reports"),
     ("reports", "reports.pdf_title", "דוח ריכוז דירות", "Apartment Summary Report"),
+    # fixes69 §Admin4a: the report number's own area(s), under its PDF header.
+    ("reports", "reports.pdf_area_label", "אזור {name}", "Area {name}"),
     ("reports", "reports.pdf_footer", "דוח #{id} · עמוד {page} מתוך {total}", "Report #{id} · Page {page} of {total}"),
     # --- fixes38 §4.2/§4.3: report column customization toolbar ---
     ("reports", "reports.column_config_title", "עמודות הדוח", "Report columns"),
