@@ -11,6 +11,7 @@
   "dependencies": {
     "@radix-ui/react-slot": "^1.1.0",
     "@types/sortablejs": "^1.15.9",
+    "canvas-confetti": "^1.9.3",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "jspdf": "^2.5.2",
@@ -25,6 +26,7 @@
     "tailwind-merge": "^2.5.2"
   },
   "devDependencies": {
+    "@types/canvas-confetti": "^1.9.0",
     "@types/node": "20.14.10",
     "@types/qrcode": "^1.5.6",
     "@types/react": "18.3.3",

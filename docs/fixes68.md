@@ -97,4 +97,12 @@ go-ahead:
    directly on the Windows host (not from inside Docker) — pre-existing,
    unrelated to this feature.
 
+> **Update (this merge):** the "deleted revision" theory above was wrong —
+> `cfead2898e35_visit_client_uuid.py` was never actually gone from the
+> project, only from `main`: a `git reset` had dropped the fixes68 route-flow
+> commits (`5dd54fb`/`0297cf6`) that introduced it. This merge restores that
+> migration file (see `docs/fixes68_route.md`), so `alembic_version` no
+> longer needs the local stamp-forward workaround described above once this
+> branch is deployed.
+
 ---

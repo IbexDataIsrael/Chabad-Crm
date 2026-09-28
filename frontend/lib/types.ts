@@ -703,6 +703,34 @@ export function roundCoord(n: number | null | undefined): number | null {
   return n == null ? null : Number(n.toFixed(5));
 }
 
+// --- fixes68 §1/§B1: activist door-to-door route ----------------------------
+
+/** One door on an activist's route (GET /api/apartments/my-route) — carries
+ *  every ApartmentListItem field (fixed columns, dynamic picklist_values,
+ *  custom_field_values, linked contact), not a trimmed subset: an activist
+ *  needs the same full picture an admin gets on the apartments grid.
+ *  Pre-sorted server-side (hierarchy: report number -> building -> floor ->
+ *  label); the client never re-sorts. */
+export interface ApartmentRouteItem extends ApartmentListItem {
+  last_outcome: DoorOutcome | null;
+  last_outcome_at: string | null;
+}
+
+export type DoorOutcome =
+  | "answered"
+  | "not_home"
+  | "jewish"
+  | "not_jewish"
+  | "come_back_later";
+
+export interface DoorOutcomeResult {
+  id: number;
+  apartment_id: number;
+  client_uuid: string;
+  outcome: string;
+  visit_date: string;
+}
+
 // --- Admin dashboard summary (GET /api/dashboard/summary) --------------------
 export interface DashboardStat {
   value: number;

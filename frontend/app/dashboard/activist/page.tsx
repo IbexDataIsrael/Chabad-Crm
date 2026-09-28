@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Home, MessageSquare, UserRound } from "lucide-react";
+import { Footprints, Home, MessageSquare, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import {
@@ -11,6 +11,7 @@ import {
 } from "@/components/ShliachSelfServiceModals";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { routeCacheSummary } from "@/lib/activistRoute";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
@@ -42,6 +43,9 @@ export default function ActivistLandingPage() {
   const [commentModalOpen, setCommentModalOpen] = useState(false);
   // fixes58 §3.2/Phase 6: one dynamic stat tile per active campaign.
   const [campaignStats, setCampaignStats] = useState<CampaignActiveStat[]>([]);
+  // fixes68 §1/EDIT: today's done/total for the "Start route" tile, read
+  // straight from the route cache (no extra network call from this page).
+  const [routeSummary, setRouteSummary] = useState<{ done: number; total: number } | null>(null);
 
   // The count here used to ignore every filter, so it always showed the
   // activist's *full* assigned set — bigger than what the Apartments page
@@ -108,6 +112,7 @@ export default function ActivistLandingPage() {
       return;
     }
     loadApartmentsTotal();
+    setRouteSummary(routeCacheSummary());
     apiFetch<ShliachAnnouncement[]>("/api/shliach-messages/announcements")
       .then(setAnnouncements)
       .catch(() => setAnnouncements([]))
@@ -135,6 +140,30 @@ export default function ActivistLandingPage() {
           {t("activist_home.intro", "עמוד הבית שלך — הפעולות והעדכונים שלך במקום אחד.")}
         </p>
       </div>
+
+      {/* fixes68 §1/EDIT: the entry point into the door-to-door route flow. */}
+      <Link href="/dashboard/activist/route">
+        <Card className="border-2 border-primary bg-primary/5 p-5 transition-colors hover:bg-primary/10">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Footprints className="h-5 w-5" />
+            </div>
+            <div className="text-lg font-semibold">
+              {t("activist_route.title", "התחל סיבוב")}
+            </div>
+          </div>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {routeSummary
+              ? t("activist_route.progress", "{done} / {total} דלתות")
+                  .replace("{done}", String(routeSummary.done))
+                  .replace("{total}", String(routeSummary.total))
+              : t(
+                  "activist_home.start_route_hint",
+                  "סיבוב דלת אחר דלת לדירות המשויכות לך",
+                )}
+          </p>
+        </Card>
+      </Link>
 
       <div className="grid gap-3 sm:grid-cols-2">
         {contactId && (
