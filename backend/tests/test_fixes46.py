@@ -124,6 +124,27 @@ class TestUsersShliachEdit:
         ).json()
         assert len(hist) == 1
 
+    def test_email_edit_resends_the_welcome_email_to_the_new_address(
+        self, client, admin_headers, monkeypatch
+    ):
+        """fixes69 Admin§1: the old address is dead the moment the login
+        identity moves — resend the same access-link email new users get."""
+        sent = []
+        monkeypatch.setattr(
+            "app.routers.users.send_shliach_welcome",
+            lambda *a, **kw: sent.append(kw.get("to")),
+        )
+        sh = _mk_shliach(client, admin_headers, "u46h@example.com")
+        user_id = sh["shliach"]["user_id"]
+
+        r = client.put(
+            f"/api/users/{user_id}",
+            json={"email": "u46h-new@example.com"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 200, r.text
+        assert sent == ["u46h-new@example.com"]
+
     def test_full_name_edit_updates_the_contact_and_login_display_name(
         self, client, admin_headers
     ):

@@ -304,6 +304,24 @@ def update_user(
         user.email = email
         if linked and linked.contact:
             linked.contact.email = email
+        # fixes69 §Admin1: the old address is dead the moment the login
+        # identity moves — without a fresh access link the user has no way
+        # back in. Same template/best-effort-only contract as a new user's
+        # welcome email in create_org_user above.
+        org_name = admin.organization.name if admin.organization else ""
+        first, _, last = user.full_name.partition(" ")
+        try:
+            send_shliach_welcome(
+                db,
+                to=email,
+                first_name=first,
+                last_name=last,
+                shliach_email=email,
+                org_name=org_name,
+                reply_to=admin.email,
+            )
+        except Exception:  # pragma: no cover — email must not block the edit
+            logger.exception("Failed to send welcome email to %s", email)
     if "phone" in data:
         phone = data.pop("phone")
         user.phone = phone
