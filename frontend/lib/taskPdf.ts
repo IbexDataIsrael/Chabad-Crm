@@ -8,6 +8,12 @@ import {
   prepareHebrewPdf,
 } from "@/lib/pdfRtl";
 import { displayPicklistValue } from "@/lib/picklists";
+import {
+  DEFAULT_TASK_SHEET_FIELDS,
+  taskSheetFieldLabel,
+  type TaskSheetFieldKey,
+  type TaskSheetFieldsConfig,
+} from "@/lib/taskSheetFields";
 import { buildingDisplayName, type TaskPrintApartment, type TaskPrintData } from "@/lib/types";
 import type { PicklistValue } from "@/lib/types";
 import type { Lang } from "@/lib/localization";
@@ -39,8 +45,10 @@ export async function generateTaskPdf(opts: {
   claimBaseUrl: string;
   t: Translate;
   lang: Lang;
+  fields?: TaskSheetFieldsConfig;
 }): Promise<void> {
   const { data, orgName, orgLogoUrl, claimBaseUrl, t, lang } = opts;
+  const fields = opts.fields ?? DEFAULT_TASK_SHEET_FIELDS;
   const { task } = data;
 
   // fixes69 §Admin3a: whatever's already on file prints in the box instead of
@@ -139,17 +147,34 @@ export async function generateTaskPdf(opts: {
   // repeat the head on page breaks it manages itself; each building/report
   // group becomes a full-width divider row inside the same table's body
   // instead of a table of its own.
-  const head = [
-    t("reports.floor", "קומה"),
-    t("reports.apartment_name", "מספר דירה"),
-    t("apartments.name", "שם דייר"),
-    t("reports.jewish_status", "מצב יהדות"),
-    t("reports.mezuzah_status", "מזוזה"),
-    t("reports.language", "שפה"),
-    t("reports.apartment_notes", "הערות"),
-  ];
+  // fixes69 §Admin3c/3d/3e: which columns print, their order and their
+  // width are all admin-configurable now (lib/taskSheetFields.ts) instead of
+  // a fixed 7-column layout.
+  const columns = fields.columns.length > 0 ? fields.columns : DEFAULT_TASK_SHEET_FIELDS.columns;
+  const head = columns.map((k) => taskSheetFieldLabel(k, t));
   const usable = pageW - MARGIN * 2;
-  const logicalWidths = [0.08, 0.1, 0.16, 0.14, 0.1, 0.1, 0.32].map((f) => f * usable);
+  const totalWidthPct = columns.reduce((sum, k) => sum + (fields.widths[k] ?? 0), 0) || 100;
+  const logicalWidths = columns.map(
+    (k) => ((fields.widths[k] ?? 0) / totalWidthPct) * usable,
+  );
+  const rowValueFor = (a: TaskPrintApartment, k: TaskSheetFieldKey): string => {
+    switch (k) {
+      case "floor":
+        return a.floor ?? "";
+      case "apartment_name":
+        return a.apartment_name ?? "";
+      case "name":
+        return a.name ?? "";
+      case "jewish_status":
+        return labelFor(jewishOpts, a.jewish_status);
+      case "mezuzah_status":
+        return labelFor(mezuzahOpts, a.mezuzah_status);
+      case "language":
+        return a.language.map((v) => labelFor(languageOpts, v)).join(", ");
+      case "notes":
+        return a.apartment_notes ?? "";
+    }
+  };
   // autotable lays columns out left-to-right: reverse for RTL.
   const visualHead = [...head].reverse();
   const visualWidths = [...logicalWidths].reverse();
@@ -195,17 +220,7 @@ export async function generateTaskPdf(opts: {
         divider(multiReport ? `${bk}  (${t("apartments.report_number_id", "מספר דוח")} ${rk})` : bk),
       );
       for (const a of apts) {
-        body.push(
-          [
-            a.floor ?? "",
-            a.apartment_name ?? "",
-            a.name ?? "",
-            labelFor(jewishOpts, a.jewish_status),
-            labelFor(mezuzahOpts, a.mezuzah_status),
-            a.language.map((v) => labelFor(languageOpts, v)).join(", "),
-            a.apartment_notes ?? "",
-          ].reverse(),
-        );
+        body.push(columns.map((k) => rowValueFor(a, k)).reverse());
       }
     }
   }

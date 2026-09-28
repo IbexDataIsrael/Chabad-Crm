@@ -1,6 +1,7 @@
 import { apiFetch, ApiError } from "@/lib/api";
 import type { Lang } from "@/lib/localization";
 import { generateTaskPdf } from "@/lib/taskPdf";
+import type { TaskSheetFieldsConfig } from "@/lib/taskSheetFields";
 import type { TaskPrintData } from "@/lib/types";
 
 type Translate = (key: string, fallback: string) => string;
@@ -14,8 +15,9 @@ export async function printTaskSheet(opts: {
   orgLogoUrl: string | null | undefined;
   t: Translate;
   lang: Lang;
+  fields?: TaskSheetFieldsConfig;
 }): Promise<string | null> {
-  const { taskId, orgName, orgLogoUrl, t, lang } = opts;
+  const { taskId, orgName, orgLogoUrl, t, lang, fields } = opts;
   try {
     const data = await apiFetch<TaskPrintData>(`/api/tasks/${taskId}/print-data`);
     await generateTaskPdf({
@@ -25,6 +27,7 @@ export async function printTaskSheet(opts: {
       claimBaseUrl: window.location.origin,
       t,
       lang,
+      fields,
     });
     return null;
   } catch (err) {

@@ -1367,6 +1367,13 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("task", "task.unassign_detail", "הדפים שכבר הודפסו ימשיכו לעבוד — הפעיל הבא שיסרוק את הקוד יקבל את המשימה.", "Sheets already printed keep working — the next activist to scan the code gets the task."),
     ("task", "task.unassigned_toast", "המשימה הוחזרה למאגר", "Task returned to the pool"),
     ("task", "task_pdf.apartment_count", "מספר דירות", "Apartments"),
+    # fixes69 §Admin3c/3d/3e: the task-sheet field-picker/reorder/width panel.
+    ("task", "task_pdf.fields_settings_title", "עיצוב דף ההדפסה", "Print sheet layout"),
+    (
+        "task", "task_pdf.widths_autoscale_hint",
+        "הרוחבים מתחלקים יחסית לרוחב הדף — אין צורך שיסתכמו ל-100.",
+        "Widths scale proportionally to the page — they don't need to add up to 100.",
+    ),
     ("task", "task_pdf.footer", "משימה #{id} · עמוד {page} מתוך {total}", "Task #{id} · page {page} of {total}"),
     ("task", "task_pdf.performed_by", "בוצע על ידי (שם מלא)", "Performed by (full name)"),
     ("task", "task_pdf.qr_caption", "סרקו את הקוד כדי לקחת את המשימה", "Scan the code to take this task"),

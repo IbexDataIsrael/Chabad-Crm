@@ -11,6 +11,7 @@ import {
   Plus,
   Printer,
   QrCode,
+  Settings,
   Trash2,
   UserMinus,
   X,
@@ -21,6 +22,7 @@ import { useEffect, useState } from "react";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { ReportStatusBadge } from "@/components/ReportStatusBadge";
 import { TaskQuickCreateForm } from "@/components/TaskQuickCreateForm";
+import { TaskSheetFieldsModal } from "@/components/tasks/TaskSheetFieldsModal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { InlineEdit } from "@/components/ui/InlineEdit";
@@ -32,6 +34,7 @@ import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 import { printTaskSheet } from "@/lib/taskPrint";
+import { useTaskSheetFields } from "@/lib/taskSheetFields";
 import type { Campaign, Task, TaskPage, TaskStatus } from "@/lib/types";
 
 type AssignmentFilter = "" | "orphan" | "assigned";
@@ -63,6 +66,8 @@ export default function TasksPage() {
   const [items, setItems] = useState<Task[]>([]);
   const [total, setTotal] = useState(0);
   const [busy, setBusy] = useState(true);
+  const [fieldsModalOpen, setFieldsModalOpen] = useState(false);
+  const [taskSheetFields] = useTaskSheetFields();
 
   const [q, setQ] = usePersistentState("crm.tasks.q", "");
   const [statusFilter, setStatusFilter] = usePersistentState<string[]>("crm.tasks.status", []);
@@ -179,6 +184,7 @@ export default function TasksPage() {
       orgLogoUrl: user?.organization?.logo_url,
       t,
       lang,
+      fields: taskSheetFields,
     });
     setPrintingId(null);
     if (err) toastError(err);
@@ -273,10 +279,20 @@ export default function TasksPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{t("page.tasks_title", "משימות")}</h1>
-        <Button onClick={() => setCreating(true)}>
-          <Plus className="h-4 w-4" /> {t("page.add_task", "משימה חדשה")}
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            title={t("task_pdf.fields_settings_title", "עיצוב דף ההדפסה")}
+            onClick={() => setFieldsModalOpen(true)}
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="h-4 w-4" /> {t("page.add_task", "משימה חדשה")}
+          </Button>
+        </div>
       </div>
+      {fieldsModalOpen && <TaskSheetFieldsModal onClose={() => setFieldsModalOpen(false)} />}
 
       <div className="flex flex-wrap items-center gap-2">
         <input

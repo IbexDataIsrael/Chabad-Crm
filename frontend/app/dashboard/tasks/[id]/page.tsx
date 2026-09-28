@@ -1,11 +1,12 @@
 "use client";
 
-import { ArrowRight, ClipboardPen, Loader2, Printer, QrCode, Trash2, UserMinus } from "lucide-react";
+import { ArrowRight, ClipboardPen, Loader2, Printer, QrCode, Settings, Trash2, UserMinus } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { ReportStatusBadge } from "@/components/ReportStatusBadge";
+import { TaskSheetFieldsModal } from "@/components/tasks/TaskSheetFieldsModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { InlineEdit } from "@/components/ui/InlineEdit";
@@ -17,6 +18,7 @@ import { useConfirm } from "@/lib/confirm";
 import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
 import { printTaskSheet } from "@/lib/taskPrint";
+import { useTaskSheetFields } from "@/lib/taskSheetFields";
 import { useToast } from "@/lib/toast";
 import type { Campaign, ReportNumber, Task, TaskStatus } from "@/lib/types";
 
@@ -57,6 +59,8 @@ export default function TaskDetailPage() {
   const [reportNumbers, setReportNumbers] = useState<ReportNumber[]>([]);
   const [activists, setActivists] = useState<ActivistOption[]>([]);
   const [printing, setPrinting] = useState(false);
+  const [fieldsModalOpen, setFieldsModalOpen] = useState(false);
+  const [taskSheetFields] = useTaskSheetFields();
 
   useEffect(() => {
     if (loading || !allowed) return;
@@ -92,6 +96,7 @@ export default function TaskDetailPage() {
       orgLogoUrl: user?.organization?.logo_url,
       t,
       lang,
+      fields: taskSheetFields,
     });
     setPrinting(false);
     if (err) toastError(err);
@@ -192,6 +197,14 @@ export default function TaskDetailPage() {
           >
             {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
             {t("task.print", "הדפסת משימה")}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            title={t("task_pdf.fields_settings_title", "עיצוב דף ההדפסה")}
+            onClick={() => setFieldsModalOpen(true)}
+          >
+            <Settings className="h-4 w-4" />
           </Button>
           <Button size="sm" variant="outline" asChild>
             <Link href={`/dashboard/tasks/${task.id}/paper-entry`}>
@@ -394,6 +407,7 @@ export default function TaskDetailPage() {
           </Field>
         </dl>
       </section>
+      {fieldsModalOpen && <TaskSheetFieldsModal onClose={() => setFieldsModalOpen(false)} />}
     </div>
   );
 }
