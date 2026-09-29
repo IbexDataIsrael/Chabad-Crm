@@ -1,0 +1,109 @@
+/* street2-only door-tile states, layered over street.module.css's .door
+   (kept separate so /dashboard/street v1 is untouched). Three states:
+   to-knock (amber, needs action) / visited (solid green + check, done) /
+   no knock needed (muted, steps back). Each state also carries a text or
+   icon cue, never color alone. */
+
+.knock {
+  border-color: #d98a00;
+  background: linear-gradient(180deg, #fff8e3, #ffe9b0);
+  box-shadow: 0 3px 0 rgba(176, 106, 0, 0.35);
+}
+.knock > span:first-child {
+  background: #d98a00;
+}
+
+.visited {
+  border-color: #0f4a26;
+  background: linear-gradient(180deg, #2fa855, #1b6b3a);
+  box-shadow: 0 3px 0 rgba(10, 50, 25, 0.45);
+}
+.visited > div {
+  color: #fff;
+}
+.visited > span:first-child {
+  background: #dcf3e3;
+}
+
+.idle {
+  border-style: dashed;
+  border-color: #b7c7bc;
+  background: #f5f7f6;
+  box-shadow: none;
+  opacity: 0.72;
+}
+.idle > div {
+  color: #6b7d71;
+}
+.idle > span:first-child {
+  background: #b7c7bc;
+}
+
+/* "לדפוק" tag sitting on the door's top edge */
+.tag {
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #d98a00;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 3px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+/* ✓ badge in the door's top corner */
+.check {
+  position: absolute;
+  top: -7px;
+  inset-inline-end: -7px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  color: #1b6b3a;
+  border: 2px solid #1b6b3a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 14px;
+  margin: -4px 0 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #dff5e6;
+}
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 5px 5px 3px 3px;
+  border: 2px solid;
+  flex: none;
+}
+.swatchKnock {
+  border-color: #d98a00;
+  background: #ffe9b0;
+}
+.swatchVisited {
+  border-color: #0f4a26;
+  background: #27a04c;
+}
+.swatchIdle {
+  border-style: dashed;
+  border-color: #b7c7bc;
+  background: #f5f7f6;
+}

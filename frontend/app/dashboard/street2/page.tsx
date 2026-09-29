@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Lock, MapPin, Pencil } from "lucide-react";
+import { Check, Lock, MapPin, Pencil } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import BuildingCelebration from "@/components/BuildingCelebration";
@@ -37,6 +37,7 @@ import {
 // instead of a hand-maintained near-duplicate — this is a read-only import
 // (a new consumer of the file), not a modification of street or its files.
 import styles from "../street/street.module.css";
+import doorStyles from "./doorStates.module.css";
 
 /** docs/fixes70_street_v2.md + docs/fixes71.md §C: street2 is street itself
  *  (same fetch/fields/tile-grid/sheet/edit mutations, verbatim data logic)
@@ -391,6 +392,12 @@ export default function Street2Page() {
     commitPatch({ language: chipDraft });
   }
 
+  const doorStateLabel = {
+    knock: t("street.door_to_knock", "לדפוק"),
+    visited: t("street.door_visited", "בוקר"),
+    idle: t("street.door_no_knock", "לא נדרש"),
+  };
+
   if (authLoading || isAdmin) {
     return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   }
@@ -415,6 +422,20 @@ export default function Street2Page() {
         >
           {t("street.title", "המסלול שלי")}
         </h1>
+        <div className={doorStyles.legend}>
+          <span className={doorStyles.legendItem}>
+            <span className={`${doorStyles.swatch} ${doorStyles.swatchKnock}`} />
+            {doorStateLabel.knock}
+          </span>
+          <span className={doorStyles.legendItem}>
+            <span className={`${doorStyles.swatch} ${doorStyles.swatchVisited}`} />
+            {doorStateLabel.visited}
+          </span>
+          <span className={doorStyles.legendItem}>
+            <span className={`${doorStyles.swatch} ${doorStyles.swatchIdle}`} />
+            {doorStateLabel.idle}
+          </span>
+        </div>
 
         {busy ? (
           <div className={styles.state}>
@@ -457,14 +478,25 @@ export default function Street2Page() {
                 )}
               </div>
               <div className={styles.doors}>
-                {b.apartments.map((a) => (
+                {b.apartments.map((a) => {
+                  // Visited wins over to-knock: once a door's been edited its
+                  // knock is done. Same predicates the completion logic uses.
+                  const state = isDone(a) ? "visited" : isToKnock(a) ? "knock" : "idle";
+                  return (
                   <button
                     key={a.id}
                     type="button"
-                    className={styles.door}
+                    className={`${styles.door} ${doorStyles[state]}`}
+                    title={doorStateLabel[state]}
                     onClick={() => setOpenId(a.id)}
                   >
                     <span className={styles.knob} />
+                    {state === "knock" && <span className={doorStyles.tag}>{doorStateLabel.knock}</span>}
+                    {state === "visited" && (
+                      <span className={doorStyles.check} aria-label={doorStateLabel.visited}>
+                        <Check className="h-3 w-3" strokeWidth={3.5} />
+                      </span>
+                    )}
                     <div className={styles.dApt}>{a.apartment_name || "—"}</div>
                     <div className={styles.dFloor}>
                       {a.floor ? `${t("apartments.floor", "קומה")} ${a.floor}` : " "}
@@ -475,7 +507,8 @@ export default function Street2Page() {
                       <div className={styles.dName}>{jewish.labelFor(a.jewish_status)}</div>
                     )}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))

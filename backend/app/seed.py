@@ -1437,6 +1437,9 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     # /dashboard/street: mobile "door" reskin of the apartments list, same
     # data/fields as /dashboard/apartments (docs/fixes68_b.md).
     ("street", "street.title", "המסלול שלי", "My route"),
+    ("street", "street.door_to_knock", "לדפוק", "To knock"),
+    ("street", "street.door_visited", "בוקר", "Visited"),
+    ("street", "street.door_no_knock", "לא נדרש", "No knock needed"),
     ("street", "street.visits_title", "ביקורים", "Visits"),
     ("street", "street.visits_soon", "בקרוב", "Coming soon"),
     (
