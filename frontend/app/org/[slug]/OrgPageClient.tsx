@@ -8,7 +8,7 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { PhotoGallery } from "@/components/public/PhotoGallery";
 import { ActivistRegisterForm, OrgSignInForm } from "@/components/public/PublicAuthForms";
 import { WaveRule } from "@/components/public/WaveRule";
-import { apiFetch, ApiError } from "@/lib/api";
+import { apiFetch, ApiError, hasLoggedInBefore } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { setPageOrg } from "@/lib/pageOrg";
@@ -34,7 +34,9 @@ export function OrgPageClient() {
     apiFetch<PublicOrg>(`/api/public/orgs/${encodeURIComponent(slug)}`)
       .then((o) => {
         setOrg(o);
-        if (!o.self_registration_enabled) setMode("signin");
+        // Returning users (anyone who ever logged in on this device) land
+        // on sign-in — register is for first-timers only.
+        if (!o.self_registration_enabled || hasLoggedInBefore()) setMode("signin");
       })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 404) setMissing(true);

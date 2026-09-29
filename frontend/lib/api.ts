@@ -22,8 +22,28 @@ export function getToken(): string | null {
   return window.localStorage.getItem(TOKEN_KEY);
 }
 
+// Device-level "someone has logged in here before" flag — set on every
+// successful login/registration, deliberately NOT cleared by clearToken()
+// (and not under the "crm." prefix its logout sweep removes), so a returning
+// activist's /org/<slug> page opens on the sign-in tab instead of register.
+const HAS_LOGGED_IN_KEY = "crm_has_logged_in";
+
 export function setToken(token: string): void {
   window.localStorage.setItem(TOKEN_KEY, token);
+  try {
+    window.localStorage.setItem(HAS_LOGGED_IN_KEY, "1");
+  } catch {
+    // storage full/blocked — the flag is only a UX nicety
+  }
+}
+
+export function hasLoggedInBefore(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(HAS_LOGGED_IN_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 export function clearToken(): void {
