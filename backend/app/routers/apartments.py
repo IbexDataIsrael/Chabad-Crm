@@ -18,6 +18,7 @@ from sqlalchemy import func, nullslast, or_, select
 from sqlalchemy.orm import Session
 
 from app import custom_field_utils, models, picklist_utils
+from app.core.campaigns import get_active_campaign_id
 from app.core.natural_sort import natural_sort_keys
 from app.core.shliach import resolve_shliach
 from app.database import get_db
@@ -858,7 +859,9 @@ def create_apartment(
     _validate_picklist_changes(picklist_changes, org_id, db)
     custom_field_changes = _split_custom_field_changes(data)
     _validate_report_number(data, org_id, db)
-    a = models.Apartment(**data, organization_id=org_id)
+    a = models.Apartment(
+        **data, organization_id=org_id, campaign_id=get_active_campaign_id(db, org_id)
+    )
     db.add(a)
     db.flush()
     for field_key, value in picklist_changes.items():
@@ -941,6 +944,7 @@ def batch_create_apartments(
     created = 0
     skipped = 0
     new_apartments: list[models.Apartment] = []
+    active_campaign_id = get_active_campaign_id(db, org_id)
     for floor in floors:
         for label in labels:
             if (floor.name, label) in existing:
@@ -951,6 +955,7 @@ def batch_create_apartments(
                 building_id=building.id,
                 apartment_name=label,
                 floor=floor.name,
+                campaign_id=active_campaign_id,
             )
             db.add(apt)
             new_apartments.append(apt)
@@ -1104,6 +1109,11 @@ def _bulk_versioned_update(
     # fixes71 §C.2: `picklist_changes` is the same dict applied to every row
     # in this batch, so the membership check only needs evaluating once.
     jewish_status_touched = _APARTMENT_PICKLISTS["jewish_status"] in picklist_changes
+    # fixes72 §B: likewise, every row in this batch shares the same
+    # "currently active campaign" — resolve it once, not per row.
+    active_campaign_id = (
+        get_active_campaign_id(db, apartments[0].organization_id) if apartments else None
+    )
     for active in apartments:
         active.is_display = False
         active.last_edit = datetime.datetime.utcnow()
@@ -1116,6 +1126,7 @@ def _bulk_versioned_update(
             is_display=True,
             root_id=active.root_id or active.id,
             created_at=active.created_at,
+            campaign_id=active_campaign_id,
         )
         db.add(new)
         db.flush()
@@ -1405,6 +1416,9 @@ def _apply_versioned_update(
         is_display=True,
         root_id=active.root_id or active.id,
         created_at=active.created_at,
+        # fixes72 §B: stamped fresh (not carried forward) — whichever
+        # campaign is active NOW, at the moment of this specific edit.
+        campaign_id=get_active_campaign_id(db, org_id),
     )
     db.add(new)
     db.flush()

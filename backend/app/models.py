@@ -522,6 +522,9 @@ class Campaign(Base):
     field_visibility = relationship(
         "CampaignFieldVisibility", back_populates="campaign", cascade="all, delete-orphan"
     )
+    building_completions = relationship(
+        "CampaignBuildingCompletion", back_populates="campaign", cascade="all, delete-orphan"
+    )
 
 
 class CampaignFieldVisibility(Base):
@@ -548,6 +551,40 @@ class CampaignFieldVisibility(Base):
     is_visible = Column(Boolean, nullable=False, default=True)
 
     campaign = relationship("Campaign", back_populates="field_visibility")
+
+
+class CampaignBuildingCompletion(Base):
+    """fixes72 §A: presence of a row = this building's to-knock apartments
+    were all done under this campaign (street2 hides it from activists
+    working the campaign). DELETE = admin undo (the building reappears) —
+    same absence-is-default convention as CampaignFieldVisibility, no
+    soft-delete flag needed. Scoped per (campaign_id, building_id) so a
+    later campaign never inherits an earlier campaign's completions."""
+
+    __tablename__ = "campaign_building_completion"
+    __table_args__ = (
+        UniqueConstraint(
+            "campaign_id", "building_id",
+            name="uq_campaignbuildingcompletion_campaign_building",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    campaign_id = Column(
+        Integer, ForeignKey("campaigns.id"), nullable=False, index=True
+    )
+    building_id = Column(
+        Integer, ForeignKey("buildings.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    completed_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    completed_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    campaign = relationship("Campaign", back_populates="building_completions")
+    building = relationship("Building", back_populates="completions")
+    completed_by = relationship("User", foreign_keys=[completed_by_user_id])
 
 
 class Task(Base):
@@ -784,6 +821,9 @@ class Building(Base):
         cascade="all, delete-orphan",
         order_by="Floor.sort_order, Floor.id",
     )
+    completions = relationship(
+        "CampaignBuildingCompletion", back_populates="building", cascade="all, delete-orphan"
+    )
 
     @property
     def is_townhouse(self) -> bool:
@@ -862,6 +902,15 @@ class Apartment(Base):
         ForeignKey("apartments.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
+    )
+    # fixes72 §B: whichever campaign was active at the moment THIS version
+    # was created — stamped fresh on every new row (never copied forward from
+    # the predecessor, so it's deliberately excluded from _VERSIONED_COLUMNS).
+    # Lets a per-campaign change-history report be computed at read time by
+    # diffing each campaign_id-stamped version against its predecessor. SET
+    # NULL matches editor_id/root_id's own ondelete convention.
+    campaign_id = Column(
+        Integer, ForeignKey("campaigns.id", ondelete="SET NULL"), nullable=True, index=True
     )
     # Instinct phase 2 (docs/system_api_part2.md §5): same draft-first pair as
     # contacts.source/status. Carried across versions (_VERSIONED_COLUMNS).

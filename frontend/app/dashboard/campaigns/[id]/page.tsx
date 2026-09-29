@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import { History, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -13,7 +13,7 @@ import { useAuth } from "@/lib/auth";
 import { useConfirm } from "@/lib/confirm";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
-import type { Campaign, CampaignFieldVisibility } from "@/lib/types";
+import type { Campaign, CampaignBuildingCompletion, CampaignFieldVisibility } from "@/lib/types";
 
 const inputClass =
   "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
@@ -37,6 +37,8 @@ export default function CampaignDetailPage() {
   const [notFound, setNotFound] = useState(false);
   const [fields, setFields] = useState<CampaignFieldVisibility[]>([]);
   const [fieldsBusy, setFieldsBusy] = useState(true);
+  const [completions, setCompletions] = useState<CampaignBuildingCompletion[]>([]);
+  const [completionsBusy, setCompletionsBusy] = useState(true);
 
   useEffect(() => {
     if (loading || !allowed) return;
@@ -45,6 +47,10 @@ export default function CampaignDetailPage() {
       .then(setFields)
       .catch(() => setFields([]))
       .finally(() => setFieldsBusy(false));
+    apiFetch<CampaignBuildingCompletion[]>(`/api/campaigns/${campaignId}/building-completions`)
+      .then(setCompletions)
+      .catch(() => setCompletions([]))
+      .finally(() => setCompletionsBusy(false));
   }, [loading, allowed, campaignId]);
 
   async function patch(data: Partial<Campaign>) {
@@ -82,6 +88,14 @@ export default function CampaignDetailPage() {
     await apiFetch(`/api/campaigns/${campaignId}`, { method: "DELETE" });
     success(t("msg.deleted", "נמחק בהצלחה"));
     router.push("/dashboard/campaigns");
+  }
+
+  async function undoCompletion(buildingId: number) {
+    await apiFetch(`/api/campaigns/${campaignId}/building-completions/${buildingId}`, {
+      method: "DELETE",
+    });
+    setCompletions((prev) => prev.filter((c) => c.building_id !== buildingId));
+    success(t("msg.deleted", "נמחק בהצלחה"));
   }
 
   async function toggleFieldVisible(f: CampaignFieldVisibility) {
@@ -222,6 +236,66 @@ export default function CampaignDetailPage() {
             ))}
           </div>
         )}
+      </Card>
+
+      <Card className="p-4 space-y-3">
+        <span className="block text-sm font-medium">
+          {t("campaign.completed_buildings", "בניינים שהושלמו")}
+        </span>
+        <p className="text-xs text-muted-foreground">
+          {t(
+            "campaign.completed_buildings_hint",
+            "בניינים אלה הוסתרו מהפעילים בקמפיין הזה. ביטול משחזר אותם לרשימה.",
+          )}
+        </p>
+        {completionsBusy ? (
+          <p className="text-sm text-muted-foreground">{t("action.loading", "טוען…")}</p>
+        ) : completions.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {t("campaign.no_completed_buildings", "אין בניינים שהושלמו עדיין.")}
+          </p>
+        ) : (
+          <div className="divide-y divide-border">
+            {completions.map((c) => (
+              <div key={c.building_id} className="flex items-center justify-between py-2 text-sm">
+                <div>
+                  <div>{c.building_label}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {new Date(c.completed_at).toLocaleString("he-IL", {
+                      dateStyle: "short",
+                      timeStyle: "short",
+                    })}
+                    {c.completed_by_name ? ` — ${c.completed_by_name}` : ""}
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-status-darkred/40 text-status-darkred hover:bg-status-darkred/10"
+                  onClick={() => undoCompletion(c.building_id)}
+                >
+                  {t("action.delete", "מחק")}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Card className="p-4 flex items-center justify-between">
+        <div>
+          <span className="block text-sm font-medium">
+            {t("campaign.history", "היסטוריית שינויים")}
+          </span>
+          <p className="text-xs text-muted-foreground">
+            {t("campaign.history_hint", "מה השתנה בכל דירה במהלך הקמפיין הזה, ומי שינה.")}
+          </p>
+        </div>
+        <Button size="sm" variant="outline" asChild>
+          <Link href={`/dashboard/campaigns/${campaignId}/history`}>
+            <History className="h-3.5 w-3.5" /> {t("action.view", "הצג")}
+          </Link>
+        </Button>
       </Card>
     </div>
   );

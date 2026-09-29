@@ -1700,6 +1700,47 @@ class CampaignActiveOut(BaseModel):
     hidden_field_keys: list[str]
 
 
+# fixes72 §A: persisted, per-campaign building completion.
+class CampaignBuildingCompletionCreate(BaseModel):
+    building_id: int
+
+
+class CampaignBuildingCompletionOut(BaseModel):
+    building_id: int
+    building_label: str
+    completed_at: datetime
+    completed_by_name: Optional[str] = None
+
+
+# fixes72 §B: per-campaign change history (computed at read time — see
+# app/campaign_history.py — not a separate write-time audit-log table).
+class CampaignHistoryFieldChange(BaseModel):
+    field_key: str
+    label_key: str
+    label: Optional[str] = None
+    english_label: Optional[str] = None
+    field_type: Optional[str] = None
+    old_value: Optional[Union[str, float, bool]] = None
+    new_value: Optional[Union[str, float, bool]] = None
+
+
+class CampaignHistoryEntry(BaseModel):
+    apartment_id: int
+    building_id: int
+    building_label: str
+    event: Literal["created", "edited"]
+    editor_name: Optional[str] = None
+    changed_at: datetime
+    changes: list[CampaignHistoryFieldChange]
+
+
+class CampaignHistoryPage(BaseModel):
+    items: list[CampaignHistoryEntry]
+    total: int
+    page: int
+    page_size: int
+
+
 class TaskCreate(BaseModel):
     campaign_id: int
     # fixes65 §2: None = "Assign Later" — the task enters the orphan pool.

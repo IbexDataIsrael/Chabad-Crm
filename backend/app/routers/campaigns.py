@@ -13,14 +13,20 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app import apartment_fields, models
+from app.campaign_history import compute_campaign_history
+from app.core.campaigns import get_active_campaign_id
+from app.core.display import building_display_name
 from app.database import get_db
 from app.deps import get_current_user, require_admin_or_campaign_manager
 from app.schemas import (
     CampaignActiveOut,
     CampaignActiveStat,
+    CampaignBuildingCompletionCreate,
+    CampaignBuildingCompletionOut,
     CampaignCreate,
     CampaignFieldVisibilityOut,
     CampaignFieldVisibilityUpdate,
+    CampaignHistoryPage,
     CampaignOut,
     CampaignUpdate,
 )
@@ -293,3 +299,127 @@ def set_campaign_field_visibility(
         label=meta.label,
         english_label=meta.english_label,
     )
+
+
+def _completion_out(row: models.CampaignBuildingCompletion) -> CampaignBuildingCompletionOut:
+    return CampaignBuildingCompletionOut(
+        building_id=row.building_id,
+        building_label=building_display_name(row.building),
+        completed_at=row.completed_at,
+        completed_by_name=row.completed_by.full_name if row.completed_by else None,
+    )
+
+
+@router.post(
+    "/{campaign_id}/building-completions",
+    response_model=CampaignBuildingCompletionOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def complete_building(
+    campaign_id: int,
+    payload: CampaignBuildingCompletionCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """fixes72 §A: an activist's own street2 completion write — idempotent
+    upsert (re-POSTing an already-completed building just returns the
+    existing row). Open to any authenticated user, unlike the rest of this
+    router — this is the activist's own action, not an admin operation."""
+    campaign = _get_or_404(campaign_id, current_user.organization_id, db)
+    building = (
+        db.query(models.Building)
+        .filter(
+            models.Building.id == payload.building_id,
+            models.Building.organization_id == current_user.organization_id,
+        )
+        .first()
+    )
+    if not building:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "building_id does not exist")
+    row = (
+        db.query(models.CampaignBuildingCompletion)
+        .filter(
+            models.CampaignBuildingCompletion.campaign_id == campaign.id,
+            models.CampaignBuildingCompletion.building_id == building.id,
+        )
+        .first()
+    )
+    if row is None:
+        row = models.CampaignBuildingCompletion(
+            campaign_id=campaign.id,
+            building_id=building.id,
+            completed_at=datetime.datetime.utcnow(),
+            completed_by_user_id=current_user.id,
+        )
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    return _completion_out(row)
+
+
+@router.get(
+    "/{campaign_id}/building-completions",
+    response_model=list[CampaignBuildingCompletionOut],
+)
+def list_building_completions(
+    campaign_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """fixes72 §A: open to any authenticated user — street2 reads this on
+    load to know which buildings to hide, and the campaign admin page reads
+    the exact same list to render the undo table. One endpoint, two
+    consumers."""
+    campaign = _get_or_404(campaign_id, current_user.organization_id, db)
+    rows = (
+        db.query(models.CampaignBuildingCompletion)
+        .filter(models.CampaignBuildingCompletion.campaign_id == campaign.id)
+        .order_by(models.CampaignBuildingCompletion.completed_at.desc())
+        .all()
+    )
+    return [_completion_out(r) for r in rows]
+
+
+@router.delete(
+    "/{campaign_id}/building-completions/{building_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def undo_building_completion(
+    campaign_id: int,
+    building_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin_or_campaign_manager),
+):
+    """fixes72 §A: the admin undo — deletes the row, the building reappears
+    on street2 for this campaign immediately (on its next load)."""
+    campaign = _get_or_404(campaign_id, current_user.organization_id, db)
+    row = (
+        db.query(models.CampaignBuildingCompletion)
+        .filter(
+            models.CampaignBuildingCompletion.campaign_id == campaign.id,
+            models.CampaignBuildingCompletion.building_id == building_id,
+        )
+        .first()
+    )
+    if not row:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Completion not found")
+    db.delete(row)
+    db.commit()
+
+
+@router.get("/{campaign_id}/history", response_model=CampaignHistoryPage)
+def get_campaign_history(
+    campaign_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin_or_campaign_manager),
+):
+    """fixes72 §B: per-campaign change history, computed at read time from
+    the Apartment version chain (see app/campaign_history.py) — what
+    actually changed, per field, during this campaign."""
+    campaign = _get_or_404(campaign_id, current_user.organization_id, db)
+    items, total = compute_campaign_history(
+        db, current_user.organization_id, campaign.id, page, page_size
+    )
+    return CampaignHistoryPage(items=items, total=total, page=page, page_size=page_size)

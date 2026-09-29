@@ -27,6 +27,7 @@ import {
   type Apartment,
   type ApartmentPage,
   type ApartmentListItem,
+  type CampaignBuildingCompletion,
   type PicklistField as PicklistFieldDef,
   type PicklistValue,
 } from "@/lib/types";
@@ -152,7 +153,29 @@ export default function Street2Page() {
   // fixes71 §C.5: ordering stays global (untouched); visibility now comes
   // from the active campaign, not this hook's isFieldVisible.
   const { orderFor } = useFieldSettings();
-  const { isVisible: campaignVisible } = useActiveCampaignFieldVisibility();
+  // Named activeCampaign, not campaign — that name is already taken by the
+  // apartment.campaign_status picklist hook below.
+  const { campaign: activeCampaign, isVisible: campaignVisible } = useActiveCampaignFieldVisibility();
+
+  // fixes72 §A: buildings completed under the active campaign are persisted
+  // server-side and excluded from the list entirely — not just celebrated
+  // once and left visible. `completionsReady` gates the self-healing effect
+  // below so it never fires before we actually know what's already recorded.
+  const [completedBuildingIds, setCompletedBuildingIds] = useState<Set<number>>(new Set());
+  const [completionsReady, setCompletionsReady] = useState(false);
+
+  useEffect(() => {
+    if (!activeCampaign?.id) {
+      setCompletedBuildingIds(new Set());
+      setCompletionsReady(true); // no active campaign — nothing to scope to, show everything
+      return;
+    }
+    setCompletionsReady(false);
+    apiFetch<CampaignBuildingCompletion[]>(`/api/campaigns/${activeCampaign.id}/building-completions`)
+      .then((rows) => setCompletedBuildingIds(new Set(rows.map((r) => r.building_id))))
+      .catch(() => setCompletedBuildingIds(new Set()))
+      .finally(() => setCompletionsReady(true));
+  }, [activeCampaign?.id]);
   const [customDefs, setCustomDefs] = useState<PicklistFieldDef[]>([]);
   const customFieldDefs = useCustomFieldDefs("apartment").filter(
     (d) => d.field_type !== "select" && d.field_key !== TO_KNOCK_CUSTOM_FIELD_KEY,
@@ -231,8 +254,41 @@ export default function Street2Page() {
       }
       map.get(a.building_id)!.apartments.push(a);
     }
-    return Array.from(map.values());
-  }, [items]);
+    // fixes72 §A: a building persisted-complete for the active campaign is
+    // excluded entirely — "not appear again" per the product requirement,
+    // not just celebrated-and-left-visible.
+    return Array.from(map.values()).filter((b) => !completedBuildingIds.has(b.id));
+  }, [items, completedBuildingIds]);
+
+  // fixes72 §A: self-healing — if an admin undoes a completion (or this is
+  // simply the first load after the DB record didn't exist yet) but the
+  // underlying apartments already satisfy completion, silently persist it
+  // again so the building re-hides itself without requiring a redundant
+  // edit. Never celebrates — only a fresh in-session transition does that.
+  useEffect(() => {
+    if (!completionsReady || !activeCampaign?.id || items.length === 0) return;
+    const byBuilding = new Map<number, ApartmentListItem[]>();
+    for (const a of items) {
+      const list = byBuilding.get(a.building_id);
+      if (list) list.push(a);
+      else byBuilding.set(a.building_id, [a]);
+    }
+    const activeCampaignId = activeCampaign.id;
+    setCompletedBuildingIds((prev) => {
+      const additions: number[] = [];
+      for (const [buildingId, apts] of byBuilding) {
+        if (!prev.has(buildingId) && buildingComplete(apts)) additions.push(buildingId);
+      }
+      if (additions.length === 0) return prev;
+      for (const buildingId of additions) {
+        apiFetch(`/api/campaigns/${activeCampaignId}/building-completions`, {
+          method: "POST",
+          body: JSON.stringify({ building_id: buildingId }),
+        }).catch(() => {});
+      }
+      return new Set([...prev, ...additions]);
+    });
+  }, [items, completionsReady, activeCampaign?.id]);
 
   const openApt = items.find((a) => a.id === openId) ?? null;
 
@@ -287,6 +343,20 @@ export default function Street2Page() {
             building_name: merged.building_name,
             building_address: merged.building_address,
           }) });
+          // fixes72 §A: persist the completion (best-effort — a failed POST
+          // here must never surface as a save error, the apartment edit
+          // itself already succeeded; the self-healing effect will retry
+          // it on next load regardless) and hide the building immediately,
+          // without waiting for a reload.
+          if (activeCampaign?.id) {
+            const activeCampaignId = activeCampaign.id;
+            apiFetch(`/api/campaigns/${activeCampaignId}/building-completions`, {
+              method: "POST",
+              body: JSON.stringify({ building_id: buildingId }),
+            })
+              .then(() => setCompletedBuildingIds((p) => new Set(p).add(buildingId)))
+              .catch(() => {});
+          }
         }
         return next;
       });

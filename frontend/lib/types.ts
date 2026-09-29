@@ -522,6 +522,45 @@ export interface CampaignActive {
   hidden_field_keys: string[];
 }
 
+// fixes72 §A: a completed building under a specific campaign — presence of
+// a row means street2 hides it; admin DELETE undoes it.
+export interface CampaignBuildingCompletion {
+  building_id: number;
+  building_label: string;
+  completed_at: string;
+  completed_by_name?: string | null;
+}
+
+// fixes72 §B: per-campaign change history, computed at read time from the
+// apartment version chain — one entry per version row, with the fields that
+// actually changed nested inside.
+export interface CampaignHistoryFieldChange {
+  field_key: string;
+  label_key: string;
+  label?: string | null;
+  english_label?: string | null;
+  field_type?: string | null;
+  old_value: string | number | boolean | null;
+  new_value: string | number | boolean | null;
+}
+
+export interface CampaignHistoryEntry {
+  apartment_id: number;
+  building_id: number;
+  building_label: string;
+  event: "created" | "edited";
+  editor_name: string | null;
+  changed_at: string;
+  changes: CampaignHistoryFieldChange[];
+}
+
+export interface CampaignHistoryPage {
+  items: CampaignHistoryEntry[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export type TaskStatus = "ACTIVE" | "COMPLETED" | "PAUSED";
 
 export interface Task {

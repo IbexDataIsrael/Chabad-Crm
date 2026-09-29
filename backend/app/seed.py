@@ -1233,6 +1233,22 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
         "Check apartment fields activists should see on their route while this campaign is active. Uncheck a field to hide it.",
     ),
     ("campaign", "campaign.not_found", "הקמפיין לא נמצא.", "Campaign not found."),
+    # fixes72 §A/§B: persisted per-campaign building completion + change history.
+    ("campaign", "campaign.completed_buildings", "בניינים שהושלמו", "Completed buildings"),
+    (
+        "campaign", "campaign.completed_buildings_hint",
+        "בניינים אלה הוסתרו מהפעילים בקמפיין הזה. ביטול משחזר אותם לרשימה.",
+        "These buildings are hidden from activists on this campaign. Undo restores them to the list.",
+    ),
+    ("campaign", "campaign.no_completed_buildings", "אין בניינים שהושלמו עדיין.", "No buildings completed yet."),
+    ("campaign", "campaign.history", "היסטוריית שינויים", "Change history"),
+    (
+        "campaign", "campaign.history_hint",
+        "מה השתנה בכל דירה במהלך הקמפיין הזה, ומי שינה.",
+        "What changed on each apartment during this campaign, and who changed it.",
+    ),
+    ("campaign", "campaign.history_created", "נוצר", "Created"),
+    ("campaign", "campaign.no_history", "אין שינויים מתועדים לקמפיין הזה עדיין.", "No changes recorded for this campaign yet."),
     ("page", "page.tasks_title", "משימות", "Tasks"),
     ("page", "page.add_task", "משימה חדשה", "New task"),
     ("page", "page.no_tasks", "אין משימות להצגה.", "No tasks to show."),
