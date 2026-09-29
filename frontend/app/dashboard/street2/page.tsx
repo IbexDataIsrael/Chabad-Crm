@@ -9,6 +9,7 @@ import BuildingCelebration from "@/components/BuildingCelebration";
 import { CustomFieldValueDisplay } from "@/components/CustomFieldValueInput";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useActiveCampaignFieldVisibility } from "@/lib/campaignFieldVisibility";
 import { mapsHref } from "@/lib/contactActions";
 import { useCustomFieldDefs } from "@/lib/customFields";
 import { sortByFieldOrder, useFieldSettings } from "@/lib/fieldSettings";
@@ -36,12 +37,9 @@ import {
 // (a new consumer of the file), not a modification of street or its files.
 import styles from "../street/street.module.css";
 
-/** docs/fixes70_street_v2.md (rebuilt per user feedback): street2 is street
- *  itself (same fetch/fields/tile-grid/sheet/edit mutations, verbatim data
- *  logic) plus exactly two additions:
- *   1. A building-completion celebration (BuildingCelebration.tsx).
- *   2. Nothing else — buildings are already rendered as cards, exactly like
- *      street.tsx does; no separate pager/progress-bar UI was added.
+/** docs/fixes70_street_v2.md + docs/fixes71.md §C: street2 is street itself
+ *  (same fetch/fields/tile-grid/sheet/edit mutations, verbatim data logic)
+ *  plus a building-completion celebration (BuildingCelebration.tsx).
  *
  *  "Done" has no dedicated field/action anywhere in this app. Per explicit
  *  product decision, a door counts as done once it's been edited at least
@@ -54,6 +52,20 @@ import styles from "../street/street.module.css";
  *  `root_id == null`. So `apt.root_id != null` IS "this door has been
  *  worked" — real, persisted, survives refresh, computed from the exact
  *  same data/writes as every other edit on this page.
+ *
+ *  fixes71 §C.4: a building is complete (and fires the celebration) only
+ *  once every "to_knock" apartment in it is done — a building with zero
+ *  to-knock apartments never fires. `to_knock` is a real apartment custom
+ *  field (backend/scripts/backfill_to_knock.py + apartments.py's
+ *  _sync_to_knock keep it in sync with Jewish status), but it's never shown
+ *  to activists (§C.3) — hard-excluded below, not just toggled off.
+ *
+ *  fixes71 §C.5/§C.6: every apartment field (fixed and custom alike) is a
+ *  display candidate, filtered by the org's one ACTIVE CAMPAIGN's per-field
+ *  visibility flags (useActiveCampaignFieldVisibility) instead of the old
+ *  global useFieldSettings — this REPLACES street2's previous always-shown
+ *  fixed rows + separate "Extra fields" section with one flat, uniformly
+ *  gated row list. street.tsx is untouched and keeps its own old behavior.
  *
  *  Admins get redirected to /dashboard/apartments before the fetch ever
  *  starts (this page's real dataset can be the WHOLE org for an admin,
@@ -70,8 +82,37 @@ const TEXT_FIELD_LOCK_KEY: Record<TextField, string> = {
   apartment_notes: "notes",
 };
 
+// fixes71 §B: field_registry.py's own keys for these fixed fields — the
+// same vocabulary the new per-campaign visibility table uses, so a single
+// admin-facing catalog covers fixed and custom fields alike.
+const FIELD_KEY = {
+  name: "apartments.name",
+  phone: "apartments.phone",
+  email: "apartments.email",
+  jewish_status: "apartment.Jewish_status",
+  campaign_status: "apartment.campaign_status",
+  mezuzah_status: "apartment.mezuzah_status",
+  language: "apartment.language",
+  apartment_notes: "apartments.apartment_notes",
+  report_number_id: "apartments.report_number_id",
+} as const;
+
+const TO_KNOCK_CUSTOM_FIELD_KEY = "to_knock";
+
 function isDone(a: ApartmentListItem): boolean {
   return a.root_id != null;
+}
+
+// fixes71 §C.4: missing/undefined AND true both count as "needs a knock" —
+// only an explicit false (set by _sync_to_knock for not_jewish/gentile/na)
+// excludes a door from the completion requirement.
+function isToKnock(a: ApartmentListItem): boolean {
+  return a.custom_field_values?.[TO_KNOCK_CUSTOM_FIELD_KEY] !== false;
+}
+
+function buildingComplete(apts: ApartmentListItem[]): boolean {
+  const required = apts.filter(isToKnock);
+  return required.length > 0 && required.every(isDone);
 }
 
 export default function Street2Page() {
@@ -108,9 +149,14 @@ export default function Street2Page() {
   const mezuzah = usePicklist("apartment.mezuzah_status");
   const language = usePicklist("apartment.language");
 
-  const { isFieldVisible: vis, orderFor } = useFieldSettings();
+  // fixes71 §C.5: ordering stays global (untouched); visibility now comes
+  // from the active campaign, not this hook's isFieldVisible.
+  const { orderFor } = useFieldSettings();
+  const { isVisible: campaignVisible } = useActiveCampaignFieldVisibility();
   const [customDefs, setCustomDefs] = useState<PicklistFieldDef[]>([]);
-  const customFieldDefs = useCustomFieldDefs("apartment").filter((d) => d.field_type !== "select");
+  const customFieldDefs = useCustomFieldDefs("apartment").filter(
+    (d) => d.field_type !== "select" && d.field_key !== TO_KNOCK_CUSTOM_FIELD_KEY,
+  );
   const { labelFor: customLabel } = usePicklistsMap(customDefs.map((d) => d.field_key));
 
   useEffect(() => {
@@ -216,7 +262,11 @@ export default function Street2Page() {
   async function commitPatch(patch: Record<string, unknown>) {
     if (!openApt) return;
     const buildingId = openApt.building_id;
-    const wasDone = isDone(openApt); // before this edit — gates the celebration
+    // fixes71 §C.4: building-level before/after (not a single-apartment
+    // "was this door done" flag) — correctly avoids a refire if a
+    // *non*-to-knock door is edited after the building's real to-knock
+    // doors were already all done.
+    const wasComplete = buildingComplete(items.filter((a) => a.building_id === buildingId));
     setSaving(true);
     setSaveErr("");
     try {
@@ -230,16 +280,13 @@ export default function Street2Page() {
       setItems((prev) => {
         const next = prev.map((it) => (it.id === openApt.id ? merged : it));
         // RULE 3: fire only when THIS save is what completes the building —
-        // never on initial load, never re-firing for an already-done door.
-        if (!wasDone) {
-          const bldApts = next.filter((a) => a.building_id === buildingId);
-          if (bldApts.length > 0 && bldApts.every(isDone)) {
-            setCelebration({ open: true, label: buildingDisplayName({
-              id: buildingId,
-              building_name: merged.building_name,
-              building_address: merged.building_address,
-            }) });
-          }
+        // never on initial load, never re-firing for an already-complete one.
+        if (!wasComplete && buildingComplete(next.filter((a) => a.building_id === buildingId))) {
+          setCelebration({ open: true, label: buildingDisplayName({
+            id: buildingId,
+            building_name: merged.building_name,
+            building_address: merged.building_address,
+          }) });
         }
         return next;
       });
@@ -351,7 +398,11 @@ export default function Street2Page() {
                     <div className={styles.dFloor}>
                       {a.floor ? `${t("apartments.floor", "קומה")} ${a.floor}` : " "}
                     </div>
-                    <div className={styles.dName}>{jewish.labelFor(a.jewish_status)}</div>
+                    {/* fixes71 §C.5: hidden fields aren't displayed anywhere,
+                        including this door-tile quick-glance headline. */}
+                    {campaignVisible(FIELD_KEY.jewish_status) && (
+                      <div className={styles.dName}>{jewish.labelFor(a.jewish_status)}</div>
+                    )}
                   </button>
                 ))}
               </div>
@@ -400,221 +451,279 @@ export default function Street2Page() {
             <div className={styles.aptTitle}>{apartmentTitle(openApt)}</div>
 
             <div className={styles.rows}>
-              <EditableRow
-                label={t("apartments.name", "שם דייר")}
-                field="name"
-                locked={fieldLocked(TEXT_FIELD_LOCK_KEY.name)}
-                editingField={editingField}
-                onBeginEdit={beginEdit}
-                onCancel={() => setEditingField(null)}
-                onSave={() => saveText("name")}
-                saving={saving}
-                saveErr={saveErr}
-                t={t}
-                display={openApt.name || "—"}
-                empty={!openApt.name}
-                editor={
-                  <input
-                    type="text"
-                    value={textDraft}
-                    onChange={(e) => setTextDraft(e.target.value)}
-                  />
-                }
-              />
-              <EditableRow
-                label={t("apartments.phone", "טלפון")}
-                field="phone"
-                locked={fieldLocked(TEXT_FIELD_LOCK_KEY.phone)}
-                editingField={editingField}
-                onBeginEdit={beginEdit}
-                onCancel={() => setEditingField(null)}
-                onSave={() => saveText("phone")}
-                saving={saving}
-                saveErr={saveErr}
-                t={t}
-                display={
-                  openApt.phone ? (
-                    <a href={`tel:${openApt.phone}`} dir="ltr" className={styles.rowLink}>
-                      {openApt.phone}
-                    </a>
-                  ) : (
-                    "—"
-                  )
-                }
-                empty={!openApt.phone}
-                editor={
-                  <input
-                    type="tel"
-                    dir="ltr"
-                    value={textDraft}
-                    onChange={(e) => setTextDraft(e.target.value)}
-                  />
-                }
-              />
-              <EditableRow
-                label={t("apartments.email", "אימייל")}
-                field="email"
-                locked={fieldLocked(TEXT_FIELD_LOCK_KEY.email)}
-                editingField={editingField}
-                onBeginEdit={beginEdit}
-                onCancel={() => setEditingField(null)}
-                onSave={() => saveText("email")}
-                saving={saving}
-                saveErr={saveErr}
-                t={t}
-                display={
-                  openApt.email ? (
-                    <a href={`mailto:${openApt.email}`} dir="ltr" className={styles.rowLink}>
-                      {openApt.email}
-                    </a>
-                  ) : (
-                    "—"
-                  )
-                }
-                empty={!openApt.email}
-                editor={
-                  <input
-                    type="email"
-                    dir="ltr"
-                    value={textDraft}
-                    onChange={(e) => setTextDraft(e.target.value)}
-                  />
-                }
-              />
-
-              <PicklistRow
-                label={t("picklist.apartment.Jewish_status", "יהדות")}
-                field="jewish_status"
-                locked={fieldLocked("jewish_status")}
-                editingField={editingField}
-                onBeginEdit={beginEdit}
-                onCancel={() => setEditingField(null)}
-                onSave={() => saveSinglePicklist("jewish_status")}
-                saving={saving}
-                saveErr={saveErr}
-                t={t}
-                value={openApt.jewish_status}
-                labelFor={jewish.labelFor}
-                options={jewish.options}
-                display={jewish.display}
-                chipDraft={chipDraft}
-                onToggleChip={(v) => toggleChip(v, false)}
-              />
-              <PicklistRow
-                label={t("picklist.apartment.campaign_status", "סטטוס קמפיין")}
-                field="campaign_status"
-                locked={fieldLocked("campaign_status")}
-                editingField={editingField}
-                onBeginEdit={beginEdit}
-                onCancel={() => setEditingField(null)}
-                onSave={() => saveSinglePicklist("campaign_status")}
-                saving={saving}
-                saveErr={saveErr}
-                t={t}
-                value={openApt.campaign_status}
-                labelFor={campaign.labelFor}
-                options={campaign.options}
-                display={campaign.display}
-                chipDraft={chipDraft}
-                onToggleChip={(v) => toggleChip(v, false)}
-              />
-              <PicklistRow
-                label={t("picklist.apartment.mezuzah_status", "מזוזה")}
-                field="mezuzah_status"
-                locked={fieldLocked("mezuzah_status")}
-                editingField={editingField}
-                onBeginEdit={beginEdit}
-                onCancel={() => setEditingField(null)}
-                onSave={() => saveSinglePicklist("mezuzah_status")}
-                saving={saving}
-                saveErr={saveErr}
-                t={t}
-                value={openApt.mezuzah_status}
-                labelFor={mezuzah.labelFor}
-                options={mezuzah.options}
-                display={mezuzah.display}
-                chipDraft={chipDraft}
-                onToggleChip={(v) => toggleChip(v, false)}
-              />
-              <PicklistRow
-                label={t("picklist.apartment.language", "שפה")}
-                field="language"
-                locked={fieldLocked("language")}
-                editingField={editingField}
-                onBeginEdit={beginEdit}
-                onCancel={() => setEditingField(null)}
-                onSave={saveLanguage}
-                saving={saving}
-                saveErr={saveErr}
-                t={t}
-                value={openApt.language}
-                labelFor={language.labelFor}
-                options={language.options}
-                display={language.display}
-                chipDraft={chipDraft}
-                onToggleChip={(v) => toggleChip(v, true)}
-              />
-
-              <div className={styles.row}>
-                <div className={styles.lbl}>{t("apartments.report_number_id", "מספר דוח")}</div>
-                <div className={`${styles.val} ${openApt.report_number_name ? "" : styles.valEmpty}`}>
-                  {openApt.report_number_name || "—"}
-                </div>
-                <span className={`${styles.act} ${styles.lock}`}>
-                  <Lock className="h-3.5 w-3.5" />
-                </span>
-              </div>
-
-              <div className={`${styles.row} ${styles.rowTop}`}>
-                <div className={styles.lbl}>{t("apartments.apartment_notes", "הערות")}</div>
-                {editingField === "apartment_notes" ? (
-                  <div className={styles.editbox}>
-                    <textarea
+              {campaignVisible(FIELD_KEY.name) && (
+                <EditableRow
+                  label={t("apartments.name", "שם דייר")}
+                  field="name"
+                  locked={fieldLocked(TEXT_FIELD_LOCK_KEY.name)}
+                  editingField={editingField}
+                  onBeginEdit={beginEdit}
+                  onCancel={() => setEditingField(null)}
+                  onSave={() => saveText("name")}
+                  saving={saving}
+                  saveErr={saveErr}
+                  t={t}
+                  display={openApt.name || "—"}
+                  empty={!openApt.name}
+                  editor={
+                    <input
+                      type="text"
                       value={textDraft}
                       onChange={(e) => setTextDraft(e.target.value)}
                     />
-                    <div className={styles.editActions}>
-                      <button
-                        type="button"
-                        className={styles.saveBtn}
-                        disabled={saving}
-                        onClick={() => saveText("apartment_notes")}
-                      >
-                        {t("action.save", "שמור")}
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.cancelBtn}
-                        disabled={saving}
-                        onClick={() => setEditingField(null)}
-                      >
-                        {t("action.cancel", "ביטול")}
-                      </button>
-                    </div>
-                    {saveErr && <div className={styles.editErr}>{saveErr}</div>}
+                  }
+                />
+              )}
+              {campaignVisible(FIELD_KEY.phone) && (
+                <EditableRow
+                  label={t("apartments.phone", "טלפון")}
+                  field="phone"
+                  locked={fieldLocked(TEXT_FIELD_LOCK_KEY.phone)}
+                  editingField={editingField}
+                  onBeginEdit={beginEdit}
+                  onCancel={() => setEditingField(null)}
+                  onSave={() => saveText("phone")}
+                  saving={saving}
+                  saveErr={saveErr}
+                  t={t}
+                  display={
+                    openApt.phone ? (
+                      <a href={`tel:${openApt.phone}`} dir="ltr" className={styles.rowLink}>
+                        {openApt.phone}
+                      </a>
+                    ) : (
+                      "—"
+                    )
+                  }
+                  empty={!openApt.phone}
+                  editor={
+                    <input
+                      type="tel"
+                      dir="ltr"
+                      value={textDraft}
+                      onChange={(e) => setTextDraft(e.target.value)}
+                    />
+                  }
+                />
+              )}
+              {campaignVisible(FIELD_KEY.email) && (
+                <EditableRow
+                  label={t("apartments.email", "אימייל")}
+                  field="email"
+                  locked={fieldLocked(TEXT_FIELD_LOCK_KEY.email)}
+                  editingField={editingField}
+                  onBeginEdit={beginEdit}
+                  onCancel={() => setEditingField(null)}
+                  onSave={() => saveText("email")}
+                  saving={saving}
+                  saveErr={saveErr}
+                  t={t}
+                  display={
+                    openApt.email ? (
+                      <a href={`mailto:${openApt.email}`} dir="ltr" className={styles.rowLink}>
+                        {openApt.email}
+                      </a>
+                    ) : (
+                      "—"
+                    )
+                  }
+                  empty={!openApt.email}
+                  editor={
+                    <input
+                      type="email"
+                      dir="ltr"
+                      value={textDraft}
+                      onChange={(e) => setTextDraft(e.target.value)}
+                    />
+                  }
+                />
+              )}
+
+              {campaignVisible(FIELD_KEY.jewish_status) && (
+                <PicklistRow
+                  label={t("picklist.apartment.Jewish_status", "יהדות")}
+                  field="jewish_status"
+                  locked={fieldLocked("jewish_status")}
+                  editingField={editingField}
+                  onBeginEdit={beginEdit}
+                  onCancel={() => setEditingField(null)}
+                  onSave={() => saveSinglePicklist("jewish_status")}
+                  saving={saving}
+                  saveErr={saveErr}
+                  t={t}
+                  value={openApt.jewish_status}
+                  labelFor={jewish.labelFor}
+                  options={jewish.options}
+                  display={jewish.display}
+                  chipDraft={chipDraft}
+                  onToggleChip={(v) => toggleChip(v, false)}
+                />
+              )}
+              {campaignVisible(FIELD_KEY.campaign_status) && (
+                <PicklistRow
+                  label={t("picklist.apartment.campaign_status", "סטטוס קמפיין")}
+                  field="campaign_status"
+                  locked={fieldLocked("campaign_status")}
+                  editingField={editingField}
+                  onBeginEdit={beginEdit}
+                  onCancel={() => setEditingField(null)}
+                  onSave={() => saveSinglePicklist("campaign_status")}
+                  saving={saving}
+                  saveErr={saveErr}
+                  t={t}
+                  value={openApt.campaign_status}
+                  labelFor={campaign.labelFor}
+                  options={campaign.options}
+                  display={campaign.display}
+                  chipDraft={chipDraft}
+                  onToggleChip={(v) => toggleChip(v, false)}
+                />
+              )}
+              {campaignVisible(FIELD_KEY.mezuzah_status) && (
+                <PicklistRow
+                  label={t("picklist.apartment.mezuzah_status", "מזוזה")}
+                  field="mezuzah_status"
+                  locked={fieldLocked("mezuzah_status")}
+                  editingField={editingField}
+                  onBeginEdit={beginEdit}
+                  onCancel={() => setEditingField(null)}
+                  onSave={() => saveSinglePicklist("mezuzah_status")}
+                  saving={saving}
+                  saveErr={saveErr}
+                  t={t}
+                  value={openApt.mezuzah_status}
+                  labelFor={mezuzah.labelFor}
+                  options={mezuzah.options}
+                  display={mezuzah.display}
+                  chipDraft={chipDraft}
+                  onToggleChip={(v) => toggleChip(v, false)}
+                />
+              )}
+              {campaignVisible(FIELD_KEY.language) && (
+                <PicklistRow
+                  label={t("picklist.apartment.language", "שפה")}
+                  field="language"
+                  locked={fieldLocked("language")}
+                  editingField={editingField}
+                  onBeginEdit={beginEdit}
+                  onCancel={() => setEditingField(null)}
+                  onSave={saveLanguage}
+                  saving={saving}
+                  saveErr={saveErr}
+                  t={t}
+                  value={openApt.language}
+                  labelFor={language.labelFor}
+                  options={language.options}
+                  display={language.display}
+                  chipDraft={chipDraft}
+                  onToggleChip={(v) => toggleChip(v, true)}
+                />
+              )}
+
+              {campaignVisible(FIELD_KEY.report_number_id) && (
+                <div className={styles.row}>
+                  <div className={styles.lbl}>{t("apartments.report_number_id", "מספר דוח")}</div>
+                  <div className={`${styles.val} ${openApt.report_number_name ? "" : styles.valEmpty}`}>
+                    {openApt.report_number_name || "—"}
                   </div>
-                ) : (
-                  <>
-                    <div
-                      className={`${styles.notesCard} ${styles.val} ${
-                        openApt.apartment_notes ? "" : styles.valEmpty
-                      }`}
-                    >
-                      {openApt.apartment_notes || "—"}
+                  <span className={`${styles.act} ${styles.lock}`}>
+                    <Lock className="h-3.5 w-3.5" />
+                  </span>
+                </div>
+              )}
+
+              {campaignVisible(FIELD_KEY.apartment_notes) && (
+                <div className={`${styles.row} ${styles.rowTop}`}>
+                  <div className={styles.lbl}>{t("apartments.apartment_notes", "הערות")}</div>
+                  {editingField === "apartment_notes" ? (
+                    <div className={styles.editbox}>
+                      <textarea
+                        value={textDraft}
+                        onChange={(e) => setTextDraft(e.target.value)}
+                      />
+                      <div className={styles.editActions}>
+                        <button
+                          type="button"
+                          className={styles.saveBtn}
+                          disabled={saving}
+                          onClick={() => saveText("apartment_notes")}
+                        >
+                          {t("action.save", "שמור")}
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.cancelBtn}
+                          disabled={saving}
+                          onClick={() => setEditingField(null)}
+                        >
+                          {t("action.cancel", "ביטול")}
+                        </button>
+                      </div>
+                      {saveErr && <div className={styles.editErr}>{saveErr}</div>}
                     </div>
-                    {!fieldLocked(TEXT_FIELD_LOCK_KEY.apartment_notes) && (
-                      <button
-                        type="button"
-                        className={styles.act}
-                        onClick={() => beginEdit("apartment_notes")}
-                        title={t("action.edit", "ערוך")}
+                  ) : (
+                    <>
+                      <div
+                        className={`${styles.notesCard} ${styles.val} ${
+                          openApt.apartment_notes ? "" : styles.valEmpty
+                        }`}
                       >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
+                        {openApt.apartment_notes || "—"}
+                      </div>
+                      {!fieldLocked(TEXT_FIELD_LOCK_KEY.apartment_notes) && (
+                        <button
+                          type="button"
+                          className={styles.act}
+                          onClick={() => beginEdit("apartment_notes")}
+                          title={t("action.edit", "ערוך")}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* fixes71 §C.5/§C.6: every remaining apartment field (custom
+                  picklists + custom fields, to_knock hard-excluded) as plain
+                  read-only rows in this SAME list — no more separate "Extra
+                  fields" section/heading. */}
+              {sortByFieldOrder(
+                [
+                  ...customDefs
+                    .filter((d) => campaignVisible(d.field_key))
+                    .map((d) => ({
+                      key: d.field_key,
+                      label: (lang === "en" ? d.english_label || d.label : d.label) || d.field_key,
+                      node: customLabel(d.field_key, openApt.picklist_values?.[d.field_key]) || "—",
+                    })),
+                  ...customFieldDefs
+                    .filter((d) => campaignVisible(`customfield.apartment.${d.field_key}`))
+                    .map((d) => ({
+                      key: `customfield.apartment.${d.field_key}`,
+                      label:
+                        (lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
+                        d.field_key,
+                      node: (
+                        <CustomFieldValueDisplay
+                          fieldType={d.field_type}
+                          value={openApt.custom_field_values?.[d.field_key] ?? null}
+                        />
+                      ),
+                    })),
+                ],
+                (e) => e.key,
+                orderFor,
+              ).map((e) => (
+                <div key={e.key} className={styles.row}>
+                  <div className={styles.lbl}>{e.label}</div>
+                  <div className={styles.val}>{e.node}</div>
+                  <span className={`${styles.act} ${styles.lock}`}>
+                    <Lock className="h-3.5 w-3.5" />
+                  </span>
+                </div>
+              ))}
 
               <div className={styles.row}>
                 <div className={styles.lbl}>{t("apt.contact", "איש קשר")}</div>
@@ -632,44 +741,6 @@ export default function Street2Page() {
                 </span>
               </div>
             </div>
-
-            {(() => {
-              type Extra = { key: string; label: string; node: ReactNode };
-              const extras: Extra[] = [
-                ...customDefs
-                  .filter((d) => vis(d.field_key))
-                  .map((d): Extra => ({
-                    key: d.field_key,
-                    label: (lang === "en" ? d.english_label || d.label : d.label) || d.field_key,
-                    node: customLabel(d.field_key, openApt.picklist_values?.[d.field_key]) || "—",
-                  })),
-                ...customFieldDefs
-                  .filter((d) => vis(`customfield.apartment.${d.field_key}`))
-                  .map((d): Extra => ({
-                    key: `customfield.apartment.${d.field_key}`,
-                    label:
-                      (lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
-                      d.field_key,
-                    node: (
-                      <CustomFieldValueDisplay
-                        fieldType={d.field_type}
-                        value={openApt.custom_field_values?.[d.field_key] ?? null}
-                      />
-                    ),
-                  })),
-              ];
-              if (extras.length === 0) return null;
-              return (
-                <div className={styles.section}>
-                  <h3>{t("street.extra_fields", "שדות נוספים")}</h3>
-                  {sortByFieldOrder(extras, (e) => e.key, orderFor).map((e) => (
-                    <div key={e.key} className={styles.roExtra}>
-                      <b>{e.label}:</b> {e.node}
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
 
             <div className={styles.section}>
               <h3>

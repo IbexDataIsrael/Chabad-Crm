@@ -57,6 +57,31 @@ _APARTMENT_PICKLISTS = {
 }
 _APARTMENT_LANGUAGE_FIELD_KEY = "apartment.language"
 
+# fixes71 §C.2: keeps the "to_knock" apartment custom field (backend/scripts/
+# backfill_to_knock.py's one-time rule, now applied live) in sync with every
+# Jewish-status write — true when affirmatively Jewish or unset, false for an
+# explicit not_jewish/gentile/na. Matches _NO_KNOCK_VALUES in that script.
+_TO_KNOCK_FIELD_KEY = "to_knock"
+_NO_KNOCK_VALUES = {"not_jewish", "gentile", "na"}
+
+
+def _sync_to_knock(
+    db: Session, org_id: int, apartment_id: int, jewish_status_value: Optional[str]
+) -> None:
+    target = jewish_status_value is None or jewish_status_value not in _NO_KNOCK_VALUES
+    definition = (
+        db.query(models.CustomFieldDefinition)
+        .filter(
+            models.CustomFieldDefinition.organization_id == org_id,
+            models.CustomFieldDefinition.entity_type == "apartment",
+            models.CustomFieldDefinition.field_key == _TO_KNOCK_FIELD_KEY,
+        )
+        .first()
+    )
+    if definition is None:
+        return  # a missing housekeeping field must never break a real apartment write
+    custom_field_utils.set_value(db, org_id, "apartment", apartment_id, _TO_KNOCK_FIELD_KEY, target)
+
 
 def _validate_picklist_changes(changes: dict, org_id: int, db: Session) -> None:
     """`changes` is field_key -> value (already resolved — fixed field names
@@ -846,6 +871,10 @@ def create_apartment(
     for field_key, value in custom_field_changes.items():
         if value is not None:
             custom_field_utils.set_value(db, org_id, "apartment", a.id, field_key, value)
+    # fixes71 §C.2: "new apartments get the same [to_knock] default when
+    # their status is set" — a brand-new apartment has no prior to_knock to
+    # protect, so this always runs, including when no status was given at all.
+    _sync_to_knock(db, org_id, a.id, picklist_changes.get(_APARTMENT_PICKLISTS["jewish_status"]))
 
     # Optionally link an existing mekurav contact to this apartment.
     if contact_id is not None:
@@ -911,20 +940,48 @@ def batch_create_apartments(
     }
     created = 0
     skipped = 0
+    new_apartments: list[models.Apartment] = []
     for floor in floors:
         for label in labels:
             if (floor.name, label) in existing:
                 skipped += 1
                 continue
-            db.add(
-                models.Apartment(
-                    organization_id=org_id,
-                    building_id=building.id,
-                    apartment_name=label,
-                    floor=floor.name,
-                )
+            apt = models.Apartment(
+                organization_id=org_id,
+                building_id=building.id,
+                apartment_name=label,
+                floor=floor.name,
             )
+            db.add(apt)
+            new_apartments.append(apt)
             created += 1
+    # fixes71 §C.2: every apartment created here has no jewish_status at all,
+    # so to_knock is always true — bulk-insert the CustomFieldValue rows
+    # directly (one definition lookup total) rather than N _sync_to_knock
+    # calls, since this matrix can create many rows in one request.
+    if new_apartments:
+        db.flush()  # assign ids
+        definition = (
+            db.query(models.CustomFieldDefinition)
+            .filter(
+                models.CustomFieldDefinition.organization_id == org_id,
+                models.CustomFieldDefinition.entity_type == "apartment",
+                models.CustomFieldDefinition.field_key == _TO_KNOCK_FIELD_KEY,
+            )
+            .first()
+        )
+        if definition is not None:
+            for apt in new_apartments:
+                db.add(
+                    models.CustomFieldValue(
+                        organization_id=org_id,
+                        entity_table="apartments",
+                        entity_id=apt.id,
+                        definition_id=definition.id,
+                        checked=True,
+                        value=None,
+                    )
+                )
     db.commit()  # single transaction for the whole matrix
     return ApartmentBatchResult(created=created, skipped=skipped)
 
@@ -1044,6 +1101,9 @@ def _bulk_versioned_update(
     commits per row in a loop and the other doesn't; that's a control-flow
     difference, not duplicated logic. Returns the number of apartments
     updated."""
+    # fixes71 §C.2: `picklist_changes` is the same dict applied to every row
+    # in this batch, so the membership check only needs evaluating once.
+    jewish_status_touched = _APARTMENT_PICKLISTS["jewish_status"] in picklist_changes
     for active in apartments:
         active.is_display = False
         active.last_edit = datetime.datetime.utcnow()
@@ -1083,6 +1143,16 @@ def _bulk_versioned_update(
         for field_key, value in custom_field_changes.items():
             custom_field_utils.set_value(
                 db, active.organization_id, "apartment", new.id, field_key, value
+            )
+        # fixes71 §C.2/§C.3: only recompute to_knock when the status itself
+        # changed — copy_values above already carried the prior value
+        # forward for edits that don't touch it (protects a manual override).
+        if jewish_status_touched:
+            _sync_to_knock(
+                db,
+                active.organization_id,
+                new.id,
+                picklist_changes[_APARTMENT_PICKLISTS["jewish_status"]],
             )
     db.commit()
     return len(apartments)
@@ -1357,6 +1427,13 @@ def _apply_versioned_update(
     custom_field_utils.copy_values(db, "apartments", active.id, new.id)
     for field_key, value in (custom_field_changes or {}).items():
         custom_field_utils.set_value(db, org_id, "apartment", new.id, field_key, value)
+    # fixes71 §C.2/§C.3: only recompute to_knock when the status itself
+    # changed — copy_values above already carried the prior value forward
+    # for edits that don't touch it (protects a manual override). Covers both
+    # update_apartment's PUT and record_door_outcome, which both call this.
+    jewish_status_key = _APARTMENT_PICKLISTS["jewish_status"]
+    if jewish_status_key in picklist_changes:
+        _sync_to_knock(db, org_id, new.id, picklist_changes[jewish_status_key])
     db.commit()
     db.refresh(new)
     return new
