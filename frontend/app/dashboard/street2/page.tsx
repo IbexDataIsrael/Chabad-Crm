@@ -7,6 +7,7 @@ import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import BuildingCelebration from "@/components/BuildingCelebration";
 import { CustomFieldValueDisplay, CustomFieldValueInput } from "@/components/CustomFieldValueInput";
+import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useActiveCampaignFieldVisibility } from "@/lib/campaignFieldVisibility";
@@ -292,6 +293,74 @@ export default function Street2Page() {
     });
   }, [items, completionsReady, activeCampaign?.id]);
 
+  // fixes73: moving on from an unfinished building needs an explicit
+  // acknowledgement. `currentBuildingId` is the building the activist last
+  // opened a door in; opening a door in a DIFFERENT building checks only
+  // that one previous building (never further back). Persisted per user so a
+  // refresh doesn't silently skip the check. Read in an effect keyed by the
+  // user id — not a lazy-init usePersistentState — because `user` loads
+  // async (the fixes70 keyed-by-async-user bug).
+  const [currentBuildingId, setCurrentBuildingId] = useState<number | null>(null);
+  const [leaveWarn, setLeaveWarn] = useState<{
+    buildingName: string;
+    pending: ApartmentListItem[];
+    targetAptId: number;
+    targetBuildingId: number;
+  } | null>(null);
+  const currentBuildingKey = user ? `crm.street2.currentBuilding.${user.id}` : null;
+
+  useEffect(() => {
+    if (!currentBuildingKey) return;
+    try {
+      const raw = window.localStorage.getItem(currentBuildingKey);
+      setCurrentBuildingId(raw ? Number(raw) || null : null);
+    } catch {
+      setCurrentBuildingId(null);
+    }
+  }, [currentBuildingKey]);
+
+  function enterBuilding(buildingId: number) {
+    setCurrentBuildingId(buildingId);
+    if (!currentBuildingKey) return;
+    try {
+      window.localStorage.setItem(currentBuildingKey, String(buildingId));
+    } catch {
+      /* storage unavailable — the check just won't survive a refresh */
+    }
+  }
+
+  function openDoor(a: ApartmentListItem) {
+    const prevId = currentBuildingId;
+    if (prevId != null && prevId !== a.building_id && !completedBuildingIds.has(prevId)) {
+      const prevApts = items.filter((x) => x.building_id === prevId);
+      // Same predicates as buildingComplete(): only to-knock doors are
+      // required, so only those are listed as still needing an edit.
+      const pending = prevApts.filter((x) => isToKnock(x) && !isDone(x));
+      if (pending.length > 0) {
+        setLeaveWarn({
+          buildingName: buildingDisplayName({
+            id: prevId,
+            building_name: prevApts[0].building_name,
+            building_address: prevApts[0].building_address,
+          }),
+          pending,
+          targetAptId: a.id,
+          targetBuildingId: a.building_id,
+        });
+        return;
+      }
+    }
+    enterBuilding(a.building_id);
+    setOpenId(a.id);
+  }
+
+  function confirmLeave() {
+    if (!leaveWarn) return;
+    enterBuilding(leaveWarn.targetBuildingId);
+    setOpenId(leaveWarn.targetAptId);
+    setLeaveWarn(null);
+  }
+
   const openApt = items.find((a) => a.id === openId) ?? null;
 
   function beginEdit(field: string) {
@@ -488,7 +557,7 @@ export default function Street2Page() {
                     type="button"
                     className={`${styles.door} ${doorStyles[state]}`}
                     title={doorStateLabel[state]}
-                    onClick={() => setOpenId(a.id)}
+                    onClick={() => openDoor(a)}
                   >
                     <span className={styles.knob} />
                     {state === "knock" && <span className={doorStyles.tag}>{doorStateLabel.knock}</span>}
@@ -922,6 +991,62 @@ export default function Street2Page() {
             >
               {t("action.close", "סגור")}
             </button>
+          </div>
+        </div>
+      )}
+
+      {leaveWarn && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setLeaveWarn(null);
+          }}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            className="w-full max-w-sm bg-card text-foreground rounded-xl shadow-xl p-5 space-y-4"
+          >
+            <h2 className="text-lg font-bold">
+              {t("street.building_incomplete_title", "הבניין {name} לא הושלם").replace(
+                "{name}",
+                leaveWarn.buildingName,
+              )}
+            </h2>
+            <p className="text-sm">
+              {t(
+                "street.building_incomplete_body",
+                "הדירות הבאות צריכות לעבור לפחות עריכה אחת כדי להיחשב כבוצעו:",
+              )}
+            </p>
+            <ul className="max-h-60 overflow-y-auto rounded-md border divide-y text-sm">
+              {leaveWarn.pending.map((a) => (
+                <li key={a.id} className="px-3 py-2 flex items-center justify-between gap-3">
+                  <span className="font-semibold">
+                    {t("apartments.apartment_name", "מספר דירה")} {a.apartment_name || `#${a.id}`}
+                  </span>
+                  {a.floor && (
+                    <span className="text-muted-foreground">
+                      {t("apartments.floor", "קומה")} {a.floor}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <p className="text-sm text-muted-foreground">
+              {t(
+                "street.building_incomplete_question",
+                "לעבור לבניין הבא למרות שהבניין הזה לא הושלם?",
+              )}
+            </p>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <Button type="button" onClick={confirmLeave}>
+                {t("street.building_incomplete_continue", "הבנתי, עבור לבניין הבא")}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setLeaveWarn(null)}>
+                {t("street.building_incomplete_stay", "הישאר בבניין")}
+              </Button>
+            </div>
           </div>
         </div>
       )}

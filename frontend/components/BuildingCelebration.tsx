@@ -28,6 +28,8 @@
 import { useEffect, useState } from "react";
 import confetti from "canvas-confetti";
 
+import { useLocalization } from "@/lib/localization";
+
 type Quote = { id: number; he: string; en: string; ref: string };
 
 /** How many photos exist in public/rebbe/ (1.jpg .. N.jpg). Must match the files the user adds. */
@@ -122,6 +124,7 @@ export default function BuildingCelebration({
   buildingLabel?: string;
   onClose: () => void;
 }) {
+  const { t, dir } = useLocalization();
   const [quote, setQuote] = useState<Quote | null>(null);
   const [imgSrc, setImgSrc] = useState<string | null>(null);
 
@@ -140,7 +143,7 @@ export default function BuildingCelebration({
 
   return (
     <div
-      dir="rtl"
+      dir={dir}
       onClick={onClose}
       style={{
         position: "fixed",
@@ -169,7 +172,7 @@ export default function BuildingCelebration({
         {imgSrc && (
           <img
             src={imgSrc}
-            alt="הרבי מליובאוויטש"
+            alt={t("street.celebration_rebbe_alt", "הרבי מליובאוויטש")}
             onError={() => setImgSrc(null)}
             style={{
               width: "120px",
@@ -191,14 +194,12 @@ export default function BuildingCelebration({
             color: "#5b3d00",
           }}
         >
-          כל הכבוד! 🎉
+          {t("street.celebration_title", "כל הכבוד! 🎉")}
         </h2>
         <p style={{ margin: "0 0 18px 0", fontSize: "18px", color: "#7a5a10" }}>
-          סיימתם את הבניין{buildingLabel ? ` - ${buildingLabel}` : ""}!
-          <br />
-          <span dir="ltr" style={{ fontSize: "13px", color: "#9a7b2d" }}>
-            Building completed!
-          </span>
+          {buildingLabel
+            ? t("street.celebration_body", "סיימתם את הבניין - {name}!").replace("{name}", buildingLabel)
+            : t("street.celebration_body_no_name", "סיימתם את הבניין!")}
         </p>
 
         {quote && (
@@ -242,7 +243,7 @@ export default function BuildingCelebration({
             boxShadow: "0 4px 12px rgba(249,168,38,0.5)",
           }}
         >
-          המשך בדרך! · Keep going
+          {t("street.celebration_continue", "המשך בדרך!")}
         </button>
       </div>
     </div>
