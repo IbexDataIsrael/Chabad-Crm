@@ -688,6 +688,9 @@ def list_apartments_enriched(
     # Instinct phase 2 (mirrors contacts' list): drafts only on request.
     # `status` itself would shadow fastapi.status inside this function.
     record_status: Literal["active", "draft"] = Query("active", alias="status"),
+    # fixes74 §12: an admin / campaign manager viewing an activist's street2
+    # gets exactly that activist's apartment set.
+    as_user_id: Optional[int] = None,
 ):
     """One page of apartments enriched with building/area + linked contact, for
     the apartments page. Shliach users see only the apartments they cover.
@@ -711,8 +714,15 @@ def list_apartments_enriched(
             models.Apartment.is_display.is_(True),  # active versions only (fixes19)
         )
     )
-    if current_user.role == "shliach":
-        ids = _shliach_apartment_ids(db, current_user)
+    scope_user = current_user
+    if as_user_id is not None and current_user.role != "shliach":
+        if current_user.role not in ("admin", "campaign_manager"):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin privileges required")
+        from app.routers.street_activity import viewed_activist
+
+        scope_user = viewed_activist(db, current_user, as_user_id)
+    if scope_user.role == "shliach":
+        ids = _shliach_apartment_ids(db, scope_user)
         if not ids:
             return ApartmentPageOut(items=[], total=0, page=page, page_size=page_size)
         query = query.filter(models.Apartment.id.in_(ids))

@@ -148,6 +148,9 @@ class User(Base):
     # fixes65 §5/§7: 'public' (org landing page) | 'qr' (task claim flow) for
     # a self-registered activist; null for every admin-provisioned account.
     registration_source = Column(String(20), nullable=True)
+    # fixes74 §12: when this activist's street2 last reached the server
+    # (event upload or heartbeat) — "last sync" on the admin's view.
+    street_synced_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     # Relationships
@@ -650,6 +653,36 @@ class Task(Base):
     report_numbers = relationship(
         "TaskReportNumber", back_populates="task", cascade="all, delete-orphan"
     )
+
+
+class StreetActivityEvent(Base):
+    """fixes74 §12: one entry of an activist's street2 work log — a door
+    marked done ('mark'), un-marked ('unmark') or a building completed
+    ('building_complete') — as synced from their device. `occurred_at` is
+    the device's clock (when it happened), `synced_at` the server's (when it
+    arrived). `apartment_id` is a plain id, not an FK: apartments are
+    versioned and the id changes on every edit; `label` keeps a readable
+    snapshot ("building · apt 3") for the log."""
+
+    __tablename__ = "street_activity_events"
+    __table_args__ = (
+        Index("ix_street_activity_events_user_occurred", "user_id", "occurred_at"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    event_type = Column(String(30), nullable=False)
+    apartment_id = Column(Integer, nullable=True)
+    building_id = Column(
+        Integer, ForeignKey("buildings.id", ondelete="SET NULL"), nullable=True
+    )
+    label = Column(String(300), nullable=True)
+    occurred_at = Column(DateTime, nullable=False)
+    synced_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
 
 
 class TaskPaperEntry(Base):

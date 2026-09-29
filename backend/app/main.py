@@ -67,6 +67,7 @@ from app.routers import (
     report_numbers,
     search,
     shliach_messages,
+    street_activity,
     tasks,
     uploads,
     users,
@@ -141,6 +142,7 @@ app.include_router(search.router)
 app.include_router(ai_query.router)
 app.include_router(campaigns.router)
 app.include_router(tasks.router)
+app.include_router(street_activity.router)
 app.include_router(public.router)
 app.include_router(instinct.router)
 

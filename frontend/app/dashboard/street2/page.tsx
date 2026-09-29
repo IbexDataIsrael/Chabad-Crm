@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Check, Lock, MapPin, Pencil } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import BuildingCelebration from "@/components/BuildingCelebration";
+import { ActivistActivityPanel, ActivistPicker } from "@/components/street/ActivistActivityPanel";
 import { CustomFieldValueDisplay, CustomFieldValueInput } from "@/components/CustomFieldValueInput";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
@@ -14,6 +15,7 @@ import { useActiveCampaignFieldVisibility } from "@/lib/campaignFieldVisibility"
 import { mapsHref } from "@/lib/contactActions";
 import { useCustomFieldDefs } from "@/lib/customFields";
 import { sortByFieldOrder, useFieldSettings } from "@/lib/fieldSettings";
+import { recordStreetEvent, syncStreetActivity } from "@/lib/streetActivity";
 import { useLocalization } from "@/lib/localization";
 import { FIXED_APARTMENT_PICKLIST_KEYS, usePicklist, usePicklistsMap } from "@/lib/picklists";
 import {
@@ -31,6 +33,7 @@ import {
   type CampaignBuildingCompletion,
   type PicklistField as PicklistFieldDef,
   type PicklistValue,
+  type StreetActivity,
 } from "@/lib/types";
 
 // Reused as-is (RULE 0/1, docs/fixes70_street_v2.md): street2 must look and
@@ -70,10 +73,13 @@ import doorStyles from "./doorStates.module.css";
  *  fixed rows + separate "Extra fields" section with one flat, uniformly
  *  gated row list. street.tsx is untouched and keeps its own old behavior.
  *
- *  Admins get redirected to /dashboard/apartments before the fetch ever
- *  starts (this page's real dataset can be the WHOLE org for an admin,
- *  which is what produced the "endless spinner" — street.tsx has no such
- *  guard, but the requirement here was explicit: admins must not hit it). */
+ *  Admins never load their own (whole-org) dataset here — that produced the
+ *  "endless spinner". fixes74 §12: instead of bouncing them to the
+ *  Apartments grid, an admin picks an activist and sees that activist's own
+ *  view (?activist=<userId>): the same apartments, fields and progress,
+ *  read-only, plus the activist's synced activity log and last-sync time.
+ *  The activist's own app records mark / building-complete events and
+ *  syncs them (lib/streetActivity.ts). */
 
 type TextField = "name" | "phone" | "email" | "apartment_notes";
 type PicklistField = "jewish_status" | "campaign_status" | "mezuzah_status";
@@ -119,9 +125,17 @@ function buildingComplete(apts: ApartmentListItem[]): boolean {
 }
 
 export default function Street2Page() {
-  const router = useRouter();
-  const { loading: authLoading, isAdmin, isShliach, user } = useAuth();
+  const searchParams = useSearchParams();
+  const { loading: authLoading, isAdmin, isCampaignManager, isShliach, user } = useAuth();
   const { t, lang } = useLocalization();
+  // fixes74 §12: an admin / campaign manager viewing an activist's street2.
+  const viewUserId =
+    (isAdmin || isCampaignManager) && Number(searchParams.get("activist")) > 0
+      ? Number(searchParams.get("activist"))
+      : null;
+  const viewer = viewUserId != null;
+  // An admin with no activist picked sees the picker, never their own data.
+  const needsPicker = !authLoading && isAdmin && !viewer;
 
   const [items, setItems] = useState<ApartmentListItem[]>([]);
   const [busy, setBusy] = useState(true);
@@ -140,13 +154,52 @@ export default function Street2Page() {
     label: "",
   });
 
-  // Admins must never land on this page (it can be a whole-org fetch for
-  // them) — bounce to the real admin apartments view before load() ever runs.
+  // fixes74 §12: the viewed activist's synced log + last-sync time, polled.
+  // A newer sync also reloads the apartments, so the view follows the
+  // activist's progress as their app syncs.
+  const [activity, setActivity] = useState<StreetActivity | null>(null);
   useEffect(() => {
-    if (!authLoading && isAdmin) {
-      router.replace("/dashboard/apartments");
-    }
-  }, [authLoading, isAdmin, router]);
+    if (!viewer) return;
+    let lastSync: string | null | undefined;
+    let cancelled = false;
+    const poll = () =>
+      apiFetch<StreetActivity>(`/api/street-activity/${viewUserId}`)
+        .then((a) => {
+          if (cancelled) return;
+          setActivity(a);
+          if (lastSync !== undefined && a.last_sync_at !== lastSync) {
+            void load(true);
+            void loadCompletions();
+          }
+          lastSync = a.last_sync_at;
+        })
+        .catch(() => {});
+    void poll();
+    const timer = window.setInterval(poll, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewer, viewUserId]);
+
+  // fixes74 §12: the activist's own app syncs its log — on open, every
+  // minute while open (a heartbeat, so "last sync" stays meaningful) and
+  // when the connection comes back.
+  useEffect(() => {
+    if (!isShliach || !user) return;
+    const uid = user.id;
+    void syncStreetActivity(uid);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void syncStreetActivity(uid);
+    }, 60000);
+    const onOnline = () => void syncStreetActivity(uid);
+    window.addEventListener("online", onOnline);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("online", onOnline);
+    };
+  }, [isShliach, user]);
 
   const jewish = usePicklist("apartment.Jewish_status");
   const campaign = usePicklist("apartment.campaign_status");
@@ -167,17 +220,21 @@ export default function Street2Page() {
   const [completedBuildingIds, setCompletedBuildingIds] = useState<Set<number>>(new Set());
   const [completionsReady, setCompletionsReady] = useState(false);
 
-  useEffect(() => {
+  function loadCompletions() {
     if (!activeCampaign?.id) {
       setCompletedBuildingIds(new Set());
       setCompletionsReady(true); // no active campaign — nothing to scope to, show everything
-      return;
+      return Promise.resolve();
     }
     setCompletionsReady(false);
-    apiFetch<CampaignBuildingCompletion[]>(`/api/campaigns/${activeCampaign.id}/building-completions`)
+    return apiFetch<CampaignBuildingCompletion[]>(`/api/campaigns/${activeCampaign.id}/building-completions`)
       .then((rows) => setCompletedBuildingIds(new Set(rows.map((r) => r.building_id))))
       .catch(() => setCompletedBuildingIds(new Set()))
       .finally(() => setCompletionsReady(true));
+  }
+  useEffect(() => {
+    void loadCompletions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCampaign?.id]);
   const [customDefs, setCustomDefs] = useState<PicklistFieldDef[]>([]);
   const customFieldDefs = useCustomFieldDefs("apartment").filter(
@@ -204,7 +261,8 @@ export default function Street2Page() {
       ? (shliachViewConfig.apartment_edit_locked_fields as string[])
       : [],
   );
-  const fieldLocked = (key: string) => shliachEditDisabled || lockedFields.has(key);
+  // fixes74 §12: the admin's view of an activist is read-only.
+  const fieldLocked = (key: string) => viewer || shliachEditDisabled || lockedFields.has(key);
 
   // fixes74 §13: the admin's order for the apartment card's fields
   // (shliach-config "הגדרות לתצוגת פעילים"). Unlisted fields follow, in
@@ -228,16 +286,17 @@ export default function Street2Page() {
       .map((x) => x.row);
   }
 
-  async function load() {
-    setBusy(true);
+  async function load(quiet = false) {
+    if (!quiet) setBusy(true);
     setLoadError(false);
     try {
       const all: ApartmentListItem[] = [];
       let page = 1;
       let total = Infinity;
+      const asUser = viewer ? `&as_user_id=${viewUserId}` : "";
       while (all.length < total) {
         const res = await apiFetch<ApartmentPage>(
-          `/api/apartments/list?page=${page}&page_size=100`,
+          `/api/apartments/list?page=${page}&page_size=100${asUser}`,
         );
         total = res.total;
         all.push(...res.items);
@@ -253,10 +312,10 @@ export default function Street2Page() {
   }
 
   useEffect(() => {
-    if (authLoading || isAdmin) return;
+    if (authLoading || needsPicker) return;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, isAdmin]);
+  }, [authLoading, needsPicker, viewUserId]);
 
   const buildings = useMemo(() => {
     const map = new Map<
@@ -291,7 +350,7 @@ export default function Street2Page() {
   // again so the building re-hides itself without requiring a redundant
   // edit. Never celebrates — only a fresh in-session transition does that.
   useEffect(() => {
-    if (!completionsReady || !activeCampaign?.id || items.length === 0) return;
+    if (viewer || !completionsReady || !activeCampaign?.id || items.length === 0) return;
     const byBuilding = new Map<number, ApartmentListItem[]>();
     for (const a of items) {
       const list = byBuilding.get(a.building_id);
@@ -313,7 +372,7 @@ export default function Street2Page() {
       }
       return new Set([...prev, ...additions]);
     });
-  }, [items, completionsReady, activeCampaign?.id]);
+  }, [items, completionsReady, activeCampaign?.id, viewer]);
 
   // fixes73: moving on from an unfinished building needs an explicit
   // acknowledgement. Opening a door in a building checks the ONE building
@@ -359,6 +418,10 @@ export default function Street2Page() {
   }, [items]);
 
   function openDoor(a: ApartmentListItem) {
+    if (viewer) {
+      setOpenId(a.id);
+      return;
+    }
     const idx = buildingOrder.indexOf(a.building_id);
     const prevId = idx > 0 ? buildingOrder[idx - 1] : null;
     if (prevId != null && !ackedBuildingIds.has(a.building_id) && !completedBuildingIds.has(prevId)) {
@@ -431,6 +494,7 @@ export default function Street2Page() {
     // *non*-to-knock door is edited after the building's real to-knock
     // doors were already all done.
     const wasComplete = buildingComplete(items.filter((a) => a.building_id === buildingId));
+    const wasDone = isDone(openApt);
     setSaving(true);
     setSaveErr("");
     try {
@@ -441,11 +505,34 @@ export default function Street2Page() {
         body: JSON.stringify(patch),
       });
       const merged: ApartmentListItem = { ...openApt, ...saved };
+      const bLabel = buildingDisplayName({
+        id: buildingId,
+        building_name: merged.building_name,
+        building_address: merged.building_address,
+      });
+      // fixes74 §12: a door's first edit marks it done — log it for the
+      // admin's view of this activist (queued + synced, see lib/streetActivity).
+      if (user && isShliach && !wasDone && isDone(merged)) {
+        recordStreetEvent(user.id, {
+          event_type: "mark",
+          apartment_id: merged.id,
+          building_id: buildingId,
+          label: `${bLabel} · ${apartmentTitle(merged)}`,
+        });
+      }
       setItems((prev) => {
         const next = prev.map((it) => (it.id === openApt.id ? merged : it));
         // RULE 3: fire only when THIS save is what completes the building —
         // never on initial load, never re-firing for an already-complete one.
         if (!wasComplete && buildingComplete(next.filter((a) => a.building_id === buildingId))) {
+          if (user && isShliach) {
+            recordStreetEvent(user.id, {
+              event_type: "building_complete",
+              apartment_id: null,
+              building_id: buildingId,
+              label: bLabel,
+            });
+          }
           setCelebration({ open: true, label: buildingDisplayName({
             id: buildingId,
             building_name: merged.building_name,
@@ -504,19 +591,42 @@ export default function Street2Page() {
     idle: t("street.door_no_knock", "לא נדרש"),
   };
 
-  if (authLoading || isAdmin) {
+  if (authLoading) {
     return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   }
+  if (needsPicker) {
+    return (
+      <div className={styles.pageBg}>
+        <div className={styles.wrap}>
+          <ActivistPicker />
+        </div>
+      </div>
+    );
+  }
+
+  const toKnockItems = items.filter(isToKnock);
+  const buildingsDoneCount = buildingOrder.filter((id) => completedBuildingIds.has(id)).length;
 
   const buildingCountFor = (buildingId: number) =>
     items.filter((a) => a.building_id === buildingId).length;
 
   return (
     <div className={styles.pageBg}>
-      <Link href="/dashboard/apartments" className={styles.backLink}>
-        {t("page.back_to_apartments", "← חזרה לדירות")}
+      <Link href={viewer ? "/dashboard/street2" : "/dashboard/apartments"} className={styles.backLink}>
+        {viewer
+          ? t("street_view.back", "← חזרה לבחירת פעיל")
+          : t("page.back_to_apartments", "← חזרה לדירות")}
       </Link>
       <div className={styles.wrap}>
+        {viewer && (
+          <ActivistActivityPanel
+            activity={activity}
+            doorsDone={toKnockItems.filter(isDone).length}
+            doorsToKnock={toKnockItems.length}
+            buildingsDone={buildingsDoneCount}
+            buildingsTotal={buildingOrder.length}
+          />
+        )}
         <h1
           style={{
             textAlign: "center",
@@ -552,7 +662,7 @@ export default function Street2Page() {
           <div className={styles.state}>
             <div className={styles.stateBig}>⚠️</div>
             <div>{t("apt.load_failed", "טעינת הדירות נכשלה. נסה שוב.")}</div>
-            <button type="button" className={styles.retry} onClick={load}>
+            <button type="button" className={styles.retry} onClick={() => load()}>
               {t("action.retry", "נסה שוב")}
             </button>
           </div>

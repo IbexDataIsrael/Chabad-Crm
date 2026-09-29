@@ -1783,6 +1783,43 @@ class TaskCreate(BaseModel):
     volunteer_report_summary: Optional[str] = None
 
 
+# --- fixes74 §12: street2 activity log --------------------------------------
+
+StreetEventType = Literal["mark", "unmark", "building_complete"]
+
+
+class StreetActivityEventIn(BaseModel):
+    # A uuid the device generates once per event — re-uploads are idempotent.
+    client_id: str = Field(min_length=8, max_length=36)
+    event_type: StreetEventType
+    apartment_id: Optional[int] = None
+    building_id: Optional[int] = None
+    label: Optional[str] = None
+    occurred_at: datetime
+
+
+class StreetActivitySync(BaseModel):
+    events: list[StreetActivityEventIn] = Field(default_factory=list, max_length=500)
+
+
+class StreetActivityEventOut(BaseModel):
+    id: int
+    event_type: str
+    apartment_id: Optional[int] = None
+    building_id: Optional[int] = None
+    building_label: Optional[str] = None
+    label: Optional[str] = None
+    occurred_at: datetime
+    synced_at: datetime
+
+
+class StreetActivityOut(BaseModel):
+    user_id: int
+    full_name: str
+    last_sync_at: Optional[datetime] = None
+    events: list[StreetActivityEventOut] = []
+
+
 class TaskBulkPreviewRequest(BaseModel):
     """fixes74 §3: what "one task per report number" would create — the
     explicitly picked report numbers plus any typed range ("10-40, 55")."""

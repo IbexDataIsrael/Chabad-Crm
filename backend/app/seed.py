@@ -1620,6 +1620,35 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
         "shliach_config", "shliach_config.field_hidden_hint",
         "מוסתר בקמפיין הפעיל — לא יוצג לפעילים", "Hidden in the active campaign — activists won't see it",
     ),
+    # fixes74 §12: admin's read-only view of an activist's street2.
+    ("users", "users.activist_view_action", "תצוגת הפעיל", "Activist view"),
+    ("street_view", "street_view.title", "תצוגת הפעיל: {name}", "Activist view: {name}"),
+    ("street_view", "street_view.pick_other", "בחירת פעיל אחר", "Pick another activist"),
+    ("street_view", "street_view.back", "← חזרה לבחירת פעיל", "← Back to activist list"),
+    ("street_view", "street_view.last_sync", "סנכרון אחרון", "Last sync"),
+    (
+        "street_view", "street_view.never_synced", "האפליקציה של הפעיל עוד לא סונכרנה",
+        "The activist's app hasn't synced yet",
+    ),
+    (
+        "street_view", "street_view.hint",
+        "צפייה בלבד. הנתונים מתעדכנים כשהאפליקציה של הפעיל מסתנכרנת — זה לא מעקב מיקום חי.",
+        "View only. Updates when the activist's app syncs — this is not live location tracking.",
+    ),
+    ("street_view", "street_view.doors", "דלתות שבוצעו", "Doors done"),
+    ("street_view", "street_view.buildings", "בניינים שהושלמו", "Buildings completed"),
+    ("street_view", "street_view.log", "יומן פעילות", "Activity log"),
+    ("street_view", "street_view.no_events", "אין עדיין אירועים ביומן.", "No events in the log yet."),
+    ("street_view", "street_view.event_mark", "דלת סומנה כבוצעה", "Door marked done"),
+    ("street_view", "street_view.event_unmark", "סימון דלת בוטל", "Door unmarked"),
+    ("street_view", "street_view.event_building_complete", "בניין הושלם", "Building completed"),
+    ("street_view", "street_view.pick_title", "צפייה בתצוגת פעיל", "View an activist's route"),
+    (
+        "street_view", "street_view.pick_hint",
+        "בחרו פעיל כדי לראות את המסלול שלו כפי שהוא רואה אותו — ההתקדמות ויומן הפעילות שלו.",
+        "Pick an activist to see their route as they see it — their progress and activity log.",
+    ),
+    ("street_view", "street_view.no_activists", "אין פעילים להצגה.", "No activists to show."),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)

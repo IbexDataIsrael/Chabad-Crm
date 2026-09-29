@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, ListPlus, Plus, Settings2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Eye, ListPlus, Plus, Settings2 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { AreaMultiSelect } from "@/components/AreaMultiSelect";
@@ -1374,6 +1374,17 @@ export default function UsersPage() {
                       >
                         <ListPlus className="h-3.5 w-3.5" /> {t("users.add_task_action", "הוסף משימה")}
                       </button>
+                    )}
+                    {/* fixes74 §12: open this activist's own street2 view
+                        (read-only, with their progress + activity log). */}
+                    {r.kind === "user" && r.role === "shliach" && (
+                      <Link
+                        href={`/dashboard/street2?activist=${r.id}`}
+                        className="me-3 inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                        title={t("users.activist_view_action", "תצוגת הפעיל")}
+                      >
+                        <Eye className="h-3.5 w-3.5" /> {t("users.activist_view_action", "תצוגת הפעיל")}
+                      </Link>
                     )}
                     {r.kind === "user" && me?.id !== r.id && (
                       <button

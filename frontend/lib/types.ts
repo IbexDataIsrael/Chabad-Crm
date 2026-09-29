@@ -874,3 +874,22 @@ export interface DashboardSummary {
   recent_jewish_changes: DashboardJewishStatusChange[];
 }
 
+
+/** fixes74 §12: GET /api/street-activity/{user_id}. */
+export interface StreetActivityEvent {
+  id: number;
+  event_type: "mark" | "unmark" | "building_complete" | string;
+  apartment_id: number | null;
+  building_id: number | null;
+  building_label: string | null;
+  label: string | null;
+  occurred_at: string;
+  synced_at: string;
+}
+
+export interface StreetActivity {
+  user_id: number;
+  full_name: string;
+  last_sync_at: string | null;
+  events: StreetActivityEvent[];
+}

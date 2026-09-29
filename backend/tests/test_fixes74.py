@@ -313,3 +313,73 @@ def test_cannot_link_someone_elses_task(client, admin_headers, setup, db_session
     task = _task(client, admin_headers, setup, names=("4",), volunteer_user_id=other.id)
     r = _report(client, _login(client, "act74u"), "completed", task["id"])
     assert r.status_code == 400
+
+
+# --- §12: admin sees the activist's street2 view -----------------------------
+
+
+def test_street_activity_sync_and_admin_view(client, admin_headers, setup, db_session, org_id):
+    user = _mk_shliach(db_session, org_id, "act74w")
+    _task(client, admin_headers, setup, names=("1", "2"), volunteer_user_id=user.id)
+    h = _login(client, "act74w")
+
+    # Before any sync: no log, no sync time.
+    view = client.get(f"/api/street-activity/{user.id}", headers=admin_headers).json()
+    assert view["last_sync_at"] is None and view["events"] == []
+
+    import datetime
+
+    tz = datetime.timezone(datetime.timedelta(hours=3))
+    t1 = (datetime.datetime.now(tz) - datetime.timedelta(hours=1)).replace(microsecond=0)
+    t2 = t1 + datetime.timedelta(minutes=5)
+    events = [
+        {"client_id": "11111111-aaaa", "event_type": "mark", "apartment_id": 5,
+         "building_id": setup["building_id"], "label": "74 Main St · 1",
+         "occurred_at": t1.isoformat()},
+        {"client_id": "22222222-bbbb", "event_type": "building_complete",
+         "building_id": setup["building_id"], "occurred_at": t2.isoformat()},
+    ]
+    assert client.post("/api/street-activity/sync", json={"events": events}, headers=h).status_code == 204
+    # A retried upload doesn't duplicate.
+    client.post("/api/street-activity/sync", json={"events": events}, headers=h)
+
+    view = client.get(f"/api/street-activity/{user.id}", headers=admin_headers).json()
+    assert view["last_sync_at"] is not None
+    assert [e["event_type"] for e in view["events"]] == ["building_complete", "mark"]
+    utc = t1.astimezone(datetime.timezone.utc).replace(tzinfo=None).isoformat()
+    assert view["events"][1]["occurred_at"].startswith(utc)  # stored as UTC
+    assert view["events"][0]["building_label"] == "74 Main St"
+
+    # An empty upload is a heartbeat: sync time moves, no new events.
+    client.post("/api/street-activity/sync", json={"events": []}, headers=h)
+    again = client.get(f"/api/street-activity/{user.id}", headers=admin_headers).json()
+    assert again["last_sync_at"] >= view["last_sync_at"] and len(again["events"]) == 2
+
+
+def test_street_activity_permissions(client, admin_headers, setup, db_session, org_id):
+    user = _mk_shliach(db_session, org_id, "act74x")
+    _mk_shliach(db_session, org_id, "act74y")
+    # An admin can't write into a log; an activist can't read one.
+    assert client.post("/api/street-activity/sync", json={"events": []}, headers=admin_headers).status_code == 403
+    assert client.get(f"/api/street-activity/{user.id}", headers=_login(client, "act74y")).status_code == 403
+    # Only activists can be viewed.
+    admin_id = _me(client, admin_headers)["id"]
+    assert client.get(f"/api/street-activity/{admin_id}", headers=admin_headers).status_code == 404
+
+
+def test_admin_lists_apartments_as_activist(client, admin_headers, setup, db_session, org_id):
+    user = _mk_shliach(db_session, org_id, "act74z")
+    _task(client, admin_headers, setup, names=("1", "2"), volunteer_user_id=user.id)
+    mine = client.get(
+        f"/api/apartments/list?as_user_id={user.id}&page_size=100", headers=admin_headers
+    ).json()
+    assert sorted(a["apartment_name"] for a in mine["items"]) == ["1", "2"]
+    # The activist sees the same set on their own.
+    theirs = client.get("/api/apartments/list?page_size=100", headers=_login(client, "act74z")).json()
+    assert sorted(a["apartment_name"] for a in theirs["items"]) == ["1", "2"]
+    # An activist can't use as_user_id to look at someone else's set.
+    other = _mk_shliach(db_session, org_id, "act74zz")
+    peek = client.get(
+        f"/api/apartments/list?as_user_id={user.id}&page_size=100", headers=_login(client, "act74zz")
+    ).json()
+    assert peek["total"] == 0 and other.id
