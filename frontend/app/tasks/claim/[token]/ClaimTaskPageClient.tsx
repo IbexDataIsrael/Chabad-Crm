@@ -216,6 +216,7 @@ export function ClaimTaskPageClient() {
           {mode === "register" ? (
             <ActivistRegisterForm
               claimToken={token}
+              organizationId={info.organization_id ?? undefined}
               onRegistered={(res) => settle(res.claim_state ?? "invalid")}
             />
           ) : (

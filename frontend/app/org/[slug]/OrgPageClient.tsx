@@ -117,7 +117,12 @@ export function OrgPageClient() {
                   "ממלאים את הפרטים ומתחילים מיד — בלי המתנה לאישור. המשימות שתקבלו יופיעו באזור האישי שלכם.",
                 )}
               </p>
-              <ActivistRegisterForm orgSlug={org.slug} onRegistered={() => router.push("/dashboard")} />
+              <ActivistRegisterForm
+                orgSlug={org.slug}
+                organizationId={org.id}
+                onRegistered={() => router.push("/dashboard")}
+                onSignedIn={() => router.push("/dashboard")}
+              />
             </>
           ) : (
             <OrgSignInForm organizationId={org.id} onSignedIn={() => router.push("/dashboard")} />

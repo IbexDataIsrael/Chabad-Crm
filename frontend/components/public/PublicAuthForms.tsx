@@ -63,14 +63,22 @@ function Divider() {
 export function ActivistRegisterForm({
   orgSlug,
   claimToken,
+  organizationId,
   onRegistered,
+  onSignedIn,
 }: {
   orgSlug?: string;
   claimToken?: string;
+  /** The org this form joins — lets Google fall back to a scoped sign-in
+   *  when the Google account is already registered (409). */
+  organizationId?: number;
   onRegistered: (res: PublicRegisterResponse) => void | Promise<void>;
+  /** Called instead of onRegistered when that 409 fallback signed an
+   *  existing user in (there's no PublicRegisterResponse then). */
+  onSignedIn?: () => void | Promise<void>;
 }) {
   const { t } = useLocalization();
-  const { signInWithToken } = useAuth();
+  const { signInWithToken, signInWithGoogle } = useAuth();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -145,6 +153,22 @@ export function ActivistRegisterForm({
       });
       await finish(res);
     } catch (err) {
+      // Bug fix: "Join" is the org page's default tab, so returning users
+      // press Google here too — register-google rightly 409s an existing
+      // email, but that must mean "sign them in", not an error. Same
+      // credential, same org-scoped login OrgSignInForm uses.
+      if (err instanceof ApiError && err.status === 409 && organizationId != null) {
+        try {
+          await signInWithGoogle(credential, organizationId);
+          await onSignedIn?.();
+          return;
+        } catch (loginErr) {
+          setError(
+            loginErr instanceof Error ? loginErr.message : t("auth.login_failed", "ההתחברות נכשלה"),
+          );
+          return;
+        }
+      }
       setError(describe(err));
     } finally {
       setBusy(false);

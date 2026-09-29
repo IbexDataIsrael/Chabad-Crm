@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Lock, MapPin, Pencil } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import BuildingCelebration from "@/components/BuildingCelebration";
-import { CustomFieldValueDisplay } from "@/components/CustomFieldValueInput";
+import { CustomFieldValueDisplay, CustomFieldValueInput } from "@/components/CustomFieldValueInput";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useActiveCampaignFieldVisibility } from "@/lib/campaignFieldVisibility";
@@ -129,6 +129,7 @@ export default function Street2Page() {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [textDraft, setTextDraft] = useState("");
   const [chipDraft, setChipDraft] = useState<string[]>([]);
+  const [customDraft, setCustomDraft] = useState<string | number | boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState("");
 
@@ -180,7 +181,7 @@ export default function Street2Page() {
   const customFieldDefs = useCustomFieldDefs("apartment").filter(
     (d) => d.field_type !== "select" && d.field_key !== TO_KNOCK_CUSTOM_FIELD_KEY,
   );
-  const { labelFor: customLabel } = usePicklistsMap(customDefs.map((d) => d.field_key));
+  const { map: customMap, labelFor: customLabel, display: customDisplay } = usePicklistsMap(customDefs.map((d) => d.field_key));
 
   useEffect(() => {
     apiFetch<PicklistFieldDef[]>("/api/picklists")
@@ -756,43 +757,92 @@ export default function Street2Page() {
               )}
 
               {/* fixes71 §C.5/§C.6: every remaining apartment field (custom
-                  picklists + custom fields, to_knock hard-excluded) as plain
-                  read-only rows in this SAME list — no more separate "Extra
-                  fields" section/heading. */}
+                  picklists + custom fields, to_knock hard-excluded) in this
+                  SAME list. Editable like the fixed fields — every apartment
+                  field the campaign doesn't hide is editable unless
+                  shliach-config locks it (lock keys: a custom picklist's
+                  field_key, `customfield.apartment.<key>` for a custom
+                  field — same convention as shliach-config's lock list). */}
               {sortByFieldOrder(
                 [
                   ...customDefs
                     .filter((d) => campaignVisible(d.field_key))
                     .map((d) => ({
                       key: d.field_key,
-                      label: (lang === "en" ? d.english_label || d.label : d.label) || d.field_key,
-                      node: customLabel(d.field_key, openApt.picklist_values?.[d.field_key]) || "—",
-                    })),
-                  ...customFieldDefs
-                    .filter((d) => campaignVisible(`customfield.apartment.${d.field_key}`))
-                    .map((d) => ({
-                      key: `customfield.apartment.${d.field_key}`,
-                      label:
-                        (lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
-                        d.field_key,
                       node: (
-                        <CustomFieldValueDisplay
-                          fieldType={d.field_type}
-                          value={openApt.custom_field_values?.[d.field_key] ?? null}
+                        <PicklistRow
+                          label={(lang === "en" ? d.english_label || d.label : d.label) || d.field_key}
+                          field={d.field_key}
+                          locked={fieldLocked(d.field_key)}
+                          editingField={editingField}
+                          onBeginEdit={(f) => {
+                            setSaveErr("");
+                            const v = openApt.picklist_values?.[d.field_key];
+                            setChipDraft(v ? [v] : []);
+                            setEditingField(f);
+                          }}
+                          onCancel={() => setEditingField(null)}
+                          onSave={() =>
+                            commitPatch({ picklist_values: { [d.field_key]: chipDraft[0] ?? null } })
+                          }
+                          saving={saving}
+                          saveErr={saveErr}
+                          t={t}
+                          value={openApt.picklist_values?.[d.field_key] ?? null}
+                          labelFor={(v) => customLabel(d.field_key, v)}
+                          options={(customMap[d.field_key] ?? []).filter((o) => o.is_active)}
+                          display={customDisplay}
+                          chipDraft={chipDraft}
+                          onToggleChip={(v) => toggleChip(v, false)}
                         />
                       ),
                     })),
+                  ...customFieldDefs
+                    .filter((d) => campaignVisible(`customfield.apartment.${d.field_key}`))
+                    .map((d) => {
+                      const key = `customfield.apartment.${d.field_key}`;
+                      const value = openApt.custom_field_values?.[d.field_key] ?? null;
+                      return {
+                        key,
+                        node: (
+                          <EditableRow
+                            label={
+                              (lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
+                              d.field_key
+                            }
+                            field={key}
+                            locked={fieldLocked(key)}
+                            editingField={editingField}
+                            onBeginEdit={(f) => {
+                              setSaveErr("");
+                              setCustomDraft(value);
+                              setEditingField(f);
+                            }}
+                            onCancel={() => setEditingField(null)}
+                            onSave={() =>
+                              commitPatch({ custom_field_values: { [d.field_key]: customDraft } })
+                            }
+                            saving={saving}
+                            saveErr={saveErr}
+                            t={t}
+                            display={<CustomFieldValueDisplay fieldType={d.field_type} value={value} />}
+                            empty={value == null || value === ""}
+                            editor={
+                              <CustomFieldValueInput
+                                fieldType={d.field_type}
+                                value={customDraft}
+                                onChange={setCustomDraft}
+                              />
+                            }
+                          />
+                        ),
+                      };
+                    }),
                 ],
                 (e) => e.key,
                 orderFor,
               ).map((e) => (
-                <div key={e.key} className={styles.row}>
-                  <div className={styles.lbl}>{e.label}</div>
-                  <div className={styles.val}>{e.node}</div>
-                  <span className={`${styles.act} ${styles.lock}`}>
-                    <Lock className="h-3.5 w-3.5" />
-                  </span>
-                </div>
+                <Fragment key={e.key}>{e.node}</Fragment>
               ))}
 
               <div className={styles.row}>
