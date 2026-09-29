@@ -71,8 +71,6 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("nav", "nav.areas", "אזורים", "Areas"),
     ("nav", "nav.buildings", "בניינים", "Buildings"),
     ("nav", "nav.apartments", "דירות", "Apartments"),
-    # docs/fixes70_street_v2.md: card-based v2 of /dashboard/street, activist-only, under review.
-    ("nav", "nav.street2", "דירות בטא", "Apartments Beta"),
     ("nav", "nav.picklists", "רשימות בחירה", "Picklists"),
     ("nav", "nav.custom_fields", "שדות מותאמים", "Custom fields"),
     ("nav", "nav.localization", "תרגומים", "Translations"),
@@ -1444,7 +1442,8 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ),
     # docs/fixes70_street_v2.md: /dashboard/street2 reuses street.title and
     # every other street.*/apt.* key above verbatim — no street2-specific
-    # copy needed beyond its nav label (nav.street2, added with the nav block).
+    # copy needed. Its nav entry now reuses nav.apartments too (fixes71
+    # follow-up: only one "apartments" menu item, pointing at street2).
     # --- fixes68 §9/§B4: activist door-to-door route flow ---
     ("activist_route", "activist_route.title", "התחל סיבוב", "Start route"),
     ("activist_route", "activist_route.outcome.answered", "נענו", "Answered"),

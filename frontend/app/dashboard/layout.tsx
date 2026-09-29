@@ -117,21 +117,16 @@ function DashboardChrome({ children }: { children: ReactNode }) {
     ...(isFeatureEnabled(org, "apartment_display_enabled")
       ? [
           // fixes69 §Admin2: an admin manages apartments from the classic
-          // grid below, not the mobile door-by-door flow — street stays the
-          // default landing page for everyone else (staff/shliach/campaign
-          // manager) per fixes68_b.md.
-          {
-            href: "/dashboard/street",
-            label: t("nav.apartments", "דירות"),
-            roles: ["staff", "shliach", "campaign_manager"],
-          },
-          // docs/fixes70_street_v2.md: card-based v2 of the street page, under
-          // review — activist (shliach) only per explicit request, unlike
-          // street itself which staff/campaign_manager also get.
+          // grid below, not the mobile door-by-door flow — the mobile view
+          // stays the default landing page for everyone else (staff/
+          // shliach/campaign manager) per fixes68_b.md. fixes71 follow-up:
+          // this now points at street2 (card-based v2), not the retired-
+          // from-nav street v1 — street2 is the only mobile-view menu entry;
+          // /dashboard/street itself still works, just unlinked from any menu.
           {
             href: "/dashboard/street2",
-            label: t("nav.street2", "דירות בטא"),
-            roles: ["shliach"],
+            label: t("nav.apartments", "דירות"),
+            roles: ["staff", "shliach", "campaign_manager"],
           },
           {
             href: "/dashboard/apartments",
