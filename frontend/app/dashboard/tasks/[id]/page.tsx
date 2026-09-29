@@ -20,7 +20,7 @@ import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
 import { printTaskSheet } from "@/lib/taskPrint";
 import { useTaskSheetFields } from "@/lib/taskSheetFields";
-import { taskStatusLabels, taskStatusOptionsFor } from "@/lib/taskStatus";
+import { taskApartmentsHref, taskStatusLabels, taskStatusOptionsFor } from "@/lib/taskStatus";
 import { useToast } from "@/lib/toast";
 import type { Campaign, ReportNumber, Task, TaskStatus } from "@/lib/types";
 
@@ -206,7 +206,7 @@ export default function TaskDetailPage() {
             <Settings className="h-4 w-4" />
           </Button>
           <Button size="sm" variant="outline" asChild>
-            <Link href={`/dashboard/tasks/${task.id}/paper-entry`}>
+            <Link href={taskApartmentsHref(task)}>
               <ClipboardPen className="h-4 w-4" /> {t("task.paper_entry", "הזנת נתונים מדף מודפס")}
             </Link>
           </Button>

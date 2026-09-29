@@ -37,7 +37,12 @@ import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 import { printTaskSheet } from "@/lib/taskPrint";
 import { useTaskSheetFields } from "@/lib/taskSheetFields";
-import { TASK_STATUS_OPTIONS, taskStatusLabels, taskStatusOptionsFor } from "@/lib/taskStatus";
+import {
+  TASK_STATUS_OPTIONS,
+  taskApartmentsHref,
+  taskStatusLabels,
+  taskStatusOptionsFor,
+} from "@/lib/taskStatus";
 import type { Campaign, Task, TaskPage, TaskStatus } from "@/lib/types";
 
 type AssignmentFilter = "" | "orphan" | "assigned";
@@ -464,7 +469,7 @@ export default function TasksPage() {
                       <TaskLinkButton task={task} />
                       <Button size="sm" variant="outline" asChild>
                         <Link
-                          href={`/dashboard/tasks/${task.id}/paper-entry`}
+                          href={taskApartmentsHref(task)}
                           title={t("task.paper_entry", "הזנת נתונים מדף מודפס")}
                           aria-label={t("task.paper_entry", "הזנת נתונים מדף מודפס")}
                         >

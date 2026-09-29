@@ -39,6 +39,7 @@ import {
   type CustomFieldDefinition,
   type Floor,
   type PicklistField,
+  type Task,
   type ReportNumber,
   type ReportNumberBuildingLink,
 } from "@/lib/types";
@@ -448,6 +449,24 @@ export default function ApartmentsPage() {
     if (ids.length === 0) return;
     clearAllFilters();
     setReportNumberIds(ids);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, searchParams]);
+
+  // fixes74 §6: an old /dashboard/tasks/<id>/paper-entry link (redirected
+  // here as ?task_id=<id>, see next.config.js) — same "replace the persisted
+  // filters" behavior, resolved to that task's report numbers.
+  const appliedTaskDeepLink = useRef(false);
+  useEffect(() => {
+    if (appliedTaskDeepLink.current || loading) return;
+    const taskId = Number(searchParams.get("task_id"));
+    if (!taskId) return;
+    appliedTaskDeepLink.current = true;
+    apiFetch<Task>(`/api/tasks/${taskId}`)
+      .then((task) => {
+        clearAllFilters();
+        setReportNumberIds(task.report_number_ids);
+      })
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, searchParams]);
 

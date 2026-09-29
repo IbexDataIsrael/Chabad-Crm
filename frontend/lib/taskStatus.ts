@@ -25,3 +25,12 @@ export function taskStatusOptionsFor(task: Pick<Task, "is_orphan">): TaskStatus[
 export function taskClaimUrl(token: string): string {
   return `${window.location.origin}/tasks/claim/${token}`;
 }
+
+/** fixes74 §6: "enter data from a printed sheet" = the main Apartments view
+ *  filtered to the task's report numbers (inline edits there are versioned
+ *  like any other apartment edit). */
+export function taskApartmentsHref(task: Pick<Task, "report_number_ids">): string {
+  const params = new URLSearchParams();
+  task.report_number_ids.forEach((id) => params.append("report_number_ids", String(id)));
+  return `/dashboard/apartments?${params}`;
+}
