@@ -1375,9 +1375,27 @@ class PicklistReorder(BaseModel):
 class UsageOut(BaseModel):
     """fixes48 §1: dependent-record count for a definition/value about to be
     hard-deleted — the frontend confirms with a data-loss warning when
-    count > 0, then purges on confirm."""
+    count > 0, then purges on confirm.
+
+    fixes72 §1: for a single *value*, a hard delete is now refused while in
+    use — `locations` says where, so the admin can go change those records."""
 
     count: int
+    locations: list["UsageLocation"] = []
+
+
+class UsageSample(BaseModel):
+    id: int
+    label: str
+
+
+class UsageLocation(BaseModel):
+    entity: str  # "contacts" | "apartments" | "visits" | "significant_dates" | "tasks"
+    count: int
+    samples: list[UsageSample] = []
+
+
+UsageOut.model_rebuild()
 
 
 class PicklistFieldOut(BaseModel):

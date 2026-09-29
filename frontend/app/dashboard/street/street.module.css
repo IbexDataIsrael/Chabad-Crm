@@ -396,17 +396,22 @@
 .saveBtn:disabled {
   opacity: 0.6;
 }
+/* fixes72 street2 §1: was a borderless pale-grey block that read as
+   disabled next to the green Save — outlined so it's clearly a button. */
 .cancelBtn {
   flex: 1;
-  background: #eef3ef;
-  color: var(--ink-soft);
-  border: none;
+  background: #fff;
+  color: var(--ink);
+  border: 1.5px solid #b9cbbf;
   border-radius: 10px;
   padding: 9px;
   font-weight: 700;
   font-size: 14px;
   cursor: pointer;
   font-family: inherit;
+}
+.cancelBtn:disabled {
+  opacity: 0.6;
 }
 .editErr {
   color: var(--danger);

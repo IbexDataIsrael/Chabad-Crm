@@ -124,7 +124,12 @@ entities that matter for orienting yourself:
   status, campaign status...) is a row here, not a hardcoded enum, so an
   admin can rename/reorder/add options. A definition's `is_system=True`
   means it ships with the app and **cannot be deleted** (only its options
-  can change) — see §7 for why that trips people up.
+  can change) — see §7 for why that trips people up. An individual
+  *option* can't be deleted (deactivated or hard-deleted) while live
+  records use it (fixes72): `GET /api/picklists/{id}/usage` returns a
+  per-entity breakdown with sample records, and `DELETE ?hard=true` 409s
+  while in use. Only active apartment versions count; links held by
+  retired versions are purged with the value.
 - **CustomFieldDefinition / CustomFieldValue** — the generic *free-typed*
   field engine (text/number/boolean/date), parallel to the picklist engine,
   usable on any entity type.

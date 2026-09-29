@@ -457,6 +457,16 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("pl", "pl.hard_delete_confirm", "למחוק לצמיתות?", "Delete permanently?"),
     ("pl", "pl.hard_delete_in_use", "לא ניתן למחוק לצמיתות — הערך בשימוש על ידי רשומות קיימות. הוא הושבת במקום.", "Can't delete permanently — the value is in use by existing records. It was deactivated instead."),
     ("pl", "pl.add_value", "הוספת ערך", "Add value"),
+    # fixes72 §1: a value still used by records can't be deleted — dialog
+    # listing where it's used.
+    ("pl", "pl.in_use_title", "לא ניתן למחוק את הערך", "This value can't be deleted"),
+    ("pl", "pl.in_use_body", "הערך משויך לרשומות קיימות. יש לשנות את הערך ברשומות אלו לפני המחיקה:", "The value is attached to existing records. Change it on these records before deleting:"),
+    ("pl", "pl.usage_contacts", "אנשי קשר", "Contacts"),
+    ("pl", "pl.usage_apartments", "דירות", "Apartments"),
+    ("pl", "pl.usage_visits", "ביקורים", "Visits"),
+    ("pl", "pl.usage_significant_dates", "תאריכים חשובים", "Significant dates"),
+    ("pl", "pl.usage_tasks", "משימות", "Tasks"),
+    ("pl", "pl.usage_and_more", "ועוד", "and"),
     ("pl", "pl.value_placeholder", "value (אנגלית)", "value (English)"),
     ("pl", "pl.editor_title", "עריכת תיבת בחירה", "Edit picklists"),
     ("pl", "pl.editor_intro", "ערוך תוויות בעברית ובאנגלית, סדר, צבע, והוסף רשימות חדשות.", "Edit labels in Hebrew and English, order, color, and add new lists."),
@@ -1440,6 +1450,10 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("street", "street.door_to_knock", "לדפוק", "To knock"),
     ("street", "street.door_visited", "בוקר", "Visited"),
     ("street", "street.door_no_knock", "לא נדרש", "No knock needed"),
+    # fixes72 street2 §2: "Save" pressed with no option picked.
+    ("street", "street.nothing_chosen", "לא נבחר ערך. יש לבחור אפשרות, או לבטל.", "Nothing selected. Pick an option, or cancel."),
+    ("street", "street.nothing_chosen_clear", "לא נבחר ערך. לנקות את הערך הקיים, או לבטל?", "Nothing selected. Clear the current value, or cancel?"),
+    ("street", "street.clear_value", "נקה ערך", "Clear value"),
     ("street", "street.visits_title", "ביקורים", "Visits"),
     ("street", "street.visits_soon", "בקרוב", "Coming soon"),
     (

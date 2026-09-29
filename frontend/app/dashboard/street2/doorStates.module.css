@@ -107,3 +107,31 @@
   border-color: #b7c7bc;
   background: #f5f7f6;
 }
+
+/* fixes72 street2 §2: "Save" with no option picked — notice + choices. */
+.emptyWarn {
+  margin-top: 9px;
+  background: #fff8e6;
+  border: 1px solid #f1d38a;
+  border-radius: 10px;
+  padding: 9px 11px;
+  font-size: 13px;
+  color: #6b4e00;
+}
+.emptyWarnActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.clearBtn {
+  flex: 1;
+  background: #fff;
+  color: var(--danger);
+  border: 1.5px solid #e6b3ad;
+  border-radius: 10px;
+  padding: 8px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+}

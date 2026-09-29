@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app import models
 from app.database import get_db
 from app.deps import get_current_user, require_admin
-from app.picklist_utils import count_definition_usage, count_usage
+from app.picklist_utils import count_definition_usage, value_usage_locations
 from app.schemas import (
     PicklistDefinitionCreate,
     PicklistDefinitionUpdate,
@@ -304,11 +304,12 @@ def value_usage(
     db: Session = Depends(get_db),
     admin: models.User = Depends(require_admin),
 ):
-    """fixes48 §1: how many records currently hold this value — drives the
-    "dependent data" confirmation before a hard delete purges it."""
+    """How many records currently hold this value, and where (fixes72 §1) —
+    the frontend shows the breakdown instead of offering a hard delete."""
     org_id = admin.organization_id
     row = _get_or_404(picklist_id, org_id, db)
-    return UsageOut(count=count_usage(db, org_id, row.field_key, row.value))
+    locations = value_usage_locations(db, org_id, row.id)
+    return UsageOut(count=sum(loc["count"] for loc in locations), locations=locations)
 
 
 @router.delete("/{picklist_id}", response_model=PicklistValueOut)
@@ -319,12 +320,23 @@ def delete_option(
     hard: bool = False,
 ):
     """Soft-delete (is_active=false) by default; `hard=true` permanently
-    removes it AND purges every record that currently points at it (fixes48
-    §1 — previously blocked with a 409 instead of asking, so a hard delete
-    never actually purged in-use data)."""
+    removes it — refused with 409 while any live record still uses it
+    (fixes72 §1, reversing fixes48's purge-on-confirm: the admin must see
+    where it's used and change those records first). Links held only by
+    retired apartment versions don't block and are purged with it."""
     org_id = admin.organization_id
     row = _get_or_404(picklist_id, org_id, db)
     if hard:
+        locations = value_usage_locations(db, org_id, row.id)
+        if locations:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                {
+                    "message": "Picklist value is in use",
+                    "count": sum(loc["count"] for loc in locations),
+                    "locations": locations,
+                },
+            )
         db.query(models.PicklistLink).filter(
             models.PicklistLink.organization_id == org_id,
             models.PicklistLink.picklist_value_id == row.id,

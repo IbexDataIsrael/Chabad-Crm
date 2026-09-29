@@ -186,7 +186,7 @@ class TestCustomFieldUsageAndPurge:
 
 
 class TestPicklistUsageAndPurge:
-    def test_value_hard_delete_purges_links_instead_of_blocking(
+    def test_value_hard_delete_blocked_while_in_use(
         self, client, admin_headers, db_session
     ):
         client.post(
@@ -218,21 +218,14 @@ class TestPicklistUsageAndPurge:
         assert usage.status_code == 200, usage.text
         assert usage.json()["count"] == 1
 
-        # fixes48: previously 409'd here and left the record untouched; now
-        # it purges the dependent link and deletes the value for real.
+        # fixes72 §1: in use -> refused (fixes48 used to purge here).
         del_res = client.delete(
             f"/api/picklists/{value_id}?hard=true", headers=admin_headers
         )
-        assert del_res.status_code == 200, del_res.text
-        assert db_session.get(models.PicklistValue, value_id) is None
-        assert (
-            db_session.query(models.PicklistLink)
-            .filter(models.PicklistLink.picklist_value_id == value_id)
-            .count()
-            == 0
-        )
+        assert del_res.status_code == 409, del_res.text
+        assert db_session.get(models.PicklistValue, value_id) is not None
         got = client.get(f"/api/contacts/{c['id']}", headers=admin_headers).json()
-        assert got["picklist_values"].get("custom.pl48") is None
+        assert got["picklist_values"].get("custom.pl48") == "opt1"
 
     def test_definition_usage_endpoint(self, client, admin_headers):
         d = client.post(

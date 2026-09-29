@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useState, type FormEvent } from "react";
 
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -297,6 +297,7 @@ function DefinitionEditor({
 }) {
   const { t } = useLocalization();
   const confirmDialog = useConfirm();
+  const { success: toastSuccess, error: toastError } = useToast();
   const [he, setHe] = useState(def.label);
   const [en, setEn] = useState(def.english_label ?? "");
 
@@ -307,11 +308,16 @@ function DefinitionEditor({
   }, [def.id, def.label, def.english_label]);
 
   async function save() {
-    await apiFetch(`/api/picklists/definition/${def.id}`, {
-      method: "PUT",
-      body: JSON.stringify({ hebrew_display_name: he, english_display_name: en || null }),
-    });
-    await onChanged();
+    try {
+      await apiFetch(`/api/picklists/definition/${def.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ hebrew_display_name: he, english_display_name: en || null }),
+      });
+      await onChanged();
+      toastSuccess(t("msg.saved", "נשמר בהצלחה"));
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+    }
   }
 
   async function remove() {
@@ -481,27 +487,59 @@ function OptionRow({
 }) {
   const { t } = useLocalization();
   const confirmDialog = useConfirm();
-  const { error: toastError } = useToast();
+  const { success: toastSuccess, error: toastError } = useToast();
   const [label, setLabel] = useState(option.hebrew_label);
   const [english, setEnglish] = useState(option.english_value ?? "");
   const [color, setColor] = useState(option.color_hint ?? "");
+  const [saving, setSaving] = useState(false);
+  const [inUse, setInUse] = useState<ValueUsage | null>(null);
 
   async function save() {
-    await apiFetch(`/api/picklists/${option.id}`, {
-      method: "PUT",
-      body: JSON.stringify({
-        hebrew_label: label,
-        english_value: english || null,
-        color_hint: color || null,
-      }),
-    });
-    await onSaved();
+    setSaving(true);
+    try {
+      await apiFetch(`/api/picklists/${option.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          hebrew_label: label,
+          english_value: english || null,
+          color_hint: color || null,
+        }),
+      });
+      await onSaved();
+      toastSuccess(t("msg.saved", "נשמר בהצלחה"));
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+    } finally {
+      setSaving(false);
+    }
   }
 
-  // Soft delete: removes the option from dropdowns; always works (keeps history).
+  // fixes72 §1: a value still used by existing records can't be deleted
+  // (neither deactivated nor hard-deleted) — show the admin where it's used
+  // instead. Returns true when the delete may proceed.
+  async function checkNotInUse(): Promise<boolean> {
+    try {
+      const usage = await apiFetch<ValueUsage>(`/api/picklists/${option.id}/usage`);
+      if (usage.count > 0) {
+        setInUse(usage);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+      return false;
+    }
+  }
+
+  // Soft delete: removes the option from dropdowns (keeps history).
   async function deactivate() {
-    await apiFetch(`/api/picklists/${option.id}`, { method: "DELETE" });
-    await onSaved();
+    if (!(await checkNotInUse())) return;
+    try {
+      await apiFetch(`/api/picklists/${option.id}`, { method: "DELETE" });
+      await onSaved();
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+    }
   }
 
   async function reactivate() {
@@ -512,22 +550,13 @@ function OptionRow({
     await onSaved();
   }
 
-  // fixes48 §1: a hard delete used to 409 when the value was in use, and
-  // silently fall back to soft-delete instead. It now purges every record
-  // pointing at this value along with it — gated by the usage-based confirm.
+  // fixes72 §1: blocked (backend 409s too) while in use — see checkNotInUse.
   async function hardDelete() {
-    const ok = await confirmHardDelete(
-      confirmDialog,
-      `/api/picklists/${option.id}/usage`,
-      option.value,
-      {
-        withData: t(
-          "cf.dependent_data_confirm",
-          "יש נתונים הקשורים לשדה זה האם למחוק בכל זאת?",
-        ),
-        plain: t("pl.hard_delete_confirm", "למחוק לצמיתות?"),
-      },
-    );
+    if (!(await checkNotInUse())) return;
+    const ok = await confirmDialog({
+      message: t("pl.hard_delete_confirm", "למחוק לצמיתות?"),
+      detail: option.value,
+    });
     if (!ok) return;
     try {
       await apiFetch(`/api/picklists/${option.id}?hard=true`, { method: "DELETE" });
@@ -540,13 +569,34 @@ function OptionRow({
   const input = "rounded-md border border-input px-2 py-1 text-sm";
 
   return (
+    <>
+    {/* Outside the row: its opacity-60 (inactive) would fade the dialog too. */}
+    {inUse && (
+      <InUseModal value={option.value} usage={inUse} onClose={() => setInUse(null)} />
+    )}
     <div
       className={`px-4 py-2 flex flex-wrap items-center gap-2 ${
         option.is_active ? "" : "opacity-60"
       }`}
     >
-      <code className="text-xs text-muted-foreground w-28 shrink-0" dir="ltr">
-        {option.value}
+      {/* fixes72 §2: long technical values (jewish_interested_gentile)
+          overflowed the fixed w-28 box onto the Hebrew input — wrap instead,
+          preferring a break after "_" (break-words is the fallback for a
+          single over-long segment). */}
+      <code
+        className="text-xs text-muted-foreground w-28 shrink-0 break-words leading-tight"
+        dir="ltr"
+      >
+        {option.value.split("_").map((part, i) => (
+          <Fragment key={i}>
+            {i > 0 && (
+              <>
+                _<wbr />
+              </>
+            )}
+            {part}
+          </Fragment>
+        ))}
       </code>
       <input
         className={`${input} flex-1 min-w-[7rem]`}
@@ -589,7 +639,8 @@ function OptionRow({
         </button>
         <button
           onClick={save}
-          className="rounded-md bg-foreground text-white px-3 py-1 text-xs hover:opacity-90"
+          disabled={saving}
+          className="rounded-md bg-foreground text-white px-3 py-1 text-xs hover:opacity-90 disabled:opacity-50"
         >
           {t("action.save", "שמור")}
         </button>
@@ -617,6 +668,99 @@ function OptionRow({
             </button>
           </>
         )}
+      </div>
+    </div>
+    </>
+  );
+}
+
+// fixes72 §1: GET /api/picklists/{id}/usage — where a value is still used.
+interface ValueUsage {
+  count: number;
+  locations: {
+    entity: string;
+    count: number;
+    samples: { id: number; label: string }[];
+  }[];
+}
+
+const USAGE_ENTITY_HREF: Record<string, (id: number) => string> = {
+  contacts: (id) => `/dashboard/contacts/${id}`,
+  apartments: (id) => `/dashboard/apartments/${id}`,
+  tasks: (id) => `/dashboard/tasks/${id}`,
+};
+
+function InUseModal({
+  value,
+  usage,
+  onClose,
+}: {
+  value: string;
+  usage: ValueUsage;
+  onClose: () => void;
+}) {
+  const { t } = useLocalization();
+  const entityLabel: Record<string, string> = {
+    contacts: t("pl.usage_contacts", "אנשי קשר"),
+    apartments: t("pl.usage_apartments", "דירות"),
+    visits: t("pl.usage_visits", "ביקורים"),
+    significant_dates: t("pl.usage_significant_dates", "תאריכים חשובים"),
+    tasks: t("pl.usage_tasks", "משימות"),
+  };
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md bg-card rounded-xl shadow-xl p-5 space-y-4 max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-lg font-bold">{t("pl.in_use_title", "לא ניתן למחוק את הערך")}</h2>
+        <p className="text-sm">
+          {t(
+            "pl.in_use_body",
+            "הערך משויך לרשומות קיימות. יש לשנות את הערך ברשומות אלו לפני המחיקה:",
+          )}{" "}
+          <code className="text-xs break-all" dir="ltr">{value}</code>
+        </p>
+        <ul className="space-y-3">
+          {usage.locations.map((loc) => {
+            const href = USAGE_ENTITY_HREF[loc.entity];
+            return (
+              <li key={loc.entity} className="text-sm">
+                <div className="font-medium">
+                  {entityLabel[loc.entity] ?? loc.entity}: {loc.count}
+                </div>
+                <ul className="ms-4 mt-1 space-y-0.5 list-disc">
+                  {loc.samples.map((s) => (
+                    <li key={s.id}>
+                      {href ? (
+                        <Link href={href(s.id)} className="text-primary hover:underline">
+                          <bdi>{s.label}</bdi>
+                        </Link>
+                      ) : (
+                        <bdi>{s.label}</bdi>
+                      )}
+                    </li>
+                  ))}
+                  {loc.count > loc.samples.length && (
+                    <li className="list-none text-muted-foreground">
+                      {t("pl.usage_and_more", "ועוד")} {loc.count - loc.samples.length}…
+                    </li>
+                  )}
+                </ul>
+              </li>
+            );
+          })}
+        </ul>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-md border border-input px-4 py-1.5 text-sm hover:bg-muted"
+        >
+          {t("action.close", "סגור")}
+        </button>
       </div>
     </div>
   );
@@ -726,16 +870,21 @@ function CustomFieldRow({
 }) {
   const { t } = useLocalization();
   const confirmDialog = useConfirm();
-  const { error: toastError } = useToast();
+  const { success: toastSuccess, error: toastError } = useToast();
   const [label, setLabel] = useState(def.hebrew_label);
   const [english, setEnglish] = useState(def.english_label ?? "");
 
   async function save() {
-    await apiFetch(`/api/custom-fields/${def.id}`, {
-      method: "PUT",
-      body: JSON.stringify({ hebrew_label: label, english_label: english || null }),
-    });
-    await onSaved();
+    try {
+      await apiFetch(`/api/custom-fields/${def.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ hebrew_label: label, english_label: english || null }),
+      });
+      await onSaved();
+      toastSuccess(t("msg.saved", "נשמר בהצלחה"));
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+    }
   }
 
   async function deactivate() {

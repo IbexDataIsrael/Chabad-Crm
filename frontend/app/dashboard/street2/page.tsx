@@ -1046,6 +1046,21 @@ function PicklistRow({
   const isEditing = editingField === field;
   const values = Array.isArray(value) ? value : value ? [value] : [];
   const hasValue = values.length > 0;
+  // fixes72 street2 §2: Save with nothing picked used to silently PUT an
+  // empty value (a new apartment version, and the door counted as edited).
+  // Now it stops and asks: cancel, or — only if there was a value —
+  // deliberately clear it. Picking a chip dismisses the notice.
+  const [emptyWarn, setEmptyWarn] = useState(false);
+  useEffect(() => {
+    if (!isEditing || chipDraft.length > 0) setEmptyWarn(false);
+  }, [isEditing, chipDraft.length]);
+  function handleSave() {
+    if (chipDraft.length === 0) {
+      setEmptyWarn(true);
+      return;
+    }
+    onSave();
+  }
   return (
     <div className={styles.row}>
       <div className={styles.lbl}>{label}</div>
@@ -1070,14 +1085,32 @@ function PicklistRow({
               })}
             </div>
           )}
-          <div className={styles.editActions}>
-            <button type="button" className={styles.saveBtn} disabled={saving} onClick={onSave}>
-              {t("action.save", "שמור")}
-            </button>
-            <button type="button" className={styles.cancelBtn} disabled={saving} onClick={onCancel}>
-              {t("action.cancel", "ביטול")}
-            </button>
-          </div>
+          {emptyWarn ? (
+            <div className={doorStyles.emptyWarn} role="alert">
+              {hasValue
+                ? t("street.nothing_chosen_clear", "לא נבחר ערך. לנקות את הערך הקיים, או לבטל?")
+                : t("street.nothing_chosen", "לא נבחר ערך. יש לבחור אפשרות, או לבטל.")}
+              <div className={doorStyles.emptyWarnActions}>
+                {hasValue && (
+                  <button type="button" className={doorStyles.clearBtn} disabled={saving} onClick={onSave}>
+                    {t("street.clear_value", "נקה ערך")}
+                  </button>
+                )}
+                <button type="button" className={styles.cancelBtn} disabled={saving} onClick={onCancel}>
+                  {t("action.cancel", "ביטול")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className={styles.editActions}>
+              <button type="button" className={styles.saveBtn} disabled={saving} onClick={handleSave}>
+                {t("action.save", "שמור")}
+              </button>
+              <button type="button" className={styles.cancelBtn} disabled={saving} onClick={onCancel}>
+                {t("action.cancel", "ביטול")}
+              </button>
+            </div>
+          )}
           {saveErr && <div className={styles.editErr}>{saveErr}</div>}
         </div>
       ) : (

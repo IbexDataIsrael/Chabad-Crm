@@ -104,37 +104,41 @@ def test_reorder(client, admin_headers):
     assert [o["id"] for o in r.json()] == reversed_ids
 
 
-def test_hard_delete_in_use_purges_dependent_links(client, admin_headers, db_session):
-    """fixes48 §1: a hard delete used to 409-block when the value was in use,
-    forcing a silent fallback to soft-delete. It now purges the dependent
-    link(s) and deletes the value for real — the frontend gates this behind
-    a "dependent data" confirmation instead of the backend refusing outright.
-    See /usage for the count that confirmation is based on."""
+def test_hard_delete_in_use_is_blocked_with_locations(client, admin_headers, db_session):
+    """fixes72 §1 (reverses fixes48's purge-on-confirm): a value still used
+    by live records can't be hard-deleted — 409, and /usage says where."""
     seed_picklists(db_session, _org_id(client, admin_headers))
-    # Create a contact using the 'new' pipeline status
     cid = client.post(
         "/api/contacts",
-        json={"name": "בדיקה", "phone": "050-7000001", "pipeline_status": "new"},
+        json={"name": "בדיקה", "last_name": "שימוש", "phone": "050-7000001", "pipeline_status": "new"},
         headers=admin_headers,
     ).json()["id"]
     assert cid
 
-    # Find the 'new' option id
     opts = client.get(f"/api/picklists/{FK}", headers=admin_headers).json()
     new_id = next(o["id"] for o in opts if o["value"] == "new")
 
     usage = client.get(f"/api/picklists/{new_id}/usage", headers=admin_headers)
     assert usage.status_code == 200
-    assert usage.json()["count"] == 1
+    body = usage.json()
+    assert body["count"] == 1
+    assert body["locations"] == [
+        {"entity": "contacts", "count": 1, "samples": [{"id": cid, "label": "בדיקה שימוש"}]}
+    ]
 
-    purged = client.delete(f"/api/picklists/{new_id}?hard=true", headers=admin_headers)
-    assert purged.status_code == 200
-    # The contact's own value is cleared along with the deleted option.
+    blocked = client.delete(f"/api/picklists/{new_id}?hard=true", headers=admin_headers)
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"]["locations"][0]["entity"] == "contacts"
+    # Nothing was purged.
     got = client.get(f"/api/contacts/{cid}", headers=admin_headers).json()
-    assert got["pipeline_status"] is None
+    assert got["pipeline_status"] == "new"
 
-    # An unused option can still be hard-deleted with nothing to purge.
+    # An unused option can still be hard-deleted.
     unused_id = next(o["id"] for o in opts if o["value"] == "completed")
+    assert client.get(f"/api/picklists/{unused_id}/usage", headers=admin_headers).json() == {
+        "count": 0,
+        "locations": [],
+    }
     ok = client.delete(f"/api/picklists/{unused_id}?hard=true", headers=admin_headers)
     assert ok.status_code == 200
 

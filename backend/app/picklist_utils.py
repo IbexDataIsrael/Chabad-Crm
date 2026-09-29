@@ -85,25 +85,112 @@ def validate_picklist_value(
         )
 
 
-def count_usage(db: Session, organization_id: int, field_key: str, value: str) -> int:
-    """How many of the org's records currently store `value` for `field_key`."""
-    return (
-        db.query(models.PicklistLink)
-        .join(
-            models.PicklistDefinition,
-            models.PicklistDefinition.id == models.PicklistLink.picklist_definition_id,
-        )
-        .join(
-            models.PicklistValue,
-            models.PicklistValue.id == models.PicklistLink.picklist_value_id,
-        )
-        .filter(
-            models.PicklistLink.organization_id == organization_id,
-            models.PicklistDefinition.system_name == field_key,
-            models.PicklistValue.value == value,
-        )
-        .count()
+_USAGE_SAMPLE_LIMIT = 5
+
+
+def value_usage_locations(db: Session, organization_id: int, value_id: int) -> list[dict]:
+    """fixes72 §1: where one picklist value is *live*-referenced, grouped by
+    entity — `[{entity, count, samples: [{id, label}]}]`, empty when unused.
+
+    Apartments are versioned: only the active version (`is_display=True`)
+    counts, since a retired version's link is history nobody can "go fix" —
+    those links are purged along with the value on a hard delete. Besides
+    the generic PicklistLink table, Task.custom_date_value_id is the one
+    direct FK to picklist_values."""
+    links = db.query(models.PicklistLink.entity_table, models.PicklistLink.entity_id).filter(
+        models.PicklistLink.organization_id == organization_id,
+        models.PicklistLink.picklist_value_id == value_id,
     )
+    ids_by_table: dict[str, list[int]] = {}
+    for table, entity_id in links.all():
+        ids_by_table.setdefault(table, []).append(entity_id)
+
+    by_entity: dict[str, dict[int, str]] = {}
+
+    def add(entity: str, rows: list[tuple[int, str]]) -> None:
+        if rows:
+            by_entity.setdefault(entity, {}).update(rows)
+
+    def contact_label(c) -> str:
+        return " ".join(p for p in (c.name, c.last_name) if p) or f"#{c.id}"
+
+    if ids := ids_by_table.pop("contacts", None):
+        rows = db.query(models.Contact).filter(models.Contact.id.in_(ids)).order_by(models.Contact.id).all()
+        add("contacts", [(c.id, contact_label(c)) for c in rows])
+
+    if ids := ids_by_table.pop("contact_mekurav", None):
+        rows = (
+            db.query(models.ContactMekurav.contact_id, models.Contact)
+            .join(models.Contact, models.Contact.id == models.ContactMekurav.contact_id)
+            .filter(models.ContactMekurav.id.in_(ids))
+            .order_by(models.Contact.id)
+            .all()
+        )
+        add("contacts", [(cid, contact_label(c)) for cid, c in rows])
+
+    if ids := ids_by_table.pop("apartments", None):
+        rows = (
+            db.query(models.Apartment, models.Building.building_address)
+            .outerjoin(models.Building, models.Building.id == models.Apartment.building_id)
+            .filter(models.Apartment.id.in_(ids), models.Apartment.is_display.is_(True))
+            .order_by(models.Apartment.id)
+            .all()
+        )
+        add("apartments", [
+            (a.id, " ".join(p for p in (addr, a.apartment_name) if p) or f"#{a.id}")
+            for a, addr in rows
+        ])
+
+    if ids := ids_by_table.pop("visit_history", None):
+        rows = (
+            db.query(models.VisitHistory)
+            .filter(models.VisitHistory.id.in_(ids))
+            .order_by(models.VisitHistory.visit_date.desc())
+            .all()
+        )
+        add("visits", [
+            (v.id, v.visit_date.strftime("%d/%m/%Y") if v.visit_date else f"#{v.id}")
+            for v in rows
+        ])
+
+    if ids := ids_by_table.pop("significant_dates", None):
+        rows = (
+            db.query(models.SignificantDate)
+            .filter(models.SignificantDate.id.in_(ids))
+            .order_by(models.SignificantDate.id)
+            .all()
+        )
+        add("significant_dates", [
+            (s.id, s.special_date_title or (s.special_date.strftime("%d/%m/%Y") if s.special_date else f"#{s.id}"))
+            for s in rows
+        ])
+
+    # Any link table this function doesn't know by name still blocks the
+    # delete — better an unlabeled count than a silent purge.
+    for table, ids in ids_by_table.items():
+        add(table, [(i, f"#{i}") for i in sorted(ids)])
+
+    tasks = (
+        db.query(models.Task.id)
+        .filter(
+            models.Task.organization_id == organization_id,
+            models.Task.custom_date_value_id == value_id,
+        )
+        .order_by(models.Task.id)
+        .all()
+    )
+    add("tasks", [(t.id, f"#{t.id}") for t in tasks])
+    return [
+        {
+            "entity": entity,
+            "count": len(rows),
+            "samples": [
+                {"id": i, "label": label}
+                for i, label in list(rows.items())[:_USAGE_SAMPLE_LIMIT]
+            ],
+        }
+        for entity, rows in by_entity.items()
+    ]
 
 
 def count_definition_usage(db: Session, picklist_definition_id: int) -> int:
