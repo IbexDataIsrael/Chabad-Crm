@@ -408,9 +408,16 @@ class ShliachReportCompletion(Base):
     # 'completed' | 'not_completed' | 'partial'
     status = Column(String(30), nullable=False)
     comments = Column(Text, nullable=True)
+    # fixes74 §11: the task this report is about. NULL for reports sent
+    # before the link existed (never back-filled) or by an activist with no
+    # task. A task only shows reports sent after it was assigned.
+    task_id = Column(
+        Integer, ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
 
     contact = relationship("Contact")
+    task = relationship("Task")
 
 
 class ShliachSystemComment(Base):

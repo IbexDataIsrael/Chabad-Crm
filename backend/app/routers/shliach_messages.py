@@ -13,6 +13,7 @@ from app.core.shliach import resolve_shliach
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.schemas import (
+    MyTaskOut,
     ReportCompletionCreate,
     ReportCompletionOut,
     ShliachAnnouncementCreate,
@@ -48,11 +49,25 @@ def submit_report_completion(
     current_user: models.User = Depends(get_current_user),
 ):
     contact_id = _resolve_self_contact_id(db, current_user)
+    if payload.task_id is not None:
+        # fixes74 §11: only one of the activist's OWN tasks can be linked.
+        task = (
+            db.query(models.Task)
+            .filter(
+                models.Task.id == payload.task_id,
+                models.Task.organization_id == current_user.organization_id,
+                models.Task.volunteer_user_id == current_user.id,
+            )
+            .first()
+        )
+        if task is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Not one of your tasks")
     row = models.ShliachReportCompletion(
         organization_id=current_user.organization_id,
         contact_id=contact_id,
         status=payload.status,
         comments=payload.comments,
+        task_id=payload.task_id,
     )
     db.add(row)
     db.commit()
@@ -65,7 +80,37 @@ def submit_report_completion(
         comments=row.comments,
         created_at=row.created_at,
         activist=ShliachSummary(id=contact.id, name=contact.name, last_name=contact.last_name),
+        task_id=row.task_id,
     )
+
+
+@router.get("/my-tasks", response_model=list[MyTaskOut])
+def my_reportable_tasks(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """fixes74 §11: the signed-in activist's own current tasks (taken or
+    paused), newest assignment first — the choices in the report form."""
+    tasks = (
+        db.query(models.Task)
+        .filter(
+            models.Task.organization_id == current_user.organization_id,
+            models.Task.volunteer_user_id == current_user.id,
+            models.Task.status.in_(["ACTIVE", "PAUSED"]),
+        )
+        .order_by(models.Task.assigned_at.desc().nullslast(), models.Task.id.desc())
+        .all()
+    )
+    return [
+        MyTaskOut(
+            id=t.id,
+            campaign_name=t.campaign.name if t.campaign else "",
+            report_number_names=sorted(rn.report_number.name for rn in t.report_numbers),
+            status=t.status,
+            assigned_at=t.assigned_at,
+        )
+        for t in tasks
+    ]
 
 
 @router.get("/report-completions", response_model=list[ReportCompletionOut])
@@ -87,6 +132,7 @@ def list_report_completions(
             id=r.id, guid=r.guid, status=r.status, comments=r.comments,
             created_at=r.created_at,
             activist=ShliachSummary(id=c.id, name=c.name, last_name=c.last_name),
+            task_id=r.task_id,
         )
         for r, c in rows
     ]

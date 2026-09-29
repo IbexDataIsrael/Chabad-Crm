@@ -71,7 +71,7 @@ def test_task_out_has_no_report_when_volunteer_never_submitted(
     assert row["latest_report_status"] is None
 
 
-def test_task_out_resolves_volunteers_latest_report_via_linked_contact(
+def test_task_out_ignores_unlinked_reports(
     client, admin_headers, db_session
 ):
     org_id = _me(client, admin_headers)["organization_id"]
@@ -113,13 +113,13 @@ def test_task_out_resolves_volunteers_latest_report_via_linked_contact(
         json={"campaign_id": campaign["id"], "volunteer_user_id": volunteer.id},
         headers=admin_headers,
     ).json()
-    assert task["latest_report_status"] == "completed"
-    assert task["latest_report_notes"] == "חדש"
+    # fixes74 §11 supersedes this: reports without a task link (every
+    # report sent before the link existed) are never attributed to a task.
+    assert task["latest_report_status"] is None
 
     r = client.get("/api/tasks/list", headers=admin_headers)
     row = next(t for t in r.json()["items"] if t["id"] == task["id"])
-    assert row["latest_report_status"] == "completed"
-    assert row["latest_report_notes"] == "חדש"
+    assert row["latest_report_status"] is None
 
 
 # --- Task 2: task_id in the campaign-task-status endpoint --------------------

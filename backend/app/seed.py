@@ -1602,6 +1602,9 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
         "Tick the columns to print, set their order with the arrows and their width in percent. Hidden fields aren't listed.",
     ),
     ("task_pdf", "task_pdf.reset_columns", "איפוס לברירת המחדל", "Reset to default"),
+    # fixes74 §11: an activist's report names its task.
+    ("shliach_msg", "shliach_msg.report_task", "על איזו משימה הדיווח?", "Which task is this report about?"),
+    ("shliach_msg", "shliach_msg.pick_task", "בחרו משימה", "Choose a task"),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)

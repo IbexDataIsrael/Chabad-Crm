@@ -733,6 +733,17 @@ export interface ReportCompletion {
   comments: string | null;
   created_at: string;
   activist: ShliachSummary;
+  /** fixes74 §11: the task the report is about (null = sent before the link existed). */
+  task_id: number | null;
+}
+
+/** fixes74 §11: GET /api/shliach-messages/my-tasks — the report form's choices. */
+export interface MyTask {
+  id: number;
+  campaign_name: string;
+  report_number_names: string[];
+  status: string;
+  assigned_at: string | null;
 }
 
 /** fixes53 §7/§9: an activist's "Comments about the system" submission. */

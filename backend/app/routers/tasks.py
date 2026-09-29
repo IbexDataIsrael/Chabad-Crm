@@ -55,77 +55,39 @@ def _get_or_404(task_id: int, org_id: int, db: Session) -> models.Task:
     return task
 
 
-def _latest_reports_by_volunteer(
-    db: Session, org_id: int, user_ids: list[int]
+def _latest_reports_by_task(
+    db: Session, tasks: list[models.Task]
 ) -> dict[int, tuple[str, Optional[str]]]:
-    """fixes60 §1/decision #2: the Tasks page's report column is the
-    volunteer's own most recent `ShliachReportCompletion`, not literally
-    scoped per-task — that table has no task_id (and no UI collects one on
-    submission). Resolved the same way apartment access is: by the shliach's
-    linked user_id, falling back to an email match for an unlinked contact
-    (fixes21). Batched across the whole page's rows in 3 queries total, not
-    one per row."""
+    """fixes74 §11: each task's own most recent report — a
+    ShliachReportCompletion linked to that task and sent AFTER the task was
+    assigned (a report from a previous assignee doesn't count). Replaces
+    fixes60's "the volunteer's latest report, whatever task it was about",
+    which let a newer report show up on an older task. Old reports have no
+    task link and are deliberately ignored — nothing guesses their task.
+    One query for the whole page."""
     result: dict[int, tuple[str, Optional[str]]] = {}
-    if not user_ids:
-        return result
-
-    contact_id_by_user: dict[int, int] = {}
-    linked = (
-        db.query(models.ContactShliach.user_id, models.ContactShliach.contact_id)
-        .filter(
-            models.ContactShliach.organization_id == org_id,
-            models.ContactShliach.user_id.in_(user_ids),
-            models.ContactShliach.is_display.is_(True),
-        )
-        .all()
-    )
-    for uid, cid in linked:
-        contact_id_by_user[uid] = cid
-
-    unresolved_ids = [uid for uid in user_ids if uid not in contact_id_by_user]
-    if unresolved_ids:
-        unresolved_users = {
-            u.id: u.email
-            for u in db.query(models.User.id, models.User.email).filter(
-                models.User.id.in_(unresolved_ids), models.User.email.isnot(None)
-            )
-        }
-        if unresolved_users:
-            by_email = (
-                db.query(models.Contact.email, models.ContactShliach.contact_id)
-                .join(models.ContactShliach, models.ContactShliach.contact_id == models.Contact.id)
-                .filter(
-                    models.ContactShliach.organization_id == org_id,
-                    models.ContactShliach.is_display.is_(True),
-                    models.Contact.email.in_(unresolved_users.values()),
-                )
-                .all()
-            )
-            email_to_contact = {email: cid for email, cid in by_email}
-            for uid, email in unresolved_users.items():
-                if email in email_to_contact:
-                    contact_id_by_user[uid] = email_to_contact[email]
-
-    contact_ids = list(set(contact_id_by_user.values()))
-    if not contact_ids:
+    assigned_at = {t.id: t.assigned_at for t in tasks if t.volunteer_user_id is not None}
+    if not assigned_at:
         return result
     rows = (
         db.query(
-            models.ShliachReportCompletion.contact_id,
+            models.ShliachReportCompletion.task_id,
             models.ShliachReportCompletion.status,
             models.ShliachReportCompletion.comments,
+            models.ShliachReportCompletion.created_at,
         )
-        .filter(models.ShliachReportCompletion.contact_id.in_(contact_ids))
-        .order_by(models.ShliachReportCompletion.created_at.desc())
+        .filter(models.ShliachReportCompletion.task_id.in_(list(assigned_at)))
+        .order_by(
+            models.ShliachReportCompletion.created_at.desc(),
+            models.ShliachReportCompletion.id.desc(),
+        )
         .all()
     )
-    latest_by_contact: dict[int, tuple[str, Optional[str]]] = {}
-    for contact_id, report_status, comments in rows:
-        latest_by_contact.setdefault(contact_id, (report_status, comments))
-
-    for uid, cid in contact_id_by_user.items():
-        if cid in latest_by_contact:
-            result[uid] = latest_by_contact[cid]
+    for task_id, report_status, comments, created_at in rows:
+        since = assigned_at[task_id]
+        if task_id in result or (since is not None and created_at < since):
+            continue
+        result[task_id] = (report_status, comments)
     return result
 
 
@@ -206,15 +168,11 @@ def _to_out(
 
 def _single_out(db: Session, org_id: int, task: models.Task) -> TaskOut:
     rn_by_task = _report_numbers_by_task(db, [task.id])
-    reports = (
-        _latest_reports_by_volunteer(db, org_id, [task.volunteer_user_id])
-        if task.volunteer_user_id
-        else {}
-    )
+    reports = _latest_reports_by_task(db, [task])
     return _to_out(
         task,
         rn_by_task.get(task.id, []),
-        reports.get(task.volunteer_user_id),
+        reports.get(task.id),
         _apartment_counts_by_task(db, [task.id]).get(task.id, 0),
     )
 
@@ -329,16 +287,14 @@ def list_tasks(
     rows = query.offset((page - 1) * page_size).limit(page_size).all()
 
     rn_by_task = _report_numbers_by_task(db, [t.id for t in rows])
-    reports_by_volunteer = _latest_reports_by_volunteer(
-        db, org_id, list({t.volunteer_user_id for t in rows if t.volunteer_user_id})
-    )
+    reports_by_task = _latest_reports_by_task(db, rows)
     apt_counts = _apartment_counts_by_task(db, [t.id for t in rows])
     return TaskPageOut(
         items=[
             _to_out(
                 t,
                 rn_by_task.get(t.id, []),
-                reports_by_volunteer.get(t.volunteer_user_id),
+                reports_by_task.get(t.id),
                 apt_counts.get(t.id, 0),
             )
             for t in rows

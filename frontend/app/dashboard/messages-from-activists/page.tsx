@@ -129,6 +129,15 @@ export default function MessagesFromActivistsPage() {
                     {contactFullName(c.activist)}
                   </Link>
                   <StatusBadge status={c.status} />
+                  {/* fixes74 §11: the task the report is about, when linked. */}
+                  {c.task_id != null && (
+                    <Link
+                      href={`/dashboard/tasks/${c.task_id}`}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      {t("task.title", "משימה")} #{c.task_id}
+                    </Link>
+                  )}
                   <span className="ms-auto text-xs text-muted-foreground" dir="ltr">
                     {new Date(c.created_at).toLocaleString()}
                   </span>

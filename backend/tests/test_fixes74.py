@@ -241,3 +241,75 @@ def test_conflicts_are_per_campaign(client, admin_headers, setup):
     ).json()
     assert [n["name"] for n in body["eligible"]] == ["1"]
     assert body["conflicts"] == []
+
+
+# --- §11: reports linked to tasks -------------------------------------------
+
+
+def _activist_with_contact(db_session, org_id, username):
+    user = _mk_shliach(db_session, org_id, username)
+    contact = models.Contact(organization_id=org_id, name=username, contact_type="shliach")
+    db_session.add(contact)
+    db_session.flush()
+    db_session.add(
+        models.ContactShliach(
+            organization_id=org_id, contact_id=contact.id, user_id=user.id, is_display=True
+        )
+    )
+    db_session.commit()
+    return user
+
+
+def _report(client, headers, status, task_id=None, comments=None):
+    return client.post(
+        "/api/shliach-messages/report-completions",
+        json={"status": status, "comments": comments, "task_id": task_id},
+        headers=headers,
+    )
+
+
+def test_each_task_shows_its_own_report(client, admin_headers, setup, db_session, org_id):
+    user = _activist_with_contact(db_session, org_id, "act74r")
+    old_task = _task(client, admin_headers, setup, names=("1",), volunteer_user_id=user.id)
+    new_task = _task(client, admin_headers, setup, names=("2",), volunteer_user_id=user.id)
+    h = _login(client, "act74r")
+
+    mine = client.get("/api/shliach-messages/my-tasks", headers=h).json()
+    assert {t["id"] for t in mine} == {old_task["id"], new_task["id"]}
+
+    assert _report(client, h, "partial", old_task["id"], "ישן").status_code == 201
+    assert _report(client, h, "completed", new_task["id"], "חדש").status_code == 201
+    # An unlinked report (no task) is attributed to nothing.
+    assert _report(client, h, "not_completed").status_code == 201
+
+    got_old = client.get(f"/api/tasks/{old_task['id']}", headers=admin_headers).json()
+    got_new = client.get(f"/api/tasks/{new_task['id']}", headers=admin_headers).json()
+    assert (got_old["latest_report_status"], got_old["latest_report_notes"]) == ("partial", "ישן")
+    assert (got_new["latest_report_status"], got_new["latest_report_notes"]) == ("completed", "חדש")
+    log = client.get("/api/shliach-messages/report-completions", headers=admin_headers).json()
+    assert sorted(r["task_id"] or 0 for r in log)[-2:] == sorted([old_task["id"], new_task["id"]])
+
+
+def test_report_before_reassignment_does_not_count(client, admin_headers, setup, db_session, org_id):
+    import datetime
+
+    first = _activist_with_contact(db_session, org_id, "act74s")
+    task = _task(client, admin_headers, setup, names=("3",), volunteer_user_id=first.id)
+    _report(client, _login(client, "act74s"), "partial", task["id"])
+    second = _mk_shliach(db_session, org_id, "act74t")
+    client.put(f"/api/tasks/{task['id']}", json={"volunteer_user_id": second.id}, headers=admin_headers)
+    # Make the reassignment unambiguously later than the first report.
+    row = db_session.get(models.Task, task["id"])
+    db_session.refresh(row)
+    row.assigned_at = datetime.datetime.utcnow() + datetime.timedelta(seconds=5)
+    db_session.commit()
+    got = client.get(f"/api/tasks/{task['id']}", headers=admin_headers).json()
+    assert got["latest_report_status"] is None
+
+
+def test_cannot_link_someone_elses_task(client, admin_headers, setup, db_session, org_id):
+    _activist_with_contact(db_session, org_id, "act74u")
+    other = _mk_shliach(db_session, org_id, "act74v")
+    task = _task(client, admin_headers, setup, names=("4",), volunteer_user_id=other.id)
+    r = _report(client, _login(client, "act74u"), "completed", task["id"])
+    assert r.status_code == 400

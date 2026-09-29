@@ -596,6 +596,18 @@ class ReportCompletionCreate(BaseModel):
 
     status: ReportCompletionStatus
     comments: Optional[str] = None
+    # fixes74 §11: which of the activist's own tasks this report is about.
+    task_id: Optional[int] = None
+
+
+class MyTaskOut(BaseModel):
+    """fixes74 §11: a task the signed-in activist can report on."""
+
+    id: int
+    campaign_name: str
+    report_number_names: list[str] = []
+    status: str
+    assigned_at: Optional[datetime] = None
 
 
 class ReportCompletionOut(BaseModel):
@@ -608,6 +620,7 @@ class ReportCompletionOut(BaseModel):
     created_at: datetime
     # fixes53 §9: who submitted it, for the Messages-from-activists list.
     activist: ShliachSummary
+    task_id: Optional[int] = None
 
 
 class SystemCommentCreate(BaseModel):
@@ -1836,9 +1849,8 @@ class TaskOut(BaseModel):
     report_number_names: list[str] = []
     status: TaskStatus
     volunteer_report_summary: Optional[str] = None
-    # fixes60 §1/decision #2: the volunteer's own most recent
-    # ShliachReportCompletion — not literally scoped per-task (that table has
-    # no task_id) — see routers/tasks.py::_latest_reports_by_volunteer.
+    # fixes74 §11: this task's own latest report (linked to it, sent after
+    # it was assigned) — see routers/tasks.py::_latest_reports_by_task.
     latest_report_status: Optional[str] = None
     latest_report_notes: Optional[str] = None
     # fixes65 §4: claim audit + derived pool state.
