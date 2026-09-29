@@ -519,6 +519,35 @@ class Campaign(Base):
     deleted_at = Column(DateTime, nullable=True)
 
     tasks = relationship("Task", back_populates="campaign")
+    field_visibility = relationship(
+        "CampaignFieldVisibility", back_populates="campaign", cascade="all, delete-orphan"
+    )
+
+
+class CampaignFieldVisibility(Base):
+    """fixes71 §B: per-campaign hide/show for apartment fields (fixed columns,
+    picklists, and custom fields alike — see app/apartment_fields.py for the
+    merged catalog). Absence of a row means visible, same convention as
+    FieldSetting's org-wide equivalent — no per-campaign backfill is ever
+    needed. Activists always see the org's one active campaign's flags
+    (street2), never the raw org-wide FieldSetting for these fields."""
+
+    __tablename__ = "campaign_field_visibility"
+    __table_args__ = (
+        UniqueConstraint(
+            "campaign_id", "field_key", name="uq_campaignfieldvis_campaign_key"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    campaign_id = Column(
+        Integer, ForeignKey("campaigns.id"), nullable=False, index=True
+    )
+    field_key = Column(String(150), nullable=False)
+    is_visible = Column(Boolean, nullable=False, default=True)
+
+    campaign = relationship("Campaign", back_populates="field_visibility")
 
 
 class Task(Base):

@@ -1216,6 +1216,25 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
         "the number of report numbers currently active under this campaign's active "
         "tasks. e.g. \"{{count}} Jews received a Menorah\".",
     ),
+    # fixes71 §B: campaigns grid + detail page + per-campaign field visibility.
+    ("campaign", "campaign.created_at", "תאריך יצירה", "Created"),
+    (
+        "campaign", "campaign.activate_confirm",
+        "הפעלת הקמפיין הזה תכבה כל קמפיין פעיל אחר. להמשיך?",
+        "Activating this campaign will turn off every other active campaign. Continue?",
+    ),
+    (
+        "campaign", "campaign.is_active_hint",
+        "קמפיין אחד בלבד יכול להיות פעיל. הפעלתו מכבה אוטומטית כל קמפיין אחר.",
+        "Only one campaign can be active at a time. Activating it automatically turns off any other.",
+    ),
+    ("campaign", "campaign.field_visibility", "שדות דירה גלויים לפעילים", "Apartment fields visible to activists"),
+    (
+        "campaign", "campaign.field_visibility_hint",
+        "סמן שדות דירה שהפעילים יראו במסלול שלהם כשהקמפיין הזה פעיל. בטל סימון כדי להסתיר שדה.",
+        "Check apartment fields activists should see on their route while this campaign is active. Uncheck a field to hide it.",
+    ),
+    ("campaign", "campaign.not_found", "הקמפיין לא נמצא.", "Campaign not found."),
     ("page", "page.tasks_title", "משימות", "Tasks"),
     ("page", "page.add_task", "משימה חדשה", "New task"),
     ("page", "page.no_tasks", "אין משימות להצגה.", "No tasks to show."),

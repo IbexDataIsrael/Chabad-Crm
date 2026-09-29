@@ -503,6 +503,25 @@ export interface Campaign {
   updated_at: string | null;
 }
 
+// fixes71 §B: per-campaign apartment field hide/show — same shape as
+// FieldSetting, apartment-only and keyed by campaign instead of org.
+export interface CampaignFieldVisibility {
+  field_key: string;
+  label_key: string;
+  entity: string;
+  is_visible: boolean;
+  label?: string | null;
+  english_label?: string | null;
+}
+
+// fixes71 §B/§C: the org's one active campaign (or none) + which apartment
+// fields it hides — what street2 shows an activist.
+export interface CampaignActive {
+  id: number;
+  name: string;
+  hidden_field_keys: string[];
+}
+
 export type TaskStatus = "ACTIVE" | "COMPLETED" | "PAUSED";
 
 export interface Task {

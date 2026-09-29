@@ -1,11 +1,12 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { Eye, Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { InlineEdit } from "@/components/ui/InlineEdit";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useConfirm } from "@/lib/confirm";
@@ -16,9 +17,14 @@ import type { Campaign } from "@/lib/types";
 const inputClass =
   "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
-/** fixes58 §3.1: Campaign CRUD — name, active toggle, and the activist-
- *  homepage stats-text template. Admin + Campaign Manager (route itself is
- *  nav-gated the same way; the backend enforces it regardless). */
+function formatDate(value: string | null): string {
+  return value ? new Date(value).toLocaleDateString("he-IL", { dateStyle: "short" }) : "—";
+}
+
+/** fixes71 §B: campaigns as a real data grid (like contacts) — display,
+ *  navigate and delete only; every edit (name/active/stats text/field
+ *  visibility) happens on the campaign's own detail page now, not inline
+ *  here (explicit requirement, unlike this page's prior InlineEdit rows). */
 export default function CampaignsPage() {
   const { isAdmin, isCampaignManager, loading } = useAuth();
   const { t } = useLocalization();
@@ -59,11 +65,6 @@ export default function CampaignsPage() {
     }
   }
 
-  async function saveField(c: Campaign, data: Partial<Campaign>) {
-    await apiFetch(`/api/campaigns/${c.id}`, { method: "PUT", body: JSON.stringify(data) });
-    await reload();
-  }
-
   async function remove(c: Campaign) {
     if (
       !(await confirmDialog({
@@ -88,7 +89,7 @@ export default function CampaignsPage() {
   }
 
   return (
-    <div className="space-y-5 max-w-3xl">
+    <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{t("page.campaigns_title", "קמפיינים")}</h1>
         {!adding && (
@@ -99,7 +100,7 @@ export default function CampaignsPage() {
       </div>
 
       {adding && (
-        <form onSubmit={addCampaign} className="flex items-center gap-2">
+        <form onSubmit={addCampaign} className="flex items-center gap-2 max-w-md">
           <input
             className={inputClass}
             placeholder={t("campaign.name", "שם")}
@@ -116,80 +117,76 @@ export default function CampaignsPage() {
         </form>
       )}
 
-      <Card className="divide-y divide-border shadow-sm">
-        {busy ? (
-          <p className="px-4 py-6 text-center text-muted-foreground">{t("action.loading", "טוען…")}</p>
-        ) : items.length === 0 ? (
-          <p className="px-4 py-6 text-center text-muted-foreground">
-            {t("page.no_campaigns", "אין קמפיינים להצגה.")}
-          </p>
-        ) : (
-          items.map((c) => (
-            <div key={c.id} className="px-4 py-3 space-y-2">
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="min-w-[10rem] font-medium">
-                  <InlineEdit<string>
-                    value={c.name}
-                    display={<span>{c.name}</span>}
-                    validate={(v) => (v.trim() ? null : t("validation.name_required", "יש להזין שם פרטי"))}
-                    onSave={(v) => saveField(c, { name: v.trim() })}
-                    editor={(draft, setDraft) => (
-                      <input
-                        className={inputClass}
-                        value={draft}
-                        onChange={(e) => setDraft(e.target.value)}
-                      />
+      <Card className="overflow-x-auto shadow-sm">
+        <table className="w-full text-sm">
+          <thead className="border-b border-border text-start text-muted-foreground">
+            <tr>
+              <th className="px-3 py-2 text-start">{t("campaign.name", "שם")}</th>
+              <th className="px-3 py-2 text-start">{t("campaign.is_active", "פעיל")}</th>
+              <th className="px-3 py-2 text-start">
+                {t("campaign.custom_stats_text", "טקסט סטטיסטיקה")}
+              </th>
+              <th className="px-3 py-2 text-start">{t("campaign.created_at", "תאריך יצירה")}</th>
+              <th className="px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {busy ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">
+                  {t("action.loading", "טוען…")}
+                </td>
+              </tr>
+            ) : items.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">
+                  {t("page.no_campaigns", "אין קמפיינים להצגה.")}
+                </td>
+              </tr>
+            ) : (
+              items.map((c) => (
+                <tr key={c.id} className="border-b border-border last:border-0">
+                  <td className="px-3 py-2">
+                    <Link href={`/dashboard/campaigns/${c.id}`} className="font-medium text-primary hover:underline">
+                      {c.name}
+                    </Link>
+                  </td>
+                  <td className="px-3 py-2">
+                    {c.is_active ? (
+                      <Badge className="bg-status-green/15 text-status-green">
+                        {t("campaign.is_active", "פעיל")}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
                     )}
-                  />
-                </div>
-                <label className="flex items-center gap-1.5 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={c.is_active}
-                    onChange={(e) => saveField(c, { is_active: e.target.checked })}
-                  />
-                  {t("campaign.is_active", "פעיל")}
-                </label>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="ms-auto border-status-darkred/40 text-status-darkred hover:bg-status-darkred/10"
-                  onClick={() => remove(c)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> {t("action.delete", "מחק")}
-                </Button>
-              </div>
-              <div>
-                <span className="block text-xs font-medium text-muted-foreground">
-                  {t("campaign.custom_stats_text", "טקסט סטטיסטיקה")}
-                </span>
-                <InlineEdit<string>
-                  value={c.custom_stats_text ?? ""}
-                  display={
-                    <span className="text-sm text-muted-foreground">
-                      {c.custom_stats_text || "—"}
-                    </span>
-                  }
-                  onSave={(v) => saveField(c, { custom_stats_text: v.trim() || null })}
-                  editor={(draft, setDraft) => (
-                    <input
-                      className={inputClass}
-                      value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
-                      placeholder="{{count}} יהודים קיבלו חנוכייה"
-                    />
-                  )}
-                />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t(
-                    "campaign.custom_stats_text_hint",
-                    "טקסט שיוצג בעמוד הבית של הפעיל. אפשר להשתמש בתגית {{count}}.",
-                  )}
-                </p>
-              </div>
-            </div>
-          ))
-        )}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {c.custom_stats_text || "—"}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">{formatDate(c.created_at)}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex justify-end gap-2">
+                      <Button size="sm" variant="outline" asChild>
+                        <Link href={`/dashboard/campaigns/${c.id}`} aria-label={t("action.view", "הצג")}>
+                          <Eye className="h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-status-darkred/40 text-status-darkred hover:bg-status-darkred/10"
+                        aria-label={t("action.delete", "מחק")}
+                        onClick={() => remove(c)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </Card>
     </div>
   );

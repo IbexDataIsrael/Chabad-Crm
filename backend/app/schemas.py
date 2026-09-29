@@ -1677,6 +1677,29 @@ class CampaignOut(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+# fixes71 §B: per-campaign apartment field hide/show — same shape as
+# field_settings.py's local FieldSettingOut/FieldSettingUpdate, apartment-only
+# and keyed by campaign instead of org.
+class CampaignFieldVisibilityOut(BaseModel):
+    field_key: str
+    label_key: str
+    entity: str
+    is_visible: bool
+    label: Optional[str] = None
+    english_label: Optional[str] = None
+
+
+class CampaignFieldVisibilityUpdate(BaseModel):
+    field_key: str
+    is_visible: bool
+
+
+class CampaignActiveOut(BaseModel):
+    id: int
+    name: str
+    hidden_field_keys: list[str]
+
+
 class TaskCreate(BaseModel):
     campaign_id: int
     # fixes65 §2: None = "Assign Later" — the task enters the orphan pool.
