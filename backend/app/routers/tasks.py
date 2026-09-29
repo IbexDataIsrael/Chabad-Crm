@@ -13,7 +13,14 @@ from sqlalchemy.orm import Session
 
 from app import models, picklist_utils
 from app.core.claim_token import make_claim_token
-from app.core.task_claim import claim, is_orphan, task_from_token
+from app.core.task_claim import (
+    assign,
+    claim,
+    claim_link_enabled,
+    is_orphan,
+    release,
+    task_from_token,
+)
 from app.database import get_db
 from app.deps import get_current_user, require_admin_or_campaign_manager
 from app.schemas import (
@@ -182,8 +189,10 @@ def _to_out(
         latest_report_notes=latest_report[1] if latest_report else None,
         claimed_at=task.claimed_at,
         claimed_via=task.claimed_via,
+        assigned_at=task.assigned_at,
         is_orphan=is_orphan(task),
         apartment_count=apartment_count,
+        claim_token=make_claim_token(task.guid) if claim_link_enabled(task) else None,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -368,25 +377,56 @@ def create_task(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "custom_date_value_id does not exist")
     _validate_report_numbers(db, org_id, payload.report_number_ids)
 
+    task = _new_task(
+        db,
+        org_id,
+        payload.campaign_id,
+        payload.volunteer_user_id,
+        payload.custom_date_value_id,
+        payload.status,
+        payload.volunteer_report_summary,
+        payload.report_number_ids,
+    )
+    db.commit()
+    db.refresh(task)
+    return _single_out(db, org_id, task)
+
+
+def _new_task(
+    db: Session,
+    org_id: int,
+    campaign_id: int,
+    volunteer_user_id: Optional[int],
+    custom_date_value_id: Optional[int],
+    task_status: str,
+    summary: Optional[str],
+    report_number_ids: list[int],
+) -> models.Task:
+    """Add one task + its report numbers (no commit). fixes74 §2: without an
+    activist a new task is AVAILABLE, never ACTIVE ("taken"); picking one at
+    creation is a manual assignment (§4)."""
+    if volunteer_user_id is None and task_status == "ACTIVE":
+        task_status = "AVAILABLE"
     task = models.Task(
         organization_id=org_id,
-        campaign_id=payload.campaign_id,
-        volunteer_user_id=payload.volunteer_user_id,
-        custom_date_value_id=payload.custom_date_value_id,
-        status=payload.status,
-        volunteer_report_summary=payload.volunteer_report_summary,
+        campaign_id=campaign_id,
+        custom_date_value_id=custom_date_value_id,
+        status=task_status,
+        volunteer_report_summary=summary,
     )
+    if volunteer_user_id is not None:
+        assign(task, volunteer_user_id, "manual")
+        if task_status in ("COMPLETED", "PAUSED"):
+            task.status = task_status
     db.add(task)
     db.flush()
-    for rn_id in payload.report_number_ids:
+    for rn_id in report_number_ids:
         db.add(
             models.TaskReportNumber(
                 organization_id=org_id, task_id=task.id, report_number_id=rn_id
             )
         )
-    db.commit()
-    db.refresh(task)
-    return _single_out(db, org_id, task)
+    return task
 
 
 @router.put("/{task_id}", response_model=TaskOut)
@@ -429,17 +469,27 @@ def update_task(
                     status.HTTP_400_BAD_REQUEST, "custom_date_value_id does not exist"
                 )
         task.custom_date_value_id = data["custom_date_value_id"]
-    if "status" in data:
-        task.status = data["status"]
     # fixes65 §4: an admin assigning (or reassigning) the task by hand. An
     # explicit null is ignored here — unassign has its own endpoint, which
-    # also clears the claim audit.
+    # also clears the claim audit. fixes74 §4: recorded as a manual
+    # assignment — status "taken" and the claim link switched off.
     new_volunteer = data.get("volunteer_user_id")
     if new_volunteer is not None and new_volunteer != task.volunteer_user_id:
         _validate_volunteer(db, org_id, new_volunteer)
-        task.volunteer_user_id = new_volunteer
-        task.claimed_at = None
-        task.claimed_via = None
+        assign(task, new_volunteer, "manual")
+    if data.get("status") is not None:
+        # fixes74 §2: "available" and "taken" follow the assignment — an
+        # unassigned task can't be taken, an assigned one can't be available.
+        if data["status"] == "AVAILABLE" and not is_orphan(task):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "An assigned task can't be available — return it to the pool instead",
+            )
+        if data["status"] == "ACTIVE" and is_orphan(task):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "Assign an activist to mark the task as taken"
+            )
+        task.status = data["status"]
     if "volunteer_report_summary" in data:
         task.volunteer_report_summary = data["volunteer_report_summary"]
     if "report_number_ids" in data and data["report_number_ids"] is not None:
@@ -484,9 +534,7 @@ def unassign_task(
     next person who scans them."""
     org_id = current_user.organization_id
     task = _get_or_404(task_id, org_id, db)
-    task.volunteer_user_id = None
-    task.claimed_at = None
-    task.claimed_via = None
+    release(task)
     db.commit()
     db.refresh(task)
     return _single_out(db, org_id, task)
@@ -561,7 +609,8 @@ def task_print_data(
     )
     return TaskPrintOut(
         task=_single_out(db, org_id, task),
-        claim_token=make_claim_token(task.guid),
+        # fixes74 §4: no QR once the link is switched off.
+        claim_token=make_claim_token(task.guid) if claim_link_enabled(task) else None,
         apartments=[
             TaskPrintApartment(
                 id=a.id,
@@ -723,10 +772,13 @@ def create_paper_entry(
     )
     db.add(entry)
     if is_orphan(task):
-        task.claimed_at = datetime.datetime.utcnow()
-        task.claimed_via = "paper"
         if performer_user is not None:
-            task.volunteer_user_id = performer_user.id
+            assign(task, performer_user.id, "paper")
+        else:
+            task.claimed_at = datetime.datetime.utcnow()
+            task.claimed_via = "paper"
+            if task.status == "AVAILABLE":
+                task.status = "ACTIVE"
     db.commit()
     db.refresh(entry)
     return _paper_entry_out(entry)

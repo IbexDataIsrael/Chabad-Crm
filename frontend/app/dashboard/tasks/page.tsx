@@ -13,6 +13,7 @@ import {
   QrCode,
   Settings,
   Trash2,
+  UserCheck,
   UserMinus,
   X,
 } from "lucide-react";
@@ -22,6 +23,7 @@ import { useEffect, useState } from "react";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { ReportStatusBadge } from "@/components/ReportStatusBadge";
 import { TaskQuickCreateForm } from "@/components/TaskQuickCreateForm";
+import { TaskLinkButton } from "@/components/tasks/TaskLinkButton";
 import { TaskSheetFieldsModal } from "@/components/tasks/TaskSheetFieldsModal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -35,6 +37,7 @@ import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 import { printTaskSheet } from "@/lib/taskPrint";
 import { useTaskSheetFields } from "@/lib/taskSheetFields";
+import { TASK_STATUS_OPTIONS, taskStatusLabels, taskStatusOptionsFor } from "@/lib/taskStatus";
 import type { Campaign, Task, TaskPage, TaskStatus } from "@/lib/types";
 
 type AssignmentFilter = "" | "orphan" | "assigned";
@@ -50,8 +53,6 @@ const inputClass =
   "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
 type SortKey = "volunteer_name" | "created_at" | "report_number";
-
-const STATUS_OPTIONS: TaskStatus[] = ["ACTIVE", "COMPLETED", "PAUSED"];
 
 /** fixes58 §3.4: Tasks management grid — search/filter/sort/paginate, with
  *  inline-edit for the activist and status. fixes67: every row opens its
@@ -97,11 +98,7 @@ export default function TasksPage() {
     setPage(1);
   }
 
-  const statusLabel: Record<TaskStatus, string> = {
-    ACTIVE: t("task.status_active", "פעיל"),
-    COMPLETED: t("task.status_completed", "הושלם"),
-    PAUSED: t("task.status_paused", "מושהה"),
-  };
+  const statusLabel = taskStatusLabels(t);
 
   useEffect(() => {
     apiFetch<Campaign[]>("/api/campaigns").then(setCampaigns).catch(() => setCampaigns([]));
@@ -224,6 +221,12 @@ export default function TasksPage() {
             <QrCode className="h-3.5 w-3.5 text-muted-foreground" />
           </span>
         )}
+        {/* fixes74 §4: picked by hand in this table (claim link switched off). */}
+        {task.claimed_via === "manual" && (
+          <span title={t("task.claimed_via_manual", "שויכה ידנית")}>
+            <UserCheck className="h-3.5 w-3.5 text-muted-foreground" />
+          </span>
+        )}
       </span>
     );
     return (
@@ -307,7 +310,7 @@ export default function TasksPage() {
         <MultiSelectFilter
           allLabel={t("filter.all_task_statuses", "כל הסטטוסים")}
           label={t("task.status", "סטטוס")}
-          options={STATUS_OPTIONS.map((s) => ({ id: s, label: statusLabel[s] }))}
+          options={TASK_STATUS_OPTIONS.map((s) => ({ id: s, label: statusLabel[s] }))}
           value={statusFilter}
           onChange={(v) => {
             setStatusFilter(v);
@@ -348,6 +351,8 @@ export default function TasksPage() {
         <table className="w-full text-sm">
           <thead className="border-b border-border text-start text-muted-foreground">
             <tr>
+              {/* fixes74 §7: the task number first (rightmost in RTL). */}
+              <th className="px-3 py-2 text-start">{t("task.number", "מס' משימה")}</th>
               <th className="px-3 py-2 text-start">{sortHeader("volunteer_name", t("task.volunteer", "פעיל"))}</th>
               <th className="px-3 py-2 text-start">{t("task.campaign", "קמפיין")}</th>
               <th className="px-3 py-2 text-start">{sortHeader("report_number", t("task.report_numbers", "מספרי דוח"))}</th>
@@ -361,19 +366,24 @@ export default function TasksPage() {
           <tbody className="divide-y divide-border">
             {busy ? (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">
+                <td colSpan={9} className="px-3 py-6 text-center text-muted-foreground">
                   {t("action.loading", "טוען…")}
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">
+                <td colSpan={9} className="px-3 py-6 text-center text-muted-foreground">
                   {t("page.no_tasks", "אין משימות להצגה.")}
                 </td>
               </tr>
             ) : (
               items.map((task) => (
                 <tr key={task.id}>
+                  <td className="px-3 py-2 font-medium tabular-nums">
+                    <Link href={`/dashboard/tasks/${task.id}`} className="text-primary hover:underline">
+                      #{task.id}
+                    </Link>
+                  </td>
                   <td className="px-3 py-2">{volunteerCell(task)}</td>
                   <td className="px-3 py-2">
                     {/* fixes67: the row's way into its own task page. */}
@@ -394,7 +404,7 @@ export default function TasksPage() {
                           onChange={(e) => commit(e.target.value as TaskStatus)}
                           autoFocus
                         >
-                          {STATUS_OPTIONS.map((s) => (
+                          {taskStatusOptionsFor(task).map((s) => (
                             <option key={s} value={s}>
                               {statusLabel[s]}
                             </option>
@@ -451,6 +461,7 @@ export default function TasksPage() {
                           <Printer className="h-3.5 w-3.5" />
                         )}
                       </Button>
+                      <TaskLinkButton task={task} />
                       <Button size="sm" variant="outline" asChild>
                         <Link
                           href={`/dashboard/tasks/${task.id}/paper-entry`}

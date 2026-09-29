@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { ReportStatusBadge } from "@/components/ReportStatusBadge";
+import { TaskLinkButton, TaskLinkField } from "@/components/tasks/TaskLinkButton";
 import { TaskSheetFieldsModal } from "@/components/tasks/TaskSheetFieldsModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,13 +20,12 @@ import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
 import { printTaskSheet } from "@/lib/taskPrint";
 import { useTaskSheetFields } from "@/lib/taskSheetFields";
+import { taskStatusLabels, taskStatusOptionsFor } from "@/lib/taskStatus";
 import { useToast } from "@/lib/toast";
 import type { Campaign, ReportNumber, Task, TaskStatus } from "@/lib/types";
 
 const inputClass =
   "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
-
-const STATUS_OPTIONS: TaskStatus[] = ["ACTIVE", "COMPLETED", "PAUSED"];
 
 interface ActivistOption {
   id: number;
@@ -72,11 +72,7 @@ export default function TaskDetailPage() {
       .catch(() => setActivists([]));
   }, [loading, allowed, taskId]);
 
-  const statusLabel: Record<TaskStatus, string> = {
-    ACTIVE: t("task.status_active", "פעיל"),
-    COMPLETED: t("task.status_completed", "הושלם"),
-    PAUSED: t("task.status_paused", "מושהה"),
-  };
+  const statusLabel = taskStatusLabels(t);
 
   async function patch(data: Partial<Task>) {
     const updated = await apiFetch<Task>(`/api/tasks/${taskId}`, {
@@ -160,6 +156,8 @@ export default function TaskDetailPage() {
   const claimedVia =
     task.claimed_via === "qr"
       ? t("task.claimed_via_qr", "נלקחה בסריקת קוד QR")
+      : task.claimed_via === "manual"
+        ? t("task.claimed_via_manual", "שויכה ידנית")
       : task.claimed_via === "paper"
         ? t("task.claimed_via_paper", "הוזנה מדף מודפס במשרד")
         : task.volunteer_user_id
@@ -198,6 +196,7 @@ export default function TaskDetailPage() {
             {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
             {t("task.print", "הדפסת משימה")}
           </Button>
+          <TaskLinkButton task={task} />
           <Button
             size="sm"
             variant="outline"
@@ -345,7 +344,7 @@ export default function TaskDetailPage() {
                   value={draft}
                   onChange={(e) => commit(e.target.value as TaskStatus)}
                 >
-                  {STATUS_OPTIONS.map((s) => (
+                  {taskStatusOptionsFor(task).map((s) => (
                     <option key={s} value={s}>
                       {statusLabel[s]}
                     </option>
@@ -397,7 +396,11 @@ export default function TaskDetailPage() {
             <span>{claimedVia}</span>
           </Field>
           <Field label={t("task.claimed_at", "תאריך שיוך")}>
-            <span>{formatDateTime(task.claimed_at)}</span>
+            <span>{formatDateTime(task.assigned_at ?? task.claimed_at)}</span>
+          </Field>
+          {/* fixes74 §1: the same link the printed QR encodes. */}
+          <Field label={t("task.assignment_link", "קישור לשיוך המשימה")} wide>
+            <TaskLinkField task={task} />
           </Field>
           <Field label={t("task.created_at", "תאריך יצירה")}>
             <span>{formatDateTime(task.created_at)}</span>

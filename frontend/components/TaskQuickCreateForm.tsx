@@ -8,12 +8,12 @@ import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
+import { taskStatusLabels } from "@/lib/taskStatus";
 import type { Campaign, ReportNumber, TaskStatus } from "@/lib/types";
 
 const inputClass =
   "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
-const STATUS_OPTIONS: TaskStatus[] = ["ACTIVE", "COMPLETED", "PAUSED"];
 
 interface ActivistOption {
   id: number;
@@ -58,11 +58,14 @@ export function TaskQuickCreateForm({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const statusLabel: Record<TaskStatus, string> = {
-    ACTIVE: t("task.status_active", "פעיל"),
-    COMPLETED: t("task.status_completed", "הושלם"),
-    PAUSED: t("task.status_paused", "מושהה"),
-  };
+  const statusLabel = taskStatusLabels(t);
+  // fixes74 §2: without an activist the new task is "available", with one it
+  // is "taken" — the first option follows the activist choice (the backend
+  // applies the same rule).
+  const noActivist = selectedVolunteerId === "";
+  const statusOptions: TaskStatus[] = [noActivist ? "AVAILABLE" : "ACTIVE", "COMPLETED", "PAUSED"];
+  const shownStatus: TaskStatus =
+    status === "ACTIVE" || status === "AVAILABLE" ? statusOptions[0] : status;
 
   useEffect(() => {
     apiFetch<Campaign[]>("/api/campaigns?active=true")
@@ -108,7 +111,7 @@ export function TaskQuickCreateForm({
           volunteer_user_id: selectedVolunteerId === "" ? null : selectedVolunteerId,
           report_number_ids: reportNumberIds,
           custom_date_value_id: customDateValueId === "" ? null : customDateValueId,
-          status,
+          status: shownStatus,
         }),
       });
       await onSaved();
@@ -204,10 +207,10 @@ export function TaskQuickCreateForm({
           <span className="block text-sm font-medium">{t("task.status", "סטטוס")}</span>
           <select
             className={inputClass}
-            value={status}
+            value={shownStatus}
             onChange={(e) => setStatus(e.target.value as TaskStatus)}
           >
-            {STATUS_OPTIONS.map((s) => (
+            {statusOptions.map((s) => (
               <option key={s} value={s}>
                 {statusLabel[s]}
               </option>

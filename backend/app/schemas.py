@@ -1661,7 +1661,8 @@ class DashboardSummaryOut(BaseModel):
 
 # --- fixes58: Campaign & Task entities -------------------------------------
 
-TaskStatus = Literal["ACTIVE", "COMPLETED", "PAUSED"]
+# fixes74 §2/§5: AVAILABLE = unassigned ("פנוי"); ACTIVE = taken ("נלקח").
+TaskStatus = Literal["AVAILABLE", "ACTIVE", "COMPLETED", "PAUSED"]
 
 
 class CampaignCreate(BaseModel):
@@ -1805,8 +1806,12 @@ class TaskOut(BaseModel):
     # fixes65 §4: claim audit + derived pool state.
     claimed_at: Optional[datetime] = None
     claimed_via: Optional[str] = None
+    assigned_at: Optional[datetime] = None
     is_orphan: bool = False
     apartment_count: int = 0
+    # fixes74 §1: the signed claim link's token (the same one the printed QR
+    # encodes) — None once the task was assigned manually (§4 disables it).
+    claim_token: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

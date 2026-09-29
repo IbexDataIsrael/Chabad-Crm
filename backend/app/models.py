@@ -594,7 +594,7 @@ class Task(Base):
     quick-action button on the Users/"Volunteers" page) and field name point
     at a real login, sidestepping the linked-vs-email-fallback shliach
     identity complexity `resolve_shliach()` exists for. `status` is a plain
-    validated string (ACTIVE|COMPLETED|PAUSED), matching how every other
+    validated string (AVAILABLE|ACTIVE|COMPLETED|PAUSED), matching how every other
     status-like field in this codebase avoids a DB-level enum."""
 
     __tablename__ = "tasks"
@@ -618,13 +618,20 @@ class Task(Base):
     custom_date_value_id = Column(
         Integer, ForeignKey("picklist_values.id"), nullable=True
     )
+    # fixes74 §2/§5: AVAILABLE ("פנוי", unassigned) | ACTIVE ("נלקח", taken —
+    # the stored value keeps its old name so existing rows and the access
+    # rules in _shliach_apartment_ids keep working) | COMPLETED | PAUSED.
     status = Column(String(20), nullable=False, default="ACTIVE")
     volunteer_report_summary = Column(Text, nullable=True)
     # fixes65 §4 claim audit: when/how the task left the orphan pool —
     # 'qr' (scanned printout), 'paper' (office entered the paper sheet; locks
-    # the task even with no registered performer). Cleared on unassign.
+    # the task even with no registered performer), fixes74 §4 'manual' (an
+    # admin picked the activist; disables the claim link). Cleared on unassign.
     claimed_at = Column(DateTime, nullable=True)
     claimed_via = Column(String(20), nullable=True)
+    # fixes74 §11: when the current activist got the task, however it
+    # happened. Only reports sent after this count as the task's report.
+    assigned_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(
         DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow

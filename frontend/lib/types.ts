@@ -561,7 +561,8 @@ export interface CampaignHistoryPage {
   page_size: number;
 }
 
-export type TaskStatus = "ACTIVE" | "COMPLETED" | "PAUSED";
+/** fixes74 §2/§5: AVAILABLE = unassigned ("פנוי"), ACTIVE = taken ("נלקח"). */
+export type TaskStatus = "AVAILABLE" | "ACTIVE" | "COMPLETED" | "PAUSED";
 
 export interface Task {
   id: number;
@@ -581,11 +582,15 @@ export interface Task {
   // see backend routers/tasks.py::_latest_reports_by_volunteer.
   latest_report_status: ReportCompletionStatus | null;
   latest_report_notes: string | null;
-  /** fixes65 §4: claim audit ('qr' | 'paper') + derived pool state. */
+  /** fixes65 §4: claim audit ('qr' | 'paper' | fixes74 'manual') + derived pool state. */
   claimed_at: string | null;
   claimed_via: string | null;
+  /** fixes74 §11: when the current activist got the task. */
+  assigned_at: string | null;
   is_orphan: boolean;
   apartment_count: number;
+  /** fixes74 §1: the claim link's token; null once assigned manually (§4). */
+  claim_token: string | null;
   created_at: string | null;
   updated_at: string | null;
 }

@@ -16,15 +16,45 @@ def is_orphan(task: models.Task) -> bool:
     return task.volunteer_user_id is None and task.claimed_via != "paper"
 
 
+def claim_link_enabled(task: models.Task) -> bool:
+    """fixes74 §4: a manually assigned task's claim link is switched off
+    (until it's returned to the pool, which clears `claimed_via`)."""
+    return task.claimed_via != "manual"
+
+
+def assign(task: models.Task, user_id: int, via: str) -> None:
+    """Give the task to an activist (no commit). fixes74 §2/§4: an assigned
+    task is "taken" — AVAILABLE becomes ACTIVE; a manual pick forces ACTIVE."""
+    now = datetime.datetime.utcnow()
+    task.volunteer_user_id = user_id
+    task.claimed_at = now
+    task.claimed_via = via
+    task.assigned_at = now
+    if via == "manual" or task.status == "AVAILABLE":
+        task.status = "ACTIVE"
+
+
+def release(task: models.Task) -> None:
+    """Back to the orphan pool (no commit): the link works again and the
+    task is available."""
+    task.volunteer_user_id = None
+    task.claimed_at = None
+    task.claimed_via = None
+    task.assigned_at = None
+    if task.status == "ACTIVE":
+        task.status = "AVAILABLE"
+
+
 def task_from_token(db: Session, token: str) -> Optional[models.Task]:
     """The task a claim token points at, or None when the token is forged /
-    malformed, the task was deleted, or it's done (a finished task's printout
-    stops working). An unassigned-then-reclaimed task keeps the same token."""
+    malformed, the task was deleted, it's done (a finished task's printout
+    stops working), or fixes74 §4 it was assigned manually. An
+    unassigned-then-reclaimed task keeps the same token."""
     guid = parse_claim_token(token)
     if guid is None:
         return None
     task = db.query(models.Task).filter(models.Task.guid == guid).first()
-    if task is None or task.status == "COMPLETED":
+    if task is None or task.status == "COMPLETED" or not claim_link_enabled(task):
         return None
     return task
 
@@ -45,9 +75,7 @@ def claim(db: Session, task: models.Task, user: models.User) -> str:
     state = claim_state_for(task, user)
     if state != "available":
         return state
-    task.volunteer_user_id = user.id
-    task.claimed_at = datetime.datetime.utcnow()
-    task.claimed_via = "qr"
+    assign(task, user.id, "qr")
     return "claimed"
 
 

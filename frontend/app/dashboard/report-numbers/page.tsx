@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { InlineEdit } from "@/components/ui/InlineEdit";
 import { Input } from "@/components/ui/input";
+import { TASK_STATUS_OPTIONS, taskStatusLabels } from "@/lib/taskStatus";
 import type {
   Campaign,
   JewishCounts,
@@ -25,7 +26,7 @@ import type {
   TaskStatusWithId,
 } from "@/lib/types";
 
-const STATUS_OPTIONS: TaskStatus[] = ["ACTIVE", "COMPLETED", "PAUSED"];
+const STATUS_OPTIONS: TaskStatus[] = TASK_STATUS_OPTIONS;
 const selectClass =
   "rounded-md border border-input px-2 py-1 text-xs focus:border-primary focus:outline-none";
 
@@ -233,11 +234,7 @@ export default function ReportNumbersPage() {
     created_at: t("sort.created", "תאריך יצירה"),
   };
 
-  const taskStatusLabel: Record<TaskStatus, string> = {
-    ACTIVE: t("task.status_active", "פעיל"),
-    COMPLETED: t("task.status_completed", "הושלם"),
-    PAUSED: t("task.status_paused", "מושהה"),
-  };
+  const taskStatusLabel = taskStatusLabels(t);
 
   // fixes58 §3.5: colored badge per active campaign — green=Active,
   // red=Paused; Completed uses a neutral outline badge rather than the blue
@@ -251,6 +248,8 @@ export default function ReportNumbersPage() {
     const badge =
       cell.status === "ACTIVE" ? (
         <Badge variant="status-green">{taskStatusLabel.ACTIVE}</Badge>
+      ) : cell.status === "AVAILABLE" ? (
+        <Badge variant="status-yellow">{taskStatusLabel.AVAILABLE}</Badge>
       ) : cell.status === "PAUSED" ? (
         <Badge variant="status-darkred">{taskStatusLabel.PAUSED}</Badge>
       ) : (
@@ -274,7 +273,10 @@ export default function ReportNumbersPage() {
             onChange={(e) => commit(e.target.value as TaskStatus)}
             autoFocus
           >
-            {STATUS_OPTIONS.map((s) => (
+            {STATUS_OPTIONS.filter(
+              // fixes74 §2: "available"/"taken" follow the assignment.
+              (s) => !(cell.status === "AVAILABLE" && s === "ACTIVE") && !(cell.status === "ACTIVE" && s === "AVAILABLE"),
+            ).map((s) => (
               <option key={s} value={s}>
                 {taskStatusLabel[s]}
               </option>

@@ -1267,7 +1267,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("task", "task.volunteer", "פעיל", "Activist"),
     ("task", "task.report_numbers", "מספרי דוח", "Report numbers"),
     ("task", "task.status", "סטטוס", "Status"),
-    ("task", "task.status_active", "פעיל", "Active"),
+    ("task", "task.status_active", "נלקח", "Taken"),
     ("task", "task.status_completed", "הושלם", "Completed"),
     ("task", "task.status_paused", "מושהה", "Paused"),
     ("task", "task.custom_date", "תאריך מותאם", "Custom date"),
@@ -1553,6 +1553,21 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
         "activist_home", "activist_home.start_route_hint",
         "סיבוב דלת אחר דלת לדירות המשויכות לך", "Door-by-door route for your assigned apartments",
     ),
+    # fixes74 §1/§2/§4/§5/§7: task statuses, assignment link, number column.
+    ("task", "task.status_available", "פנוי", "Available"),
+    ("task", "task.number", "מס' משימה", "Task #"),
+    ("task", "task.copy_link", "העתקת קישור לשיוך המשימה", "Copy the task assignment link"),
+    ("task", "task.assignment_link", "קישור לשיוך המשימה", "Task assignment link"),
+    ("task", "task.link_copied", "הקישור הועתק", "Link copied"),
+    (
+        "task", "task.link_copy_failed", "ההעתקה נכשלה — סמנו את הקישור והעתיקו ידנית",
+        "Copy failed — select the link and copy it manually",
+    ),
+    (
+        "task", "task.link_disabled", "הקישור בוטל — המשימה שויכה ידנית",
+        "Link disabled — the task was assigned manually",
+    ),
+    ("action", "action.copy", "העתק", "Copy"),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)
@@ -1807,6 +1822,9 @@ LOCALIZATION_RENAMES: dict[str, tuple[set, str, set, str]] = {
     "contact_mekurav.admin_area_id": (
         {"אזור מנהל"}, "אזור מותאם אישית", {"Admin area"}, "Custom area",
     ),
+    # fixes74 §5: an assigned, active task is "taken" (the stored value
+    # stays ACTIVE).
+    "task.status_active": ({"פעיל"}, "נלקח", {"Active"}, "Taken"),
     "filter.all_admin_areas": (
         {"כל אזורי המנהל"}, "כל האזורים המותאמים אישית",
         {"All admin areas"}, "All custom areas",
