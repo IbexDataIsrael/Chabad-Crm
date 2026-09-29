@@ -294,44 +294,52 @@ export default function Street2Page() {
   }, [items, completionsReady, activeCampaign?.id]);
 
   // fixes73: moving on from an unfinished building needs an explicit
-  // acknowledgement. `currentBuildingId` is the building the activist last
-  // opened a door in; opening a door in a DIFFERENT building checks only
-  // that one previous building (never further back). Persisted per user so a
-  // refresh doesn't silently skip the check. Read in an effect keyed by the
-  // user id — not a lazy-init usePersistentState — because `user` loads
-  // async (the fixes70 keyed-by-async-user bug).
-  const [currentBuildingId, setCurrentBuildingId] = useState<number | null>(null);
+  // acknowledgement. Opening a door in a building checks the ONE building
+  // right before it in the route (list) order — whether or not the activist
+  // ever tapped a door there, so scrolling past a building can't skip it.
+  // Once the activist confirms for a building, doors in it open freely
+  // afterwards. Acknowledgements are persisted per user so a refresh doesn't
+  // re-nag; read in an effect keyed by the user id — not a lazy-init
+  // usePersistentState — because `user` loads async (fixes70 bug).
+  const [ackedBuildingIds, setAckedBuildingIds] = useState<Set<number>>(new Set());
   const [leaveWarn, setLeaveWarn] = useState<{
     buildingName: string;
     pending: ApartmentListItem[];
     targetAptId: number;
     targetBuildingId: number;
   } | null>(null);
-  const currentBuildingKey = user ? `crm.street2.currentBuilding.${user.id}` : null;
+  const ackKey = user ? `crm.street2.ackedBuildings.${user.id}` : null;
 
   useEffect(() => {
-    if (!currentBuildingKey) return;
+    if (!ackKey) return;
     try {
-      const raw = window.localStorage.getItem(currentBuildingKey);
-      setCurrentBuildingId(raw ? Number(raw) || null : null);
+      const raw = window.localStorage.getItem(ackKey);
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      setAckedBuildingIds(new Set(Array.isArray(parsed) ? parsed.filter((n) => typeof n === "number") : []));
     } catch {
-      setCurrentBuildingId(null);
+      setAckedBuildingIds(new Set());
     }
-  }, [currentBuildingKey]);
+  }, [ackKey]);
 
-  function enterBuilding(buildingId: number) {
-    setCurrentBuildingId(buildingId);
-    if (!currentBuildingKey) return;
-    try {
-      window.localStorage.setItem(currentBuildingKey, String(buildingId));
-    } catch {
-      /* storage unavailable — the check just won't survive a refresh */
+  // Route order = the order buildings appear in the list, INCLUDING
+  // completed (hidden) ones, so a hidden finished building counts as the
+  // previous one and correctly never warns.
+  const buildingOrder = useMemo(() => {
+    const seen: number[] = [];
+    const set = new Set<number>();
+    for (const a of items) {
+      if (!set.has(a.building_id)) {
+        set.add(a.building_id);
+        seen.push(a.building_id);
+      }
     }
-  }
+    return seen;
+  }, [items]);
 
   function openDoor(a: ApartmentListItem) {
-    const prevId = currentBuildingId;
-    if (prevId != null && prevId !== a.building_id && !completedBuildingIds.has(prevId)) {
+    const idx = buildingOrder.indexOf(a.building_id);
+    const prevId = idx > 0 ? buildingOrder[idx - 1] : null;
+    if (prevId != null && !ackedBuildingIds.has(a.building_id) && !completedBuildingIds.has(prevId)) {
       const prevApts = items.filter((x) => x.building_id === prevId);
       // Same predicates as buildingComplete(): only to-knock doors are
       // required, so only those are listed as still needing an edit.
@@ -350,13 +358,20 @@ export default function Street2Page() {
         return;
       }
     }
-    enterBuilding(a.building_id);
     setOpenId(a.id);
   }
 
   function confirmLeave() {
     if (!leaveWarn) return;
-    enterBuilding(leaveWarn.targetBuildingId);
+    const next = new Set(ackedBuildingIds).add(leaveWarn.targetBuildingId);
+    setAckedBuildingIds(next);
+    if (ackKey) {
+      try {
+        window.localStorage.setItem(ackKey, JSON.stringify([...next]));
+      } catch {
+        /* storage unavailable — the user just gets asked again after a refresh */
+      }
+    }
     setOpenId(leaveWarn.targetAptId);
     setLeaveWarn(null);
   }
