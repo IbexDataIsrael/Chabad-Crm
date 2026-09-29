@@ -1770,6 +1770,44 @@ class TaskCreate(BaseModel):
     volunteer_report_summary: Optional[str] = None
 
 
+class TaskBulkPreviewRequest(BaseModel):
+    """fixes74 §3: what "one task per report number" would create — the
+    explicitly picked report numbers plus any typed range ("10-40, 55")."""
+    campaign_id: int
+    report_number_ids: list[int] = []
+    range_text: Optional[str] = None
+
+
+class TaskBulkNumber(BaseModel):
+    id: int
+    name: str
+    # For a conflict: the tasks (same campaign) that already cover it.
+    task_ids: list[int] = []
+
+
+class TaskBulkPreviewOut(BaseModel):
+    eligible: list[TaskBulkNumber] = []
+    conflicts: list[TaskBulkNumber] = []
+    # Numbers from the range that aren't report numbers at all (skipped).
+    missing: list[str] = []
+
+
+class TaskBulkCreate(BaseModel):
+    campaign_id: int
+    report_number_ids: list[int]
+    volunteer_user_id: Optional[int] = None
+    custom_date_value_id: Optional[int] = None
+    status: TaskStatus = "ACTIVE"
+    # False = refuse (409) when any number is already in a task of this
+    # campaign; True = create the rest and skip those.
+    skip_conflicts: bool = False
+
+
+class TaskBulkCreateOut(BaseModel):
+    created_task_ids: list[int] = []
+    skipped: list[TaskBulkNumber] = []
+
+
 class TaskUpdate(BaseModel):
     campaign_id: Optional[int] = None
     # fixes65 §4: assign an orphan / reassign (unassign has its own endpoint).

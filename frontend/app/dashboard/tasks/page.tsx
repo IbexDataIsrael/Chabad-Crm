@@ -532,10 +532,14 @@ export default function TasksPage() {
       {creating && (
         <TaskQuickCreateForm
           onClose={() => setCreating(false)}
-          onSaved={async () => {
+          onSaved={async (createdCount) => {
             setCreating(false);
             await reload();
-            success(t("msg.saved", "נשמר בהצלחה"));
+            success(
+              createdCount != null
+                ? t("task.bulk_created", "נוצרו {n} משימות").replace("{n}", String(createdCount))
+                : t("msg.saved", "נשמר בהצלחה"),
+            );
           }}
         />
       )}

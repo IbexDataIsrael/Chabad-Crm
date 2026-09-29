@@ -162,3 +162,82 @@ def test_manual_assignment_forces_taken_even_when_paused(client, admin_headers, 
         f"/api/tasks/{task['id']}", json={"volunteer_user_id": user.id}, headers=admin_headers
     ).json()
     assert body["status"] == "ACTIVE"
+
+
+# --- §3: one task per report number -----------------------------------------
+
+
+def test_bulk_preview_range_skips_missing_and_flags_conflicts(client, admin_headers, setup):
+    existing = _task(client, admin_headers, setup, names=("3",))
+    r = client.post(
+        "/api/tasks/bulk/preview",
+        json={"campaign_id": setup["campaign_id"], "range_text": "1-5, 9"},
+        headers=admin_headers,
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert [n["name"] for n in body["eligible"]] == ["1", "2", "4", "5"]
+    assert [(n["name"], n["task_ids"]) for n in body["conflicts"]] == [("3", [existing["id"]])]
+    assert body["missing"] == ["9"]
+
+
+def test_bulk_preview_rejects_garbage(client, admin_headers, setup):
+    r = client.post(
+        "/api/tasks/bulk/preview",
+        json={"campaign_id": setup["campaign_id"], "range_text": "10-abc"},
+        headers=admin_headers,
+    )
+    assert r.status_code == 422
+
+
+def test_bulk_create_refuses_on_conflict_unless_skipping(client, admin_headers, setup):
+    _task(client, admin_headers, setup, names=("3",))
+    ids = [setup["rns"][n] for n in ("1", "2", "3")]
+    payload = {"campaign_id": setup["campaign_id"], "report_number_ids": ids}
+    before = client.get("/api/tasks/list", headers=admin_headers).json()["total"]
+    r = client.post("/api/tasks/bulk", json=payload, headers=admin_headers)
+    assert r.status_code == 409
+    assert client.get("/api/tasks/list", headers=admin_headers).json()["total"] == before
+
+    r = client.post("/api/tasks/bulk", json={**payload, "skip_conflicts": True}, headers=admin_headers)
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert len(body["created_task_ids"]) == 2
+    assert [n["name"] for n in body["skipped"]] == ["3"]
+    tasks = client.get("/api/tasks/list", headers=admin_headers).json()["items"]
+    created = [t for t in tasks if t["id"] in body["created_task_ids"]]
+    # One separate task per number, each unassigned = available.
+    assert sorted(t["report_number_names"][0] for t in created) == ["1", "2"]
+    assert all(len(t["report_number_names"]) == 1 for t in created)
+    assert all(t["status"] == "AVAILABLE" for t in created)
+
+
+def test_bulk_create_with_activist_is_manual(client, admin_headers, setup, db_session, org_id):
+    user = _mk_shliach(db_session, org_id, "act74bulk")
+    r = client.post(
+        "/api/tasks/bulk",
+        json={
+            "campaign_id": setup["campaign_id"],
+            "report_number_ids": [setup["rns"]["4"], setup["rns"]["5"]],
+            "volunteer_user_id": user.id,
+        },
+        headers=admin_headers,
+    )
+    assert r.status_code == 201
+    for tid in r.json()["created_task_ids"]:
+        t = client.get(f"/api/tasks/{tid}", headers=admin_headers).json()
+        assert t["status"] == "ACTIVE" and t["claimed_via"] == "manual"
+
+
+def test_conflicts_are_per_campaign(client, admin_headers, setup):
+    _task(client, admin_headers, setup, names=("1",))
+    other = client.post(
+        "/api/campaigns", json={"name": "אחר", "is_active": False}, headers=admin_headers
+    ).json()
+    body = client.post(
+        "/api/tasks/bulk/preview",
+        json={"campaign_id": other["id"], "report_number_ids": [setup["rns"]["1"]]},
+        headers=admin_headers,
+    ).json()
+    assert [n["name"] for n in body["eligible"]] == ["1"]
+    assert body["conflicts"] == []

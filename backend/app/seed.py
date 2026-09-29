@@ -1568,6 +1568,32 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
         "Link disabled — the task was assigned manually",
     ),
     ("action", "action.copy", "העתק", "Copy"),
+    # fixes74 §3: bulk task creation.
+    ("task", "task.create_mode", "אופן היצירה", "How to create"),
+    ("task", "task.mode_single", "משימה אחת לכל מספרי הדוח שנבחרו", "One task for all selected report numbers"),
+    ("task", "task.mode_per_number", "משימה נפרדת לכל מספר דוח", "A separate task per report number"),
+    ("task", "task.number_range", "טווח מספרי דוח", "Report number range"),
+    (
+        "task", "task.number_range_hint",
+        "אפשר לשלב טווחים ומספרים בודדים. מספרים שלא קיימים ידולגו; לפני היצירה תוצג רשימה לאישור.",
+        "Combine ranges and single numbers. Numbers that don't exist are skipped; you'll confirm a list before anything is created.",
+    ),
+    ("task", "task.bulk_numbers_required", "יש לבחור מספרי דוח או להקליד טווח", "Pick report numbers or type a range"),
+    ("task", "task.bulk_conflict_title", "חלק מהמספרים כבר שייכים למשימה", "Some numbers already belong to a task"),
+    ("task", "task.bulk_confirm_title", "יצירת משימה נפרדת לכל מספר דוח", "Create a separate task per report number"),
+    ("task", "task.bulk_eligible", "ייווצרו משימות עבור", "Tasks will be created for"),
+    ("task", "task.bulk_conflicts", "כבר שייכים למשימה בקמפיין הזה", "Already in a task in this campaign"),
+    ("task", "task.bulk_missing", "לא קיימים במערכת — ידולגו", "Don't exist — will be skipped"),
+    ("task", "task.bulk_nothing_to_create", "אין מספרים פנויים — לא תיווצר אף משימה.", "No free numbers — no task will be created."),
+    (
+        "task", "task.bulk_no_activist_hint",
+        "המשימות ייווצרו ללא פעיל ויחכו במאגר המשימות הפנויות.",
+        "The tasks are created without an activist and wait in the available pool.",
+    ),
+    ("task", "task.bulk_skip_and_create", "דלג על התפוסים וצור {n} משימות", "Skip the taken ones and create {n} tasks"),
+    ("task", "task.bulk_create_n", "צור {n} משימות", "Create {n} tasks"),
+    ("task", "task.bulk_cancel_all", "ביטול הכל", "Cancel everything"),
+    ("task", "task.bulk_created", "נוצרו {n} משימות", "{n} tasks created"),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)

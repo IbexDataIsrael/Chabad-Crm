@@ -3,13 +3,14 @@
 import { useEffect, useState, type FormEvent } from "react";
 
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { BulkTaskPreviewModal } from "@/components/tasks/BulkTaskPreviewModal";
 import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
 import { taskStatusLabels } from "@/lib/taskStatus";
-import type { Campaign, ReportNumber, TaskStatus } from "@/lib/types";
+import type { Campaign, ReportNumber, TaskBulkPreview, TaskStatus } from "@/lib/types";
 
 const inputClass =
   "w-full rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
@@ -37,7 +38,8 @@ export function TaskQuickCreateForm({
   volunteerUserId?: number;
   volunteerName?: string;
   onClose: () => void;
-  onSaved: () => Promise<void> | void;
+  /** fixes74 §3: `createdCount` is set when several tasks were created at once. */
+  onSaved: (createdCount?: number) => Promise<void> | void;
 }) {
   const { t } = useLocalization();
   const customDate = usePicklist("task.custom_date");
@@ -57,6 +59,11 @@ export function TaskQuickCreateForm({
   const [status, setStatus] = useState<TaskStatus>("ACTIVE");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // fixes74 §3: "one task for all selected numbers" (the original behavior)
+  // or "a separate task per number" — picked numbers and/or a typed range.
+  const [mode, setMode] = useState<"single" | "per_number">("single");
+  const [rangeText, setRangeText] = useState("");
+  const [bulkPreview, setBulkPreview] = useState<TaskBulkPreview | null>(null);
 
   const statusLabel = taskStatusLabels(t);
   // fixes74 §2: without an activist the new task is "available", with one it
@@ -93,11 +100,66 @@ export function TaskQuickCreateForm({
       setError(t("validation.campaign_required", "יש לבחור קמפיין"));
       return;
     }
+    if (mode === "per_number") {
+      void previewBulk();
+      return;
+    }
     if (selectedVolunteerId === "") {
       setConfirmNoActivist(true);
       return;
     }
     void create();
+  }
+
+  async function previewBulk() {
+    if (reportNumberIds.length === 0 && !rangeText.trim()) {
+      setError(t("task.bulk_numbers_required", "יש לבחור מספרי דוח או להקליד טווח"));
+      return;
+    }
+    setBusy(true);
+    try {
+      setBulkPreview(
+        await apiFetch<TaskBulkPreview>("/api/tasks/bulk/preview", {
+          method: "POST",
+          body: JSON.stringify({
+            campaign_id: campaignId,
+            report_number_ids: reportNumberIds,
+            range_text: rangeText.trim() || null,
+          }),
+        }),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createBulk(skipConflicts: boolean) {
+    if (!bulkPreview) return;
+    const ids = [...bulkPreview.eligible, ...bulkPreview.conflicts].map((n) => n.id);
+    setBusy(true);
+    try {
+      const res = await apiFetch<{ created_task_ids: number[] }>("/api/tasks/bulk", {
+        method: "POST",
+        body: JSON.stringify({
+          campaign_id: campaignId,
+          report_number_ids: ids,
+          volunteer_user_id: selectedVolunteerId === "" ? null : selectedVolunteerId,
+          custom_date_value_id: customDateValueId === "" ? null : customDateValueId,
+          status: shownStatus,
+          skip_conflicts: skipConflicts,
+        }),
+      });
+      setBulkPreview(null);
+      await onSaved(res.created_task_ids.length);
+    } catch (err) {
+      // e.g. 409: someone took a number between the preview and now.
+      setBulkPreview(null);
+      setError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function create() {
@@ -176,6 +238,28 @@ export function TaskQuickCreateForm({
           </select>
         </label>
 
+        <fieldset className="space-y-1.5">
+          <legend className="text-sm font-medium">{t("task.create_mode", "אופן היצירה")}</legend>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="radio"
+              name="task-create-mode"
+              checked={mode === "single"}
+              onChange={() => setMode("single")}
+            />
+            {t("task.mode_single", "משימה אחת לכל מספרי הדוח שנבחרו")}
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="radio"
+              name="task-create-mode"
+              checked={mode === "per_number"}
+              onChange={() => setMode("per_number")}
+            />
+            {t("task.mode_per_number", "משימה נפרדת לכל מספר דוח")}
+          </label>
+        </fieldset>
+
         <label className="block space-y-1">
           <span className="block text-sm font-medium">{t("task.report_numbers", "מספרי דוח")}</span>
           <MultiSelectSearchFilter
@@ -186,6 +270,26 @@ export function TaskQuickCreateForm({
             searchPlaceholder={t("select.search_ph", "הקלד לחיפוש…")}
           />
         </label>
+
+        {mode === "per_number" && (
+          <label className="block space-y-1">
+            <span className="block text-sm font-medium">{t("task.number_range", "טווח מספרי דוח")}</span>
+            <input
+              className={inputClass}
+              dir="ltr"
+              inputMode="numeric"
+              placeholder="10-40, 55"
+              value={rangeText}
+              onChange={(e) => setRangeText(e.target.value)}
+            />
+            <span className="block text-xs text-muted-foreground">
+              {t(
+                "task.number_range_hint",
+                "אפשר לשלב טווחים ומספרים בודדים. מספרים שלא קיימים ידולגו; לפני היצירה תוצג רשימה לאישור.",
+              )}
+            </span>
+          </label>
+        )}
 
         <label className="block space-y-1">
           <span className="block text-sm font-medium">{t("task.custom_date", "תאריך מותאם")}</span>
@@ -229,6 +333,15 @@ export function TaskQuickCreateForm({
           </Button>
         </div>
       </form>
+      {bulkPreview && (
+        <BulkTaskPreviewModal
+          preview={bulkPreview}
+          noActivist={selectedVolunteerId === ""}
+          busy={busy}
+          onCreate={(skip) => void createBulk(skip)}
+          onCancel={() => setBulkPreview(null)}
+        />
+      )}
       {confirmNoActivist && (
         <ConfirmModal
           message={t(

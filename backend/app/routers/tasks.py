@@ -5,6 +5,7 @@ a Campaign; `_shliach_apartment_ids` (`routers/apartments.py`) grants
 apartment access while the Task is ACTIVE under an active Campaign.
 """
 import datetime
+import re
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -27,6 +28,11 @@ from app.schemas import (
     ClaimResultOut,
     PaperEntryCreate,
     PaperEntryOut,
+    TaskBulkCreate,
+    TaskBulkCreateOut,
+    TaskBulkNumber,
+    TaskBulkPreviewOut,
+    TaskBulkPreviewRequest,
     TaskCreate,
     TaskOut,
     TaskPageOut,
@@ -427,6 +433,205 @@ def _new_task(
             )
         )
     return task
+
+
+# --- fixes74 §3: one task per report number ---------------------------------
+
+_MAX_BULK_NUMBERS = 1000
+
+
+def _parse_range_text(text: str) -> list[int]:
+    """ "10-40, 55 60-62" -> [10..40, 55, 60, 61, 62] (order kept, deduped)."""
+    numbers: list[int] = []
+    # Normalize "10 - 40" to "10-40" before splitting on separators.
+    text = re.sub(r"\s*[-–]\s*", "-", text.strip())
+    for part in re.split(r"[,\s;]+", text):
+        if not part:
+            continue
+        m = re.fullmatch(r"(\d+)-(\d+)|(\d+)", part)
+        if not m:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"Can't read '{part}' — use numbers and ranges like 10-40",
+            )
+        if m.group(3) is not None:
+            lo = hi = int(m.group(3))
+        else:
+            lo, hi = sorted((int(m.group(1)), int(m.group(2))))
+        if hi - lo + 1 > _MAX_BULK_NUMBERS:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"A range can cover at most {_MAX_BULK_NUMBERS} numbers",
+            )
+        numbers.extend(range(lo, hi + 1))
+    return list(dict.fromkeys(numbers))
+
+
+def _natural_key(name: str):
+    return [
+        (0, int(p), "") if p.isdigit() else (1, 0, p)
+        for p in re.split(r"(\d+)", name or "")
+        if p
+    ]
+
+
+def _conflicting_tasks(
+    db: Session, campaign_id: int, rn_ids: list[int]
+) -> dict[int, list[int]]:
+    """report_number_id -> ids of the tasks in this campaign already covering it."""
+    result: dict[int, list[int]] = {}
+    if not rn_ids:
+        return result
+    rows = (
+        db.query(models.TaskReportNumber.report_number_id, models.Task.id)
+        .join(models.Task, models.Task.id == models.TaskReportNumber.task_id)
+        .filter(
+            models.Task.campaign_id == campaign_id,
+            models.TaskReportNumber.report_number_id.in_(rn_ids),
+        )
+        .order_by(models.Task.id)
+        .all()
+    )
+    for rn_id, task_id in rows:
+        result.setdefault(rn_id, []).append(task_id)
+    return result
+
+
+def _campaign_or_400(db: Session, org_id: int, campaign_id: int) -> models.Campaign:
+    campaign = (
+        db.query(models.Campaign)
+        .filter(
+            models.Campaign.id == campaign_id,
+            models.Campaign.organization_id == org_id,
+            models.Campaign.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if not campaign:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "campaign_id does not exist")
+    return campaign
+
+
+@router.post("/bulk/preview", response_model=TaskBulkPreviewOut)
+def preview_bulk_tasks(
+    payload: TaskBulkPreviewRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin_or_campaign_manager),
+):
+    """fixes74 §3: the numbers a bulk create would use — eligible, already in
+    a task of this campaign (conflicts), and range numbers that aren't report
+    numbers at all (skipped). Range numbers match report numbers by name, so
+    "10-40" finds "10".."40"."""
+    org_id = current_user.organization_id
+    _campaign_or_400(db, org_id, payload.campaign_id)
+    _validate_report_numbers(db, org_id, payload.report_number_ids)
+    org_rns = (
+        db.query(models.ReportNumber.id, models.ReportNumber.name)
+        .filter(models.ReportNumber.organization_id == org_id)
+        .all()
+    )
+    name_by_id = {rn_id: name for rn_id, name in org_rns}
+    id_by_number: dict[int, int] = {}
+    for rn_id, name in org_rns:
+        stripped = (name or "").strip()
+        if stripped.isdigit():
+            id_by_number.setdefault(int(stripped), rn_id)
+
+    wanted: list[int] = list(dict.fromkeys(payload.report_number_ids))
+    missing: list[str] = []
+    for n in _parse_range_text(payload.range_text or ""):
+        rn_id = id_by_number.get(n)
+        if rn_id is None:
+            missing.append(str(n))
+        elif rn_id not in wanted:
+            wanted.append(rn_id)
+    if len(wanted) > _MAX_BULK_NUMBERS:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"At most {_MAX_BULK_NUMBERS} report numbers at once",
+        )
+
+    conflicts = _conflicting_tasks(db, payload.campaign_id, wanted)
+    ordered = sorted(wanted, key=lambda i: _natural_key(name_by_id[i]))
+    return TaskBulkPreviewOut(
+        eligible=[
+            TaskBulkNumber(id=i, name=name_by_id[i]) for i in ordered if i not in conflicts
+        ],
+        conflicts=[
+            TaskBulkNumber(id=i, name=name_by_id[i], task_ids=conflicts[i])
+            for i in ordered
+            if i in conflicts
+        ],
+        missing=missing,
+    )
+
+
+@router.post("/bulk", response_model=TaskBulkCreateOut, status_code=status.HTTP_201_CREATED)
+def create_bulk_tasks(
+    payload: TaskBulkCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_admin_or_campaign_manager),
+):
+    """fixes74 §3: one separate task per report number, in one transaction.
+    Conflicts are re-checked here (not trusted from the preview): without
+    `skip_conflicts` any conflict refuses the whole batch."""
+    org_id = current_user.organization_id
+    _campaign_or_400(db, org_id, payload.campaign_id)
+    ids = list(dict.fromkeys(payload.report_number_ids))
+    if not ids:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No report numbers selected")
+    if len(ids) > _MAX_BULK_NUMBERS:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"At most {_MAX_BULK_NUMBERS} report numbers at once",
+        )
+    _validate_report_numbers(db, org_id, ids)
+    if payload.volunteer_user_id is not None:
+        _validate_volunteer(db, org_id, payload.volunteer_user_id)
+    if payload.custom_date_value_id is not None:
+        cdv = (
+            db.query(models.PicklistValue)
+            .filter(
+                models.PicklistValue.id == payload.custom_date_value_id,
+                models.PicklistValue.organization_id == org_id,
+                models.PicklistValue.field_key == "task.custom_date",
+            )
+            .first()
+        )
+        if not cdv:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "custom_date_value_id does not exist")
+
+    conflicts = _conflicting_tasks(db, payload.campaign_id, ids)
+    if conflicts and not payload.skip_conflicts:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Some report numbers already belong to a task in this campaign",
+        )
+    names = dict(
+        db.query(models.ReportNumber.id, models.ReportNumber.name)
+        .filter(models.ReportNumber.id.in_(ids))
+        .all()
+    )
+    created: list[int] = []
+    for rn_id in sorted((i for i in ids if i not in conflicts), key=lambda i: _natural_key(names[i])):
+        task = _new_task(
+            db,
+            org_id,
+            payload.campaign_id,
+            payload.volunteer_user_id,
+            payload.custom_date_value_id,
+            payload.status,
+            None,
+            [rn_id],
+        )
+        created.append(task.id)
+    db.commit()
+    return TaskBulkCreateOut(
+        created_task_ids=created,
+        skipped=[
+            TaskBulkNumber(id=i, name=names[i], task_ids=conflicts[i]) for i in ids if i in conflicts
+        ],
+    )
 
 
 @router.put("/{task_id}", response_model=TaskOut)

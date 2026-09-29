@@ -595,6 +595,19 @@ export interface Task {
   updated_at: string | null;
 }
 
+/** fixes74 §3: POST /api/tasks/bulk/preview. */
+export interface TaskBulkNumber {
+  id: number;
+  name: string;
+  task_ids: number[];
+}
+
+export interface TaskBulkPreview {
+  eligible: TaskBulkNumber[];
+  conflicts: TaskBulkNumber[];
+  missing: string[];
+}
+
 // --- fixes65: public landing page, QR claim, printing, paper entry ---------
 
 export interface PublicOrg {
