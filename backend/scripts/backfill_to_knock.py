@@ -30,7 +30,7 @@ from app.database import SessionLocal
 
 FIELD_KEY = "to_knock"
 JEWISH_STATUS_KEY = "apartment.Jewish_status"
-NO_KNOCK_VALUES = {"not_jewish", "gentile", "na"}
+NO_KNOCK_VALUES = {"not_jewish", "gentile", "na", "dont_knock"}
 
 
 def main() -> int:

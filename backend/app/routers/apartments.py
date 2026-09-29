@@ -61,9 +61,10 @@ _APARTMENT_LANGUAGE_FIELD_KEY = "apartment.language"
 # fixes71 §C.2: keeps the "to_knock" apartment custom field (backend/scripts/
 # backfill_to_knock.py's one-time rule, now applied live) in sync with every
 # Jewish-status write — true when affirmatively Jewish or unset, false for an
-# explicit not_jewish/gentile/na. Matches _NO_KNOCK_VALUES in that script.
+# explicit not_jewish/gentile/na/dont_knock ("לא לדפוק!"). Must match
+# NO_KNOCK_VALUES in that script.
 _TO_KNOCK_FIELD_KEY = "to_knock"
-_NO_KNOCK_VALUES = {"not_jewish", "gentile", "na"}
+_NO_KNOCK_VALUES = {"not_jewish", "gentile", "na", "dont_knock"}
 
 
 def _sync_to_knock(
