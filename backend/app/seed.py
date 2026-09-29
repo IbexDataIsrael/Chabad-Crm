@@ -1463,6 +1463,29 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
         "This apartment's visit history will appear here once supported.",
     ),
     ("street", "street.extra_fields", "שדות נוספים", "Extra fields"),
+    # fixes73: leaving an unfinished building on street2 needs confirmation.
+    # {name} is replaced client-side with the building's display name.
+    ("street", "street.building_incomplete_title", "הבניין {name} לא הושלם", "Building {name} not completed"),
+    (
+        "street",
+        "street.building_incomplete_body",
+        "הדירות הבאות צריכות לעבור לפחות עריכה אחת כדי להיחשב כבוצעו:",
+        "These apartments need to have at least one edit to be considered done:",
+    ),
+    (
+        "street",
+        "street.building_incomplete_question",
+        "לעבור לבניין הבא למרות שהבניין הזה לא הושלם?",
+        "Move to the next building even though this one isn't completed?",
+    ),
+    ("street", "street.building_incomplete_continue", "הבנתי, עבור לבניין הבא", "I understand, go to the next building"),
+    ("street", "street.building_incomplete_stay", "הישאר בבניין", "Stay in this building"),
+    # fixes73: BuildingCelebration's previously hard-coded copy.
+    ("street", "street.celebration_title", "כל הכבוד! 🎉", "Well done! 🎉"),
+    ("street", "street.celebration_body", "סיימתם את הבניין - {name}!", "You completed the building - {name}!"),
+    ("street", "street.celebration_body_no_name", "סיימתם את הבניין!", "Building completed!"),
+    ("street", "street.celebration_continue", "המשך בדרך!", "Keep going!"),
+    ("street", "street.celebration_rebbe_alt", "הרבי מליובאוויטש", "The Lubavitcher Rebbe"),
     ("apt", "apt.no_options", "אין אפשרויות מוגדרות בשדה הזה.", "No options are defined for this field."),
     # /dashboard/street is now the default "Apartments" nav entry; the
     # classic grid gets its own sidebar label at its same URL.
