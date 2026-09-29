@@ -19,7 +19,7 @@ import { useConfirm } from "@/lib/confirm";
 import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
 import { printTaskSheet } from "@/lib/taskPrint";
-import { useTaskSheetFields } from "@/lib/taskSheetFields";
+import { useTaskSheetCatalog, useTaskSheetFields } from "@/lib/taskSheetFields";
 import { taskApartmentsHref, taskStatusLabels, taskStatusOptionsFor } from "@/lib/taskStatus";
 import { useToast } from "@/lib/toast";
 import type { Campaign, ReportNumber, Task, TaskStatus } from "@/lib/types";
@@ -61,6 +61,8 @@ export default function TaskDetailPage() {
   const [printing, setPrinting] = useState(false);
   const [fieldsModalOpen, setFieldsModalOpen] = useState(false);
   const [taskSheetFields] = useTaskSheetFields();
+  // fixes74 §9: the printable columns (hidden fields excluded).
+  const { columns: taskSheetCatalog } = useTaskSheetCatalog();
 
   useEffect(() => {
     if (loading || !allowed) return;
@@ -93,6 +95,7 @@ export default function TaskDetailPage() {
       t,
       lang,
       fields: taskSheetFields,
+      catalog: taskSheetCatalog,
     });
     setPrinting(false);
     if (err) toastError(err);

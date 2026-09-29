@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app import models, picklist_utils
+from app import custom_field_utils, models, picklist_utils
 from app.core.claim_token import make_claim_token
 from app.core.task_claim import (
     assign,
@@ -786,12 +786,13 @@ def task_print_data(
     org_id = current_user.organization_id
     task = _get_or_404(task_id, org_id, db)
     rows = (
-        db.query(models.Apartment, models.Building, models.ReportNumber)
+        db.query(models.Apartment, models.Building, models.ReportNumber, models.Area.area_name)
         .join(
             models.TaskReportNumber,
             models.TaskReportNumber.report_number_id == models.Apartment.report_number_id,
         )
         .join(models.Building, models.Building.id == models.Apartment.building_id)
+        .outerjoin(models.Area, models.Area.id == models.Building.area_id)
         .join(models.ReportNumber, models.ReportNumber.id == models.Apartment.report_number_id)
         .filter(
             models.TaskReportNumber.task_id == task.id,
@@ -802,16 +803,19 @@ def task_print_data(
     )
     if not rows:
         raise HTTPException(status.HTTP_409_CONFLICT, "This task has no apartments to print")
-    apartment_ids = [a.id for a, _b, _rn in rows]
+    apartment_ids = [a.id for a, _b, _rn, _area in rows]
     # fixes69 §Admin3a: whatever's already on file (Jewish status, mezuzah,
-    # language, notes) prints in the box instead of a blank one.
-    picklist_map = picklist_utils.get_values_bulk(
-        db, org_id, "apartments", apartment_ids,
-        ["apartment.Jewish_status", "apartment.mezuzah_status"],
-    )
+    # language, notes) prints in the box instead of a blank one. fixes74 §9:
+    # every picklist + custom field, for the admin-chosen extra columns.
+    picklist_map = picklist_utils.get_values_bulk(db, org_id, "apartments", apartment_ids)
     language_map = picklist_utils.get_multi_values_bulk(
         db, org_id, "apartments", apartment_ids, "apartment.language"
     )
+    custom_field_map = custom_field_utils.get_values_bulk(db, org_id, "apartment", apartment_ids)
+    fixed_picklists = {
+        "apartment.Jewish_status", "apartment.mezuzah_status", "apartment.campaign_status",
+        "apartment.language",
+    }
     return TaskPrintOut(
         task=_single_out(db, org_id, task),
         # fixes74 §4: no QR once the link is switched off.
@@ -830,8 +834,22 @@ def task_print_data(
                 mezuzah_status=picklist_map.get(a.id, {}).get("apartment.mezuzah_status"),
                 language=language_map.get(a.id, []),
                 apartment_notes=a.apartment_notes,
+                phone=a.phone,
+                email=a.email,
+                campaign_status=picklist_map.get(a.id, {}).get("apartment.campaign_status"),
+                area_name=area_name,
+                picklist_values={
+                    k: v
+                    for k, v in picklist_map.get(a.id, {}).items()
+                    if k not in fixed_picklists
+                },
+                custom_field_values={
+                    k: v
+                    for k, v in custom_field_map.get(a.id, {}).items()
+                    if k != "to_knock"  # internal (fixes71 §C.3), never shown
+                },
             )
-            for a, b, rn in rows
+            for a, b, rn, area_name in rows
         ],
     )
 

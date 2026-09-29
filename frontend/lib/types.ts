@@ -659,6 +659,13 @@ export interface TaskPrintApartment {
   mezuzah_status: string | null;
   language: string[];
   apartment_notes: string | null;
+  /** fixes74 §9: the rest of the printable columns. */
+  phone: string | null;
+  email: string | null;
+  campaign_status: string | null;
+  area_name: string | null;
+  picklist_values: Record<string, string | null>;
+  custom_field_values: Record<string, string | number | boolean | null>;
 }
 
 export interface TaskPrintData {

@@ -72,6 +72,8 @@ export function drawPdfHeaders(
   margin: number,
   orgName: string,
   logo: PdfHeaderLogo | null,
+  /** fixes74 §8: an English PDF mirrors the header (name left, logo right). */
+  rtl = true,
 ): void {
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
@@ -83,7 +85,7 @@ export function drawPdfHeaders(
       doc.setFont(HEBREW_FONT, "bold");
       doc.setFontSize(12);
       doc.setTextColor(55, 65, 81);
-      doc.text(orgName, pageW - margin, 34, { align: "right" });
+      doc.text(orgName, rtl ? pageW - margin : margin, 34, { align: rtl ? "right" : "left" });
       doc.setTextColor(0);
     }
     if (logo && logo.width > 0 && logo.height > 0) {
@@ -94,7 +96,7 @@ export function drawPdfHeaders(
         h = (100 / w) * h;
         w = 100;
       }
-      doc.addImage(logo.dataUrl, "PNG", margin, 30 - h / 2, w, h);
+      doc.addImage(logo.dataUrl, "PNG", rtl ? margin : pageW - margin - w, 30 - h / 2, w, h);
     }
     doc.setDrawColor(209, 213, 219);
     doc.line(margin, 48, pageW - margin, 48);

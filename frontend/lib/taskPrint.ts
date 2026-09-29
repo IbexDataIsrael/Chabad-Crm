@@ -1,7 +1,7 @@
 import { apiFetch, ApiError } from "@/lib/api";
 import type { Lang } from "@/lib/localization";
 import { generateTaskPdf } from "@/lib/taskPdf";
-import type { TaskSheetFieldsConfig } from "@/lib/taskSheetFields";
+import type { TaskSheetColumn, TaskSheetFieldsConfig } from "@/lib/taskSheetFields";
 import type { TaskPrintData } from "@/lib/types";
 
 type Translate = (key: string, fallback: string) => string;
@@ -16,8 +16,9 @@ export async function printTaskSheet(opts: {
   t: Translate;
   lang: Lang;
   fields?: TaskSheetFieldsConfig;
+  catalog: TaskSheetColumn[];
 }): Promise<string | null> {
-  const { taskId, orgName, orgLogoUrl, t, lang, fields } = opts;
+  const { taskId, orgName, orgLogoUrl, t, lang, fields, catalog } = opts;
   try {
     const data = await apiFetch<TaskPrintData>(`/api/tasks/${taskId}/print-data`);
     await generateTaskPdf({
@@ -28,6 +29,7 @@ export async function printTaskSheet(opts: {
       t,
       lang,
       fields,
+      catalog,
     });
     return null;
   } catch (err) {

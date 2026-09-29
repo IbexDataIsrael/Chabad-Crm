@@ -9,9 +9,10 @@ import {
 } from "@/lib/pdfRtl";
 import { displayPicklistValue } from "@/lib/picklists";
 import {
+  DEFAULT_COLUMN_WIDTH,
   DEFAULT_TASK_SHEET_FIELDS,
-  taskSheetFieldLabel,
-  type TaskSheetFieldKey,
+  printableColumns,
+  type TaskSheetColumn,
   type TaskSheetFieldsConfig,
 } from "@/lib/taskSheetFields";
 import { buildingDisplayName, type TaskPrintApartment, type TaskPrintData } from "@/lib/types";
@@ -46,24 +47,47 @@ export async function generateTaskPdf(opts: {
   t: Translate;
   lang: Lang;
   fields?: TaskSheetFieldsConfig;
+  /** fixes74 §9: the columns this org may print (hidden fields excluded). */
+  catalog: TaskSheetColumn[];
 }): Promise<void> {
-  const { data, orgName, orgLogoUrl, claimBaseUrl, t, lang } = opts;
+  const { data, orgName, orgLogoUrl, claimBaseUrl, t, lang, catalog } = opts;
   const fields = opts.fields ?? DEFAULT_TASK_SHEET_FIELDS;
   const { task } = data;
+  // fixes74 §8: column/text direction follows the selected UI language —
+  // Hebrew right-to-left, English left-to-right (it used to always be RTL).
+  const rtl = lang !== "en";
+  const align = rtl ? "right" : "left";
+  const columns = printableColumns(fields, catalog);
+  const customPicklistKeys = columns
+    .filter((c) => c.key.startsWith("picklist:"))
+    .map((c) => c.key.slice("picklist:".length));
 
   // fixes69 §Admin3a: whatever's already on file prints in the box instead of
   // a blank one — same "fetch labels imperatively, not via a hook" reasoning
   // as the apartments report's PDF (a fast click right after page load must
   // never print a raw technical value).
-  const [{ jsPDF }, { default: autoTable }, headerLogo, jewishOpts, mezuzahOpts, languageOpts] =
-    await Promise.all([
-      import("jspdf"),
-      import("jspdf-autotable"),
-      loadHeaderLogo(orgLogoUrl),
-      apiFetch<PicklistValue[]>("/api/picklists/apartment.Jewish_status"),
-      apiFetch<PicklistValue[]>("/api/picklists/apartment.mezuzah_status"),
-      apiFetch<PicklistValue[]>("/api/picklists/apartment.language"),
-    ]);
+  const [
+    { jsPDF },
+    { default: autoTable },
+    headerLogo,
+    jewishOpts,
+    mezuzahOpts,
+    languageOpts,
+    campaignOpts,
+    ...customOpts
+  ] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable"),
+    loadHeaderLogo(orgLogoUrl),
+    apiFetch<PicklistValue[]>("/api/picklists/apartment.Jewish_status"),
+    apiFetch<PicklistValue[]>("/api/picklists/apartment.mezuzah_status"),
+    apiFetch<PicklistValue[]>("/api/picklists/apartment.language"),
+    apiFetch<PicklistValue[]>("/api/picklists/apartment.campaign_status"),
+    ...customPicklistKeys.map((k) =>
+      apiFetch<PicklistValue[]>(`/api/picklists/${encodeURIComponent(k)}`).catch(() => []),
+    ),
+  ]);
+  const customOptsByKey = new Map(customPicklistKeys.map((k, i) => [k, customOpts[i] ?? []]));
   const labelFor = (options: PicklistValue[], value: string | null): string => {
     if (value == null) return "";
     const o = options.find((opt) => opt.value === value);
@@ -96,6 +120,8 @@ export async function generateTaskPdf(opts: {
   // Room at the bottom of every page for the QR strip (or just the footer).
   const bottomReserve = qrDataUrl ? QR_SIZE + 30 : 34;
   const right = pageW - MARGIN;
+  // The "start" edge text anchors to: right in Hebrew, left in English.
+  const start = rtl ? right : MARGIN;
 
   // --- Title block ---------------------------------------------------------
   let y = PDF_CONTENT_TOP;
@@ -104,9 +130,9 @@ export async function generateTaskPdf(opts: {
   doc.setFontSize(18);
   doc.text(
     `${t("task_pdf.title", "דף משימה")} #${task.id} — ${task.campaign_name}`,
-    right,
+    start,
     y + 8,
-    { align: "right" },
+    { align },
   );
   doc.setLineWidth(1.4);
   doc.setDrawColor(...BLACK);
@@ -126,18 +152,20 @@ export async function generateTaskPdf(opts: {
   ];
   for (const [label, value] of facts) {
     doc.setFont(HEBREW_FONT, "bold");
-    doc.text(`${label}:`, right, y, { align: "right" });
+    doc.text(`${label}:`, start, y, { align });
     const labelW = doc.getTextWidth(`${label}: `);
     doc.setFont(HEBREW_FONT, "normal");
-    doc.text(value, right - labelW, y, { align: "right" });
+    doc.text(value, rtl ? right - labelW : MARGIN + labelW, y, { align });
     y += 16;
   }
   // Performer line — the office copies this into "who performed the work?".
   doc.setFont(HEBREW_FONT, "bold");
   const performedLabel = `${t("task_pdf.performed_by", "בוצע על ידי (שם מלא)")}:`;
-  doc.text(performedLabel, right, y + 4, { align: "right" });
+  doc.text(performedLabel, start, y + 4, { align });
   doc.setLineWidth(0.8);
-  doc.line(MARGIN + 150, y + 6, right - doc.getTextWidth(performedLabel) - 8, y + 6);
+  const performedW = doc.getTextWidth(performedLabel) + 8;
+  if (rtl) doc.line(MARGIN + 150, y + 6, right - performedW, y + 6);
+  else doc.line(MARGIN + performedW, y + 6, right - 150, y + 6);
   y += 24;
 
   // --- One continuous table for the whole sheet -----------------------------
@@ -150,34 +178,68 @@ export async function generateTaskPdf(opts: {
   // fixes69 §Admin3c/3d/3e: which columns print, their order and their
   // width are all admin-configurable now (lib/taskSheetFields.ts) instead of
   // a fixed 7-column layout.
-  const columns = fields.columns.length > 0 ? fields.columns : DEFAULT_TASK_SHEET_FIELDS.columns;
-  const head = columns.map((k) => taskSheetFieldLabel(k, t));
+  // fixes74 §9: any admin-chosen apartment/report column, in the chosen
+  // order and relative widths (hidden fields never reach this list).
+  const head = columns.map((c) => c.label);
   const usable = pageW - MARGIN * 2;
-  const totalWidthPct = columns.reduce((sum, k) => sum + (fields.widths[k] ?? 0), 0) || 100;
-  const logicalWidths = columns.map(
-    (k) => ((fields.widths[k] ?? 0) / totalWidthPct) * usable,
-  );
-  const rowValueFor = (a: TaskPrintApartment, k: TaskSheetFieldKey): string => {
-    switch (k) {
+  const widthOf = (key: string) => {
+    const w = fields.widths[key];
+    return w != null && w > 0 ? w : DEFAULT_COLUMN_WIDTH;
+  };
+  const totalWidthPct = columns.reduce((sum, c) => sum + widthOf(c.key), 0) || 100;
+  const logicalWidths = columns.map((c) => (widthOf(c.key) / totalWidthPct) * usable);
+  const formatCustom = (v: string | number | boolean | null | undefined): string => {
+    if (v == null || v === "") return "";
+    if (typeof v === "boolean") return v ? "✓" : "";
+    return String(v);
+  };
+  const rowValueFor = (a: TaskPrintApartment, key: string): string => {
+    if (key.startsWith("picklist:")) {
+      const fk = key.slice("picklist:".length);
+      return labelFor(customOptsByKey.get(fk) ?? [], a.picklist_values?.[fk] ?? null);
+    }
+    if (key.startsWith("custom:")) {
+      return formatCustom(a.custom_field_values?.[key.slice("custom:".length)]);
+    }
+    switch (key) {
+      case "report_number":
+        return a.report_number_name ?? "";
+      case "building":
+        return buildingDisplayName({
+          id: a.building_id,
+          building_name: a.building_name,
+          building_address: a.building_address,
+        });
+      case "area":
+        return a.area_name ?? "";
       case "floor":
         return a.floor ?? "";
       case "apartment_name":
         return a.apartment_name ?? "";
       case "name":
         return a.name ?? "";
+      case "phone":
+        return a.phone ?? "";
+      case "email":
+        return a.email ?? "";
       case "jewish_status":
         return labelFor(jewishOpts, a.jewish_status);
       case "mezuzah_status":
         return labelFor(mezuzahOpts, a.mezuzah_status);
+      case "campaign_status":
+        return labelFor(campaignOpts, a.campaign_status);
       case "language":
         return (a.language ?? []).map((v) => labelFor(languageOpts, v)).join(", ");
       case "notes":
         return a.apartment_notes ?? "";
+      default:
+        return "";
     }
   };
-  // autotable lays columns out left-to-right: reverse for RTL.
-  const visualHead = [...head].reverse();
-  const visualWidths = [...logicalWidths].reverse();
+  // autotable lays columns out left-to-right: reverse only for Hebrew (§8).
+  const toVisual = <T,>(cells: T[]): T[] => (rtl ? [...cells].reverse() : cells);
+  const visualHead = toVisual(head);
+  const visualWidths = toVisual(logicalWidths);
   const columnStyles = Object.fromEntries(visualWidths.map((w, i) => [i, { cellWidth: w }]));
 
   type Cell = string | { content: string; colSpan: number; styles?: Record<string, unknown> };
@@ -185,7 +247,7 @@ export async function generateTaskPdf(opts: {
     {
       content: label,
       colSpan: head.length,
-      styles: { fontStyle: "bold", fontSize: 12, halign: "right", minCellHeight: 20 },
+      styles: { fontStyle: "bold", fontSize: 12, halign: align, minCellHeight: 20 },
     },
   ];
 
@@ -220,7 +282,7 @@ export async function generateTaskPdf(opts: {
         divider(multiReport ? `${bk}  (${t("apartments.report_number_id", "מספר דוח")} ${rk})` : bk),
       );
       for (const a of apts) {
-        body.push(columns.map((k) => rowValueFor(a, k)).reverse());
+        body.push(toVisual(columns.map((c) => rowValueFor(a, c.key))));
       }
     }
   }
@@ -235,7 +297,7 @@ export async function generateTaskPdf(opts: {
     styles: {
       font: HEBREW_FONT,
       fontSize: 10,
-      halign: "right",
+      halign: align,
       valign: "middle",
       cellPadding: 4,
       minCellHeight: 24,
@@ -256,7 +318,7 @@ export async function generateTaskPdf(opts: {
   });
 
   // --- Per-page chrome: org header, QR strip, footer ----------------------------
-  drawPdfHeaders(doc, MARGIN, orgName, headerLogo);
+  drawPdfHeaders(doc, MARGIN, orgName, headerLogo, rtl);
   const total = doc.getNumberOfPages();
   for (let p = 1; p <= total; p += 1) {
     doc.setPage(p);

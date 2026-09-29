@@ -36,7 +36,7 @@ import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 import { printTaskSheet } from "@/lib/taskPrint";
-import { useTaskSheetFields } from "@/lib/taskSheetFields";
+import { useTaskSheetCatalog, useTaskSheetFields } from "@/lib/taskSheetFields";
 import {
   TASK_STATUS_OPTIONS,
   taskApartmentsHref,
@@ -74,6 +74,8 @@ export default function TasksPage() {
   const [busy, setBusy] = useState(true);
   const [fieldsModalOpen, setFieldsModalOpen] = useState(false);
   const [taskSheetFields] = useTaskSheetFields();
+  // fixes74 §9: the printable columns (hidden fields excluded).
+  const { columns: taskSheetCatalog } = useTaskSheetCatalog();
 
   const [q, setQ] = usePersistentState("crm.tasks.q", "");
   const [statusFilter, setStatusFilter] = usePersistentState<string[]>("crm.tasks.status", []);
@@ -187,6 +189,7 @@ export default function TasksPage() {
       t,
       lang,
       fields: taskSheetFields,
+      catalog: taskSheetCatalog,
     });
     setPrintingId(null);
     if (err) toastError(err);

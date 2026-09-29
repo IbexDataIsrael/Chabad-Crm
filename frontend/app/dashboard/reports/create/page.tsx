@@ -515,6 +515,12 @@ function CreateReportsInner() {
             return "";
         }
       };
+      // fixes74 §8: direction follows the selected UI language — Hebrew
+      // right-to-left, English left-to-right (it used to always be RTL).
+      const rtl = lang !== "en";
+      const align = rtl ? "right" : "left";
+      const startX = rtl ? pageW - MARGIN : MARGIN;
+      const toVisual = <T,>(cells: T[]): T[] => (rtl ? [...cells].reverse() : cells);
       // fixes38 §4.2: width % of the usable page width, per active column.
       const usableWidth = pageW - MARGIN * 2;
       const logicalWidths = activeReportColumns.map(
@@ -533,9 +539,9 @@ function CreateReportsInner() {
         (k) => reportColumns.subheadings[k]?.trim() ?? "",
       );
       const hasSubheadingRow = logicalSubheadings.some(Boolean);
-      const labelsRow = [...logicalLabels].reverse();
-      const subheadingsRow = [...logicalSubheadings].reverse();
-      const visualWidths = [...logicalWidths].reverse();
+      const labelsRow = toVisual(logicalLabels);
+      const subheadingsRow = toVisual(logicalSubheadings);
+      const visualWidths = toVisual(logicalWidths);
       const columnStyles = Object.fromEntries(
         visualWidths.map((w, i) => [i, { cellWidth: w }]),
       );
@@ -544,9 +550,7 @@ function CreateReportsInner() {
       let y = PDF_CONTENT_TOP;
       doc.setFont(HEBREW_FONT, "bold");
       doc.setFontSize(18);
-      doc.text(t("reports.pdf_title", "דוח ריכוז דירות"), pageW - MARGIN, y + 8, {
-        align: "right",
-      });
+      doc.text(t("reports.pdf_title", "דוח ריכוז דירות"), startX, y + 8, { align });
       // fixes52 §4: a prominent divider under the report's own title —
       // distinct from drawPdfHeaders' pale org-branding hairline.
       doc.setDrawColor(31, 41, 55);
@@ -563,7 +567,7 @@ function CreateReportsInner() {
         doc.setFontSize(10);
         const lines = doc.splitTextToSize(trimmedNotes, usableWidth) as string[];
         for (const line of lines) {
-          doc.text(line, pageW - MARGIN, y, { align: "right" });
+          doc.text(line, startX, y, { align });
           y += 13;
         }
         y += 10;
@@ -633,7 +637,7 @@ function CreateReportsInner() {
               styles: {
                 fontStyle: "bold",
                 fontSize: compact ? 10 : 12,
-                halign: "right",
+                halign: align,
                 fillColor: [255, 255, 255],
                 minCellHeight: compact ? 16 : 20,
               },
@@ -641,7 +645,7 @@ function CreateReportsInner() {
           ]);
           rowCompact.push(null);
           for (const a of apts) {
-            body.push(activeReportColumns.map((k) => rowValueFor(a, k)).reverse());
+            body.push(toVisual(activeReportColumns.map((k) => rowValueFor(a, k))));
             rowCompact.push(compact);
           }
         }
@@ -662,7 +666,7 @@ function CreateReportsInner() {
           styles: {
             font: HEBREW_FONT,
             fontSize: 10,
-            halign: "right",
+            halign: align,
             valign: "top",
             cellPadding: CELL_PADDING,
           },
@@ -672,7 +676,7 @@ function CreateReportsInner() {
             // white text).
             fillColor: [229, 231, 235],
             textColor: [31, 41, 55],
-            halign: "right",
+            halign: align,
           },
           // fixes43 §2: every 2nd body row (Row 2, Row 4, …) gets a light
           // grey background so it reads distinctly from Row 1 — jspdf-
@@ -742,9 +746,9 @@ function CreateReportsInner() {
           doc.setFontSize(14);
           doc.text(
             `${t("apartments.report_number_id", "מספר דוח")}: ${rn.name}`,
-            pageW - MARGIN,
+            startX,
             y + 6,
-            { align: "right" },
+            { align },
           );
           y += 22;
           // fixes69 §Admin4a: the report number's own area(s), right under
@@ -756,9 +760,9 @@ function CreateReportsInner() {
             doc.setFontSize(10);
             doc.text(
               t("reports.pdf_area_label", "אזור {name}").replace("{name}", areaNames.join(", ")),
-              pageW - MARGIN,
+              startX,
               y,
-              { align: "right" },
+              { align },
             );
             y += 16;
           }
@@ -777,7 +781,7 @@ function CreateReportsInner() {
       }
 
       // fixes26 §1: stamp the org name + logo header onto every page.
-      drawPdfHeaders(doc, MARGIN, user?.organization?.name ?? "", headerLogo);
+      drawPdfHeaders(doc, MARGIN, user?.organization?.name ?? "", headerLogo, rtl);
 
       const totalPages = doc.getNumberOfPages();
       const drawFooter = (p: number, label: string, page: number, total: number) => {

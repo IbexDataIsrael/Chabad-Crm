@@ -1,7 +1,7 @@
 """Pydantic request/response schemas."""
 import re
 from datetime import datetime, time
-from typing import Literal, Optional, Union
+from typing import Any, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -1943,6 +1943,17 @@ class TaskPrintApartment(BaseModel):
     mezuzah_status: Optional[str] = None
     language: list[str] = []
     apartment_notes: Optional[str] = None
+    # fixes74 §9: every other printable apartment column — the admin picks
+    # which ones print (hidden fields are filtered client-side, like every
+    # other view of these fields).
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    campaign_status: Optional[str] = None
+    area_name: Optional[str] = None
+    # Custom apartment picklists (field_key -> technical value) and custom
+    # fields (field_key -> value).
+    picklist_values: dict[str, Optional[str]] = {}
+    custom_field_values: dict[str, Any] = {}
 
 
 class TaskPrintOut(BaseModel):

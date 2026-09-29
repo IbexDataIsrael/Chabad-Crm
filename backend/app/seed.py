@@ -1594,6 +1594,14 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("task", "task.bulk_create_n", "צור {n} משימות", "Create {n} tasks"),
     ("task", "task.bulk_cancel_all", "ביטול הכל", "Cancel everything"),
     ("task", "task.bulk_created", "נוצרו {n} משימות", "{n} tasks created"),
+    # fixes74 §9/§10: print-sheet column picker.
+    ("reports", "reports.building", "בניין", "Building"),
+    (
+        "task_pdf", "task_pdf.fields_hint",
+        "סמנו את העמודות שיודפסו, קבעו את הסדר בחיצים ואת הרוחב באחוזים. שדות מוסתרים אינם מוצגים.",
+        "Tick the columns to print, set their order with the arrows and their width in percent. Hidden fields aren't listed.",
+    ),
+    ("task_pdf", "task_pdf.reset_columns", "איפוס לברירת המחדל", "Reset to default"),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)
