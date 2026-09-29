@@ -93,6 +93,7 @@ export interface User {
   full_name: string;
   /** fixes14: full name resolved from the linked contacts row (navbar). */
   display_name?: string | null;
+  email?: string | null;
   role: string;
   created_at: string;
   organization_id: number;

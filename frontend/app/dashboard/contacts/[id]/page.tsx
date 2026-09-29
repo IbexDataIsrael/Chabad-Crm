@@ -38,7 +38,7 @@ export default function ContactDetailPage() {
   const router = useRouter();
   const { t } = useLocalization();
   const confirmDialog = useConfirm();
-  const { isAdmin, isShliach, isCampaignManager, user } = useAuth();
+  const { isAdmin, isShliach, isCampaignManager, user, refresh: refreshAuth } = useAuth();
   const { success, error: toastError } = useToast();
   const { isFieldVisible: vis } = useFieldSettings();
 
@@ -74,6 +74,22 @@ export default function ContactDetailPage() {
       body: JSON.stringify(partial),
     });
     setContact(fresh);
+    // Bug fix: a shliach editing their OWN profile here (self-edit) can
+    // change the name backend/app/routers/auth.py's GET /api/auth/me
+    // display_name is resolved from — but AuthContext.user is only
+    // populated at login/mount, so the header kept showing the pre-edit
+    // name until a full reload. Same pattern already used after an
+    // org-settings save (dashboard/settings/page.tsx) that touches cached
+    // auth data. /me also falls back to a same-org contact carrying the
+    // user's email (admins/staff), so that self-edit counts too.
+    const myEmail = user?.email?.toLowerCase();
+    const isSelf =
+      (isShliach && user?.shliach?.contact_id === contactId) ||
+      (!!myEmail &&
+        [contact?.email, fresh.email].some((e) => e?.toLowerCase() === myEmail));
+    if (isSelf) {
+      refreshAuth().catch(() => {});
+    }
   }
 
   async function remove() {
