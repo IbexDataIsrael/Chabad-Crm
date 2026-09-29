@@ -15,7 +15,7 @@ import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCustomFieldDefs } from "@/lib/customFields";
 import { useLocalization } from "@/lib/localization";
-import { usePicklist } from "@/lib/picklists";
+import { FIXED_APARTMENT_PICKLIST_KEYS, usePicklist } from "@/lib/picklists";
 import { useToast } from "@/lib/toast";
 import {
   buildingDisplayName,
@@ -107,6 +107,27 @@ export default function ShliachConfigPage() {
       )
       .catch(() => setShliachPicklistDefs([]));
   }, []);
+
+  // fixes71 §A: the Edit Lock list below only ever showed the 11 fixed
+  // APARTMENT_FIELD_KEYS — any admin-added apartment custom picklist/custom
+  // field could never be locked. Same fetch pattern as shliachPicklistDefs
+  // above, just for entity_type="apartment" (mirrors street.tsx's own
+  // customDefs/customFieldDefs split).
+  const [apartmentPicklistDefs, setApartmentPicklistDefs] = useState<PicklistField[]>([]);
+  useEffect(() => {
+    apiFetch<PicklistField[]>("/api/picklists")
+      .then((defs) =>
+        setApartmentPicklistDefs(
+          defs.filter(
+            (d) => d.entity_type === "apartment" && !FIXED_APARTMENT_PICKLIST_KEYS.includes(d.field_key),
+          ),
+        ),
+      )
+      .catch(() => setApartmentPicklistDefs([]));
+  }, []);
+  const apartmentCustomFieldDefs = useCustomFieldDefs("apartment").filter(
+    (d) => d.field_type !== "select",
+  );
 
   const [disableEdit, setDisableEdit] = useState(false);
   const [hideFilters, setHideFilters] = useState(false);
@@ -231,7 +252,7 @@ export default function ShliachConfigPage() {
     );
   }
 
-  function toggleApartmentEditLock(key: ApartmentFieldKey) {
+  function toggleApartmentEditLock(key: string) {
     setApartmentEditLockedFields((prev) =>
       prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key],
     );
@@ -415,6 +436,30 @@ export default function ShliachConfigPage() {
                 {fieldLabels[k]}
               </label>
             ))}
+            {apartmentPicklistDefs.map((d) => (
+              <label key={d.field_key} className="flex items-center gap-1.5 text-sm">
+                <input
+                  type="checkbox"
+                  checked={apartmentEditLockedFields.includes(d.field_key)}
+                  onChange={() => toggleApartmentEditLock(d.field_key)}
+                />
+                {(lang === "en" ? d.english_label || d.label : d.label) || d.field_key}
+              </label>
+            ))}
+            {apartmentCustomFieldDefs.map((d) => {
+              const key = `customfield.apartment.${d.field_key}`;
+              return (
+                <label key={key} className="flex items-center gap-1.5 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={apartmentEditLockedFields.includes(key)}
+                    onChange={() => toggleApartmentEditLock(key)}
+                  />
+                  {(lang === "en" ? d.english_label || d.hebrew_label : d.hebrew_label) ||
+                    d.field_key}
+                </label>
+              );
+            })}
           </div>
         </div>
 
