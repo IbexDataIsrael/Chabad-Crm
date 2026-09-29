@@ -203,8 +203,8 @@ def test_single_org_login_unchanged(client):
     assert body["access_token"]
 
 
-# --- Feature 2: navbar name from the contacts table --------------------------
-def test_me_display_name_comes_from_contact(client, admin_headers):
+# --- Feature 2 (reversed by fixes75 §1): navbar name from the users table ----
+def test_me_display_name_comes_from_users_table(client, admin_headers, db_session):
     _mk_shliach(
         client,
         admin_headers,
@@ -214,10 +214,26 @@ def test_me_display_name_comes_from_contact(client, admin_headers):
         last_name="כהן",
     )
     token = _login(client, "display@example.com", "Secret123").json()["access_token"]
-    me = client.get(
-        "/api/auth/me", headers={"Authorization": f"Bearer {token}"}
-    ).json()
-    assert me["display_name"] == "שרה כהן"
+    auth = {"Authorization": f"Bearer {token}"}
+    me = client.get("/api/auth/me", headers=auth).json()
+    assert me["display_name"] == me["full_name"]
+
+    # A rename on the users page shows up at once — even when the contact's
+    # own name columns hold something else (the stale second copy).
+    contact = (
+        db_session.query(models.Contact)
+        .filter(models.Contact.email == "display@example.com")
+        .first()
+    )
+    contact.name, contact.last_name = "ישן", "שם"
+    db_session.commit()
+    r = client.put(
+        f"/api/users/{me['id']}", json={"full_name": "רבקה לוי"}, headers=admin_headers
+    )
+    assert r.status_code == 200
+    contact.name, contact.last_name = "ישן", "שם"  # simulate the drift again
+    db_session.commit()
+    assert client.get("/api/auth/me", headers=auth).json()["display_name"] == "רבקה לוי"
 
 
 # --- Feature 3 + user report: shliach passwords & the access log -------------

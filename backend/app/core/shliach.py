@@ -56,6 +56,26 @@ def resolve_shliach(
     return shliach
 
 
+def activist_names_by_contact(db: Session, contact_ids) -> dict[int, str]:
+    """fixes75 §1: {contact_id: users.full_name} for shliach contacts bound
+    to a login. The users table is the source of truth for an activist's
+    name; the contact's name columns are only a fallback for a contact with
+    no login at all."""
+    ids = {cid for cid in contact_ids if cid is not None}
+    if not ids:
+        return {}
+    rows = (
+        db.query(models.ContactShliach.contact_id, models.User.full_name)
+        .join(models.User, models.User.id == models.ContactShliach.user_id)
+        .filter(
+            models.ContactShliach.contact_id.in_(ids),
+            models.ContactShliach.is_display.is_(True),
+        )
+        .all()
+    )
+    return {cid: name for cid, name in rows if name}
+
+
 # fixes45: the real columns copied from a retired version into its successor
 # — same idea as apartments._VERSIONED_COLUMNS. contact_id/user_id identify
 # the lineage/login and are never part of `changes`, but do need copying

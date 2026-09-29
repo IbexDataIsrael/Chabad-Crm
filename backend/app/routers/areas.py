@@ -12,7 +12,7 @@ from app import models
 from app.core.geo import convex_hull, hull_to_geojson, point_in_polygon, polygon_ring
 from app.core.jewish_status import apartment_jewish_counts_by
 from app.core.natural_sort import natural_sort_key
-from app.core.shliach import resolve_shliach
+from app.core.shliach import activist_names_by_contact, resolve_shliach
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.schemas import (
@@ -103,8 +103,12 @@ def area_shliach_assignments(
         )
         .all()
     )
+    # fixes75 §1: a bound activist's name comes from the users table.
+    names = activist_names_by_contact(db, [r[1] for r in rows])
     result: dict[int, list[ShliachSummary]] = {}
     for area_id, contact_id, name, last_name in rows:
+        if contact_id in names:
+            name, last_name = names[contact_id], None
         result.setdefault(area_id, []).append(
             ShliachSummary(id=contact_id, name=name, last_name=last_name)
         )

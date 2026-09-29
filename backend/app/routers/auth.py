@@ -417,30 +417,12 @@ def google_signup(payload: GoogleSignupRequest, db: Session = Depends(get_db)) -
 
 
 def _resolve_display_name(db: Session, user: models.User) -> Optional[str]:
-    """fixes14 §feature 2: the user's full name as recorded on the contacts
-    table — the linked shliach contact first, else a same-org contact carrying
-    the user's email. None when the user has no contact record (e.g. staff)."""
-    link = (
-        db.query(models.ContactShliach)
-        .filter(
-            models.ContactShliach.user_id == user.id,
-            models.ContactShliach.is_display.is_(True),
-        )
-        .first()
-    )
-    contact = link.contact if link else None
-    if contact is None and user.email:
-        contact = (
-            db.query(models.Contact)
-            .filter(
-                models.Contact.organization_id == user.organization_id,
-                models.Contact.email == user.email,
-            )
-            .first()
-        )
-    if contact is None:
-        return None
-    return " ".join(filter(None, [contact.name, contact.last_name])) or None
+    """fixes75 §1: the name the activist system shows is the users table's
+    own `full_name` — the single source of truth. It used to be read from
+    the linked contacts row (fixes14 §2), a second copy that went stale
+    whenever a rename didn't reach it (e.g. a split into name/last_name that
+    didn't match, or a contact found only by the email fallback)."""
+    return user.full_name or None
 
 
 @router.get("/me", response_model=UserOut)

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app import models
-from app.core.shliach import resolve_shliach
+from app.core.shliach import activist_names_by_contact, resolve_shliach
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.schemas import (
@@ -25,6 +25,14 @@ from app.schemas import (
 )
 
 router = APIRouter(prefix="/api/shliach-messages", tags=["shliach-messages"])
+
+
+def _activist(contact: models.Contact, names: dict[int, str]) -> ShliachSummary:
+    """fixes75 §1: the linked login's current name (users table) when the
+    contact has one; the contact's own name only for a login-less contact."""
+    if contact.id in names:
+        return ShliachSummary(id=contact.id, name=names[contact.id], last_name=None)
+    return ShliachSummary(id=contact.id, name=contact.name, last_name=contact.last_name)
 
 
 def _resolve_self_contact_id(db: Session, current_user: models.User) -> int:
@@ -79,7 +87,7 @@ def submit_report_completion(
         status=row.status,
         comments=row.comments,
         created_at=row.created_at,
-        activist=ShliachSummary(id=contact.id, name=contact.name, last_name=contact.last_name),
+        activist=_activist(contact, activist_names_by_contact(db, [contact.id])),
         task_id=row.task_id,
     )
 
@@ -127,11 +135,12 @@ def list_report_completions(
         .order_by(models.ShliachReportCompletion.created_at.desc())
         .all()
     )
+    names = activist_names_by_contact(db, [c.id for _, c in rows])
     return [
         ReportCompletionOut(
             id=r.id, guid=r.guid, status=r.status, comments=r.comments,
             created_at=r.created_at,
-            activist=ShliachSummary(id=c.id, name=c.name, last_name=c.last_name),
+            activist=_activist(c, names),
             task_id=r.task_id,
         )
         for r, c in rows
@@ -163,7 +172,7 @@ def submit_system_comment(
     contact = db.get(models.Contact, contact_id)
     return SystemCommentOut(
         id=row.id, guid=row.guid, comment=row.comment, created_at=row.created_at,
-        activist=ShliachSummary(id=contact.id, name=contact.name, last_name=contact.last_name),
+        activist=_activist(contact, activist_names_by_contact(db, [contact.id])),
     )
 
 
@@ -179,10 +188,11 @@ def list_system_comments(
         .order_by(models.ShliachSystemComment.created_at.desc())
         .all()
     )
+    names = activist_names_by_contact(db, [c.id for _, c in rows])
     return [
         SystemCommentOut(
             id=r.id, guid=r.guid, comment=r.comment, created_at=r.created_at,
-            activist=ShliachSummary(id=c.id, name=c.name, last_name=c.last_name),
+            activist=_activist(c, names),
         )
         for r, c in rows
     ]
