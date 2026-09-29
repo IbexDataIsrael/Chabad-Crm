@@ -84,6 +84,10 @@ export interface ShliachViewConfig {
   /** fixes54 §6: hides the Apartments page's "Customize fields" column
    *  picker entirely from activists. */
   customize_fields_locked?: boolean;
+  /** fixes74 §13: the order of the fields in street2's apartment card —
+   *  visibility keys (apartments.name, apartment.Jewish_status, a custom
+   *  picklist's field_key, customfield.apartment.<key>). */
+  street2_field_order?: string[];
 }
 
 export interface User {

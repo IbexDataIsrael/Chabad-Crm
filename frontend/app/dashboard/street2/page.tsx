@@ -206,6 +206,28 @@ export default function Street2Page() {
   );
   const fieldLocked = (key: string) => shliachEditDisabled || lockedFields.has(key);
 
+  // fixes74 §13: the admin's order for the apartment card's fields
+  // (shliach-config "הגדרות לתצוגת פעילים"). Unlisted fields follow, in
+  // their default order; hidden (falsy) rows drop out.
+  const fieldOrder: string[] = Array.isArray(shliachViewConfig?.street2_field_order)
+    ? shliachViewConfig.street2_field_order
+    : [];
+  function orderStreetRows(rows: [string, ReactNode][]): [string, ReactNode][] {
+    const rank = new Map(fieldOrder.map((k, i) => [k, i]));
+    return rows
+      .filter(([, node]) => !!node)
+      .map((row, index) => ({ row, index }))
+      .sort((a, b) => {
+        const ra = rank.get(a.row[0]);
+        const rb = rank.get(b.row[0]);
+        if (ra != null && rb != null) return ra - rb;
+        if (ra != null) return -1;
+        if (rb != null) return 1;
+        return a.index - b.index;
+      })
+      .map((x) => x.row);
+  }
+
   async function load() {
     setBusy(true);
     setLoadError(false);
@@ -639,7 +661,13 @@ export default function Street2Page() {
             <div className={styles.aptTitle}>{apartmentTitle(openApt)}</div>
 
             <div className={styles.rows}>
-              {campaignVisible(FIELD_KEY.name) && (
+              {/* fixes74 §13: one list of every visible field — built-in and
+                  custom alike — ordered by the admin's shliach-config order
+                  (street2_field_order); fields it doesn't mention keep the
+                  previous default order after the ordered ones. Hidden
+                  fields never enter the list. */}
+              {orderStreetRows([
+              [FIELD_KEY.name, campaignVisible(FIELD_KEY.name) && (
                 <EditableRow
                   label={t("apartments.name", "שם דייר")}
                   field="name"
@@ -661,8 +689,8 @@ export default function Street2Page() {
                     />
                   }
                 />
-              )}
-              {campaignVisible(FIELD_KEY.phone) && (
+              )],
+              [FIELD_KEY.phone, campaignVisible(FIELD_KEY.phone) && (
                 <EditableRow
                   label={t("apartments.phone", "טלפון")}
                   field="phone"
@@ -693,8 +721,8 @@ export default function Street2Page() {
                     />
                   }
                 />
-              )}
-              {campaignVisible(FIELD_KEY.email) && (
+              )],
+              [FIELD_KEY.email, campaignVisible(FIELD_KEY.email) && (
                 <EditableRow
                   label={t("apartments.email", "אימייל")}
                   field="email"
@@ -725,9 +753,9 @@ export default function Street2Page() {
                     />
                   }
                 />
-              )}
+              )],
 
-              {campaignVisible(FIELD_KEY.jewish_status) && (
+              [FIELD_KEY.jewish_status, campaignVisible(FIELD_KEY.jewish_status) && (
                 <PicklistRow
                   label={t("picklist.apartment.Jewish_status", "יהדות")}
                   field="jewish_status"
@@ -746,8 +774,8 @@ export default function Street2Page() {
                   chipDraft={chipDraft}
                   onToggleChip={(v) => toggleChip(v, false)}
                 />
-              )}
-              {campaignVisible(FIELD_KEY.campaign_status) && (
+              )],
+              [FIELD_KEY.campaign_status, campaignVisible(FIELD_KEY.campaign_status) && (
                 <PicklistRow
                   label={t("picklist.apartment.campaign_status", "סטטוס קמפיין")}
                   field="campaign_status"
@@ -766,8 +794,8 @@ export default function Street2Page() {
                   chipDraft={chipDraft}
                   onToggleChip={(v) => toggleChip(v, false)}
                 />
-              )}
-              {campaignVisible(FIELD_KEY.mezuzah_status) && (
+              )],
+              [FIELD_KEY.mezuzah_status, campaignVisible(FIELD_KEY.mezuzah_status) && (
                 <PicklistRow
                   label={t("picklist.apartment.mezuzah_status", "מזוזה")}
                   field="mezuzah_status"
@@ -786,8 +814,8 @@ export default function Street2Page() {
                   chipDraft={chipDraft}
                   onToggleChip={(v) => toggleChip(v, false)}
                 />
-              )}
-              {campaignVisible(FIELD_KEY.language) && (
+              )],
+              [FIELD_KEY.language, campaignVisible(FIELD_KEY.language) && (
                 <PicklistRow
                   label={t("picklist.apartment.language", "שפה")}
                   field="language"
@@ -806,9 +834,9 @@ export default function Street2Page() {
                   chipDraft={chipDraft}
                   onToggleChip={(v) => toggleChip(v, true)}
                 />
-              )}
+              )],
 
-              {campaignVisible(FIELD_KEY.report_number_id) && (
+              [FIELD_KEY.report_number_id, campaignVisible(FIELD_KEY.report_number_id) && (
                 <div className={styles.row}>
                   <div className={styles.lbl}>{t("apartments.report_number_id", "מספר דוח")}</div>
                   <div className={`${styles.val} ${openApt.report_number_name ? "" : styles.valEmpty}`}>
@@ -818,9 +846,9 @@ export default function Street2Page() {
                     <Lock className="h-3.5 w-3.5" />
                   </span>
                 </div>
-              )}
+              )],
 
-              {campaignVisible(FIELD_KEY.apartment_notes) && (
+              [FIELD_KEY.apartment_notes, campaignVisible(FIELD_KEY.apartment_notes) && (
                 <div className={`${styles.row} ${styles.rowTop}`}>
                   <div className={styles.lbl}>{t("apartments.apartment_notes", "הערות")}</div>
                   {editingField === "apartment_notes" ? (
@@ -871,16 +899,16 @@ export default function Street2Page() {
                     </>
                   )}
                 </div>
-              )}
+              )],
 
-              {/* fixes71 §C.5/§C.6: every remaining apartment field (custom
+              /* fixes71 §C.5/§C.6: every remaining apartment field (custom
                   picklists + custom fields, to_knock hard-excluded) in this
                   SAME list. Editable like the fixed fields — every apartment
                   field the campaign doesn't hide is editable unless
                   shliach-config locks it (lock keys: a custom picklist's
                   field_key, `customfield.apartment.<key>` for a custom
-                  field — same convention as shliach-config's lock list). */}
-              {sortByFieldOrder(
+                  field — same convention as shliach-config's lock list). */
+              ...sortByFieldOrder(
                 [
                   ...customDefs
                     .filter((d) => campaignVisible(d.field_key))
@@ -958,8 +986,9 @@ export default function Street2Page() {
                 ],
                 (e) => e.key,
                 orderFor,
-              ).map((e) => (
-                <Fragment key={e.key}>{e.node}</Fragment>
+              ).map((e): [string, ReactNode] => [e.key, e.node]),
+              ]).map(([key, node]) => (
+                <Fragment key={key}>{node}</Fragment>
               ))}
 
               <div className={styles.row}>

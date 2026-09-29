@@ -1605,6 +1605,21 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     # fixes74 §11: an activist's report names its task.
     ("shliach_msg", "shliach_msg.report_task", "על איזו משימה הדיווח?", "Which task is this report about?"),
     ("shliach_msg", "shliach_msg.pick_task", "בחרו משימה", "Choose a task"),
+    # fixes74 §13: street2 apartment-card field order.
+    (
+        "shliach_config", "shliach_config.street2_field_order",
+        "סדר השדות בכרטיס הדירה של הפעיל", "Field order in the activist's apartment card",
+    ),
+    (
+        "shliach_config", "shliach_config.street2_field_order_hint",
+        "קובע את סדר השדות בחלון הדירה במסלול של הפעיל — שדות מובנים ושדות נוספים. שדות מוסתרים נשארים מוסתרים.",
+        "Sets the order of the fields in the apartment window of the activist's route — built-in and additional fields. Hidden fields stay hidden.",
+    ),
+    ("shliach_config", "shliach_config.field_hidden", "מוסתר", "Hidden"),
+    (
+        "shliach_config", "shliach_config.field_hidden_hint",
+        "מוסתר בקמפיין הפעיל — לא יוצג לפעילים", "Hidden in the active campaign — activists won't see it",
+    ),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)

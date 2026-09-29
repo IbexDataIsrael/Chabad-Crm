@@ -6,6 +6,7 @@ import { Plus } from "lucide-react";
 import { ImagePickerModal } from "@/components/ImagePickerModal";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { RichTextEditor } from "@/components/RichTextEditor";
+import { Street2FieldOrderEditor } from "@/components/Street2FieldOrderEditor";
 import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -77,6 +78,8 @@ interface ShliachViewConfigShape {
   // fixes54 §6: hides the apartments page's "התאמת שדות" (Customize fields)
   // column picker from the activist interface entirely when true.
   customize_fields_locked?: boolean;
+  // fixes74 §13: order of the street2 apartment-card fields.
+  street2_field_order?: string[];
 }
 
 export default function ShliachConfigPage() {
@@ -138,6 +141,7 @@ export default function ShliachConfigPage() {
   // (already defined above for the "default columns" section).
   const [apartmentEditLockedFields, setApartmentEditLockedFields] = useState<string[]>([]);
   const [customizeFieldsLocked, setCustomizeFieldsLocked] = useState(false);
+  const [street2FieldOrder, setStreet2FieldOrder] = useState<string[]>([]);
   const [areaIds, setAreaIds] = useState<number[]>([]);
   const [buildingIds, setBuildingIds] = useState<number[]>([]);
   const [jewishFilter, setJewishFilter] = useState<string[]>([]);
@@ -226,6 +230,7 @@ export default function ShliachConfigPage() {
         setSelfEditLockedFields(cfg.self_edit_locked_fields ?? []);
         setApartmentEditLockedFields(cfg.apartment_edit_locked_fields ?? []);
         setCustomizeFieldsLocked(!!cfg.customize_fields_locked);
+        setStreet2FieldOrder(cfg.street2_field_order ?? []);
         setAreaIds(cfg.default_filters?.area_ids ?? []);
         setBuildingIds(cfg.default_filters?.building_ids ?? []);
         setJewishFilter(cfg.default_filters?.jewish_status ?? []);
@@ -329,6 +334,7 @@ export default function ShliachConfigPage() {
         self_edit_locked_fields: selfEditLockedFields,
         apartment_edit_locked_fields: apartmentEditLockedFields,
         customize_fields_locked: customizeFieldsLocked,
+        street2_field_order: street2FieldOrder,
         default_filters: {
           area_ids: areaIds,
           building_ids: buildingIds,
@@ -519,6 +525,21 @@ export default function ShliachConfigPage() {
               </label>
             ))}
           </div>
+        </div>
+
+        {/* fixes74 §13: order of every field in the activist's street2
+            apartment card (built-in + additional). */}
+        <div className="border-t border-border pt-4 space-y-3">
+          <span className="block text-sm font-medium">
+            {t("shliach_config.street2_field_order", "סדר השדות בכרטיס הדירה של הפעיל")}
+          </span>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              "shliach_config.street2_field_order_hint",
+              "קובע את סדר השדות בחלון הדירה במסלול של הפעיל — שדות מובנים ושדות נוספים. שדות מוסתרים נשארים מוסתרים.",
+            )}
+          </p>
+          <Street2FieldOrderEditor value={street2FieldOrder} onChange={setStreet2FieldOrder} />
         </div>
 
         <div className="border-t border-border pt-4 space-y-3">
