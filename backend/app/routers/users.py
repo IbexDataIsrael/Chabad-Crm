@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app import models
 from app.core.email import send_shliach_welcome
 from app.core.security import hash_password
+from app.core.user_delete import clear_user_references
 from app.core.shliach import (
     apply_shliach_versioned_update,
     resolve_shliach,
@@ -558,22 +559,9 @@ def delete_user(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin privileges required")
     if user.id == admin.id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "You cannot delete yourself")
-    # Unassign their contacts instead of blocking the delete (guid FK, fixes10).
-    db.query(models.Contact).filter(
-        models.Contact.assigned_user_id == user.guid
-    ).update({models.Contact.assigned_user_id: None}, synchronize_session=False)
-    # fixes45: deliberately unfiltered by is_display — every historical
-    # version carries this user_id forward too, and all of them must be
-    # nulled or the FK blocks the delete below.
-    db.query(models.ContactShliach).filter(
-        models.ContactShliach.user_id == user.id
-    ).update({models.ContactShliach.user_id: None}, synchronize_session=False)
-    # fixes26 §4: saved UI preferences (fixes17) are a NOT-NULL FK — any user
-    # who ever logged in couldn't be deleted (FK violation → 500).
-    db.query(models.UserPreference).filter(
-        models.UserPreference.user_id == user.id
-    ).delete(synchronize_session=False)
-    # fixes25: interactions live inside visit JSON (the author survives as a
-    # plain-text name) — no user-owned interaction rows to re-home anymore.
+    # fixes75 §11: tasks back to the pool, own report-number/area bindings
+    # cleared, history rows kept with the reference nulled — every user can
+    # be deleted (a user with tasks used to fail on the tasks FK).
+    clear_user_references(db, user, admin)
     db.delete(user)
     db.commit()

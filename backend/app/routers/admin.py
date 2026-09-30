@@ -16,6 +16,7 @@ from app.core.email import send_email, send_org_approved_user
 from app.core.org_clone import clone_organization
 from app.core import org_prefs
 from app.core.security import create_access_token, hash_password
+from app.core.user_delete import clear_user_references
 from app.database import get_db
 from app.deps import require_superadmin
 from app.schemas import (
@@ -427,16 +428,8 @@ def delete_user(
     admin: models.User = Depends(require_superadmin),
 ):
     user = _get_manageable_user(db, user_id, admin)
-    # Contacts reference users; null the soft links, hard-delete the rest.
-    db.query(models.Contact).filter(
-        models.Contact.assigned_user_id == user.guid
-    ).update({models.Contact.assigned_user_id: None}, synchronize_session=False)
-    # fixes45: deliberately unfiltered by is_display — every historical
-    # version carries this user_id forward too, and all of them must be
-    # nulled or the FK blocks the delete below.
-    db.query(models.ContactShliach).filter(
-        models.ContactShliach.user_id == user_id
-    ).update({models.ContactShliach.user_id: None}, synchronize_session=False)
+    # fixes75 §11: same cleanup as the org admin's delete.
+    clear_user_references(db, user, admin)
     db.delete(user)
     db.commit()
     logger.warning("superadmin %s deleted user %s (%s)", admin.email, user_id, user.email)
