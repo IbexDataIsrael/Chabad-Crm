@@ -169,6 +169,8 @@ function DashboardChrome({ children }: { children: ReactNode }) {
     { href: "/dashboard/custom-fields", label: t("nav.custom_fields", "שדות מותאמים"), admin: true },
     { href: "/dashboard/fields", label: t("page.fields_title", "ניהול שדות"), admin: true },
     { href: "/dashboard/localization", label: t("nav.localization", "תרגומים"), admin: true },
+    // fixes75 §6: entry log + error log.
+    { href: "/dashboard/logs", label: t("nav.logs", "לוגים"), admin: true },
     // fixes51 §4: config panel for the Shliach role's Apartments view.
     // fixes58 §3.7: this is the "Volunteer View Settings" page Campaign
     // Manager is explicitly granted.

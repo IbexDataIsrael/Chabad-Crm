@@ -12,6 +12,7 @@ import {
   adminDeactivateUser,
   adminDeleteOrg,
   adminDeleteUser,
+  adminResetUserPassword,
   adminGetOrgPrefs,
   adminImpersonateOrg,
   adminListOrgUsers,
@@ -40,6 +41,7 @@ import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
 import { useConfirm } from "@/lib/confirm";
+import { isMediumPassword, PASSWORD_HINT } from "@/lib/validation";
 
 export default function SystemAdminPage() {
   const { isSuperadmin, loading } = useAuth();
@@ -212,6 +214,8 @@ export default function SystemAdminPage() {
 
   // fixes15 §2.2: user deletion opens a modal that reports the data ties
   // (assigned contacts, shliach card, coverage) and asks "בטוח ?".
+  // fixes75 §3: the user whose password the superadmin is resetting.
+  const [userToReset, setUserToReset] = useState<AdminUser | null>(null);
   const [userToDelete, setUserToDelete] = useState<{
     user: AdminUser;
     orgId: number | null;
@@ -361,6 +365,13 @@ export default function SystemAdminPage() {
                         </span>
                       </td>
                       <td className="py-2 text-end whitespace-nowrap">
+                        <button
+                          disabled={busy}
+                          onClick={() => setUserToReset(u)}
+                          className="text-primary hover:underline me-3 disabled:opacity-50"
+                        >
+                          {t("admin.reset_password", "איפוס סיסמה")}
+                        </button>
                         <button
                           disabled={busy}
                           onClick={() => setUserToDelete({ user: u, orgId: null })}
@@ -570,6 +581,13 @@ export default function SystemAdminPage() {
                               )}
                               <button
                                 disabled={busy}
+                                onClick={() => setUserToReset(u)}
+                                className="text-primary hover:underline me-3 disabled:opacity-50"
+                              >
+                                {t("admin.reset_password", "איפוס סיסמה")}
+                              </button>
+                              <button
+                                disabled={busy}
                                 onClick={() => setUserToDelete({ user: u, orgId: org.id })}
                                 className="text-status-darkred hover:underline disabled:opacity-50"
                               >
@@ -624,6 +642,9 @@ export default function SystemAdminPage() {
         />
       )}
 
+      {userToReset && (
+        <ResetPasswordModal user={userToReset} onClose={() => setUserToReset(null)} />
+      )}
       {userToDelete && (
         <DeleteUserModal
           user={userToDelete.user}
@@ -638,6 +659,62 @@ export default function SystemAdminPage() {
 /** fixes15 §2.2: before deleting a user (e.g. a shliach), show what's still
  *  tied to them and require an explicit "בטוח ?" confirmation. All copy is
  *  localization-table-mapped. */
+/** fixes75 §3: the superadmin types a new password for one user. */
+function ResetPasswordModal({ user, onClose }: { user: AdminUser; onClose: () => void }) {
+  const { t } = useLocalization();
+  const { success } = useToast();
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    setError("");
+    if (!isMediumPassword(password)) {
+      setError(t("validation.password_hint", PASSWORD_HINT));
+      return;
+    }
+    setBusy(true);
+    try {
+      await adminResetUserPassword(user.id, password);
+      success(t("admin.password_reset_done", "הסיסמה אופסה"));
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md bg-card rounded-xl shadow-xl p-5 space-y-4">
+        <h2 className="text-lg font-bold">{t("admin.reset_password", "איפוס סיסמה")}</h2>
+        <p className="text-sm font-medium" dir="ltr">
+          {user.full_name} · {user.email ?? user.username}
+        </p>
+        <Input
+          type="text"
+          dir="ltr"
+          autoComplete="off"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder={t("auth.new_password", "סיסמה חדשה")}
+        />
+        <p className="text-xs text-muted-foreground">{t("validation.password_hint", PASSWORD_HINT)}</p>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <div className="flex items-center gap-2 pt-1">
+          <Button type="button" disabled={busy} onClick={save}>
+            {t("action.save", "שמור")}
+          </Button>
+          <Button type="button" variant="outline" onClick={onClose}>
+            {t("action.cancel", "ביטול")}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DeleteUserModal({
   user,
   onCancel,
@@ -665,6 +742,14 @@ function DeleteUserModal({
               t("admin.deps_shliach_contact", "מקושר לכרטיס פעיל: {name}").replace(
                 "{name}",
                 deps.shliach_contact_name ?? `#${deps.shliach_contact_id}`,
+              ),
+            ]
+          : []),
+        ...((deps.assigned_tasks ?? 0) > 0
+          ? [
+              n(
+                t("admin.deps_tasks", "משימות משויכות (יחזרו להיות פנויות): {n}"),
+                deps.assigned_tasks ?? 0,
               ),
             ]
           : []),

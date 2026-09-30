@@ -71,6 +71,8 @@ def _log_event(db: Session, user: models.User, event: str) -> None:
             time=now.time(),
             username=user.email or user.username,
             status=event,
+            user_id=user.id,
+            organization_id=user.organization_id,
         )
     )
 

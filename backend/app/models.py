@@ -106,6 +106,9 @@ class Organization(Base):
     self_registration_enabled = Column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    # fixes75 §9: "Errors Admin Emails" — every address here is emailed when
+    # a server error happens in this organization (list of strings).
+    errors_admin_emails = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     users = relationship("User", back_populates="organization")
@@ -1211,7 +1214,43 @@ class SystemAccessLog(Base):
     # 'SUCCESS' | 'FAILED_INVALID_PASSWORD' | 'FAILED_NO_USER' |
     # 'FAILED_NOT_VERIFIED' | 'FAILED_ORG_DISABLED' | 'ORG_SELECTION_REQUIRED'
     status = Column(String(50), nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    # fixes75 §5: who / from where. `user_id` is set when the identifier
+    # resolved to a single account; `organization_id` when the attempt can be
+    # attributed to one org (what an org admin's entry log is scoped by).
+    ip_address = Column(String(64), nullable=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+
+
+class ErrorLog(Base):
+    """fixes75 §4: one unhandled server error (a 500), with the request that
+    hit it and the traceback. `organization_id`/`user_id` come from the
+    request's bearer token when there was one (an org admin sees their own
+    org's rows; the superadmin sees all)."""
+
+    __tablename__ = "error_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False, index=True)
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    method = Column(String(10), nullable=True)
+    path = Column(String(500), nullable=True)
+    status_code = Column(Integer, nullable=False, default=500)
+    error_type = Column(String(200), nullable=False)
+    message = Column(Text, nullable=True)
+    traceback = Column(Text, nullable=True)
+    ip_address = Column(String(64), nullable=True)
 
 
 class FieldLocalization(Base):

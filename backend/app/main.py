@@ -10,8 +10,10 @@ from contextlib import asynccontextmanager
 
 from alembic import command
 from alembic.config import Config as AlembicConfig
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect
 
@@ -59,6 +61,7 @@ from app.routers import (
     instinct,
     field_settings,
     localization,
+    logs,
     metadata,
     organizations,
     picklists,
@@ -145,6 +148,7 @@ app.include_router(tasks.router)
 app.include_router(street_activity.router)
 app.include_router(public.router)
 app.include_router(instinct.router)
+app.include_router(logs.router)
 
 # fixes25 §6: locally stored uploads (logo fallback when Cloudinary is
 # unavailable) are served straight from the data volume.
@@ -160,6 +164,19 @@ async def _uploads_nosniff(request, call_next):
     if request.url.path.startswith("/uploads/"):
         response.headers["X-Content-Type-Options"] = "nosniff"
     return response
+
+
+@app.exception_handler(Exception)
+async def _unhandled_error(request: Request, exc: Exception):
+    """fixes75 §4/§9: every unhandled error (a 500) is written to the
+    error_logs table and emailed to the org's Errors Admin Emails list."""
+    from app.core.error_log import record_error
+
+    error_id = await run_in_threadpool(record_error, request, exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error", "error_id": error_id},
+    )
 
 
 @app.get("/api/health", tags=["health"])

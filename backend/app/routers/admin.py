@@ -7,6 +7,7 @@ the /admin dashboard. Destructive actions (org delete, impersonate) are logged.
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -120,6 +121,12 @@ def _delete_organization_cascade(db: Session, org_id: int) -> None:
         models.FieldSetting,
         models.User,
     ]
+    # fixes75: audit logs outlive the org (the superadmin still sees them);
+    # only the reference goes. Also the DB-level ON DELETE SET NULL.
+    for model in (models.SystemAccessLog, models.ErrorLog):
+        db.query(model).filter(model.organization_id == org_id).update(
+            {model.organization_id: None}, synchronize_session=False
+        )
     for model in ordered_models:
         db.query(model).filter(
             model.organization_id == org_id
@@ -401,6 +408,12 @@ def user_dependencies(
     ) or 0
     # fixes25: interaction rows are gone (visit JSON, author as plain text).
     out = AdminUserDependenciesOut(assigned_contacts=assigned)
+    # fixes75 §11: tasks go back to the pool (unassigned) on delete.
+    out.assigned_tasks = (
+        db.query(func.count(models.Task.id))
+        .filter(models.Task.volunteer_user_id == user.id)
+        .scalar()
+    ) or 0
     shliach = (
         db.query(models.ContactShliach)
         .filter(
@@ -417,7 +430,7 @@ def user_dependencies(
             )
         out.covered_report_numbers = len(shliach.report_numbers)
         out.covered_areas = len(shliach.areas)
-    out.has_dependencies = bool(assigned or shliach is not None)
+    out.has_dependencies = bool(assigned or out.assigned_tasks or shliach is not None)
     return out
 
 
@@ -456,6 +469,33 @@ def activate_user(
     user = _get_manageable_user(db, user_id, admin)
     user.is_active = True
     db.commit()
+    return user
+
+
+class AdminPasswordReset(BaseModel):
+    new_password: str
+
+
+@router.post("/users/{user_id}/reset-password", response_model=AdminUserOut)
+def reset_user_password(
+    user_id: int,
+    payload: AdminPasswordReset,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_superadmin),
+):
+    """fixes75 §3: the superadmin sets a new password for any (non-superadmin)
+    user. Same strength rule as the user's own change-password."""
+    from app.routers.auth import _is_strong_password
+
+    user = _get_manageable_user(db, user_id, admin)
+    if not _is_strong_password(payload.new_password):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Password must be at least 8 characters with an uppercase letter, a lowercase letter, and a number.",
+        )
+    user.password_hash = hash_password(payload.new_password)
+    db.commit()
+    logger.warning("superadmin %s reset the password of user %s", admin.email, user_id)
     return user
 
 
