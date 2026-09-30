@@ -185,6 +185,32 @@ def test_logs_are_admin_only_and_org_scoped(client, admin_headers, auth_headers,
     assert all(i["organization_id"] != other.id for i in items)
 
 
+def test_superadmin_sees_every_orgs_logs_with_org_name(
+    client, superadmin_headers, db_session
+):
+    """fixes83: the superadmin's Logs page — cross-org rows, each named."""
+    other = models.Organization(name="Other83")
+    db_session.add(other)
+    db_session.flush()
+    db_session.add(
+        models.ErrorLog(
+            organization_id=other.id, error_type="IntegrityError", status_code=500,
+            method="POST", path=f"/api/admin/organizations/{other.id}/clone",
+        )
+    )
+    db_session.commit()
+    items = client.get("/api/logs/errors", headers=superadmin_headers).json()["items"]
+    mine = [i for i in items if i["organization_id"] == other.id]
+    assert mine and mine[0]["organization_name"] == "Other83"
+    # Narrowed to one org.
+    items = client.get(
+        f"/api/logs/errors?organization_id={other.id}", headers=superadmin_headers
+    ).json()["items"]
+    assert {i["organization_id"] for i in items} == {other.id}
+    access = client.get("/api/logs/access", headers=superadmin_headers).json()["items"]
+    assert all("organization_name" in i for i in access)
+
+
 # --- §4/§9: unhandled errors are logged and emailed ---------------------------
 def test_unhandled_error_is_logged_and_emailed(client, admin_headers, monkeypatch, org_id):
     from fastapi.testclient import TestClient

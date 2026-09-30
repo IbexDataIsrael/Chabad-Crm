@@ -107,9 +107,13 @@ def _build_rich_org(db):
     db.add(mekurav)
     db.flush()
 
+    # fixes83: client_uuid is GLOBALLY unique (copying it crashed every prod
+    # clone) and apartment_id must follow the clone, not the source.
     visit = models.VisitHistory(
         organization_id=org.id, contact_id=contact.id,
         visit_date=datetime.datetime(2026, 1, 15),
+        client_uuid="11111111-2222-3333-4444-555555555555",
+        apartment_id=apt_v2.id,
     )
     db.add(visit)
     db.flush()
@@ -254,6 +258,10 @@ def test_clone_deep_data_integrity(client, superadmin_headers, db_session):
 
     new_visit = _one(models.VisitHistory, contact_id=new_contact.id)
     assert new_visit.id != fx["visit"].id
+    # fixes83: offline-sync key not copied (it's globally unique); the visit's
+    # apartment is the CLONED apartment, not the source org's.
+    assert new_visit.client_uuid is None
+    assert new_visit.apartment_id == new_apt_v2.id
 
     # CustomFieldValue: entity_table="visit_history" convention, remapped
     # against the NEW visit's id.
@@ -436,3 +444,39 @@ def test_clone_table_row_limit_drops_rows_with_dangling_required_fk(
         models.ContactMekurav.organization_id == new_org_id
     ).one()
     assert cloned_mekurav.apartment_id is None
+
+
+def test_clone_rewires_activist_version_lineage(client, superadmin_headers, db_session):
+    """fixes83: ContactShliach.root_id used to keep pointing at the SOURCE
+    org's first version."""
+    org = _make_org(db_session, "Lineage Src")
+    contact = models.Contact(
+        organization_id=org.id, name="פעיל", phone="050-7441122", contact_type="shliach",
+    )
+    db_session.add(contact)
+    db_session.flush()
+    v1 = models.ContactShliach(
+        organization_id=org.id, contact_id=contact.id, full_name="v1", is_display=False,
+    )
+    db_session.add(v1)
+    db_session.flush()
+    v2 = models.ContactShliach(
+        organization_id=org.id, contact_id=contact.id, full_name="v2", is_display=True,
+        root_id=v1.id,
+    )
+    db_session.add(v2)
+    db_session.commit()
+
+    r = client.post(
+        f"/api/admin/organizations/{org.id}/clone",
+        json=_clone_payload("Lineage Copy"), headers=superadmin_headers,
+    )
+    assert r.status_code == 201, r.text
+    new_org_id = r.json()["id"]
+    db_session.expire_all()
+    rows = {
+        sh.full_name: sh
+        for sh in db_session.query(models.ContactShliach).filter_by(organization_id=new_org_id)
+    }
+    assert rows["v2"].root_id == rows["v1"].id
+    assert rows["v2"].root_id != v1.id

@@ -46,6 +46,19 @@ def _user_names(db: Session, ids) -> dict[int, str]:
     }
 
 
+def _org_names(db: Session, ids) -> dict[int, str]:
+    """fixes83: the superadmin's cross-org view names each row's org."""
+    ids = {i for i in ids if i is not None}
+    if not ids:
+        return {}
+    return {
+        o.id: o.name
+        for o in db.query(models.Organization.id, models.Organization.name).filter(
+            models.Organization.id.in_(ids)
+        )
+    }
+
+
 @router.get("/access")
 def list_access_log(
     limit: int = Query(50, ge=1, le=500),
@@ -68,6 +81,7 @@ def list_access_log(
     total = query.count()
     rows = query.order_by(Log.id.desc()).offset(offset).limit(limit).all()
     names = _user_names(db, [r.user_id for r in rows])
+    orgs = _org_names(db, [r.organization_id for r in rows])
     return {
         "total": total,
         "items": [
@@ -81,6 +95,7 @@ def list_access_log(
                 "status": r.status,
                 "ip_address": r.ip_address,
                 "organization_id": r.organization_id,
+                "organization_name": orgs.get(r.organization_id),
             }
             for r in rows
         ],
@@ -101,6 +116,7 @@ def list_error_log(
     total = query.count()
     rows = query.order_by(Log.id.desc()).offset(offset).limit(limit).all()
     names = _user_names(db, [r.user_id for r in rows])
+    orgs = _org_names(db, [r.organization_id for r in rows])
     return {
         "total": total,
         "items": [
@@ -117,6 +133,7 @@ def list_error_log(
                 "traceback": r.traceback,
                 "ip_address": r.ip_address,
                 "organization_id": r.organization_id,
+                "organization_name": orgs.get(r.organization_id),
             }
             for r in rows
         ],

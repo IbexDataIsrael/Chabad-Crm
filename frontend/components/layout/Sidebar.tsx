@@ -17,6 +17,7 @@ import {
   MapPin,
   MessageSquare,
   Receipt,
+  ScrollText,
   Settings,
   Settings2,
   ShieldCheck,
@@ -73,6 +74,8 @@ const ICONS: Record<string, LucideIcon> = {
   "/dashboard/admin/users": UserSearch,
   "/dashboard/admin/email-templates": Mail,
   "/dashboard/admin/settings": Settings,
+  "/dashboard/admin/logs": ScrollText,
+  "/dashboard/logs": ScrollText,
 };
 
 // Longest-prefix match, same rule NavMenu used (fixes50 §3.3): a shorter

@@ -1748,6 +1748,11 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("logs", "logs.status_no_user", "משתמש לא קיים", "Unknown user"),
     ("logs", "logs.status_not_verified", "חשבון לא מאומת", "Account not verified"),
     ("logs", "logs.status_org_disabled", "הארגון מושבת", "Organization disabled"),
+    # fixes80 §5 / fixes83: suspended-login outcome + the superadmin's cross-org view.
+    ("logs", "logs.status_suspended", "הכניסה הושעתה", "Access suspended"),
+    ("logs", "logs.col_org", "ארגון", "Organization"),
+    ("logs", "logs.all_orgs", "כל הארגונים", "All organizations"),
+    ("logs", "logs.platform_intro", "כניסות ושגיאות מכל הארגונים, כולל שגיאות בפעולות מנהל המערכת עצמו (למשל שכפול ארגון).", "Logins and errors from every organization, including errors in the system admin's own actions (e.g. cloning an organization)."),
     ("logs", "logs.status_org_selection", "בחירת ארגון", "Organization selection"),
     ("logs", "logs.status_backup_created", "נוצר גיבוי", "Backup created"),
     ("logs", "logs.status_backup_restored", "שוחזר גיבוי", "Backup restored"),

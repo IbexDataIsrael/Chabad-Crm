@@ -58,7 +58,9 @@ _CLONE_PLAN: list[tuple[type, dict[str, str], bool]] = [
         {"contact_id": "contacts", "apartment_id": "apartments", "admin_area_id": "admin_areas"},
         False,
     ),
-    (models.ContactShliach, {"contact_id": "contacts"}, False),
+    # fixes83: root_id (version lineage) used to keep pointing at the SOURCE
+    # org's versions.
+    (models.ContactShliach, {"contact_id": "contacts", "root_id": "self"}, False),
     (
         models.ReportNumberContactShliach,
         {"report_number_id": "report_number", "contact_shliach_id": "contact_shliach"},
@@ -73,7 +75,8 @@ _CLONE_PLAN: list[tuple[type, dict[str, str], bool]] = [
         False,
     ),
     (models.SignificantDateReminder, {"significant_date_id": "significant_dates"}, False),
-    (models.VisitHistory, {"contact_id": "contacts"}, False),
+    # fixes83: apartment_id used to keep pointing at the SOURCE org's apartment.
+    (models.VisitHistory, {"contact_id": "contacts", "apartment_id": "apartments"}, False),
     (
         models.CustomFieldValue,
         {"definition_id": "custom_field_definitions", "visit_id": "visit_history"},
@@ -93,6 +96,14 @@ _CLONE_PLAN: list[tuple[type, dict[str, str], bool]] = [
 # Columns that reference a user — never cloned (no user rows are copied),
 # always nulled on the copy regardless of what the source pointed at.
 _USER_FK_COLUMNS = {"assigned_user_id", "editor_id", "user_id"}
+
+# fixes83: columns that must not be copied verbatim either —
+#   client_uuid: VisitHistory's offline-sync dedupe key, GLOBALLY unique, so
+#     copying it crashed every clone of an org with synced visits
+#     (UniqueViolation ix_visit_history_client_uuid, prod 2026-09-30);
+#   campaign_id: campaigns aren't cloned, so it would point at the source
+#     org's campaign.
+_NULLED_COLUMNS = {"client_uuid", "campaign_id"}
 
 
 def clone_organization(
@@ -207,7 +218,7 @@ def clone_organization(
                     skipped += 1
                     continue
                 data["entity_id"] = new_entity_id
-            for column in _USER_FK_COLUMNS:
+            for column in _USER_FK_COLUMNS | _NULLED_COLUMNS:
                 if column in data:
                     data[column] = None
             new_row = model(**data)

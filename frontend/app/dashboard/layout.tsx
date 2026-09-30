@@ -206,6 +206,7 @@ function DashboardChrome({ children }: { children: ReactNode }) {
         { href: "/dashboard/admin/users", label: t("admin.nav_users", "חיפוש משתמשים") },
         { href: "/dashboard/admin/email-templates", label: t("admin.nav_email_templates", "תבניות מייל") },
         { href: "/dashboard/admin/settings", label: t("admin.system_settings_title", "הגדרות מערכת") },
+        { href: "/dashboard/admin/logs", label: t("logs.title", "לוגים") },
       ],
     },
   ];
