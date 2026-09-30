@@ -403,7 +403,18 @@ def google_login(
             raise no_user_error
 
     # Google verified the email itself, so only the org gate applies here
-    # (the first sign-in below flips email_verified/is_active on).
+    # (the first sign-in below flips email_verified/is_active on). A user who
+    # is already verified but inactive was suspended by an admin — Google
+    # must not switch them back on (it used to set is_active=True for anyone).
+    suspended = [u for u in users if u.email_verified and not u.is_active]
+    users = [u for u in users if u not in suspended]
+    if not users:
+        _log_access(db, email, "FAILED_SUSPENDED", request, suspended[:1])
+        raise auth_error(
+            status.HTTP_403_FORBIDDEN,
+            "auth.error.account_suspended",
+            "Your access has been suspended. Contact your organization's admin.",
+        )
     active = [u for u in users if u.organization and u.organization.is_active]
     if not active:
         _log_access(db, email, "FAILED_ORG_DISABLED", request, users[:1])

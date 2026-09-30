@@ -12,6 +12,7 @@ const FALLBACKS: Record<string, string> = {
   "auth.error.org_disabled": "הארגון הושבת. יש לפנות לתמיכה.",
   "auth.error.google_invalid": "ההתחברות עם Google נכשלה. נסו שוב.",
   "auth.error.google_no_user": "לא נמצא משתמש עם כתובת אימייל זו. יש להירשם או לקבל הזמנה תחילה.",
+  "auth.error.account_suspended": "הכניסה שלך למערכת הושעתה. יש לפנות למנהל הארגון.",
   "auth.error.reset_link_invalid": "הקישור לאיפוס הסיסמה אינו תקף או שפג תוקפו.",
   "auth.error.password_weak": "הסיסמה חייבת לכלול לפחות 8 תווים, אות גדולה, אות קטנה וספרה.",
 };

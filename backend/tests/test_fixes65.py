@@ -192,6 +192,33 @@ def test_google_registration_uses_typed_name(client, public_org, monkeypatch):
     assert me["full_name"] == "דוד לוי"
 
 
+def test_google_login_does_not_undo_suspension(
+    client, admin_headers, public_org, db_session, monkeypatch
+):
+    """Google sign-in used to set is_active=True unconditionally, so a user an
+    admin suspended got back in just by pressing the Google button."""
+    from app.routers import auth as auth_router
+    from app.routers import public as public_router
+
+    info = {"email": "susp@gmail.com", "name": "G", "sub": "g-susp"}
+    monkeypatch.setattr(public_router, "verify_google_token", lambda cred: info)
+    monkeypatch.setattr(auth_router, "verify_google_token", lambda cred: info)
+    r = client.post(
+        "/api/public/register-google",
+        json={"credential": "x", "full_name": "מושעה", "org_slug": "test-org"},
+    )
+    uid = _me(client, _bearer(r.json()["access_token"]))["id"]
+    assert client.post("/api/auth/google", json={"credential": "x"}).status_code == 200
+
+    r = client.put(f"/api/users/{uid}", json={"is_active": False}, headers=admin_headers)
+    assert r.status_code == 200 and r.json()["is_active"] is False
+    r = client.post("/api/auth/google", json={"credential": "x"})
+    assert r.status_code == 403
+    user = db_session.get(models.User, uid)
+    db_session.refresh(user)
+    assert user.is_active is False
+
+
 def test_admin_rename_updates_split_name(client, admin_headers, public_org, db_session):
     r = client.post(
         "/api/public/register",

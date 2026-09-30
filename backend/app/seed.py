@@ -1677,6 +1677,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("auth", "auth.error.org_disabled", "הארגון הושבת. יש לפנות לתמיכה.", "This organization has been disabled. Contact support."),
     ("auth", "auth.error.google_invalid", "ההתחברות עם Google נכשלה. נסו שוב.", "Google sign-in failed. Please try again."),
     ("auth", "auth.error.google_no_user", "לא נמצא משתמש עם כתובת אימייל זו. יש להירשם או לקבל הזמנה תחילה.", "No user with this email address. Sign up or get an invitation first."),
+    ("auth", "auth.error.account_suspended", "הכניסה שלך למערכת הושעתה. יש לפנות למנהל הארגון.", "Your access has been suspended. Contact your organization's admin."),
     ("auth", "auth.error.reset_link_invalid", "הקישור לאיפוס הסיסמה אינו תקף או שפג תוקפו.", "This password reset link is invalid or has expired."),
     ("auth", "auth.error.password_weak", "הסיסמה חייבת לכלול לפחות 8 תווים, אות גדולה, אות קטנה וספרה.", "The password needs at least 8 characters, an uppercase letter, a lowercase letter and a digit."),
     ("auth", "auth.error.network", "אין חיבור לשרת. בדקו את החיבור ונסו שוב.", "Can't reach the server. Check your connection and try again."),

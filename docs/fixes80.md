@@ -46,5 +46,31 @@ name (user 44 was created as "zvi shmuel naiman").
       blank, it tries an org-scoped Google sign-in (returning user), otherwise
       it shows "יש למלא שם מלא". The label is marked `*`.
 
-Tests: test_fixes65 + test_users + test_fixes14 → 39 passed. `tsc --noEmit` clean.
+## 4. Superadmin login lands on street2 (activist screen)
+
+The superadmin login itself was correct (prod access log 20:52 → user 4). But
+when a session ends (logout, 401, suspension), `RequireAuth` sends the browser
+to `/?redirect=<current page>`, and the login page sent **whoever logged in
+next** there. The test activist had been on street2 in the same browser.
+
+- [x] `app/page.tsx` `loginTarget(role)`: activist-only pages
+      (`/dashboard/street*`, `/dashboard/activist`) are honoured only for a
+      shliach. A superadmin only follows `/dashboard/admin*` links. Anything
+      else falls back to `/dashboard` (which routes by role). The effect waits
+      for `user` so the role is known.
+      Live-verified locally: admin + `?redirect=/dashboard/street2` → `/dashboard`;
+      admin + `/dashboard/users` → `/dashboard/users` (deep links still work);
+      superadmin + street2 → `/dashboard/admin`.
+      Trade-off: an admin can no longer deep-link back into street2 through the login page.
+
+## 5. Google sign-in undid a suspension (found while tracing §4)
+
+`POST /api/auth/google` set `is_active = True` on every sign-in, so any
+suspended user got back in with the Google button.
+
+- [x] A verified-but-inactive user is refused: 403 `auth.error.account_suspended`,
+      logged as `FAILED_SUSPENDED`. First-time activation (not yet verified)
+      is unchanged. Test `test_google_login_does_not_undo_suspension`.
+
+Tests: test_fixes65 + test_users + test_fixes14 + test_fixes75 → 50 passed. `tsc --noEmit` clean.
 Not committed or pushed.

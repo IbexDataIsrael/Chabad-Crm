@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { LogIn, Loader2 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
-import { ApiError, getToken, resendVerification } from "@/lib/api";
+import { ApiError, resendVerification } from "@/lib/api";
 import { authErrorText } from "@/lib/authErrors";
 import { useAuth, type LoginOrgOption } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
@@ -18,10 +18,21 @@ import { Label } from "@/components/ui/label";
 
 /** Post-login destination from ?redirect= (fixes8 §3), restricted to internal
  *  paths — absolute and protocol-relative URLs fall back to the dashboard. */
-function loginTarget(): string {
+// Activist-only screens. The ?redirect= is captured from whoever's session
+// just ended — on a shared device that's often a different person than the
+// one logging in now, so e.g. a superadmin used to land on an activist's
+// street2 screen.
+const ACTIVIST_ONLY_PREFIXES = ["/dashboard/street", "/dashboard/activist"];
+
+function loginTarget(role: string): string {
   if (typeof window === "undefined") return "/dashboard";
   const target = new URLSearchParams(window.location.search).get("redirect");
-  if (target && target.startsWith("/") && !target.startsWith("//")) return target;
+  if (target && target.startsWith("/") && !target.startsWith("//")) {
+    const activistOnly = ACTIVIST_ONLY_PREFIXES.some((p) => target.startsWith(p));
+    const superadminMismatch = role === "superadmin" && !target.startsWith("/dashboard/admin");
+    if (!(activistOnly && role !== "shliach") && !superadminMismatch) return target;
+    return "/dashboard";
+  }
   // fixes65 §4: a QR claim interrupted by a trip to this login screen.
   const claimToken = pendingClaimToken();
   if (claimToken) return `/tasks/claim/${encodeURIComponent(claimToken)}`;
@@ -44,8 +55,10 @@ export default function LoginPage() {
   const [googleCredential, setGoogleCredential] = useState<string | null>(null);
 
   // Already authenticated → go straight to the intended page (or dashboard).
+  // Waits for `user` (not just a stored token) so the target can be checked
+  // against the role of whoever actually signed in.
   useEffect(() => {
-    if (getToken() || user) router.replace(loginTarget());
+    if (user) router.replace(loginTarget(user.role));
   }, [user, router]);
 
   async function onSubmit(e: FormEvent) {
