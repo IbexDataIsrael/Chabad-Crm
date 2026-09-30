@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   adminActivateOrg,
@@ -94,6 +94,45 @@ export default function SystemAdminPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, isSuperadmin]);
+
+  // The new-org notification email links to ?approve=<org id>: once the list
+  // is loaded, spotlight that org and offer to approve it right away. The
+  // param is dropped from the URL so a reload doesn't prompt again.
+  const [highlightOrg, setHighlightOrg] = useState<number | null>(null);
+  const approveLinkHandled = useRef(false);
+  useEffect(() => {
+    if (orgs === null || approveLinkHandled.current) return;
+    const param = new URLSearchParams(window.location.search).get("approve");
+    if (!param) return;
+    approveLinkHandled.current = true;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("approve");
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    const org = orgs.find((o) => o.id === Number(param));
+    if (!org) {
+      error(t("admin.approve_link_missing", "הארגון מהקישור לא נמצא (ייתכן שנדחה או נמחק)."));
+      return;
+    }
+    setHighlightOrg(org.id);
+    requestAnimationFrame(() =>
+      document.getElementById(`org-${org.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }),
+    );
+    if (org.approval_status !== "pending") {
+      success(t("admin.approve_link_already", 'הארגון "{name}" כבר אושר.').replace("{name}", org.name));
+      return;
+    }
+    (async () => {
+      if (
+        await confirmDialog({
+          message: t("admin.confirm_approve_org", 'לאשר את הארגון "{name}" ({email})?')
+            .replace("{name}", org.name)
+            .replace("{email}", org.admin_email ?? "—"),
+        })
+      )
+        await onApprove(org);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgs]);
 
   const orgNameById = (id: number) => orgs?.find((o) => o.id === id)?.name ?? `#${id}`;
   const userMatches =
@@ -396,7 +435,13 @@ export default function SystemAdminPage() {
       ) : (
         <div className="space-y-3">
           {orgs.map((org) => (
-            <div key={org.id} className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+            <div
+              key={org.id}
+              id={`org-${org.id}`}
+              className={`bg-card border rounded-xl shadow-sm overflow-hidden ${
+                highlightOrg === org.id ? "border-status-green ring-2 ring-status-green/40" : "border-border"
+              }`}
+            >
               <div className="flex flex-wrap items-center justify-between gap-3 p-4">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">

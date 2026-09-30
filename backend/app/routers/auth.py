@@ -181,7 +181,7 @@ def _create_pending_org(db: Session, org: models.Organization, user: models.User
     except Exception:
         logger.exception("Failed to send pending-user email to %s", user.email)
     try:
-        send_org_pending_admin(org.name, user.full_name, user.email or "")
+        send_org_pending_admin(org.id, org.name, user.full_name, user.email or "")
     except Exception:
         logger.exception("Failed to send pending-admin notification for org %s", org.name)
 

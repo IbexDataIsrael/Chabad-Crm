@@ -680,6 +680,10 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("admin", "admin.deps_none", "אין נתונים מקושרים למשתמש זה.", "No connected data for this user."),
     ("admin", "admin.deps_assigned_contacts", "אנשי קשר משויכים: {n}", "Assigned contacts: {n}"),
     ("admin", "admin.deps_shliach_contact", "מקושר לכרטיס פעיל: {name}", "Linked activist card: {name}"),
+    # {name}/{email} are replaced client-side (new-org email's ?approve= link).
+    ("admin", "admin.confirm_approve_org", "לאשר את הארגון \"{name}\" ({email})?", "Approve the organization \"{name}\" ({email})?"),
+    ("admin", "admin.approve_link_already", "הארגון \"{name}\" כבר אושר.", "The organization \"{name}\" is already approved."),
+    ("admin", "admin.approve_link_missing", "הארגון מהקישור לא נמצא (ייתכן שנדחה או נמחק).", "The organization from the link was not found (it may have been rejected or deleted)."),
     ("admin", "admin.deps_report_numbers", "מספרי דוח באחריות: {n}", "Report numbers covered: {n}"),
     ("admin", "admin.deps_areas", "אזורים באחריות: {n}", "Areas covered: {n}"),
     ("admin", "admin.deps_note", "בעת המחיקה השיוכים יוסרו והנתונים יישארו ללא משתמש מקושר.", "On deletion the links are removed; the data remains without a linked user."),
@@ -2507,7 +2511,7 @@ def seed_superadmin(db: Session) -> None:
 def seed_email_templates(db: Session) -> None:
     """Insert any missing editable email templates (idempotent, never overwrites
     an admin's edits). Defaults live in app.core.email.DEFAULT_EMAIL_TEMPLATES."""
-    from app.core.email import DEFAULT_EMAIL_TEMPLATES
+    from app.core.email import DEFAULT_EMAIL_TEMPLATES, LEGACY_EMAIL_SUBJECTS
 
     existing = {
         k for (k,) in db.query(models.EmailTemplate.key).all()
@@ -2525,6 +2529,18 @@ def seed_email_templates(db: Session) -> None:
             )
         )
         added = True
+    for key, old_subject in LEGACY_EMAIL_SUBJECTS.items():
+        row = (
+            db.query(models.EmailTemplate)
+            .filter(
+                models.EmailTemplate.key == key,
+                models.EmailTemplate.subject == old_subject,
+            )
+            .first()
+        )
+        if row:
+            row.subject = DEFAULT_EMAIL_TEMPLATES[key]["subject"]
+            added = True
     if added:
         db.commit()
 

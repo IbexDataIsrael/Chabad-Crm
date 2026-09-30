@@ -44,6 +44,14 @@ def _load_html(name: str) -> str:
 # superadmin can restyle it in the WYSIWYG editor. Placeholders:
 # {{first_name}}, {{last_name}}, {{url_to_system}}, {{shliach_email}},
 # {{org_name}}, {{logo_url}}.
+# Subjects that shipped Hebrew-only. seed_email_templates upgrades a stored row
+# to the bilingual default only while it still holds this exact old text — a
+# subject the superadmin edited is left alone.
+LEGACY_EMAIL_SUBJECTS: dict[str, str] = {
+    "aignummail1": "בקשתך התקבלה — מיני CRM",
+    "aignummail2": "הארגון אושר — מיני CRM",
+}
+
 DEFAULT_EMAIL_TEMPLATES: dict[str, dict[str, str]] = {
     "shliach_welcome": {
         "subject": "Welcome to the system",
@@ -79,7 +87,7 @@ DEFAULT_EMAIL_TEMPLATES: dict[str, dict[str, str]] = {
         ),
     },
     "aignummail1": {
-        "subject": "בקשתך התקבלה — מיני CRM",
+        "subject": "בקשתך התקבלה / Request received — מיני CRM",
         "body_hebrew": (
             "שלום {{user_name}},\n\n"
             "בקשתך לפתיחת הארגון \"{{org_name}}\" נשלחה והיא נבחנת.\n"
@@ -92,7 +100,7 @@ DEFAULT_EMAIL_TEMPLATES: dict[str, dict[str, str]] = {
         ),
     },
     "aignummail2": {
-        "subject": "הארגון אושר — מיני CRM",
+        "subject": "הארגון אושר / Organization approved — מיני CRM",
         "body_hebrew": (
             "שלום {{user_name}},\n\n"
             "הארגון \"{{org_name}}\" אושר!\n"
@@ -356,18 +364,55 @@ def send_org_approved_user(
     )
 
 
-def send_org_pending_admin(org_name: str, user_name: str, user_email: str) -> None:
-    """Notify the platform operator that a new org awaits approval (not editable)."""
-    if not settings.platform_admin_email:
-        logger.warning("platform_admin_email not set — skipping admin notification")
+def send_org_pending_admin(
+    org_id: int, org_name: str, user_name: str, user_email: str
+) -> None:
+    """Notify the platform operator + superadmin that a new org awaits approval,
+    with a link that opens the system-admin page on that org's approve prompt
+    (login first if needed — the ?redirect deep link keeps the query)."""
+    recipients: list[str] = []
+    for addr in (settings.platform_admin_email, settings.superadmin_email):
+        addr = (addr or "").strip()
+        if addr and addr.lower() not in {r.lower() for r in recipients}:
+            recipients.append(addr)
+    if not recipients:
+        logger.warning(
+            "platform_admin_email/superadmin_email not set — skipping admin notification"
+        )
         return
-    subject = f"New organization pending approval — {org_name}"
-    body = (
+    approve_url = f"{settings.frontend_url.rstrip('/')}/dashboard/admin?approve={org_id}"
+    subject = f"ארגון חדש ממתין לאישור / New organization pending approval — {org_name}"
+    body_he = (
+        f'ארגון חדש "{org_name}" נרשם וממתין לאישור.\n'
+        f"מנהל: {user_name} ({user_email}).\n"
+        f"לאישור הארגון: {approve_url}"
+    )
+    body_en = (
         f'A new organization "{org_name}" has signed up and is pending approval.\n'
         f"Admin: {user_name} ({user_email}).\n"
-        "Review and approve it in the system admin dashboard."
+        f"Approve it here: {approve_url}"
     )
-    send_email(settings.platform_admin_email, subject, body)
+    button = (
+        f'<p style="text-align:center;margin:24px 0;">'
+        f'<a href="{htmllib.escape(approve_url)}" style="display:inline-block;'
+        f"background:#16a34a;color:#ffffff;text-decoration:none;font-weight:bold;"
+        f'padding:12px 28px;border-radius:8px;">אישור הארגון / Approve organization</a></p>'
+    )
+    content_html = (
+        f'<div dir="rtl" style="text-align:right;font-size:15px;line-height:1.7;">'
+        f"{_text_to_html(body_he.rsplit(chr(10), 1)[0])}</div>"
+        f"{button}"
+        f'<div dir="ltr" style="font-size:15px;line-height:1.7;color:#374151;">'
+        f"{_text_to_html(body_en.rsplit(chr(10), 1)[0])}</div>"
+    )
+    html_body = render_template(
+        "notification.html",
+        subject=htmllib.escape(subject),
+        content_html=content_html,
+        logo_url=_logo_url(),
+    )
+    for to in recipients:
+        send_email(to, subject, f"{body_he}\n\n{body_en}", html=html_body)
 
 
 def send_password_reset(db: Session, user, reset_url: str, expire_minutes: int) -> None:
