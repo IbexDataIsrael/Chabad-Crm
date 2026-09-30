@@ -1487,6 +1487,18 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     # fixes73: BuildingCelebration's previously hard-coded copy.
     ("street", "street.celebration_title", "כל הכבוד! 🎉", "Well done! 🎉"),
     ("street", "street.celebration_body", "סיימתם את הבניין - {name}!", "You completed the building - {name}!"),
+    # fixes79: practice data for an activist with no taken task.
+    ("street", "street.sample_building", "בניין לדוגמא", "Sample building"),
+    (
+        "street", "street.sample_notice",
+        "אין לך עדיין משימה פעילה — זה בניין לתרגול בלבד. השינויים כאן לא נשמרים. כשתקבל/י משימה, הדירות שלך יופיעו כאן.",
+        "You don't have an active task yet — this building is for practice only. Changes here are not saved. Once you get a task, your apartments will appear here.",
+    ),
+    (
+        "activist_home", "activist_home.practice_hint",
+        "אין לך עדיין משימה — אפשר להתאמן על בניין לדוגמא.",
+        "You don't have a task yet — you can practise on a sample building.",
+    ),
     ("street", "street.celebration_body_no_name", "סיימתם את הבניין!", "Building completed!"),
     ("street", "street.celebration_continue", "המשך בדרך!", "Keep going!"),
     ("street", "street.celebration_rebbe_alt", "הרבי מליובאוויטש", "The Lubavitcher Rebbe"),

@@ -93,3 +93,21 @@ def task_apartment_count(db: Session, task_id: int) -> int:
         .scalar()
         or 0
     )
+
+
+def has_active_task(db: Session, user_id: int) -> bool:
+    """Does this activist hold a taken (ACTIVE) task under a live campaign?
+    Same predicate as the task branch of apartments._shliach_apartment_ids —
+    an activist without one sees the practice sample data in street2."""
+    return (
+        db.query(models.Task.id)
+        .join(models.Campaign, models.Campaign.id == models.Task.campaign_id)
+        .filter(
+            models.Task.volunteer_user_id == user_id,
+            models.Task.status == "ACTIVE",
+            models.Campaign.is_active.is_(True),
+            models.Campaign.deleted_at.is_(None),
+        )
+        .first()
+        is not None
+    )

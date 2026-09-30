@@ -25,6 +25,7 @@ from app.core.email import (
     send_verification_email,
 )
 from app.core import org_prefs
+from app.core.task_claim import has_active_task
 from app.core.error_log import client_ip
 from app.core.security import (
     PASSWORD_RESET_EXPIRE_MINUTES,
@@ -487,6 +488,9 @@ def me(
     sh = _linked_shliach(db, current_user)
     if sh:
         out.shliach = _shliach_out(sh)
+    # fixes79: an activist with no taken task practises on sample data.
+    if current_user.role == "shliach":
+        out.has_active_task = has_active_task(db, current_user.id)
     # fixes54 §8: the org's cascaded feature-toggle flags — every session
     # bootstraps from this endpoint (useAuth's `user`), so this is the one
     # place the frontend's nav/route guards need it set from.

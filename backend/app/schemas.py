@@ -179,6 +179,9 @@ class UserOut(BaseModel):
     created_at: datetime
     organization_id: int
     organization: Optional[OrganizationOut] = None
+    # fixes79: set by GET /api/auth/me for role='shliach' only (None otherwise)
+    # — False means street2 shows practice sample data.
+    has_active_task: Optional[bool] = None
     # fixes46: the linked ContactShliach (role='shliach' only), resolved by
     # the real user_id FK — replaces the frontend's old email-matching hack.
     # None for admin/staff, or a shliach login not yet linked to a contact.

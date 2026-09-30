@@ -106,6 +106,8 @@ export interface User {
   // schemas.UserOut.shliach, already returned by GET /api/auth/me but never
   // exposed on this type before now.
   shliach?: Shliach | null;
+  /** fixes79: shliach only — false = no taken task yet (street2 sample data). */
+  has_active_task?: boolean | null;
 }
 
 interface AuthContextValue {

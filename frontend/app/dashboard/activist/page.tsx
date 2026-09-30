@@ -155,6 +155,11 @@ export default function ActivistLandingPage() {
               "סיבוב דלת אחר דלת לדירות המשויכות לך",
             )}
           </p>
+          {user?.has_active_task === false && (
+            <p className="mt-2 text-sm font-semibold text-status-orange">
+              {t("activist_home.practice_hint", "אין לך עדיין משימה — אפשר להתאמן על בניין לדוגמא.")}
+            </p>
+          )}
         </Card>
       </Link>
 

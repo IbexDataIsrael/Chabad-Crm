@@ -16,6 +16,7 @@ import { mapsHref } from "@/lib/contactActions";
 import { useCustomFieldDefs } from "@/lib/customFields";
 import { sortByFieldOrder, useFieldSettings } from "@/lib/fieldSettings";
 import { recordStreetEvent, syncStreetActivity } from "@/lib/streetActivity";
+import { applySamplePatch, buildSampleApartments } from "@/lib/sampleStreet";
 import { groupByFloor } from "@/lib/floorGroups";
 import { useLocalization } from "@/lib/localization";
 import { FIXED_APARTMENT_PICKLIST_KEYS, usePicklist, usePicklistsMap } from "@/lib/picklists";
@@ -140,6 +141,9 @@ export default function Street2Page() {
   const needsPicker = !authLoading && isAdmin && !viewer;
 
   const [items, setItems] = useState<ApartmentListItem[]>([]);
+  // fixes79: an activist with no taken task (and so no apartments) practises
+  // on lib/sampleStreet's fixed building — every edit stays in this page.
+  const [sampleMode, setSampleMode] = useState(false);
   const [busy, setBusy] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
@@ -305,7 +309,12 @@ export default function Street2Page() {
         if (res.items.length === 0) break;
         page++;
       }
-      setItems(all);
+      // Real apartments always win: an activist still covered by areas
+      // (fixes19) keeps seeing them even without a task.
+      const practice =
+        !viewer && isShliach && user?.has_active_task === false && all.length === 0;
+      setSampleMode(practice);
+      setItems(practice ? buildSampleApartments(t("street.sample_building", "בניין לדוגמא")) : all);
     } catch {
       setLoadError(true);
     } finally {
@@ -352,7 +361,7 @@ export default function Street2Page() {
   // again so the building re-hides itself without requiring a redundant
   // edit. Never celebrates — only a fresh in-session transition does that.
   useEffect(() => {
-    if (viewer || !completionsReady || !activeCampaign?.id || items.length === 0) return;
+    if (viewer || sampleMode || !completionsReady || !activeCampaign?.id || items.length === 0) return;
     const byBuilding = new Map<number, ApartmentListItem[]>();
     for (const a of items) {
       const list = byBuilding.get(a.building_id);
@@ -374,7 +383,7 @@ export default function Street2Page() {
       }
       return new Set([...prev, ...additions]);
     });
-  }, [items, completionsReady, activeCampaign?.id, viewer]);
+  }, [items, completionsReady, activeCampaign?.id, viewer, sampleMode]);
 
   // fixes73: moving on from an unfinished building needs an explicit
   // acknowledgement. Opening a door in a building checks the ONE building
@@ -502,10 +511,12 @@ export default function Street2Page() {
     try {
       // fixes19 §3: apartments are versioned — a PUT returns a NEW row with a
       // new id (and, as a side effect, a non-null root_id — see file header).
-      const saved = await apiFetch<Apartment>(`/api/apartments/${openApt.id}`, {
-        method: "PUT",
-        body: JSON.stringify(patch),
-      });
+      const saved: Partial<Apartment> = sampleMode
+        ? applySamplePatch(openApt, patch)
+        : await apiFetch<Apartment>(`/api/apartments/${openApt.id}`, {
+            method: "PUT",
+            body: JSON.stringify(patch),
+          });
       const merged: ApartmentListItem = { ...openApt, ...saved };
       const bLabel = buildingDisplayName({
         id: buildingId,
@@ -514,7 +525,7 @@ export default function Street2Page() {
       });
       // fixes74 §12: a door's first edit marks it done — log it for the
       // admin's view of this activist (queued + synced, see lib/streetActivity).
-      if (user && isShliach && !wasDone && isDone(merged)) {
+      if (user && isShliach && !sampleMode && !wasDone && isDone(merged)) {
         recordStreetEvent(user.id, {
           event_type: "mark",
           apartment_id: merged.id,
@@ -527,7 +538,7 @@ export default function Street2Page() {
         // RULE 3: fire only when THIS save is what completes the building —
         // never on initial load, never re-firing for an already-complete one.
         if (!wasComplete && buildingComplete(next.filter((a) => a.building_id === buildingId))) {
-          if (user && isShliach) {
+          if (user && isShliach && !sampleMode) {
             recordStreetEvent(user.id, {
               event_type: "building_complete",
               apartment_id: null,
@@ -545,7 +556,10 @@ export default function Street2Page() {
           // itself already succeeded; the self-healing effect will retry
           // it on next load regardless) and hide the building immediately,
           // without waiting for a reload.
-          if (activeCampaign?.id) {
+          if (sampleMode) {
+            // Practice run: hide the finished sample building locally only.
+            setCompletedBuildingIds((p) => new Set(p).add(buildingId));
+          } else if (activeCampaign?.id) {
             const activeCampaignId = activeCampaign.id;
             apiFetch(`/api/campaigns/${activeCampaignId}/building-completions`, {
               method: "POST",
@@ -640,6 +654,30 @@ export default function Street2Page() {
         >
           {t("street.title", "המסלול שלי")}
         </h1>
+        {sampleMode && !busy && (
+          <div
+            role="status"
+            style={{
+              background: "#fde047",
+              color: "#422006",
+              border: "2px dashed #a16207",
+              borderRadius: 14,
+              padding: "12px 14px",
+              margin: "0 0 14px",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ fontWeight: 800, fontSize: 20 }}>
+              {t("street.sample_building", "בניין לדוגמא")}
+            </div>
+            <div style={{ fontSize: 14, marginTop: 4 }}>
+              {t(
+                "street.sample_notice",
+                "אין לך עדיין משימה פעילה — זה בניין לתרגול בלבד. השינויים כאן לא נשמרים. כשתקבל/י משימה, הדירות שלך יופיעו כאן.",
+              )}
+            </div>
+          </div>
+        )}
         <div className={doorStyles.legend}>
           <span className={doorStyles.legendItem}>
             <span className={`${doorStyles.swatch} ${doorStyles.swatchKnock}`} />
