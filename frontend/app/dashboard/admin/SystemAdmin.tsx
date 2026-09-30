@@ -242,15 +242,32 @@ export function SystemAdmin({ section }: { section: AdminSection }) {
   // fixes10 §1.2: deletion goes through the two-step modal, not confirm().
   const [orgToDelete, setOrgToDelete] = useState<AdminOrganization | null>(null);
 
+  // fixes82: a refused action gets a modal saying exactly why, not a toast.
+  const [blocked, setBlocked] = useState<{
+    org: AdminOrganization;
+    action: BlockedAction;
+    message?: string;
+  } | null>(null);
+
   async function onDeleteOrgConfirmed(org: AdminOrganization) {
     setOrgToDelete(null);
-    await run(async () => {
+    setBusy(true);
+    try {
       await adminDeleteOrg(org.id);
       await loadOrgs();
-    }, t("admin.org_deleted", "הארגון נמחק"));
+      success(t("admin.org_deleted", "הארגון נמחק"));
+    } catch (e) {
+      setBlocked({ org, action: "delete", message: e instanceof Error ? e.message : undefined });
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function onImpersonate(org: AdminOrganization) {
+    if (org.is_system) {
+      setBlocked({ org, action: "impersonate" });
+      return;
+    }
     if (
       !(await confirmDialog({ message: t("admin.confirm_impersonate", `להתחבר כמנהל של "${org.name}"? תנותק מחשבון המנהל.`) }))
     )
@@ -470,8 +487,20 @@ export function SystemAdmin({ section }: { section: AdminSection }) {
             >
               <div className="flex flex-wrap items-center justify-between gap-3 p-4">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold">{org.name}</span>
+                    {/* fixes82: the org id, for tracking an org across logs/DB. */}
+                    <span
+                      className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground"
+                      dir="ltr"
+                      style={{ unicodeBidi: "isolate" }}
+                      title={t("admin.org_id", "מזהה ארגון")}
+                    >
+                      #{org.id}
+                    </span>
+                    {org.is_system && (
+                      <Badge variant="secondary">{t("admin.system_org_badge", "ארגון מערכת")}</Badge>
+                    )}
                     {org.approval_status === "pending" ? (
                       <Badge variant="warning">
                         {t("admin.pending", "ממתין לאישור")}
@@ -552,10 +581,12 @@ export function SystemAdmin({ section }: { section: AdminSection }) {
                         <button
                           disabled={busy}
                           onClick={() =>
-                            run(async () => {
-                              await adminDeactivateOrg(org.id);
-                              await loadOrgs();
-                            }, t("admin.org_disabled", "הארגון הושבת"))
+                            org.is_system
+                              ? setBlocked({ org, action: "deactivate" })
+                              : run(async () => {
+                                  await adminDeactivateOrg(org.id);
+                                  await loadOrgs();
+                                }, t("admin.org_disabled", "הארגון הושבת"))
                           }
                           className="rounded-md border border-input px-3 py-1 hover:bg-accent disabled:opacity-50"
                         >
@@ -577,7 +608,9 @@ export function SystemAdmin({ section }: { section: AdminSection }) {
                       )}
                       <button
                         disabled={busy}
-                        onClick={() => setOrgToDelete(org)}
+                        onClick={() =>
+                          org.is_system ? setBlocked({ org, action: "delete" }) : setOrgToDelete(org)
+                        }
                         className="rounded-md border border-status-darkred/30 text-status-darkred px-3 py-1 hover:bg-status-darkred/10 disabled:opacity-50"
                       >
                         {t("action.delete", "מחק")}
@@ -722,6 +755,15 @@ export function SystemAdmin({ section }: { section: AdminSection }) {
           org={orgToDelete}
           onCancel={() => setOrgToDelete(null)}
           onConfirm={() => onDeleteOrgConfirmed(orgToDelete)}
+        />
+      )}
+
+      {blocked && (
+        <OrgActionBlockedModal
+          org={blocked.org}
+          action={blocked.action}
+          message={blocked.message}
+          onClose={() => setBlocked(null)}
         />
       )}
 
@@ -1039,6 +1081,89 @@ function CloneOrgModal({
             </Button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+type BlockedAction = "delete" | "deactivate" | "impersonate";
+
+/** fixes82: explains exactly why an action on an org was refused — either
+ *  the org is the system org (hosts the superadmin login), known up front
+ *  from `is_system`, or the server refused for another reason (`message`). */
+function OrgActionBlockedModal({
+  org,
+  action,
+  message,
+  onClose,
+}: {
+  org: AdminOrganization;
+  action: BlockedAction;
+  message?: string;
+  onClose: () => void;
+}) {
+  const { t } = useLocalization();
+  const title = {
+    delete: t("admin.blocked_delete_title", "לא ניתן למחוק את הארגון"),
+    deactivate: t("admin.blocked_deactivate_title", "לא ניתן להשבית את הארגון"),
+    impersonate: t("admin.blocked_impersonate_title", "לא ניתן להתחבר כארגון זה"),
+  }[action];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-md bg-card rounded-xl shadow-xl p-5 space-y-3"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-lg font-bold text-status-darkred">{title}</h2>
+        <p className="text-sm font-medium">
+          {org.name}{" "}
+          <span className="text-muted-foreground" dir="ltr" style={{ unicodeBidi: "isolate" }}>
+            #{org.id}
+          </span>
+        </p>
+        {org.is_system ? (
+          <>
+            <p className="text-sm">
+              {t(
+                "admin.system_org_explain",
+                "זהו ארגון המערכת: הוא מכיל את חשבון מנהל המערכת (superadmin) — החשבון שאיתו מנהלים את כל הארגונים, כולל החשבון שאיתו אתה מחובר עכשיו.",
+              )}
+            </p>
+            <p className="text-sm">
+              {t(
+                "admin.system_org_consequence",
+                "מחיקה או השבתה שלו היו מוחקות או חוסמות את חשבון הניהול עצמו ומשאירות את המערכת ללא מנהל, ולכן המערכת חוסמת את הפעולה. זה לא ארגון לקוח ואין בו נתוני לקוחות.",
+              )}
+            </p>
+            <div className="rounded-md bg-muted/50 p-3 text-xs">
+              <div className="mb-1 text-muted-foreground">
+                {t("admin.system_org_accounts", "חשבונות מנהל מערכת בארגון זה:")}
+              </div>
+              <ul className="list-disc ps-5" dir="ltr">
+                {org.superadmin_usernames.map((u) => (
+                  <li key={u}>{u}</li>
+                ))}
+              </ul>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-sm">
+              {t("admin.org_action_failed_explain", "השרת סירב לבצע את הפעולה. הסיבה שהתקבלה:")}
+            </p>
+            <p className="rounded-md bg-muted/50 p-3 text-sm" dir="auto">
+              {message || t("msg.save_failed", "שמירה נכשלה")}
+            </p>
+          </>
+        )}
+        <div className="flex justify-end pt-1">
+          <Button type="button" onClick={onClose} autoFocus>
+            {t("action.close", "סגור")}
+          </Button>
+        </div>
       </div>
     </div>
   );

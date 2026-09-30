@@ -3,7 +3,7 @@ import re
 from datetime import datetime, time
 from typing import Any, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 Role = Literal["admin", "staff", "shliach"]
 ContactType = Literal["mekurav", "shliach"]
@@ -340,6 +340,15 @@ class AdminOrganizationOut(BaseModel):
     user_count: int
     admin_email: Optional[str] = None
     admin_name: Optional[str] = None
+    # fixes82: an org hosting a superadmin account is the "system" org —
+    # it can't be deleted, disabled or impersonated (routers/admin.py
+    # _is_system_org). Non-empty list == system org.
+    superadmin_usernames: list[str] = []
+
+    @computed_field
+    @property
+    def is_system(self) -> bool:
+        return bool(self.superadmin_usernames)
 
 
 class OrgPrefsOut(BaseModel):

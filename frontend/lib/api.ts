@@ -387,6 +387,9 @@ export interface AdminOrganization {
   user_count: number;
   admin_email: string | null;
   admin_name: string | null;
+  /** fixes82: hosts a superadmin account → can't be deleted/disabled/impersonated. */
+  is_system: boolean;
+  superadmin_usernames: string[];
 }
 
 export interface AdminUser {

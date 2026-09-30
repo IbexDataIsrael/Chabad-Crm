@@ -72,6 +72,15 @@ def _org_out(db: Session, org: models.Organization) -> AdminOrganizationOut:
         user_count=user_count,
         admin_email=admin.email if admin else None,
         admin_name=admin.full_name if admin else None,
+        # fixes82: why delete/disable/impersonate are refused — the UI
+        # explains it (naming these accounts) instead of a bare error.
+        superadmin_usernames=[
+            u
+            for (u,) in db.query(models.User.username).filter(
+                models.User.organization_id == org.id,
+                models.User.role == "superadmin",
+            )
+        ],
     )
 
 

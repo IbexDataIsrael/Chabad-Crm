@@ -56,6 +56,12 @@ def test_superadmin_lists_organizations(client, superadmin_headers, db_session):
     assert resp.status_code == 200
     names = {o["name"] for o in resp.json()}
     assert {"System", "Tenant A"} <= names
+    # fixes82: the UI explains a refused delete from these fields.
+    by_name = {o["name"]: o for o in resp.json()}
+    assert by_name["System"]["is_system"] is True
+    assert by_name["System"]["superadmin_usernames"] == ["superadmin"]
+    assert by_name["Tenant A"]["is_system"] is False
+    assert by_name["Tenant A"]["superadmin_usernames"] == []
 
 
 def test_delete_org_cascades_users_and_contacts(client, superadmin_headers, db_session):
