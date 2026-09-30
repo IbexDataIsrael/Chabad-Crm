@@ -1,0 +1,24 @@
+/* fixes77: street2-only floor sections inside a building card (kept out of
+   the shared street.module.css so /dashboard/street v1 is untouched). The
+   divider is the section border — the heading is a separate element, so it
+   can be removed without losing the separation. Not interactive, not sticky. */
+
+.floor + .floor {
+  border-block-start: 2px solid #cfe3d5;
+}
+
+.floorLabel {
+  padding-block: 10px 0;
+  padding-inline: 16px;
+  text-align: start;
+  font-size: 13px;
+  font-weight: 700;
+  color: #4d6b57;
+  overflow-wrap: anywhere;
+}
+
+/* The shared .doors grid pads 16px on every side; under a floor label the
+   top padding is tightened so the label reads as the heading of its doors. */
+.floorDoors {
+  padding-block-start: 10px;
+}

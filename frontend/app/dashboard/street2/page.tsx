@@ -16,6 +16,7 @@ import { mapsHref } from "@/lib/contactActions";
 import { useCustomFieldDefs } from "@/lib/customFields";
 import { sortByFieldOrder, useFieldSettings } from "@/lib/fieldSettings";
 import { recordStreetEvent, syncStreetActivity } from "@/lib/streetActivity";
+import { groupByFloor } from "@/lib/floorGroups";
 import { useLocalization } from "@/lib/localization";
 import { FIXED_APARTMENT_PICKLIST_KEYS, usePicklist, usePicklistsMap } from "@/lib/picklists";
 import {
@@ -42,6 +43,7 @@ import {
 // (a new consumer of the file), not a modification of street or its files.
 import styles from "../street/street.module.css";
 import doorStyles from "./doorStates.module.css";
+import floorStyles from "./floors.module.css";
 
 /** docs/fixes70_street_v2.md + docs/fixes71.md §C: street2 is street itself
  *  (same fetch/fields/tile-grid/sheet/edit mutations, verbatim data logic)
@@ -693,39 +695,51 @@ export default function Street2Page() {
                   </a>
                 )}
               </div>
-              <div className={styles.doors}>
-                {b.apartments.map((a) => {
-                  // Visited wins over to-knock: once a door's been edited its
-                  // knock is done. Same predicates the completion logic uses.
-                  const state = isDone(a) ? "visited" : isToKnock(a) ? "knock" : "idle";
-                  return (
-                  <button
-                    key={a.id}
-                    type="button"
-                    className={`${styles.door} ${doorStyles[state]}`}
-                    title={doorStateLabel[state]}
-                    onClick={() => openDoor(a)}
-                  >
-                    <span className={styles.knob} />
-                    {state === "knock" && <span className={doorStyles.tag}>{doorStateLabel.knock}</span>}
-                    {state === "visited" && (
-                      <span className={doorStyles.check} aria-label={doorStateLabel.visited}>
-                        <Check className="h-3 w-3" strokeWidth={3.5} />
-                      </span>
-                    )}
-                    <div className={styles.dApt}>{a.apartment_name || "—"}</div>
-                    <div className={styles.dFloor}>
-                      {a.floor ? `${t("apartments.floor", "קומה")} ${a.floor}` : " "}
-                    </div>
-                    {/* fixes71 §C.5: hidden fields aren't displayed anywhere,
-                        including this door-tile quick-glance headline. */}
-                    {campaignVisible(FIELD_KEY.jewish_status) && (
-                      <div className={styles.dName}>{jewish.labelFor(a.jewish_status)}</div>
-                    )}
-                  </button>
-                  );
-                })}
-              </div>
+              {/* fixes77: one section per floor (stored floor name, backend
+                  order kept), divider between sections via floorStyles; the
+                  door tiles inside are unchanged. */}
+              {groupByFloor(b.apartments).map((f) => (
+                <section key={f.floor ?? ""} className={floorStyles.floor}>
+                  <div className={floorStyles.floorLabel}>
+                    {f.floor !== null
+                      ? `${t("apartments.floor", "קומה")} ${f.floor}`
+                      : t("apartments.floor_unknown", "קומה לא צוינה")}
+                  </div>
+                  <div className={`${styles.doors} ${floorStyles.floorDoors}`}>
+                    {f.apartments.map((a) => {
+                      // Visited wins over to-knock: once a door's been edited its
+                      // knock is done. Same predicates the completion logic uses.
+                      const state = isDone(a) ? "visited" : isToKnock(a) ? "knock" : "idle";
+                      return (
+                      <button
+                        key={a.id}
+                        type="button"
+                        className={`${styles.door} ${doorStyles[state]}`}
+                        title={doorStateLabel[state]}
+                        onClick={() => openDoor(a)}
+                      >
+                        <span className={styles.knob} />
+                        {state === "knock" && <span className={doorStyles.tag}>{doorStateLabel.knock}</span>}
+                        {state === "visited" && (
+                          <span className={doorStyles.check} aria-label={doorStateLabel.visited}>
+                            <Check className="h-3 w-3" strokeWidth={3.5} />
+                          </span>
+                        )}
+                        <div className={styles.dApt}>{a.apartment_name || "—"}</div>
+                        <div className={styles.dFloor}>
+                          {a.floor ? `${t("apartments.floor", "קומה")} ${a.floor}` : " "}
+                        </div>
+                        {/* fixes71 §C.5: hidden fields aren't displayed anywhere,
+                            including this door-tile quick-glance headline. */}
+                        {campaignVisible(FIELD_KEY.jewish_status) && (
+                          <div className={styles.dName}>{jewish.labelFor(a.jewish_status)}</div>
+                        )}
+                      </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
             </div>
           ))
         )}

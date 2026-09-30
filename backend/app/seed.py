@@ -1720,6 +1720,8 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
         "Every server error is written to the error log and emailed to every address on this list (the same error at most once every 10 minutes).",
     ),
     ("logs", "logs.error_emails_empty", "אין כתובות — שגיאות נרשמות ביומן בלבד.", "No addresses — errors are only written to the log."),
+    # fixes77: street2 floor-divider heading for apartments with no floor.
+    ("column", "apartments.floor_unknown", "קומה לא צוינה", "Floor not specified"),
 ]
 
 # (field_key, value, hebrew_label, color_hint, sort_order, is_default)
