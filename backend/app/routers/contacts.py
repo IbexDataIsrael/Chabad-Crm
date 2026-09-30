@@ -366,13 +366,13 @@ def _check_shliach_email_unique(
         )
 
 
-def _sync_user_email(db: Session, user: models.User, email: Optional[str]) -> None:
+def _sync_user_email(db: Session, user: models.User, email: Optional[str]) -> bool:
     """fixes14: keep the shliach's login identity in step with the contact
     email. An empty contact email never blanks the login (it's the auth
     identity). The username follows only when it *was* the email."""
     email = email.strip().lower() if email else None
     if not email or email == (user.email or "").lower():
-        return
+        return False
     dup = (
         db.query(models.User)
         .filter(
@@ -403,6 +403,7 @@ def _sync_user_email(db: Session, user: models.User, email: Optional[str]) -> No
     # fixes65 §5: a paper-only activist who now has an email is a regular
     # (Google-or-password) login from here on.
     user.is_manual = False
+    return True
 
 
 def _provision_shliach_user(
@@ -1571,6 +1572,7 @@ def update_contact(
                 db.commit()
                 contact.shliach = new
 
+    welcome_to: Optional[str] = None
     # Keep the shliach's *login user* in sync with the contact. The user's
     # full_name (shown in their own session) is a separate field from the
     # contact name an admin edits — without this, the shliach kept seeing the
@@ -1590,7 +1592,8 @@ def update_contact(
             user.first_name = contact.name
             user.last_name = contact.last_name
             user.phone = contact.phone
-            _sync_user_email(db, user, contact.email)
+            if _sync_user_email(db, user, contact.email):
+                welcome_to = user.email
 
     if payload.picklist_values is not None:
         _check_admin_only_picklist_fields(current_user, payload.picklist_values)
@@ -1600,6 +1603,22 @@ def update_contact(
 
     db.commit()
     db.refresh(contact)
+    if welcome_to:
+        # fixes75 §10: a login email changed from the contact form gets the
+        # same welcome email as a new user. The users page already did this
+        # (fixes69); this edit path never did.
+        try:
+            send_shliach_welcome(
+                db,
+                to=welcome_to,
+                first_name=contact.name,
+                last_name=contact.last_name or "",
+                shliach_email=welcome_to,
+                org_name=current_user.organization.name if current_user.organization else "",
+                reply_to=current_user.email,
+            )
+        except Exception:  # pragma: no cover — email must not block the edit
+            logger.exception("Failed to send welcome email to %s", welcome_to)
     return _build_detail(contact, db)
 
 

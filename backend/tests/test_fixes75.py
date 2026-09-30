@@ -79,3 +79,27 @@ def test_delete_user_with_tasks_and_bindings(client, admin_headers, setup, db_se
     kept = db_session.get(models.TaskPaperEntry, paper_id)
     assert kept is not None
     assert kept.performer_user_id is None and kept.entered_by_user_id is None
+
+
+# --- §10: login email changed from the contact form → welcome email ----------
+def test_contact_form_email_edit_sends_welcome(client, admin_headers, monkeypatch):
+    from tests.test_fixes14 import _mk_shliach
+
+    sent = []
+    monkeypatch.setattr(
+        "app.routers.contacts.send_shliach_welcome",
+        lambda *a, **kw: sent.append(kw.get("to")),
+    )
+    contact = _mk_shliach(client, admin_headers, "c75old@example.com").json()
+    sent.clear()  # creation's own welcome
+
+    # Unchanged email -> nothing sent.
+    r = client.put(f"/api/contacts/{contact['id']}", json={"notes": "x"}, headers=admin_headers)
+    assert r.status_code == 200, r.text
+    assert sent == []
+
+    r = client.put(
+        f"/api/contacts/{contact['id']}", json={"email": "c75new@example.com"}, headers=admin_headers
+    )
+    assert r.status_code == 200, r.text
+    assert sent == ["c75new@example.com"]
