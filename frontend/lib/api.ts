@@ -10,11 +10,36 @@ export class ApiError extends Error {
    * `Error`'s message would otherwise stringify a non-string detail into the
    * useless "[object Object]", losing the data callers need to branch on. */
   body?: unknown;
+  /** fixes75 §8: a localization key the backend attaches to login-flow
+   * errors (`detail: {code, message}`) — shown via t(code), never raw. */
+  code?: string;
   constructor(status: number, message: string, body?: unknown) {
     super(message);
     this.status = status;
     this.body = body;
+    const code = (body as { code?: unknown } | undefined)?.code;
+    if (typeof code === "string") this.code = code;
   }
+}
+
+/** Parse a failed response's `detail`: a plain string, or fixes75's
+ * `{code, message}` object (message becomes the Error text). */
+async function readErrorDetail(
+  res: Response,
+  fallback: string,
+): Promise<{ message: string; body?: unknown }> {
+  try {
+    const data = await res.json();
+    const detail = data?.detail;
+    if (typeof detail === "string") return { message: detail };
+    if (detail && typeof detail === "object") {
+      const message = typeof detail.message === "string" ? detail.message : fallback;
+      return { message, body: detail };
+    }
+  } catch {
+    /* not JSON */
+  }
+  return { message: fallback };
 }
 
 export function getToken(): string | null {
@@ -206,22 +231,14 @@ export async function apiFetch<T>(
     if (typeof window !== "undefined" && window.location.pathname !== "/") {
       window.location.href = "/";
     }
-    throw new ApiError(401, "Unauthorized");
+    // fixes75 §8: keep a login-flow error code (e.g. an invalid Google token).
+    const { body } = await readErrorDetail(res, "Unauthorized");
+    throw new ApiError(401, "Unauthorized", body);
   }
 
   if (!res.ok) {
-    let detail = res.statusText;
-    let structuredDetail: unknown;
-    try {
-      const data = await res.json();
-      if (data?.detail) {
-        detail = typeof data.detail === "string" ? data.detail : res.statusText;
-        if (data.detail && typeof data.detail === "object") structuredDetail = data.detail;
-      }
-    } catch {
-      /* keep statusText */
-    }
-    throw new ApiError(res.status, detail, structuredDetail);
+    const { message, body } = await readErrorDetail(res, res.statusText);
+    throw new ApiError(res.status, message, body);
   }
 
   if (res.status === 204) return undefined as T;
@@ -343,14 +360,8 @@ export async function login(
     body,
   });
   if (!res.ok) {
-    let detail = "Login failed";
-    try {
-      const data = await res.json();
-      if (data?.detail) detail = data.detail;
-    } catch {
-      /* keep default */
-    }
-    throw new ApiError(res.status, detail);
+    const { message, body } = await readErrorDetail(res, "Login failed");
+    throw new ApiError(res.status, message, body);
   }
   return (await res.json()) as LoginResult;
 }
@@ -493,6 +504,7 @@ export const adminListUsers = (): Promise<AdminUser[]> => apiFetch("/api/admin/u
 /** What still points at a user (fixes15 §2.2 delete-confirm modal). */
 export interface AdminUserDependencies {
   assigned_contacts: number;
+  assigned_tasks?: number;
   interactions: number;
   shliach_contact_id: number | null;
   shliach_contact_name: string | null;
@@ -514,6 +526,13 @@ export const adminDeactivateUser = (userId: number): Promise<AdminUser> =>
 
 export const adminActivateUser = (userId: number): Promise<AdminUser> =>
   apiFetch(`/api/admin/users/${userId}/activate`, { method: "POST" });
+
+/** fixes75 §3: the superadmin sets a new password for a user. */
+export const adminResetUserPassword = (userId: number, newPassword: string): Promise<AdminUser> =>
+  apiFetch(`/api/admin/users/${userId}/reset-password`, {
+    method: "POST",
+    body: JSON.stringify({ new_password: newPassword }),
+  });
 
 export const adminVerifyUser = (userId: number): Promise<AdminUser> =>
   apiFetch(`/api/admin/users/${userId}/verify`, { method: "POST" });

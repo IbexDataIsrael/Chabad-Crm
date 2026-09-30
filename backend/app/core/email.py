@@ -59,6 +59,25 @@ DEFAULT_EMAIL_TEMPLATES: dict[str, dict[str, str]] = {
         "body_hebrew": "",
         "body": _load_html("hello_tenant.html"),
     },
+    # fixes75 §7: the forgot-password link. Placeholders: {{user_name}},
+    # {{org_name}}, {{reset_url}}, {{expire_minutes}}.
+    "password_reset": {
+        "subject": "איפוס סיסמה / Password reset",
+        "body_hebrew": (
+            "שלום {{user_name}},\n\n"
+            "התקבלה בקשה לאיפוס הסיסמה שלך בארגון \"{{org_name}}\".\n"
+            "לבחירת סיסמה חדשה יש להיכנס לקישור הבא (בתוקף {{expire_minutes}} דקות):\n"
+            "{{reset_url}}\n\n"
+            "אם לא ביקשת לאפס את הסיסמה, אפשר להתעלם מהודעה זו."
+        ),
+        "body": (
+            "Hello {{user_name}},\n\n"
+            "We received a request to reset your password for \"{{org_name}}\".\n"
+            "To choose a new password, open this link (valid for {{expire_minutes}} minutes):\n"
+            "{{reset_url}}\n\n"
+            "If you didn't ask for this, you can ignore this email."
+        ),
+    },
     "aignummail1": {
         "subject": "בקשתך התקבלה — מיני CRM",
         "body_hebrew": (
@@ -349,3 +368,18 @@ def send_org_pending_admin(org_name: str, user_name: str, user_email: str) -> No
         "Review and approve it in the system admin dashboard."
     )
     send_email(settings.platform_admin_email, subject, body)
+
+
+def send_password_reset(db: Session, user, reset_url: str, expire_minutes: int) -> None:
+    """fixes75 §7: the forgot-password link, in the organization's name."""
+    org_name = user.organization.name if getattr(user, "organization", None) else ""
+    send_templated_email(
+        db,
+        "password_reset",
+        user.email,
+        from_name=org_name or None,
+        user_name=user.full_name or user.username or "",
+        org_name=org_name,
+        reset_url=reset_url,
+        expire_minutes=str(expire_minutes),
+    )

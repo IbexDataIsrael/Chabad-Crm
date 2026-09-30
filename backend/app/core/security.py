@@ -29,8 +29,13 @@ def create_access_token(
 
 
 def decode_access_token(token: str) -> dict:
-    """Decode and validate a JWT. Raises `jose.JWTError` on failure."""
-    return jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+    """Decode and validate a JWT. Raises `jose.JWTError` on failure.
+    fixes75: access tokens carry no `type` claim — an email-verification
+    token (same key, same `sub`) must never work as a bearer token."""
+    payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+    if payload.get("type"):
+        raise JWTError("not an access token")
+    return payload
 
 
 def verify_google_token(credential: str) -> dict:
@@ -67,3 +72,38 @@ def decode_email_token(token: str) -> int:
     if payload.get("type") != "email_verify":
         raise JWTError("wrong token type")
     return int(payload["sub"])
+
+
+# --- fixes75 §7: forgot-password reset links -----------------------------------
+PASSWORD_RESET_EXPIRE_MINUTES = 60
+
+
+def _password_fingerprint(password_hash: Optional[str]) -> str:
+    """Changes whenever the password does — so a reset link works once."""
+    import hashlib
+
+    return hashlib.sha256((password_hash or "").encode()).hexdigest()[:16]
+
+
+def create_password_reset_token(user_id: int, password_hash: Optional[str]) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(minutes=PASSWORD_RESET_EXPIRE_MINUTES)
+    payload = {
+        "uid": user_id,  # deliberately not `sub`: never usable as an access token
+        "type": "password_reset",
+        "fp": _password_fingerprint(password_hash),
+        "exp": expire,
+    }
+    return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
+
+
+def decode_password_reset_token(token: str) -> tuple[int, str]:
+    """(user id, password fingerprint). Raises `jose.JWTError` when invalid,
+    expired or not a reset token."""
+    payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+    if payload.get("type") != "password_reset" or "uid" not in payload:
+        raise JWTError("wrong token type")
+    return int(payload["uid"]), str(payload.get("fp", ""))
+
+
+def password_reset_token_matches(fingerprint: str, password_hash: Optional[str]) -> bool:
+    return fingerprint == _password_fingerprint(password_hash)

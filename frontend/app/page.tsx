@@ -6,6 +6,7 @@ import { LogIn, Loader2 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { ApiError, getToken, resendVerification } from "@/lib/api";
+import { authErrorText } from "@/lib/authErrors";
 import { useAuth, type LoginOrgOption } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { pendingClaimToken } from "@/lib/pendingClaim";
@@ -65,11 +66,12 @@ export default function LoginPage() {
       // from a child page, e.g. superadmin's /dashboard -> /dashboard/admin
       // hop, leaving the app stuck on the loading state).
     } catch (err) {
-      if (err instanceof ApiError && err.status === 403) {
+      // fixes75 §8: every message goes through the translation table.
+      if (err instanceof ApiError && err.code === "auth.error.not_verified") {
         setUnverified(true);
-        setError(t("auth.verify_email_first"));
+        setError(t("auth.verify_email_first", "עליך לאמת את כתובת האימייל לפני ההתחברות."));
       } else {
-        setError(err instanceof Error ? err.message : t("auth.login_failed"));
+        setError(authErrorText(err, t));
       }
     } finally {
       setBusy(false);
@@ -88,11 +90,7 @@ export default function LoginPage() {
       }
       // See onSubmit: redirect is handled solely by the effect below.
     } catch (err) {
-      if (err instanceof ApiError && err.status === 403) {
-        setError(err.message);
-      } else {
-        setError(err instanceof Error ? err.message : t("auth.login_failed"));
-      }
+      setError(authErrorText(err, t));
     } finally {
       setBusy(false);
     }
@@ -109,7 +107,7 @@ export default function LoginPage() {
         ? signInWithGoogle(googleCredential, orgId)
         : signIn(username, password, orgId));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("auth.login_failed"));
+      setError(authErrorText(err, t));
     } finally {
       setBusy(false);
     }
@@ -226,6 +224,13 @@ export default function LoginPage() {
             {error}
           </p>
         )}
+
+        {/* fixes75 §7 */}
+        <p className="text-end text-sm">
+          <Link href="/forgot-password" className="text-primary hover:underline">
+            {t("auth.forgot_password", "שכחת סיסמה?")}
+          </Link>
+        </p>
 
         {unverified && (
           <div className="space-y-2">

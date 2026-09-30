@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { apiFetch, ApiError } from "@/lib/api";
+import { authErrorText } from "@/lib/authErrors";
 import { googleClientId } from "@/lib/google";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
@@ -163,9 +165,7 @@ export function ActivistRegisterForm({
           await onSignedIn?.();
           return;
         } catch (loginErr) {
-          setError(
-            loginErr instanceof Error ? loginErr.message : t("auth.login_failed", "ההתחברות נכשלה"),
-          );
+          setError(authErrorText(loginErr, t));
           return;
         }
       }
@@ -268,13 +268,7 @@ export function OrgSignInForm({
       await signIn(username.trim(), password, organizationId);
       await onSignedIn();
     } catch (err) {
-      setError(
-        err instanceof ApiError && err.status === 401
-          ? t("public.bad_credentials", "האימייל או הסיסמה שגויים.")
-          : err instanceof Error
-            ? err.message
-            : t("auth.login_failed", "ההתחברות נכשלה"),
-      );
+      setError(authErrorText(err, t));
     } finally {
       setBusy(false);
     }
@@ -287,7 +281,7 @@ export function OrgSignInForm({
       await signInWithGoogle(credential, organizationId);
       await onSignedIn();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("auth.login_failed", "ההתחברות נכשלה"));
+      setError(authErrorText(err, t));
     } finally {
       setBusy(false);
     }
@@ -321,6 +315,12 @@ export function OrgSignInForm({
         {busy && <Loader2 className="h-4 w-4 animate-spin" />}
         {t("auth.login", "התחברות")}
       </button>
+      {/* fixes75 §7 */}
+      <p className="text-center text-sm">
+        <Link href="/forgot-password" className="text-primary hover:underline">
+          {t("auth.forgot_password", "שכחת סיסמה?")}
+        </Link>
+      </p>
       {googleClientId && (
         <>
           <Divider />

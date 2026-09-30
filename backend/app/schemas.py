@@ -227,6 +227,19 @@ class OrgUserUpdate(BaseModel):
     _email_lower = field_validator("email")(_normalize_email)
 
 
+class ForgotPasswordRequest(BaseModel):
+    """fixes75 §7."""
+
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    """fixes75 §7."""
+
+    token: str
+    new_password: str
+
+
 class UserRecreateIn(BaseModel):
     """fixes26 §4: re-enable (or re-create) a shliach's login by the contact's
     email — the one-click recovery for a deleted/disabled account."""
@@ -304,6 +317,7 @@ class AdminUserDependenciesOut(BaseModel):
     modal so the superadmin sees the data ties before deleting a shliach."""
 
     assigned_contacts: int = 0
+    assigned_tasks: int = 0  # fixes75 §11
     shliach_contact_id: Optional[int] = None
     shliach_contact_name: Optional[str] = None
     covered_report_numbers: int = 0  # fixes19 (was covered apartments)

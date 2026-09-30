@@ -10,7 +10,7 @@ import datetime
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Form, HTTPException, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError
 from sqlalchemy import func
@@ -21,14 +21,20 @@ from app.config import settings
 from app.core.email import (
     send_org_pending_admin,
     send_org_pending_user,
+    send_password_reset,
     send_verification_email,
 )
 from app.core import org_prefs
+from app.core.error_log import client_ip
 from app.core.security import (
+    PASSWORD_RESET_EXPIRE_MINUTES,
     create_access_token,
     create_email_token,
+    create_password_reset_token,
     decode_email_token,
+    decode_password_reset_token,
     hash_password,
+    password_reset_token_matches,
     verify_google_token,
     verify_password,
 )
@@ -37,6 +43,8 @@ from app.deps import get_current_user
 from app.routers.users import _linked_shliach, _shliach_out
 from app.schemas import (
     ChangePasswordRequest,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
     GoogleLoginRequest,
     GoogleSignupRequest,
     LoginResponse,
@@ -53,26 +61,62 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 logger = logging.getLogger("app.auth")
 
 
+def auth_error(
+    status_code: int, code: str, message: str, headers: Optional[dict] = None
+) -> HTTPException:
+    """fixes75 §8: a login-flow error the UI shows in the user's language.
+    `code` is a localization key (seed.py LOCALIZATION); `message` is the
+    English text for API clients and logs."""
+    return HTTPException(
+        status_code=status_code,
+        detail={"code": code, "message": message},
+        headers=headers,
+    )
+
+
 def _assert_org_active(org) -> None:
     """Block login for a disabled or not-yet-approved organization."""
     if org.is_active:
         return
     if getattr(org, "approval_status", "approved") == "pending":
-        detail = "הארגון ממתין לאישור מנהל המערכת. נעדכן אותך במייל."
-    else:
-        detail = "This organization has been disabled. Contact support."
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+        raise auth_error(
+            status.HTTP_403_FORBIDDEN,
+            "auth.error.org_pending",
+            "The organization is awaiting approval.",
+        )
+    raise auth_error(
+        status.HTTP_403_FORBIDDEN,
+        "auth.error.org_disabled",
+        "This organization has been disabled. Contact support.",
+    )
 
 
-def _log_access(db: Session, username: str, outcome: str) -> None:
+def _log_access(
+    db: Session,
+    username: str,
+    outcome: str,
+    request: Optional[Request] = None,
+    users=(),
+) -> None:
     """fixes14 §feature 3: audit every login attempt, success or failure.
+    fixes75 §5: with the caller's IP, and the user/organization whenever the
+    identifier resolved to exactly one of each (a failed attempt for an
+    unknown identifier, or one spanning several orgs, stays unattributed).
 
     Committed immediately so the row survives the HTTPException raised right
     after a failed attempt (the request session is discarded without commit)."""
     now = datetime.datetime.utcnow()
+    users = list(users)
+    org_ids = {u.organization_id for u in users}
     db.add(
         models.SystemAccessLog(
-            date=now.date(), time=now.time(), username=username, status=outcome
+            date=now.date(),
+            time=now.time(),
+            username=username,
+            status=outcome,
+            ip_address=client_ip(request) if request is not None else None,
+            user_id=users[0].id if len(users) == 1 else None,
+            organization_id=next(iter(org_ids)) if len(org_ids) == 1 else None,
         )
     )
     db.commit()
@@ -88,10 +132,12 @@ def _loginable(user: models.User) -> bool:
     )
 
 
-def _org_selection_response(db: Session, identifier: str, users) -> LoginResponse:
+def _org_selection_response(
+    db: Session, identifier: str, users, request: Optional[Request] = None
+) -> LoginResponse:
     """fixes14 §feature 1: the verified identity maps to several organizations —
     withhold the token and let the user pick one explicitly."""
-    _log_access(db, identifier, "ORG_SELECTION_REQUIRED")
+    _log_access(db, identifier, "ORG_SELECTION_REQUIRED", request, users)
     return LoginResponse(
         requires_org_selection=True,
         organizations=[
@@ -249,6 +295,7 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> models.User:
 
 @router.post("/token", response_model=LoginResponse)
 def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     organization_id: Optional[int] = Form(None),
     db: Session = Depends(get_db),
@@ -268,13 +315,14 @@ def login(
         )
         .all()
     )
-    credentials_error = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Incorrect username or password",
+    credentials_error = auth_error(
+        status.HTTP_401_UNAUTHORIZED,
+        "auth.error.invalid_credentials",
+        "Incorrect username or password",
         headers={"WWW-Authenticate": "Bearer"},
     )
     if not candidates:
-        _log_access(db, identifier, "FAILED_NO_USER")
+        _log_access(db, identifier, "FAILED_NO_USER", request)
         raise credentials_error
 
     # Credentials first: org names are never revealed for a wrong password.
@@ -284,24 +332,25 @@ def login(
         if u.password_hash and verify_password(form_data.password, u.password_hash)
     ]
     if not verified:
-        _log_access(db, identifier, "FAILED_INVALID_PASSWORD")
+        _log_access(db, identifier, "FAILED_INVALID_PASSWORD", request, candidates)
         raise credentials_error
     if organization_id is not None:
         verified = [u for u in verified if u.organization_id == organization_id]
         if not verified:
-            _log_access(db, identifier, "FAILED_NO_USER")
+            _log_access(db, identifier, "FAILED_NO_USER", request)
             raise credentials_error
 
     eligible = [u for u in verified if _loginable(u)]
     if not eligible:
         blocked = verified[0]
         if not blocked.email_verified or not blocked.is_active:
-            _log_access(db, identifier, "FAILED_NOT_VERIFIED")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Please verify your email before logging in",
+            _log_access(db, identifier, "FAILED_NOT_VERIFIED", request, [blocked])
+            raise auth_error(
+                status.HTTP_403_FORBIDDEN,
+                "auth.error.not_verified",
+                "Please verify your email before logging in",
             )
-        _log_access(db, identifier, "FAILED_ORG_DISABLED")
+        _log_access(db, identifier, "FAILED_ORG_DISABLED", request, [blocked])
         _assert_org_active(blocked.organization)  # raises with the org detail
         raise credentials_error  # unreachable safety net
 
@@ -310,17 +359,17 @@ def login(
     for u in eligible:
         by_org.setdefault(u.organization_id, u)
     if organization_id is None and len(by_org) > 1:
-        return _org_selection_response(db, identifier, list(by_org.values()))
+        return _org_selection_response(db, identifier, list(by_org.values()), request)
 
     user = next(iter(by_org.values()))
-    _log_access(db, identifier, "SUCCESS")
+    _log_access(db, identifier, "SUCCESS", request, [user])
     token = create_access_token(subject=str(user.id), role=user.role)
     return LoginResponse(access_token=token)
 
 
 @router.post("/google", response_model=LoginResponse)
 def google_login(
-    payload: GoogleLoginRequest, db: Session = Depends(get_db)
+    payload: GoogleLoginRequest, request: Request, db: Session = Depends(get_db)
 ) -> LoginResponse:
     """Google Identity Services login. Links to existing users by email; when
     the email exists in several organizations (fixes14) the response asks for
@@ -328,15 +377,15 @@ def google_login(
     try:
         info = verify_google_token(payload.credential)
     except ValueError:
-        _log_access(db, "(google)", "FAILED_INVALID_PASSWORD")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid Google token",
+        _log_access(db, "(google)", "FAILED_INVALID_PASSWORD", request)
+        raise auth_error(
+            status.HTTP_401_UNAUTHORIZED, "auth.error.google_invalid", "Invalid Google token"
         )
     email = info["email"].strip().lower()
-    no_user_error = HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="לא נמצא משתמש עם כתובת אימייל זו. יש להירשם או לקבל הזמנה תחילה.",
+    no_user_error = auth_error(
+        status.HTTP_403_FORBIDDEN,
+        "auth.error.google_no_user",
+        "No user with this email address. Sign up or get an invitation first.",
     )
     # Case-insensitive: a mixed-case stored email must not 403 the login
     # (Google ID tokens always carry the address lowercased).
@@ -344,24 +393,24 @@ def google_login(
         db.query(models.User).filter(func.lower(models.User.email) == email).all()
     )
     if not users:
-        _log_access(db, email, "FAILED_NO_USER")
+        _log_access(db, email, "FAILED_NO_USER", request)
         raise no_user_error
     if payload.organization_id is not None:
         users = [u for u in users if u.organization_id == payload.organization_id]
         if not users:
-            _log_access(db, email, "FAILED_NO_USER")
+            _log_access(db, email, "FAILED_NO_USER", request)
             raise no_user_error
 
     # Google verified the email itself, so only the org gate applies here
     # (the first sign-in below flips email_verified/is_active on).
     active = [u for u in users if u.organization and u.organization.is_active]
     if not active:
-        _log_access(db, email, "FAILED_ORG_DISABLED")
+        _log_access(db, email, "FAILED_ORG_DISABLED", request, users[:1])
         _assert_org_active(users[0].organization)  # raises with the org detail
         raise no_user_error  # unreachable safety net
 
     if payload.organization_id is None and len(active) > 1:
-        return _org_selection_response(db, email, active)
+        return _org_selection_response(db, email, active, request)
 
     user = active[0]
     # First Google sign-in: bind the Google subject and activate the account.
@@ -371,7 +420,7 @@ def google_login(
         user.email_verified = True
     user.is_active = True
     db.commit()
-    _log_access(db, email, "SUCCESS")
+    _log_access(db, email, "SUCCESS", request, [user])
     return LoginResponse(
         access_token=create_access_token(subject=str(user.id), role=user.role)
     )
@@ -480,5 +529,71 @@ def change_password(
             detail="Password must be at least 8 characters with an uppercase letter, a lowercase letter, and a number.",
         )
     current_user.password_hash = hash_password(payload.new_password)
+    db.commit()
+    return {"status": "ok"}
+
+
+# --- fixes75 §7: forgot password ------------------------------------------------
+_reset_last_sent: dict[str, float] = {}
+_RESET_THROTTLE_SECONDS = 60
+
+
+@router.post("/forgot-password")
+def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)) -> dict:
+    """Email a one-time reset link to every active account with this email
+    (one per organization). Always 200 — never reveals whether the address
+    exists. The same address gets at most one mail a minute."""
+    import time
+
+    email = (payload.email or "").strip().lower()
+    if not email:
+        return {"status": "ok"}
+    now = time.monotonic()
+    last = _reset_last_sent.get(email)
+    if last is not None and now - last < _RESET_THROTTLE_SECONDS:
+        return {"status": "ok"}
+    _reset_last_sent[email] = now
+    users = (
+        db.query(models.User)
+        .filter(func.lower(models.User.email) == email, models.User.is_active.is_(True))
+        .all()
+    )
+    for user in users:
+        if user.organization is None or not user.organization.is_active:
+            continue
+        token = create_password_reset_token(user.id, user.password_hash)
+        link = f"{settings.frontend_url.rstrip('/')}/reset-password?token={token}"
+        try:
+            send_password_reset(db, user, link, PASSWORD_RESET_EXPIRE_MINUTES)
+        except Exception:  # noqa: BLE001 — never reveal a delivery failure
+            logger.exception("Failed to send password reset email to %s", user.email)
+    return {"status": "ok"}
+
+
+@router.post("/reset-password")
+def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)) -> dict:
+    """Set a new password from a reset link. The link stops working once the
+    password changes (single use) and after PASSWORD_RESET_EXPIRE_MINUTES."""
+    invalid = auth_error(
+        status.HTTP_400_BAD_REQUEST,
+        "auth.error.reset_link_invalid",
+        "This reset link is invalid or has expired.",
+    )
+    try:
+        user_id, fingerprint = decode_password_reset_token(payload.token)
+    except (JWTError, ValueError):
+        raise invalid
+    user = db.get(models.User, user_id)
+    if user is None or not user.is_active or not password_reset_token_matches(
+        fingerprint, user.password_hash
+    ):
+        raise invalid
+    if not _is_strong_password(payload.new_password):
+        raise auth_error(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "auth.error.password_weak",
+            "Password must be at least 8 characters with an uppercase letter, a lowercase letter, and a number.",
+        )
+    user.password_hash = hash_password(payload.new_password)
     db.commit()
     return {"status": "ok"}

@@ -32,11 +32,10 @@ function VerifyInner() {
         setState("success");
         setTimeout(() => router.replace("/"), 3000);
       })
-      .catch((err) => {
+      .catch(() => {
         setState("error");
-        setMessage(
-          err instanceof Error ? err.message : t("verify.failed", "אימות האימייל נכשל."),
-        );
+        // fixes75 §8: never the backend's raw (English) text.
+        setMessage(t("verify.failed", "אימות האימייל נכשל."));
       });
   }, [token, router]);
 
