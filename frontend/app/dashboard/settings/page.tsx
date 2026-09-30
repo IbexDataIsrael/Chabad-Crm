@@ -36,6 +36,8 @@ export default function SettingsPage() {
   const { t } = useLocalization();
   const { success, error: toastError } = useToast();
   const [name, setName] = useState("");
+  // fixes85: separate English title (blank = the Hebrew name is used).
+  const [nameEn, setNameEn] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [mapInEnglish, setMapInEnglish] = useState(false);
   // fixes18 §6: shliach contacts-visibility permission (default off).
@@ -61,6 +63,7 @@ export default function SettingsPage() {
     apiFetch<OrgDetails>("/api/organizations/me")
       .then((o) => {
         setName(o.name);
+        setNameEn(o.name_en ?? "");
         setLogoUrl(o.logo_url);
         setMapInEnglish(o.map_in_english);
         setShliachViewContacts(o.shliach_can_view_contacts ?? false);
@@ -83,6 +86,7 @@ export default function SettingsPage() {
         method: "PUT",
         body: JSON.stringify({
           name,
+          name_en: nameEn.trim() || null,
           logo_url: logoUrl,
           map_in_english: mapInEnglish,
           shliach_can_view_contacts: shliachViewContacts,
@@ -123,6 +127,15 @@ export default function SettingsPage() {
             onChange={(e) => setName(e.target.value)}
             required
           />
+        </label>
+        <label className="block space-y-1">
+          <Label className="block text-sm font-medium">
+            {t("settings.org_name_en", "שם הארגון באנגלית")}
+          </Label>
+          <Input dir="ltr" value={nameEn} onChange={(e) => setNameEn(e.target.value)} />
+          <span className="block text-xs text-muted-foreground">
+            {t("settings.org_name_en_hint", "מוצג כשהמערכת או דף הארגון מוצגים באנגלית. ריק = השם בעברית.")}
+          </span>
         </label>
 
         <div className="space-y-1">

@@ -102,6 +102,10 @@ class Organization(Base):
     # switch (default off). slug is null until an admin publishes the page.
     slug = Column(String(80), nullable=True, unique=True, index=True)
     public_subtitle = Column(Text, nullable=True)
+    # fixes85: separate English title (org name) + subtitle, shown when the
+    # app / public page is in English; null = fall back to the Hebrew one.
+    name_en = Column(String(150), nullable=True)
+    public_subtitle_en = Column(Text, nullable=True)
     public_gallery = Column(JSON, nullable=True)
     self_registration_enabled = Column(
         Boolean, nullable=False, default=False, server_default=text("false")

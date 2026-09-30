@@ -22,6 +22,7 @@ from app.core.security import hash_password
 from app.core.user_delete import clear_user_references
 from app.core.shliach import (
     apply_shliach_versioned_update,
+    email_taken_error,
     resolve_shliach,
     set_shliach_areas,
     set_shliach_report_numbers,
@@ -496,10 +497,7 @@ def recreate_user(
             .first()
         )
         if linked_elsewhere:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "כתובת אימייל זו כבר משויכת לפעיל אחר בארגון",
-            )
+            raise email_taken_error(linked_elsewhere.contact)
         user.is_active = True
     else:
         full_name = " ".join(filter(None, [contact.last_name, contact.name]))

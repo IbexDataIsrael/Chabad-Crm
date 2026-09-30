@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useLocalization } from "@/lib/localization";
-import { loadGoogleMaps, mapsKey } from "@/lib/maps";
+import { loadGoogleMaps, mapsKey, useMapsLang } from "@/lib/maps";
 
 // Sheepshead Bay, Brooklyn — sensible default center when an area has no polygon yet.
 const DEFAULT_CENTER = { lat: 40.5862, lng: -73.9442 };
@@ -50,7 +50,8 @@ export function AreaPolygonMap({
 }) {
   // fixes17 §4: the apm.* keys were seeded long ago but this component was
   // hardcoded Hebrew — the English UI now resolves them properly.
-  const { t, lang } = useLocalization();
+  const { t } = useLocalization();
+  const mapsLang = useMapsLang();
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const polygonRef = useRef<any>(null); // finalized, editable polygon
@@ -85,7 +86,7 @@ export function AreaPolygonMap({
     if (!mapsKey || !ref.current) return;
     let cancelled = false;
 
-    loadGoogleMaps(lang)
+    loadGoogleMaps(mapsLang)
       .then(() => {
         if (cancelled || !ref.current) return;
         const g = (window as any).google;

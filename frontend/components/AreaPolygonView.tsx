@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { loadGoogleMaps, mapsKey } from "@/lib/maps";
+import { loadGoogleMaps, mapsKey, useMapsLang } from "@/lib/maps";
 import { useLocalization } from "@/lib/localization";
 
 // Sheepshead Bay fallback when an area has no polygon to fit to.
@@ -29,7 +29,8 @@ function geoJSONToPath(geojson: string): { lat: number; lng: number }[] | null {
 /** Read-only map showing an area's polygon boundary. Degrades to a short note
  *  when there's no boundary, no Maps key, or Maps fails to load. */
 export function AreaPolygonView({ polygon }: { polygon: string | null }) {
-  const { t, lang } = useLocalization();
+  const { t } = useLocalization();
+  const mapsLang = useMapsLang();
   const ref = useRef<HTMLDivElement>(null);
   const [loadError, setLoadError] = useState(false);
   const path = polygon ? geoJSONToPath(polygon) : null;
@@ -38,7 +39,7 @@ export function AreaPolygonView({ polygon }: { polygon: string | null }) {
     if (!mapsKey || !ref.current || !path || path.length < 3) return;
     let cancelled = false;
 
-    loadGoogleMaps(lang)
+    loadGoogleMaps(mapsLang)
       .then(() => {
         if (cancelled || !ref.current) return;
         const g = (window as any).google;
@@ -71,7 +72,7 @@ export function AreaPolygonView({ polygon }: { polygon: string | null }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [polygon, lang]);
+  }, [polygon, mapsLang]);
 
   if (!path || path.length < 3) {
     return (

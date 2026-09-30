@@ -85,6 +85,9 @@ class OrganizationOut(BaseModel):
     public_subtitle: Optional[str] = None
     public_gallery: Optional[list[str]] = None
     self_registration_enabled: bool = False
+    # fixes85: English title + subtitle (null = use the Hebrew ones).
+    name_en: Optional[str] = None
+    public_subtitle_en: Optional[str] = None
 
 
 class OrganizationUpdate(BaseModel):
@@ -105,6 +108,9 @@ class OrganizationUpdate(BaseModel):
     public_subtitle: Optional[str] = None
     public_gallery: Optional[list[str]] = None
     self_registration_enabled: Optional[bool] = None
+    # fixes85
+    name_en: Optional[str] = None
+    public_subtitle_en: Optional[str] = None
 
     @field_validator("slug")
     @classmethod
@@ -1956,6 +1962,9 @@ class PublicOrgOut(BaseModel):
     slug: str
     name: str
     subtitle: Optional[str] = None
+    # fixes85: English variants; the page falls back to name/subtitle.
+    name_en: Optional[str] = None
+    subtitle_en: Optional[str] = None
     logo_url: Optional[str] = None
     gallery: list[str] = []
     self_registration_enabled: bool = False

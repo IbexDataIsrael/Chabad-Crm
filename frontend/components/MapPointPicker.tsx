@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { loadGoogleMaps, mapsKey } from "@/lib/maps";
+import { loadGoogleMaps, mapsKey, useMapsLang } from "@/lib/maps";
 import { useLocalization } from "@/lib/localization";
 
 // Sheepshead Bay, Brooklyn — fallback when no point is set yet.
@@ -28,7 +28,8 @@ export function MapPointPicker({
   onChange: (lat: number, lng: number) => void;
   onZoomChange?: (zoom: number) => void;
 }) {
-  const { t, lang } = useLocalization();
+  const { t } = useLocalization();
+  const mapsLang = useMapsLang();
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -66,7 +67,7 @@ export function MapPointPicker({
     if (!mapsKey || !ref.current) return;
     let cancelled = false;
 
-    loadGoogleMaps(lang)
+    loadGoogleMaps(mapsLang)
       .then(() => {
         if (cancelled || !ref.current) return;
         const g = (window as any).google;

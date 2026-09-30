@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
-import { loadGoogleMaps, mapsKey } from "@/lib/maps";
+import { loadGoogleMaps, mapsKey, useMapsLang } from "@/lib/maps";
 
 export interface PlaceResult {
   address: string;
@@ -40,7 +40,7 @@ export function AddressAutocomplete({
 }) {
   const { user } = useAuth();
   const { t } = useLocalization();
-  const language = user?.organization?.map_in_english ? "en" : "he";
+  const language = useMapsLang();
   const region = user?.organization?.map_in_english ? "us" : "il";
 
   const ready = useRef(false);

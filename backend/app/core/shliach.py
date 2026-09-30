@@ -56,6 +56,18 @@ def resolve_shliach(
     return shliach
 
 
+def email_taken_error(contact: Optional[models.Contact]) -> HTTPException:
+    """fixes85: "this email already belongs to another activist in the org" —
+    naming that activist (and its contact id). The bare message sent admins
+    hunting, e.g. in a cloned org whose copied activists keep their emails
+    but have no login, so they never show up as users."""
+    msg = "כתובת אימייל זו כבר משויכת לפעיל אחר בארגון"
+    if contact is not None:
+        name = " ".join(filter(None, [contact.name, contact.last_name])).strip()
+        msg += f": {name} (#{contact.id})" if name else f" (#{contact.id})"
+    return HTTPException(status.HTTP_400_BAD_REQUEST, msg)
+
+
 def activist_names_by_contact(db: Session, contact_ids) -> dict[int, str]:
     """fixes75 §1: {contact_id: users.full_name} for shliach contacts bound
     to a login. The users table is the source of truth for an activist's

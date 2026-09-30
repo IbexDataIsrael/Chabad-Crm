@@ -24,6 +24,8 @@ export type { LoginOrgOption };
 export interface Organization {
   id: number;
   name: string;
+  /** fixes85: English title — shown in the app when the UI is in English. */
+  name_en?: string | null;
   logo_url: string | null;
   map_in_english: boolean;
   default_lat: number | null;

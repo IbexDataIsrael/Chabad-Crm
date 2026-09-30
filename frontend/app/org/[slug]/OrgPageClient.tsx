@@ -24,7 +24,7 @@ type Mode = "join" | "signin";
 export function OrgPageClient() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
-  const { t } = useLocalization();
+  const { t, lang } = useLocalization();
   const { user, loading: authLoading } = useAuth();
   const [org, setOrg] = useState<PublicOrg | null>(null);
   const [missing, setMissing] = useState(false);
@@ -45,10 +45,15 @@ export function OrgPageClient() {
   }, [slug]);
 
   // The browser tab shows this org's name + logo (TitleManager owns both).
+  // fixes85: English title/subtitle when the page is in English (falls back
+  // to the Hebrew ones when blank).
+  const orgTitle = org ? (lang === "en" && org.name_en ? org.name_en : org.name) : "";
+  const orgSubtitle = org ? (lang === "en" && org.subtitle_en ? org.subtitle_en : org.subtitle) : null;
+
   useEffect(() => {
-    setPageOrg(org ? { name: org.name, logoUrl: org.logo_url } : null);
+    setPageOrg(org ? { name: orgTitle, logoUrl: org.logo_url } : null);
     return () => setPageOrg(null);
-  }, [org]);
+  }, [org, orgTitle]);
 
   if (missing) {
     return (
@@ -143,7 +148,7 @@ export function OrgPageClient() {
         <div className="relative">
           <PhotoGallery
             images={org.gallery}
-            orgName={org.name}
+            orgName={orgTitle}
             frameClassName="h-[58vh] min-h-[340px]"
             showThumbnails={false}
           />
@@ -155,11 +160,11 @@ export function OrgPageClient() {
               <img src={org.logo_url} alt="" className="absolute start-4 top-4 h-11 w-11 rounded-lg bg-white/90 object-contain p-1" />
             )}
             <h1 className="font-[family-name:var(--font-frank-ruhl)] text-[2.6rem] font-black leading-[1.05] text-white">
-              {org.name}
+              {orgTitle}
             </h1>
             <WaveRule className="mt-3 h-3.5 w-32" />
-            {org.subtitle && (
-              <p className="mt-3 max-w-[36ch] text-[15px] leading-relaxed text-white/85">{org.subtitle}</p>
+            {orgSubtitle && (
+              <p className="mt-3 max-w-[36ch] text-[15px] leading-relaxed text-white/85">{orgSubtitle}</p>
             )}
           </div>
         </div>
@@ -183,18 +188,18 @@ export function OrgPageClient() {
             <LanguageToggle />
           </div>
           <h1 className="font-[family-name:var(--font-frank-ruhl)] text-6xl font-black leading-[1.02] text-[#0E3B4A]">
-            {org.name}
+            {orgTitle}
           </h1>
           <WaveRule className="mt-5 h-4 w-44" />
-          {org.subtitle && (
-            <p className="mt-6 max-w-[34ch] text-lg leading-relaxed text-[#13232B]/75">{org.subtitle}</p>
+          {orgSubtitle && (
+            <p className="mt-6 max-w-[34ch] text-lg leading-relaxed text-[#13232B]/75">{orgSubtitle}</p>
           )}
           <div className="mt-10">{panel}</div>
         </div>
         <div className="sticky top-10 self-start">
           <PhotoGallery
             images={org.gallery}
-            orgName={org.name}
+            orgName={orgTitle}
             frameClassName="aspect-[4/5] rounded-3xl shadow-[0_30px_60px_-30px_rgba(14,59,74,0.55)]"
           />
         </div>

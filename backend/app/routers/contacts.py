@@ -27,6 +27,7 @@ from app.core.security import hash_password
 from app.core.shliach import (
     apply_shliach_versioned_update,
     copy_shliach_children,
+    email_taken_error,
     set_shliach_areas,
     set_shliach_report_numbers,
     validate_area,
@@ -360,10 +361,9 @@ def _check_shliach_email_unique(
     )
     if exclude_contact_id is not None:
         query = query.filter(models.Contact.id != exclude_contact_id)
-    if query.first():
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "כתובת אימייל זו כבר משויכת לפעיל אחר בארגון"
-        )
+    taken = query.first()
+    if taken:
+        raise email_taken_error(taken)
 
 
 def _sync_user_email(db: Session, user: models.User, email: Optional[str]) -> bool:
@@ -476,10 +476,7 @@ def _provision_shliach_user(
             .first()
         )
         if linked_elsewhere:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "כתובת אימייל זו כבר משויכת לפעיל אחר בארגון",
-            )
+            raise email_taken_error(linked_elsewhere.contact)
         return existing
     full_name = " ".join(filter(None, [contact.last_name, contact.name]))
     user = models.User(

@@ -321,3 +321,30 @@ def test_org_selection_is_logged(client, db_session):
         .count()
         == 1
     )
+
+
+# --- fixes85: the same activist email in two orgs ---------------------------
+def test_same_activist_email_in_two_orgs_then_org_picker(client, admin_headers):
+    """An activist may belong to several orgs with one email; login then asks
+    which org to continue with."""
+    assert _register(client, "orgbadmin", "orgbadmin@example.com").status_code == 201
+    tok = _login(client, "orgbadmin", "pw12345").json()["access_token"]
+    other_headers = {"Authorization": f"Bearer {tok}"}
+
+    r = _mk_shliach(client, admin_headers, "both@example.com", password="Secret123")
+    assert r.status_code == 201, r.text
+    r = _mk_shliach(client, other_headers, "both@example.com", password="Secret123")
+    assert r.status_code == 201, r.text
+
+    body = _login(client, "both@example.com", "Secret123").json()
+    assert body["requires_org_selection"] is True
+    assert len(body["organizations"]) == 2
+
+
+def test_same_org_duplicate_names_the_existing_activist(client, admin_headers):
+    first = _mk_shliach(client, admin_headers, "named@example.com", name="יוסי", last_name="כהן")
+    assert first.status_code == 201
+    r = _mk_shliach(client, admin_headers, "named@example.com")
+    assert r.status_code == 400
+    detail = r.json()["detail"]
+    assert "יוסי כהן" in detail and f"#{first.json()['id']}" in detail

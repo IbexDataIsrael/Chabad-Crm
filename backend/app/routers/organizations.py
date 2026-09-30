@@ -93,11 +93,15 @@ def update_my_org(
         "shliach_view_config",
         # fixes65 §1: the public landing page's subtitle.
         "public_subtitle",
+        # fixes85: English title + subtitle.
+        "public_subtitle_en",
     ):
         if field in data:
             setattr(org, field, data[field])
     # fixes65 §1: public landing page slug (unique across all orgs) + gallery
     # + the self-registration switch.
+    if "name_en" in data:
+        org.name_en = (data["name_en"] or "").strip() or None
     if "slug" in data:
         slug = data["slug"]
         if slug:

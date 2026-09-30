@@ -23,6 +23,7 @@ export function PublicPageSettingsCard() {
   const { success, error: toastError } = useToast();
   const [slug, setSlug] = useState("");
   const [subtitle, setSubtitle] = useState("");
+  const [subtitleEn, setSubtitleEn] = useState(""); // fixes85
   const [gallery, setGallery] = useState<string[]>([]);
   const [selfRegistration, setSelfRegistration] = useState(false);
   const [savedSlug, setSavedSlug] = useState<string | null>(null);
@@ -62,6 +63,7 @@ export function PublicPageSettingsCard() {
         setSlug(o.slug ?? "");
         setSavedSlug(o.slug ?? null);
         setSubtitle(o.public_subtitle ?? "");
+        setSubtitleEn(o.public_subtitle_en ?? "");
         setGallery(o.public_gallery ?? []);
         setSelfRegistration(o.self_registration_enabled ?? false);
       })
@@ -113,6 +115,7 @@ export function PublicPageSettingsCard() {
         body: JSON.stringify({
           slug: cleanSlug || null,
           public_subtitle: subtitle.trim() || null,
+          public_subtitle_en: subtitleEn.trim() || null,
           public_gallery: gallery,
           self_registration_enabled: selfRegistration,
         }),
@@ -207,6 +210,22 @@ export function PublicPageSettingsCard() {
             value={subtitle}
             onChange={(e) => setSubtitle(e.target.value)}
           />
+        </label>
+
+        <label className="block space-y-1">
+          <span className="block text-sm font-medium">
+            {t("public_settings.subtitle_en", "כותרת משנה באנגלית")}
+          </span>
+          <textarea
+            dir="ltr"
+            className="w-full rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            rows={2}
+            value={subtitleEn}
+            onChange={(e) => setSubtitleEn(e.target.value)}
+          />
+          <span className="block text-xs text-muted-foreground">
+            {t("public_settings.subtitle_en_hint", "מוצגת כשדף הארגון מוצג באנגלית. ריק = כותרת המשנה בעברית.")}
+          </span>
         </label>
 
         <div className="space-y-2">

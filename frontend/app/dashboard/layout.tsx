@@ -33,7 +33,11 @@ function DashboardChrome({ children }: { children: ReactNode }) {
   const { user, isAdmin, isShliach, isSuperadmin, isCampaignManager, signOut } = useAuth();
   const { t, dir } = useLocalization();
   const isRtl = dir === "rtl";
-  const orgName = user?.organization?.name ?? t("auth.app_title", "מיני CRM");
+  // fixes85: the English title when the UI is in English (if one is set).
+  const orgName =
+    (dir === "ltr" && user?.organization?.name_en) ||
+    user?.organization?.name ||
+    t("auth.app_title", "מיני CRM");
   const logoUrl = user?.organization?.logo_url ?? null;
   // The browser-tab title comes from TitleManager (fixes9 §1) — not set here.
 

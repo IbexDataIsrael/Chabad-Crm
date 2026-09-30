@@ -1,7 +1,23 @@
 // Google Maps JS API loader (Places library). The key is public/client-side.
 // When the key is absent, the app degrades gracefully (plain address input, no map).
 
+import { useAuth } from "@/lib/auth";
+import { useLocalization } from "@/lib/localization";
+
 export const mapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+
+/** fixes85: the ONE language every Maps caller on a page must agree on.
+ *  The Maps JS API is a single global instance with its language baked in,
+ *  and loadGoogleMaps tears it down whenever a different language is asked
+ *  for. AddressAutocomplete used the org's "map in English" setting while the
+ *  maps used the UI language, so any page with both (e.g. Settings) reloaded
+ *  the API mid-render and the map came up blank. The org setting wins; else
+ *  the UI language. */
+export function useMapsLang(): "he" | "en" {
+  const { user } = useAuth();
+  const { lang } = useLocalization();
+  return user?.organization?.map_in_english ? "en" : lang;
+}
 
 let loadPromise: Promise<void> | null = null;
 // The Maps JS API bakes `language` into the script at load time — there's no

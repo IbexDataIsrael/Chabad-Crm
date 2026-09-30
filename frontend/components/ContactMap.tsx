@@ -2,17 +2,18 @@
 
 import { useEffect, useRef } from "react";
 
-import { loadGoogleMaps, mapsKey } from "@/lib/maps";
+import { loadGoogleMaps, mapsKey, useMapsLang } from "@/lib/maps";
 import { useLocalization } from "@/lib/localization";
 
 /** Renders a Google map with a marker via the Maps JavaScript API (no Embed API). */
 export function ContactMap({ lat, lng }: { lat: number; lng: number }) {
-  const { t, lang } = useLocalization();
+  const { t } = useLocalization();
+  const mapsLang = useMapsLang();
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!mapsKey || !ref.current) return;
-    loadGoogleMaps(lang)
+    loadGoogleMaps(mapsLang)
       .then(() => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const g = (window as any).google;
@@ -27,7 +28,7 @@ export function ContactMap({ lat, lng }: { lat: number; lng: number }) {
       .catch(() => {
         /* ignore */
       });
-  }, [lat, lng, lang]);
+  }, [lat, lng, mapsLang]);
 
   if (!mapsKey) {
     return (

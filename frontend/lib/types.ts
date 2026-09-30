@@ -454,6 +454,9 @@ export interface OrgDetails {
   /** fixes65 §1: public landing page + self-registration switch. */
   slug?: string | null;
   public_subtitle?: string | null;
+  /** fixes85: English title + subtitle (null = use the Hebrew ones). */
+  name_en?: string | null;
+  public_subtitle_en?: string | null;
   public_gallery?: string[] | null;
   self_registration_enabled?: boolean;
 }
@@ -615,6 +618,9 @@ export interface PublicOrg {
   slug: string;
   name: string;
   subtitle: string | null;
+  /** fixes85: English variants — the page falls back to name/subtitle. */
+  name_en?: string | null;
+  subtitle_en?: string | null;
   logo_url: string | null;
   gallery: string[];
   self_registration_enabled: boolean;

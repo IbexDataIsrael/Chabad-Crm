@@ -100,6 +100,25 @@ def test_public_org_page(client, public_org):
     assert client.get("/api/public/orgs/nope").status_code == 404
 
 
+def test_org_english_title_and_subtitle(client, admin_headers, public_org):
+    """fixes85: separate English title + subtitle, blank → null (the page
+    then falls back to the Hebrew ones)."""
+    r = client.put(
+        "/api/organizations/me",
+        json={"name_en": "  Chabad Test  ", "public_subtitle_en": "Welcome"},
+        headers=admin_headers,
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["name_en"] == "Chabad Test"
+    body = client.get("/api/public/orgs/test-org").json()
+    assert body["name_en"] == "Chabad Test" and body["subtitle_en"] == "Welcome"
+    assert body["subtitle"] == "ברוכים הבאים"  # Hebrew one untouched
+    me = client.get("/api/auth/me", headers=admin_headers).json()
+    assert me["organization"]["name_en"] == "Chabad Test"
+    client.put("/api/organizations/me", json={"name_en": ""}, headers=admin_headers)
+    assert client.get("/api/public/orgs/test-org").json()["name_en"] is None
+
+
 def test_slug_validation_and_uniqueness(client, admin_headers, public_org, org_id):
     r = client.put("/api/organizations/me", json={"slug": "bad slug!"}, headers=admin_headers)
     assert r.status_code == 422

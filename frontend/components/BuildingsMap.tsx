@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 
-import { loadGoogleMaps, mapsKey } from "@/lib/maps";
+import { loadGoogleMaps, mapsKey, useMapsLang } from "@/lib/maps";
 import { useLocalization } from "@/lib/localization";
 import { buildingDisplayName, type Area, type Building } from "@/lib/types";
 import { geoJSONToPath, ZONE_COLORS } from "./AreasMap";
@@ -62,7 +62,8 @@ export function BuildingsMap({
   buildings: Building[];
   areas?: Area[];
 }) {
-  const { t, lang } = useLocalization();
+  const { t } = useLocalization();
+  const mapsLang = useMapsLang();
   const ref = useRef<HTMLDivElement>(null);
 
   const located = useMemo(
@@ -84,7 +85,7 @@ export function BuildingsMap({
 
   useEffect(() => {
     if (!mapsKey || !ref.current || located.length === 0) return;
-    loadGoogleMaps(lang)
+    loadGoogleMaps(mapsLang)
       .then(() => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const g = (window as any).google;
@@ -140,7 +141,7 @@ export function BuildingsMap({
         /* leave the container empty on load failure */
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signature, lang]);
+  }, [signature, mapsLang]);
 
   if (!mapsKey) {
     return (

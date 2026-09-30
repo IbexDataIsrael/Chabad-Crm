@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
-import { loadGoogleMaps, mapsKey } from "@/lib/maps";
+import { loadGoogleMaps, mapsKey, useMapsLang } from "@/lib/maps";
 import type { Area } from "@/lib/types";
 
 // Sheepshead Bay fallback when the org has no default center configured.
@@ -37,7 +37,8 @@ export function geoJSONToPath(geojson: string): { lat: number; lng: number }[] |
  */
 export function AreasMap({ areas }: { areas: Area[] }) {
   const { user } = useAuth();
-  const { t, lang, loading: locLoading } = useLocalization();
+  const { t, loading: locLoading } = useLocalization();
+  const mapsLang = useMapsLang();
   const ref = useRef<HTMLDivElement>(null);
 
   const zones = useMemo(
@@ -51,7 +52,7 @@ export function AreasMap({ areas }: { areas: Area[] }) {
 
   useEffect(() => {
     if (!mapsKey || !ref.current || zones.length === 0) return;
-    loadGoogleMaps(lang)
+    loadGoogleMaps(mapsLang)
       .then(() => {
         if (!ref.current) return;
         const g = (window as any).google;
@@ -101,7 +102,7 @@ export function AreasMap({ areas }: { areas: Area[] }) {
     // when the localization data or language changes so the "view area" label
     // renders localized instead of its pre-load fallback.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signature, lang, locLoading]);
+  }, [signature, mapsLang, locLoading]);
 
   if (!mapsKey) {
     return (
