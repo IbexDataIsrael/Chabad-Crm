@@ -131,6 +131,12 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("admin", "admin.admin_name", "שם המנהל", "Admin name"),
     ("admin", "admin.clone", "שכפל", "Clone"),
     ("admin", "admin.clone_org_title", "שכפול ארגון", "Clone organization"),
+    # fixes84: clone is its own page now.
+    ("admin", "admin.back_to_orgs", "חזרה לארגונים", "Back to organizations"),
+    ("admin", "admin.org_cloned_named", "הארגון שוכפל: \"{name}\" (#{id})", "Organization cloned: \"{name}\" (#{id})"),
+    ("admin", "admin.clone_org_source", "ארגון מקור:", "Source organization:"),
+    ("admin", "admin.clone_org_new_org", "הארגון החדש והמנהל שלו", "The new organization and its admin"),
+    ("admin", "admin.clone_org_running", "משכפל… בארגון גדול זה יכול לקחת דקה או יותר. אין לסגור את הדף.", "Cloning… for a large organization this can take a minute or more. Don't close the page."),
     ("admin", "admin.clone_org_intro", "יוצר ארגון חדש עם עותק מלא של כל הנתונים — אנשי קשר, ביקורים, דירות, בניינים, רשימות בחירה ועוד. הארגון המקורי לא ישתנה.", "Creates a new organization with a full copy of all its data — contacts, visits, apartments, buildings, picklists, and more. The original organization is never changed."),
     ("admin", "admin.clone_org_confirm", "שכפל ארגון", "Clone organization"),
     ("admin", "admin.org_cloned", "הארגון שוכפל", "Organization cloned"),

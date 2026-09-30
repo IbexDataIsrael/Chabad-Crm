@@ -1,12 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import {
   adminActivateOrg,
   adminActivateUser,
   adminApproveOrg,
-  adminCloneOrg,
   adminCreateOrg,
   adminDeactivateOrg,
   adminDeactivateUser,
@@ -22,7 +22,6 @@ import {
   adminUserDependencies,
   adminVerifyUser,
   setToken,
-  type AdminOrgCreate,
   type AdminOrganization,
   type AdminUser,
   type AdminUserDependencies,
@@ -115,6 +114,28 @@ export function SystemAdmin({ section }: { section: AdminSection }) {
   const approveLinkHandled = useRef(false);
   useEffect(() => {
     if (section !== "orgs" || orgs === null || approveLinkHandled.current) return;
+    // fixes84: back from the clone page — spotlight the new org (appended at
+    // the bottom of the list) and say so, so a successful clone is visible.
+    const cloned = new URLSearchParams(window.location.search).get("cloned");
+    if (cloned) {
+      approveLinkHandled.current = true;
+      const url = new URL(window.location.href);
+      url.searchParams.delete("cloned");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+      const org = orgs.find((o) => o.id === Number(cloned));
+      if (org) {
+        setHighlightOrg(org.id);
+        requestAnimationFrame(() =>
+          document.getElementById(`org-${org.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }),
+        );
+        success(
+          t("admin.org_cloned_named", 'הארגון שוכפל: "{name}" (#{id})')
+            .replace("{name}", org.name)
+            .replace("{id}", String(org.id)),
+        );
+      }
+      return;
+    }
     const param = new URLSearchParams(window.location.search).get("approve");
     if (!param) return;
     approveLinkHandled.current = true;
@@ -226,17 +247,6 @@ export function SystemAdmin({ section }: { section: AdminSection }) {
     } finally {
       setBusy(false);
     }
-  }
-
-  const [orgToClone, setOrgToClone] = useState<AdminOrganization | null>(null);
-
-  async function onCloneOrgConfirmed(org: AdminOrganization, payload: AdminOrgCreate) {
-    setOrgToClone(null);
-    await run(async () => {
-      await adminCloneOrg(org.id, payload);
-      await loadOrgs();
-      await loadAllUsers();
-    }, t("admin.org_cloned", "הארגון שוכפל"));
   }
 
   // fixes10 §1.2: deletion goes through the two-step modal, not confirm().
@@ -570,13 +580,12 @@ export function SystemAdmin({ section }: { section: AdminSection }) {
                       >
                         {t("admin.impersonate", "התחבר כארגון")}
                       </button>
-                      <button
-                        disabled={busy}
-                        onClick={() => setOrgToClone(org)}
-                        className="rounded-md border border-input px-3 py-1 hover:bg-accent disabled:opacity-50"
+                      <Link
+                        href={`/dashboard/admin/clone/${org.id}`}
+                        className="rounded-md border border-input px-3 py-1 hover:bg-accent"
                       >
                         {t("admin.clone", "שכפל")}
-                      </button>
+                      </Link>
                       {org.is_active ? (
                         <button
                           disabled={busy}
@@ -739,15 +748,6 @@ export function SystemAdmin({ section }: { section: AdminSection }) {
           <PendingSignupEmailsCard />
           <SystemSettingsCard defaultOpen />
         </>
-      )}
-
-      {orgToClone && (
-        <CloneOrgModal
-          org={orgToClone}
-          busy={busy}
-          onCancel={() => setOrgToClone(null)}
-          onConfirm={(payload) => onCloneOrgConfirmed(orgToClone, payload)}
-        />
       )}
 
       {orgToDelete && (
@@ -952,140 +952,6 @@ function DeleteUserModal({
 // large in practice (see [[unpaginated-buildings-at-scale-gotcha]]). Value
 // is the raw text input; blank = clone every row in that table (unchanged
 // default behavior).
-const CLONE_LIMIT_TABLES: { table: string; labelKey: string; fallback: string }[] = [
-  { table: "apartments", labelKey: "nav.apartments", fallback: "דירות" },
-  { table: "buildings", labelKey: "nav.buildings", fallback: "בניינים" },
-  { table: "contacts", labelKey: "nav.contacts", fallback: "אנשי קשר" },
-  { table: "visit_history", labelKey: "admin.clone_org_limit_visits", fallback: "ביקורים" },
-  { table: "donations", labelKey: "nav.donations", fallback: "תרומות" },
-];
-
-function CloneOrgModal({
-  org,
-  busy,
-  onCancel,
-  onConfirm,
-}: {
-  org: AdminOrganization;
-  busy: boolean;
-  onCancel: () => void;
-  onConfirm: (payload: AdminOrgCreate) => void;
-}) {
-  const { t } = useLocalization();
-  const [form, setForm] = useState<AdminOrgCreate>({
-    organization_name: `${org.name} - Sample`,
-    admin_full_name: "",
-    admin_email: "",
-    admin_username: "sample_admin",
-    admin_password: "",
-  });
-  const [limitInputs, setLimitInputs] = useState<Record<string, string>>({});
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md bg-card rounded-xl shadow-xl p-5 space-y-4">
-        <h2 className="text-lg font-bold">{t("admin.clone_org_title", "שכפול ארגון")}</h2>
-        <p className="text-sm text-muted-foreground">
-          {t(
-            "admin.clone_org_intro",
-            "יוצר ארגון חדש עם עותק מלא של כל הנתונים — אנשי קשר, ביקורים, דירות, בניינים, רשימות בחירה ועוד. הארגון המקורי לא ישתנה.",
-          )}
-        </p>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            const table_row_limits: Record<string, number> = {};
-            for (const { table } of CLONE_LIMIT_TABLES) {
-              const raw = limitInputs[table]?.trim();
-              if (!raw) continue;
-              const n = Number(raw);
-              if (Number.isFinite(n) && n >= 0) table_row_limits[table] = Math.floor(n);
-            }
-            onConfirm(
-              Object.keys(table_row_limits).length > 0
-                ? { ...form, table_row_limits }
-                : form,
-            );
-          }}
-          className="space-y-3"
-        >
-          <Input
-            required
-            value={form.organization_name}
-            onChange={(e) => setForm({ ...form, organization_name: e.target.value })}
-            placeholder={t("signup.org_name", "שם הארגון")}
-          />
-          <Input
-            required
-            value={form.admin_full_name}
-            onChange={(e) => setForm({ ...form, admin_full_name: e.target.value })}
-            placeholder={t("admin.admin_name", "שם המנהל")}
-          />
-          <Input
-            required
-            dir="ltr"
-            type="email"
-            value={form.admin_email}
-            onChange={(e) => setForm({ ...form, admin_email: e.target.value })}
-            placeholder={t("contacts.email", "אימייל")}
-          />
-          <Input
-            required
-            dir="ltr"
-            value={form.admin_username}
-            onChange={(e) => setForm({ ...form, admin_username: e.target.value })}
-            placeholder={t("auth.username", "שם משתמש")}
-          />
-          <Input
-            required
-            dir="ltr"
-            type="text"
-            value={form.admin_password}
-            onChange={(e) => setForm({ ...form, admin_password: e.target.value })}
-            placeholder={t("auth.password", "סיסמה")}
-          />
-          <div className="space-y-2 rounded-md border border-border p-3">
-            <p className="text-sm font-medium">
-              {t("admin.clone_org_limits_title", "הגבלת מספר רשומות (אופציונלי)")}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {t(
-                "admin.clone_org_limits_hint",
-                "השאירו ריק כדי לשכפל את כל הרשומות בטבלה. רשומה שמתייחסת לרשומה שלא שוכפלה (כי הוגבלה בטבלה אחרת) תושמט.",
-              )}
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {CLONE_LIMIT_TABLES.map(({ table, labelKey, fallback }) => (
-                <label key={table} className="flex items-center gap-2 text-sm">
-                  <span className="w-20 shrink-0 text-muted-foreground">{t(labelKey, fallback)}</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    dir="ltr"
-                    value={limitInputs[table] ?? ""}
-                    onChange={(e) =>
-                      setLimitInputs({ ...limitInputs, [table]: e.target.value })
-                    }
-                    placeholder="∞"
-                  />
-                </label>
-              ))}
-            </div>
-          </div>
-          <div className="flex items-center gap-2 pt-1">
-            <Button type="submit" disabled={busy}>
-              {t("admin.clone_org_confirm", "שכפל ארגון")}
-            </Button>
-            <Button type="button" variant="outline" onClick={onCancel}>
-              {t("action.cancel", "ביטול")}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
 type BlockedAction = "delete" | "deactivate" | "impersonate";
 
 /** fixes82: explains exactly why an action on an org was refused — either
