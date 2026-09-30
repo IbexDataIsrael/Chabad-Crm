@@ -24,6 +24,7 @@ apartment didn't make the cut just ends up unhoused in the copy).
 """
 import logging
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app import models
@@ -106,6 +107,63 @@ _USER_FK_COLUMNS = {"assigned_user_id", "editor_id", "user_id"}
 _NULLED_COLUMNS = {"client_uuid", "campaign_id"}
 
 
+def _whole_building_selection(
+    db: Session, source_org_id: int, apartment_limit: int
+) -> dict[str, set[int]]:
+    """fixes86: an apartments cap selects WHOLE buildings — the most recently
+    created buildings are taken until their (displayed) apartments reach
+    `apartment_limit`, rounding up so no building is split. Only those
+    buildings, the areas they sit in, and the report numbers their
+    apartments use are cloned; every other building / area / report number
+    is dropped. Returns {tablename: allowed source ids}."""
+    counts = (
+        db.query(models.Apartment.building_id, func.count(models.Apartment.id))
+        .filter(
+            models.Apartment.organization_id == source_org_id,
+            models.Apartment.is_display.is_(True),
+            models.Apartment.building_id.isnot(None),
+        )
+        .group_by(models.Apartment.building_id)
+        .all()
+    )
+    per_building = {bid: n for bid, n in counts}
+    buildings = (
+        db.query(models.Building.id, models.Building.area_id)
+        .filter(
+            models.Building.organization_id == source_org_id,
+            models.Building.id.in_(per_building.keys() or {0}),
+        )
+        .order_by(models.Building.id.desc())
+        .all()
+    )
+    building_ids: set[int] = set()
+    area_ids: set[int] = set()
+    total = 0
+    for bid, area_id in buildings:
+        if total >= apartment_limit:
+            break
+        building_ids.add(bid)
+        total += per_building[bid]
+        if area_id is not None:
+            area_ids.add(area_id)
+    # Every version (not only the displayed one) of the chosen buildings'
+    # apartments — Apartment.root_id chains must stay intact.
+    apartment_rows = (
+        db.query(models.Apartment.id, models.Apartment.report_number_id)
+        .filter(
+            models.Apartment.organization_id == source_org_id,
+            models.Apartment.building_id.in_(building_ids or {0}),
+        )
+        .all()
+    )
+    return {
+        "buildings": building_ids,
+        "areas": area_ids,
+        "apartments": {a for a, _ in apartment_rows},
+        "report_number": {rn for _, rn in apartment_rows if rn is not None},
+    }
+
+
 def clone_organization(
     db: Session,
     source_org_id: int,
@@ -166,11 +224,29 @@ def clone_organization(
     # the string stored in entity_table on polymorphic rows.
     id_maps: dict[str, dict[int, int]] = {}
 
+    # fixes86: an apartments cap means "whole buildings" — it replaces the
+    # plain row caps on apartments/buildings with an explicit id selection.
+    table_limits = dict(table_limits or {})
+    selection: dict[str, set[int]] = {}
+    if table_limits.get("apartments") is not None:
+        selection = _whole_building_selection(
+            db, source_org_id, max(0, table_limits.pop("apartments"))
+        )
+        table_limits.pop("buildings", None)
+        logger.info(
+            "org_clone: whole-building selection — %d buildings, %d apartment rows, "
+            "%d areas, %d report numbers",
+            len(selection["buildings"]), len(selection["apartments"]),
+            len(selection["areas"]), len(selection["report_number"]),
+        )
+
     for model, fk_remap, is_polymorphic in _CLONE_PLAN:
         tablename = model.__tablename__
         nullable_by_column = {col.name: col.nullable for col in model.__table__.columns}
         query = db.query(model).filter(model.organization_id == source_org_id)
-        limit = (table_limits or {}).get(tablename)
+        if tablename in selection:
+            query = query.filter(model.id.in_(selection[tablename] or {0}))
+        limit = table_limits.get(tablename)
         if limit is not None:
             limit = max(0, limit)
             # Keep the most recently created rows. Re-sorted back to ascending

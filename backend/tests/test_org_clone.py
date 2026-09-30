@@ -341,46 +341,76 @@ def test_clone_new_org_isolated_from_source_via_api(client, superadmin_headers, 
     assert src_ids.isdisjoint(clone_ids)  # ...but it's a different row, not a shared one
 
 
-def test_clone_table_row_limit_keeps_most_recent_rows(client, superadmin_headers, db_session):
-    """A capped table keeps its highest-id (most recently created) rows —
-    not an arbitrary/first-N slice."""
+def test_clone_apartment_limit_takes_whole_buildings_and_related_only(
+    client, superadmin_headers, db_session
+):
+    """fixes86: an apartments cap takes WHOLE buildings (newest first,
+    rounded up — never a partial building) and clones only those buildings,
+    their areas and the report numbers their apartments use."""
     org = _make_org(db_session, "Big Org")
-    area = models.Area(organization_id=org.id, area_name="אזור")
-    db_session.add(area)
+    a1, a2, a3 = (models.Area(organization_id=org.id, area_name=n) for n in ("א1", "א2", "א3"))
+    db_session.add_all([a1, a2, a3])
+    rn1, rn2, rn3 = (models.ReportNumber(organization_id=org.id, name=n) for n in ("R1", "R2", "R3"))
+    db_session.add_all([rn1, rn2, rn3])
     db_session.flush()
-    building = models.Building(organization_id=org.id, area_id=area.id, building_address="1 Main St")
-    db_session.add(building)
-    db_session.flush()
-    for i in range(1, 6):
-        db_session.add(
-            models.Apartment(organization_id=org.id, building_id=building.id, apartment_name=f"A{i}")
+
+    def building(addr, area):
+        b = models.Building(organization_id=org.id, area_id=area.id, building_address=addr)
+        db_session.add(b)
+        db_session.flush()
+        return b
+
+    def apt(b, name, rn=None, **kw):
+        a = models.Apartment(
+            organization_id=org.id, building_id=b.id, apartment_name=name,
+            report_number_id=rn.id if rn else None, **kw,
         )
+        db_session.add(a)
+        db_session.flush()
+        return a
+
+    b_old = building("Old St", a1)   # oldest — not needed to reach the cap
+    for i in range(4):
+        apt(b_old, f"O{i}", rn1)
+    b_mid = building("Mid St", a2)
+    v1 = apt(b_mid, "M0", rn2, is_display=False)  # a retired version
+    apt(b_mid, "M0", rn2, root_id=v1.id)
+    apt(b_mid, "M1", rn2)
+    apt(b_mid, "M2", rn2)
+    b_new = building("New St", a2)   # newest — taken first
+    apt(b_new, "N0")
+    apt(b_new, "N1")
     db_session.commit()
 
+    # Cap 4: New St (2) is not enough, so Mid St (3 displayed) joins → 5 ≥ 4.
     r = client.post(
         f"/api/admin/organizations/{org.id}/clone",
-        json=_clone_payload(table_row_limits={"apartments": 2}),
+        json=_clone_payload(table_row_limits={"apartments": 4, "buildings": 1}),
         headers=superadmin_headers,
     )
-    assert r.status_code == 201
+    assert r.status_code == 201, r.text
     new_org_id = r.json()["id"]
-
     db_session.expire_all()
-    cloned_names = sorted(
-        a.apartment_name
-        for a in db_session.query(models.Apartment).filter(
-            models.Apartment.organization_id == new_org_id
+
+    def names(model, col):
+        return sorted(
+            getattr(row, col)
+            for row in db_session.query(model).filter(model.organization_id == new_org_id)
         )
-    )
-    assert cloned_names == ["A4", "A5"]  # the 2 most recently created, not A1/A2
-    # The building itself wasn't capped — it's still there and correctly targeted.
-    cloned_building = db_session.query(models.Building).filter(
-        models.Building.organization_id == new_org_id
-    ).one()
-    for apt in db_session.query(models.Apartment).filter(
-        models.Apartment.organization_id == new_org_id
-    ):
-        assert apt.building_id == cloned_building.id
+
+    # Whole buildings only; the (ignored) buildings:1 cap didn't cut Mid St.
+    assert names(models.Building, "building_address") == ["Mid St", "New St"]
+    # Every version of those buildings' apartments (5 displayed + 1 retired).
+    assert names(models.Apartment, "apartment_name") == ["M0", "M0", "M1", "M2", "N0", "N1"]
+    # Only the area the chosen buildings are in, only the used report number.
+    assert names(models.Area, "area_name") == ["א2"]
+    assert names(models.ReportNumber, "name") == ["R2"]
+    # The retired version's lineage still resolves inside the copy.
+    cloned = {
+        (a.apartment_name, a.is_display): a
+        for a in db_session.query(models.Apartment).filter_by(organization_id=new_org_id)
+    }
+    assert cloned[("M0", True)].root_id == cloned[("M0", False)].id
 
 
 def test_clone_table_row_limit_drops_rows_with_dangling_required_fk(

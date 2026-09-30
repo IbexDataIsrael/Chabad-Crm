@@ -24,7 +24,6 @@ import { useLocalization } from "@/lib/localization";
 
 const CLONE_LIMIT_TABLES: { table: string; labelKey: string; fallback: string }[] = [
   { table: "apartments", labelKey: "nav.apartments", fallback: "דירות" },
-  { table: "buildings", labelKey: "nav.buildings", fallback: "בניינים" },
   { table: "contacts", labelKey: "nav.contacts", fallback: "אנשי קשר" },
   { table: "visit_history", labelKey: "admin.clone_org_limit_visits", fallback: "ביקורים" },
   { table: "donations", labelKey: "nav.donations", fallback: "תרומות" },
@@ -200,6 +199,14 @@ export default function CloneOrgPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             {CLONE_LIMIT_TABLES.map(({ table, labelKey, fallback }) => (
               <Field key={table} label={t(labelKey, fallback)}>
+                {table === "apartments" && (
+                  <span className="block text-xs text-muted-foreground">
+                    {t(
+                      "admin.clone_org_apartments_hint",
+                      "משוכפלים בניינים שלמים עד שמגיעים למספר הזה (מעוגל כלפי מעלה). רק האזורים ומספרי הדוח של הבניינים האלה משוכפלים.",
+                    )}
+                  </span>
+                )}
                 <Input
                   type="number"
                   min={0}
