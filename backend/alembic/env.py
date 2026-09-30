@@ -20,7 +20,10 @@ if db_url.startswith("postgres://"):
 config.set_main_option("sqlalchemy.url", db_url)
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # fixes75: the app runs migrations in-process at startup — the default
+    # disable_existing_loggers=True silenced every app.* and uvicorn logger
+    # from then on (no request, email or error lines in the Render log).
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 
