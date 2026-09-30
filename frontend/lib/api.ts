@@ -415,7 +415,36 @@ export interface AdminOrgCreate {
    *  (keyed by table name, e.g. {apartments: 500}). Ignored by plain org
    *  creation (adminCreateOrg). */
   table_row_limits?: Record<string, number>;
+  /** fixes87: demo clone — the activist ids a clone-plan preview chose, and
+   *  the password for their made-up demo logins. */
+  demo_activist_user_ids?: number[];
+  demo_password?: string;
 }
+
+/** fixes87: the preview of a demo clone (nothing written yet). */
+export interface ClonePlan {
+  available_activists: number;
+  activists: { user_id: number; full_name: string; task_count: number; apartment_count: number }[];
+  apartment_count: number;
+  building_count: number;
+}
+
+export interface CloneResult extends AdminOrganization {
+  clone_activists: number;
+  clone_apartments: number;
+  clone_tasks: number;
+  demo_logins: { username: string; full_name: string | null }[];
+}
+
+export const adminClonePlan = (
+  orgId: number,
+  activistCount: number,
+  apartmentTarget: number,
+): Promise<ClonePlan> =>
+  apiFetch(`/api/admin/organizations/${orgId}/clone-plan`, {
+    method: "POST",
+    body: JSON.stringify({ activist_count: activistCount, apartment_target: apartmentTarget }),
+  });
 
 export const adminCreateOrg = (payload: AdminOrgCreate): Promise<AdminOrganization> =>
   apiFetch("/api/admin/organizations", {
@@ -433,7 +462,7 @@ export const adminListOrganizations = (): Promise<AdminOrganization[]> =>
 export const adminCloneOrg = (
   orgId: number,
   payload: AdminOrgCreate,
-): Promise<AdminOrganization> =>
+): Promise<CloneResult> =>
   apiFetch(`/api/admin/organizations/${orgId}/clone`, {
     method: "POST",
     body: JSON.stringify(payload),

@@ -510,3 +510,171 @@ def test_clone_rewires_activist_version_lineage(client, superadmin_headers, db_s
     }
     assert rows["v2"].root_id == rows["v1"].id
     assert rows["v2"].root_id != v1.id
+
+
+# --- fixes87: demo clone driven by activists with tasks ----------------------
+def _build_demo_org(db):
+    """3 activists with tasks holding 10 / 4 / 6 apartments (via report
+    numbers), plus an unassigned task — each activist with its contact card."""
+    org = _make_org(db, "Demo Source")
+    area = models.Area(organization_id=org.id, area_name="אזור")
+    db.add(area)
+    db.flush()
+    campaign = models.Campaign(organization_id=org.id, name="מבצע", is_active=True)
+    db.add(campaign)
+    db.flush()
+    db.add(models.CampaignFieldVisibility(campaign_id=campaign.id, field_key="x", is_visible=False))
+    activists = {}
+    for i, (name, n_apts) in enumerate((("Alpha", 10), ("Bravo", 4), ("Charlie", 6), ("Nobody", 3))):
+        rn = models.ReportNumber(organization_id=org.id, name=f"RN-{name}")
+        db.add(rn)
+        building = models.Building(organization_id=org.id, area_id=area.id, building_address=f"{name} St")
+        db.add(building)
+        db.flush()
+        for k in range(n_apts):
+            db.add(models.Apartment(
+                organization_id=org.id, building_id=building.id,
+                apartment_name=f"{name}-{k}", report_number_id=rn.id,
+            ))
+        user = None
+        if name != "Nobody":
+            user = _make_user(db, org.id, name.lower(), "shliach", f"{name.lower()}@real.example")
+            user.full_name = f"{name} Real"
+            contact = models.Contact(
+                organization_id=org.id, name=name, phone=f"050-99000{i}",
+                contact_type="shliach", email=f"{name.lower()}@real.example",
+            )
+            db.add(contact)
+            db.flush()
+            db.add(models.ContactShliach(
+                organization_id=org.id, contact_id=contact.id, user_id=user.id, full_name=user.full_name,
+            ))
+        task = models.Task(
+            organization_id=org.id, campaign_id=campaign.id,
+            volunteer_user_id=user.id if user else None,
+            status="ACTIVE" if user else "AVAILABLE",
+        )
+        db.add(task)
+        db.flush()
+        db.add(models.TaskReportNumber(organization_id=org.id, task_id=task.id, report_number_id=rn.id))
+        activists[name] = user
+    db.commit()
+    return org, activists
+
+
+def test_demo_clone_plan_picks_activists_closest_to_target(client, superadmin_headers, db_session):
+    org, act = _build_demo_org(db_session)
+    r = client.post(
+        f"/api/admin/organizations/{org.id}/clone-plan",
+        json={"activist_count": 2, "apartment_target": 10},
+        headers=superadmin_headers,
+    )
+    assert r.status_code == 200, r.text
+    plan = r.json()
+    # Alpha alone has 10, but 2 were asked for: Bravo(4)+Charlie(6)=10 is exact.
+    assert {a["user_id"] for a in plan["activists"]} == {act["Bravo"].id, act["Charlie"].id}
+    assert plan["apartment_count"] == 10 and plan["available_activists"] == 3
+    # Asking for more activists than exist → all of them, apartments above target.
+    plan = client.post(
+        f"/api/admin/organizations/{org.id}/clone-plan",
+        json={"activist_count": 9, "apartment_target": 5},
+        headers=superadmin_headers,
+    ).json()
+    assert len(plan["activists"]) == 3 and plan["apartment_count"] == 20
+
+
+def test_demo_clone_copies_exactly_the_chosen_activists_work(client, superadmin_headers, db_session):
+    org, act = _build_demo_org(db_session)
+    ids = [act["Bravo"].id, act["Charlie"].id]
+    payload = {**_clone_payload("Demo Copy"), "demo_activist_user_ids": ids, "demo_password": "Demo12345"}
+    r = client.post(f"/api/admin/organizations/{org.id}/clone", json=payload, headers=superadmin_headers)
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert (body["clone_activists"], body["clone_apartments"], body["clone_tasks"]) == (2, 10, 2)
+    new_id = body["id"]
+    db_session.expire_all()
+    q = lambda m: db_session.query(m).filter(m.organization_id == new_id)  # noqa: E731
+
+    # Exactly the task apartments; only their buildings / report numbers.
+    assert sorted(a.apartment_name.split("-")[0] for a in q(models.Apartment)) == ["Bravo"] * 4 + ["Charlie"] * 6
+    assert sorted(b.building_address for b in q(models.Building)) == ["Bravo St", "Charlie St"]
+    assert sorted(rn.name for rn in q(models.ReportNumber)) == ["RN-Bravo", "RN-Charlie"]
+    # Only the chosen activists' cards; demo logins, never the real emails.
+    assert sorted(c.name for c in q(models.Contact).filter(models.Contact.contact_type == "shliach")) == ["Bravo", "Charlie"]
+    demo_users = q(models.User).filter(models.User.role == "shliach").all()
+    assert len(demo_users) == 2
+    assert all(u.email.endswith(f"@org{new_id}.demo") for u in demo_users)
+    assert not any("real.example" in (u.email or "") for u in q(models.User))
+    # Tasks → demo logins, campaign cloned (with its field visibility), links intact.
+    tasks = q(models.Task).all()
+    assert {t.volunteer_user_id for t in tasks} == {u.id for u in demo_users}
+    campaign = q(models.Campaign).one()
+    assert all(t.campaign_id == campaign.id for t in tasks)
+    assert db_session.query(models.CampaignFieldVisibility).filter_by(campaign_id=campaign.id).count() == 1
+    assert q(models.TaskReportNumber).count() == 2
+    # Activist cards point at their demo login.
+    assert {sh.user_id for sh in q(models.ContactShliach)} == {u.id for u in demo_users}
+
+    # A demo login works (and sees its task apartments).
+    login = body["demo_logins"][0]["username"]
+    tok = client.post("/api/auth/token", data={"username": login, "password": "Demo12345"})
+    assert tok.status_code == 200, tok.text
+
+
+def test_demo_clone_rejects_bad_input(client, superadmin_headers, db_session):
+    org, act = _build_demo_org(db_session)
+    base = _clone_payload("Bad Demo")
+    r = client.post(
+        f"/api/admin/organizations/{org.id}/clone",
+        json={**base, "demo_activist_user_ids": [act["Bravo"].id]},  # no password
+        headers=superadmin_headers,
+    )
+    assert r.status_code == 400
+    r = client.post(
+        f"/api/admin/organizations/{org.id}/clone",
+        json={**base, "demo_activist_user_ids": [999999], "demo_password": "Demo12345"},
+        headers=superadmin_headers,
+    )
+    assert r.status_code == 400
+    assert db_session.query(models.Organization).filter_by(name="Bad Demo").count() == 0
+
+
+def test_clone_replaces_real_emails_and_phones_with_demo_values(client, superadmin_headers, db_session):
+    """fixes87 §7: no real email / phone survives a clone; one real value →
+    one demo value (consistent across tables, distinct people stay distinct)."""
+    org, act = _build_demo_org(db_session)
+    building = db_session.query(models.Building).filter_by(organization_id=org.id).first()
+    db_session.add(models.Apartment(
+        organization_id=org.id, building_id=building.id, apartment_name="P1",
+        phone="052-1234567", email="tenant@real.example",
+    ))
+    db_session.add(models.Contact(
+        organization_id=org.id, name="מקורב", phone="053-7654321",
+        contact_type="mekurav", email="mekurav@real.example",
+    ))
+    db_session.commit()
+    ids = [act["Bravo"].id]
+    payload = {**_clone_payload("PII Copy"), "demo_activist_user_ids": ids, "demo_password": "Demo12345"}
+    r = client.post(f"/api/admin/organizations/{org.id}/clone", json=payload, headers=superadmin_headers)
+    assert r.status_code == 201, r.text
+    new_id = r.json()["id"]
+    login = r.json()["demo_logins"][0]["username"]
+    db_session.expire_all()
+
+    rows = []
+    for model in (models.Contact, models.ContactShliach, models.Apartment):
+        rows += db_session.query(model).filter(model.organization_id == new_id).all()
+    emails = [r.email for r in rows if r.email]
+    phones = [r.phone for r in rows if r.phone]
+    assert emails and phones
+    assert not any("real.example" in e for e in emails)
+    assert all(e.endswith(f"@org{new_id}.demo") for e in emails)
+    assert all(p.startswith("050-") for p in phones)
+    assert not {"052-1234567", "053-7654321"} & set(phones)
+    # The activist's card and snapshot carry their demo login.
+    card = db_session.query(models.Contact).filter_by(organization_id=new_id, contact_type="shliach").one()
+    snap = db_session.query(models.ContactShliach).filter_by(organization_id=new_id).one()
+    assert card.email == login and snap.email in (None, login)
+    # Distinct real phones stay distinct.
+    contact_phones = [c.phone for c in db_session.query(models.Contact).filter_by(organization_id=new_id) if c.phone]
+    assert len(contact_phones) == len(set(contact_phones))

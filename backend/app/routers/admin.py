@@ -19,7 +19,7 @@ from app.core.email import (
     send_org_approved_user,
     set_pending_signup_emails,
 )
-from app.core.org_clone import clone_organization
+from app.core.org_clone import clone_organization, plan_demo_clone
 from app.core import org_prefs
 from app.core.security import create_access_token, hash_password
 from app.core.user_delete import clear_user_references
@@ -30,6 +30,9 @@ from app.schemas import (
     AdminOrganizationOut,
     AdminUserDependenciesOut,
     AdminUserOut,
+    ClonePlanIn,
+    ClonePlanOut,
+    CloneResultOut,
     EmailTemplateOut,
     EmailTemplateUpdate,
     OrgPrefsOut,
@@ -109,43 +112,53 @@ def _delete_organization_cascade(db: Session, org_id: int) -> None:
 
     The FKs to `organizations` have no DB-level ON DELETE CASCADE, so we remove
     dependents in an order that never violates a foreign key.
+
+    fixes87: the order is derived from the schema (every table with an
+    organization_id, dependency-sorted children → parents) instead of a
+    hand-kept list — that list had fallen behind (tasks, campaigns, backups,
+    announcements, …), so deleting any org with tasks failed with a
+    ForeignKeyViolation. Child tables WITHOUT an organization_id are cleared
+    first through their parent rows.
     """
-    # Org-scoped tables, leaves → roots.
-    ordered_models = [
-        models.CustomFieldValue,  # fixes35: gained its own organization_id
-        models.PicklistLink,  # fixes32: replaces ContactPicklistValue (generic now)
-        models.ContactMekuravSpecialDate,
-        models.SignificantDateReminder,
-        models.ReportNumberContactShliach,
-        models.ContactShliachArea,
-        models.VisitHistory,
-        models.Donation,
-        models.ContactMekurav,
-        models.ContactShliach,
-        models.CustomFieldDefinition,
-        models.PicklistValue,
-        models.PicklistDefinition,
-        models.SignificantDate,
-        models.Apartment,
-        models.ReportNumber,  # after Apartment, which references it
-        models.Floor,  # before Building (FK); DB-level cascade only covers PG
-        models.Building,
-        models.Area,
-        models.AdminArea,  # after ContactMekurav, which references it
-        models.Contact,
-        models.FieldSetting,
-        models.User,
-    ]
+    from sqlalchemy import select
+
+    from app.database import Base
+
+    tables = Base.metadata.sorted_tables  # parents before children
+    org_scoped = {t.name for t in tables if "organization_id" in t.c}
     # fixes75: audit logs outlive the org (the superadmin still sees them);
     # only the reference goes. Also the DB-level ON DELETE SET NULL.
+    keep = {"organizations", "system_access_logs", "error_logs"}
     for model in (models.SystemAccessLog, models.ErrorLog):
         db.query(model).filter(model.organization_id == org_id).update(
             {model.organization_id: None}, synchronize_session=False
         )
-    for model in ordered_models:
-        db.query(model).filter(
-            model.organization_id == org_id
-        ).delete(synchronize_session=False)
+
+    # 1) Tables with no organization_id of their own that point at this
+    #    org's rows (campaign_field_visibility, campaign_building_completion,
+    #    user_preferences, …): delete the rows hanging off this org's parents.
+    for table in reversed(tables):
+        if "organization_id" in table.c or table.name in keep:
+            continue
+        conds = []
+        for col in table.c:
+            for fk in col.foreign_keys:
+                parent = fk.column.table
+                if parent.name in org_scoped and parent.name not in keep:
+                    conds.append(
+                        col.in_(
+                            select(fk.column).where(parent.c.organization_id == org_id)
+                        )
+                    )
+        if conds:
+            from sqlalchemy import or_ as _or
+
+            db.execute(table.delete().where(_or(*conds)))
+
+    # 2) Org-scoped tables, children before parents.
+    for table in reversed(tables):
+        if table.name in org_scoped and table.name not in keep:
+            db.execute(table.delete().where(table.c.organization_id == org_id))
 
     db.query(models.Organization).filter(
         models.Organization.id == org_id
@@ -222,7 +235,7 @@ def create_organization(
 
 @router.post(
     "/organizations/{org_id}/clone",
-    response_model=AdminOrganizationOut,
+    response_model=CloneResultOut,
     status_code=status.HTTP_201_CREATED,
 )
 def clone_organization_endpoint(
@@ -236,6 +249,7 @@ def clone_organization_endpoint(
     The source org is never modified. See app.core.org_clone for exactly
     what's copied and how references are rewired."""
     source = _get_org(db, org_id)
+    summary: dict = {}
     try:
         new_org = clone_organization(
             db,
@@ -246,8 +260,14 @@ def clone_organization_endpoint(
             payload.admin_email,
             payload.admin_password,
             table_limits=payload.table_row_limits,
+            demo_activist_user_ids=payload.demo_activist_user_ids,
+            demo_password=payload.demo_password,
+            summary=summary,
         )
         db.commit()
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
     except Exception:
         db.rollback()
         raise
@@ -256,7 +276,27 @@ def clone_organization_endpoint(
         admin.email, source.name, org_id, new_org.name, new_org.id,
     )
     db.refresh(new_org)
-    return _org_out(db, new_org)
+    return CloneResultOut(
+        **_org_out(db, new_org).model_dump(exclude={"is_system"}),
+        clone_activists=summary.get("activists", 0),
+        clone_apartments=summary.get("apartments", 0),
+        clone_tasks=summary.get("tasks", 0),
+        demo_logins=summary.get("demo_logins", []),
+    )
+
+
+@router.post("/organizations/{org_id}/clone-plan", response_model=ClonePlanOut)
+def clone_plan_endpoint(
+    org_id: int,
+    payload: ClonePlanIn,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_superadmin),
+):
+    """fixes87: preview a demo clone (nothing is written) — the activists
+    with tasks whose task apartments come closest to the target. The
+    superadmin approves, then /clone receives exactly these user ids."""
+    _get_org(db, org_id)
+    return plan_demo_clone(db, org_id, payload.activist_count, payload.apartment_target)
 
 
 @router.get("/organizations", response_model=list[AdminOrganizationOut])

@@ -436,6 +436,47 @@ class AdminOrgCreate(BaseModel):
     # (keyed by table name, e.g. {"apartments": 500}) — see
     # app.core.org_clone. Ignored by plain org creation.
     table_row_limits: Optional[dict[str, int]] = None
+    # fixes87: demo clone — the activist user ids a /clone-plan preview chose
+    # (the superadmin approved exactly these) + the password for their demo
+    # logins. Unset = a plain clone.
+    demo_activist_user_ids: Optional[list[int]] = None
+    demo_password: Optional[str] = None
+
+
+class ClonePlanIn(BaseModel):
+    """fixes87: preview a demo clone — N activists (with tasks) whose task
+    apartments come closest to `apartment_target`."""
+
+    activist_count: int = Field(ge=1, le=200)
+    apartment_target: int = Field(ge=0)
+
+
+class ClonePlanActivist(BaseModel):
+    user_id: int
+    full_name: str
+    task_count: int
+    apartment_count: int
+
+
+class ClonePlanOut(BaseModel):
+    available_activists: int
+    activists: list[ClonePlanActivist]
+    apartment_count: int
+    building_count: int
+
+
+class DemoLogin(BaseModel):
+    username: str
+    full_name: Optional[str] = None
+
+
+class CloneResultOut(AdminOrganizationOut):
+    """fixes87: the new org + what the clone actually produced."""
+
+    clone_activists: int = 0
+    clone_apartments: int = 0
+    clone_tasks: int = 0
+    demo_logins: list[DemoLogin] = []
 
 
 class SignupRequest(BaseModel):
