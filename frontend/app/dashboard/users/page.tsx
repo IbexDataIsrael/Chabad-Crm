@@ -252,6 +252,9 @@ export default function UsersPage() {
   // card — show only those self-registrations ("all" = never dismissed).
   // URL-driven, deliberately not persisted.
   const [signupsSince, setSignupsSince] = useState<string | null>(null);
+  // Free-text name/email/phone search. Deliberately NOT persisted — a
+  // forgotten persisted query would silently hide newly registered users.
+  const [query, setQuery] = useState("");
   useEffect(() => {
     const since = new URLSearchParams(window.location.search).get("new_signups_since");
     setSignupsSince(since);
@@ -270,13 +273,15 @@ export default function UsersPage() {
     reportNumberIds.length +
     Object.values(shliachPicklistFilters).filter((v) => v.length > 0).length +
     Object.values(shliachFieldFilters).filter((v) => v).length +
-    (signupsSince ? 1 : 0);
+    (signupsSince ? 1 : 0) +
+    (query.trim() ? 1 : 0);
   function clearNewSignupsFilter() {
     setSignupsSince(null);
     router.replace("/dashboard/users");
   }
   function clearAllFilters() {
     if (signupsSince) clearNewSignupsFilter();
+    setQuery("");
     setRoleFilter([]);
     setAreaIds([]);
     setBuildingIds([]);
@@ -482,6 +487,10 @@ export default function UsersPage() {
       }
     }
     if (roleFilter.length > 0 && !roleFilter.includes(r.role)) return false;
+    const q = query.trim().toLowerCase();
+    if (q && ![r.full_name, r.email, r.phone].some((v) => (v ?? "").toLowerCase().includes(q))) {
+      return false;
+    }
     if (!showInactive && !r.is_active) return false;
     if (geoFilterActive && r.role === "shliach" && r.kind === "user") {
       if (!shliachMatchesGeo(r.raw.shliach)) return false;
@@ -1057,6 +1066,16 @@ export default function UsersPage() {
           filters carried over from the standalone Shluchim page (shliach
           coverage only — admin/staff rows are unaffected by them). */}
       <div className="flex flex-wrap items-center gap-2 text-sm">
+        <input
+          type="search"
+          className={`${toolbarSelectClass} min-w-[12rem]`}
+          placeholder={t("users.search", "חיפוש לפי שם / אימייל / טלפון…")}
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setPage(1);
+          }}
+        />
         <MultiSelectFilter
           allLabel={t("filter.all_roles", "כל התפקידים")}
           options={roleOptions}

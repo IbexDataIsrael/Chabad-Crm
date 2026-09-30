@@ -1089,6 +1089,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("filter", "filter.show_all_records", "הצג את כל הרשומות", "Show All Records"),
     ("filter", "filter.all_roles", "כל התפקידים", "All roles"),
     ("users", "users.show_inactive", "הצג משתמשים לא פעילים", "Show inactive users"),
+    ("users", "users.search", "חיפוש לפי שם / אימייל / טלפון…", "Search by name / email / phone…"),
     ("users", "users.role_updated", "התפקיד עודכן", "Role updated"),
     ("users", "users.login_missing", "אין כניסה למערכת", "No system login"),
     # --- fixes44 §4: picklists page surfaces non-select custom fields (e.g.
