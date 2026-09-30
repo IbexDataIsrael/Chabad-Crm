@@ -64,6 +64,20 @@ export function TaskQuickCreateForm({
   const [mode, setMode] = useState<"single" | "per_number">("single");
   const [rangeText, setRangeText] = useState("");
   const [bulkPreview, setBulkPreview] = useState<TaskBulkPreview | null>(null);
+  // fixes75 §2: report_number_id -> campaign_id -> its task, for every
+  // active campaign — numbers already in a task of the chosen campaign show
+  // as selected (and locked) in the report-number picker.
+  const [taskStatusByRn, setTaskStatusByRn] = useState<
+    Record<number, Record<number, { task_id: number }>>
+  >({});
+  const assignedRnIds =
+    campaignId === ""
+      ? []
+      : reportNumbers
+          .filter((rn) => taskStatusByRn[rn.id]?.[campaignId])
+          .map((rn) => rn.id);
+  // A number picked before switching to a campaign where it's taken is dropped.
+  const pickedRnIds = reportNumberIds.filter((id) => !assignedRnIds.includes(id));
 
   const statusLabel = taskStatusLabels(t);
   // fixes74 §2: without an activist the new task is "available", with one it
@@ -84,6 +98,11 @@ export function TaskQuickCreateForm({
     apiFetch<ReportNumber[]>("/api/report-numbers")
       .then(setReportNumbers)
       .catch(() => setReportNumbers([]));
+    apiFetch<Record<number, Record<number, { task_id: number }>>>(
+      "/api/report-numbers/campaign-task-status",
+    )
+      .then(setTaskStatusByRn)
+      .catch(() => setTaskStatusByRn({}));
     // fixes60 §1: only needed when no volunteer was locked in via props.
     if (volunteerUserId === undefined) {
       apiFetch<ActivistOption[]>("/api/users")
@@ -112,7 +131,7 @@ export function TaskQuickCreateForm({
   }
 
   async function previewBulk() {
-    if (reportNumberIds.length === 0 && !rangeText.trim()) {
+    if (pickedRnIds.length === 0 && !rangeText.trim()) {
       setError(t("task.bulk_numbers_required", "יש לבחור מספרי דוח או להקליד טווח"));
       return;
     }
@@ -123,7 +142,7 @@ export function TaskQuickCreateForm({
           method: "POST",
           body: JSON.stringify({
             campaign_id: campaignId,
-            report_number_ids: reportNumberIds,
+            report_number_ids: pickedRnIds,
             range_text: rangeText.trim() || null,
           }),
         }),
@@ -171,7 +190,7 @@ export function TaskQuickCreateForm({
         body: JSON.stringify({
           campaign_id: campaignId,
           volunteer_user_id: selectedVolunteerId === "" ? null : selectedVolunteerId,
-          report_number_ids: reportNumberIds,
+          report_number_ids: pickedRnIds,
           custom_date_value_id: customDateValueId === "" ? null : customDateValueId,
           status: shownStatus,
         }),
@@ -265,10 +284,20 @@ export function TaskQuickCreateForm({
           <MultiSelectSearchFilter
             allLabel={t("contact_shliach.no_report_numbers_selected", "לא נבחרו מספרי דוח")}
             options={reportNumbers.map((rn) => ({ id: rn.id, label: rn.name }))}
-            value={reportNumberIds}
+            value={pickedRnIds}
             onChange={setReportNumberIds}
             searchPlaceholder={t("select.search_ph", "הקלד לחיפוש…")}
+            lockedIds={assignedRnIds}
+            lockedHint={t("task.rn_in_task", "כבר במשימה")}
           />
+          {assignedRnIds.length > 0 && (
+            <span className="block text-xs text-muted-foreground">
+              {t(
+                "task.rn_in_task_hint",
+                "מספרי דוח שכבר שייכים למשימה בקמפיין הזה מסומנים כנבחרים ואינם ניתנים לבחירה שוב.",
+              )}
+            </span>
+          )}
         </label>
 
         {mode === "per_number" && (

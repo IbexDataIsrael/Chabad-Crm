@@ -35,6 +35,8 @@ export function MultiSelectSearchFilter<Id extends number | string>({
   className = "",
   buttonClassName = "",
   remoteSearch,
+  lockedIds,
+  lockedHint,
 }: {
   /** Trigger text while nothing is selected, e.g. "כל הבניינים". */
   allLabel: string;
@@ -57,6 +59,11 @@ export function MultiSelectSearchFilter<Id extends number | string>({
    *  still used as the initial/default page (before the user has typed) and
    *  as a label source for already-selected ids. */
   remoteSearch?: (query: string) => Promise<{ id: Id; label: string }[]>;
+  /** fixes75 §2: options shown checked but not toggleable (e.g. report
+   *  numbers another task already covers). Not part of `value`. */
+  lockedIds?: Id[];
+  /** Short note after a locked option's label, e.g. "(במשימה אחרת)". */
+  lockedHint?: string;
 }) {
   const { t } = useLocalization();
   const [open, setOpen] = useState(false);
@@ -86,14 +93,17 @@ export function MultiSelectSearchFilter<Id extends number | string>({
       : options;
   }, [options, query, remoteSearch, remoteOptions]);
 
+  const locked = useMemo(() => new Set<Id>(lockedIds ?? []), [lockedIds]);
+
   const visible = useMemo(
     () =>
       [...filtered].sort((a, b) => {
-        const aFirst = frozenSelected.has(a.id) ? 0 : 1;
-        const bFirst = frozenSelected.has(b.id) ? 0 : 1;
+        // fixes75 §2: locked (shown-as-selected) options float up too.
+        const aFirst = frozenSelected.has(a.id) || locked.has(a.id) ? 0 : 1;
+        const bFirst = frozenSelected.has(b.id) || locked.has(b.id) ? 0 : 1;
         return aFirst - bFirst;
       }),
-    [filtered, frozenSelected],
+    [filtered, frozenSelected, locked],
   );
 
   useEffect(() => {
@@ -164,18 +174,22 @@ export function MultiSelectSearchFilter<Id extends number | string>({
 
   function selectAllVisible() {
     const merged = new Set<Id>(value);
-    visible.forEach((o) => merged.add(o.id));
+    visible.forEach((o) => {
+      if (!locked.has(o.id)) merged.add(o.id);
+    });
     onChange([...merged]);
   }
 
   const selectedLabel = useMemo(() => {
-    if (value.length === 0) return allLabel;
+    // fixes75 §2: locked options count as selected in the summary too.
+    const shown = [...(lockedIds ?? []), ...value.filter((v) => !locked.has(v))];
+    if (shown.length === 0) return allLabel;
     const selectedText =
-      value.length === 1
-        ? (knownLabels.get(value[0]) ?? options.find((o) => o.id === value[0])?.label ?? allLabel)
-        : t("filter.n_selected", "{n} נבחרו").replace("{n}", String(value.length));
+      shown.length === 1
+        ? (knownLabels.get(shown[0]) ?? options.find((o) => o.id === shown[0])?.label ?? allLabel)
+        : t("filter.n_selected", "{n} נבחרו").replace("{n}", String(shown.length));
     return label ? `${label}: ${selectedText}` : selectedText;
-  }, [value, options, knownLabels, allLabel, label, t]);
+  }, [value, lockedIds, locked, options, knownLabels, allLabel, label, t]);
 
   return (
     <div ref={rootRef} className={`relative inline-block ${className}`}>
@@ -186,7 +200,7 @@ export function MultiSelectSearchFilter<Id extends number | string>({
         aria-controls={open ? listboxId : undefined}
         onClick={() => setOpen((v) => !v)}
         className={`w-full rounded-md border px-3 py-2 text-sm text-start ${
-          value.length > 0
+          value.length > 0 || locked.size > 0
             ? "border-primary text-primary bg-primary/5"
             : "border-input text-foreground hover:bg-accent"
         } ${buttonClassName}`}
@@ -261,17 +275,31 @@ export function MultiSelectSearchFilter<Id extends number | string>({
               </li>
             ) : (
               visible.map((o) => {
-                const checked = value.includes(o.id);
+                const isLocked = locked.has(o.id);
+                const checked = isLocked || value.includes(o.id);
                 return (
-                  <li key={String(o.id)} role="option" aria-selected={checked}>
-                    <label className="flex items-center gap-2 rounded px-2 py-1 cursor-pointer hover:bg-accent">
+                  <li
+                    key={String(o.id)}
+                    role="option"
+                    aria-selected={checked}
+                    aria-disabled={isLocked || undefined}
+                  >
+                    <label
+                      className={`flex items-center gap-2 rounded px-2 py-1 ${
+                        isLocked ? "cursor-not-allowed text-muted-foreground" : "cursor-pointer hover:bg-accent"
+                      }`}
+                    >
                       <input
                         type="checkbox"
                         className="accent-primary"
                         checked={checked}
+                        disabled={isLocked}
                         onChange={() => toggle(o.id)}
                       />
                       <span className="truncate">{o.label}</span>
+                      {isLocked && lockedHint && (
+                        <span className="ms-auto shrink-0 text-xs">{lockedHint}</span>
+                      )}
                     </label>
                   </li>
                 );
