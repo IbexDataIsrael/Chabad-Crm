@@ -5,13 +5,14 @@ instead of sent — the link is printed so you can copy it. HTML templates live 
 the `/HTML` directory (repo `backend/HTML`); `{{placeholders}}` are substituted.
 """
 import html as htmllib
+import json
 import logging
 import re
 import smtplib
 from email.message import EmailMessage
 from email.utils import formataddr, parseaddr
 from pathlib import Path
-from typing import Optional
+from typing import Iterable, Optional
 
 from sqlalchemy.orm import Session
 
@@ -364,14 +365,59 @@ def send_org_approved_user(
     )
 
 
+# fixes81 §3: superadmin-configured extra recipients of the "new organization
+# pending approval" email — a JSON list of addresses in system_settings.
+PENDING_SIGNUP_EMAILS_KEY = "pending_signup_notify_emails"
+
+
+def get_pending_signup_emails(db: Session) -> list[str]:
+    row = (
+        db.query(models.SystemSetting)
+        .filter(models.SystemSetting.key == PENDING_SIGNUP_EMAILS_KEY)
+        .first()
+    )
+    if row is None or not row.value.strip():
+        return []
+    try:
+        value = json.loads(row.value)
+    except ValueError:
+        return []
+    return [e for e in value if isinstance(e, str) and e.strip()] if isinstance(value, list) else []
+
+
+def set_pending_signup_emails(db: Session, emails: list[str]) -> list[str]:
+    """Store a lowercased, de-duplicated list (order kept). Caller commits."""
+    clean: list[str] = []
+    for e in emails:
+        e = e.strip().lower()
+        if e and e not in clean:
+            clean.append(e)
+    row = (
+        db.query(models.SystemSetting)
+        .filter(models.SystemSetting.key == PENDING_SIGNUP_EMAILS_KEY)
+        .first()
+    )
+    if row is None:
+        row = models.SystemSetting(key=PENDING_SIGNUP_EMAILS_KEY)
+        db.add(row)
+    row.value = json.dumps(clean)
+    return clean
+
+
 def send_org_pending_admin(
-    org_id: int, org_name: str, user_name: str, user_email: str
+    org_id: int,
+    org_name: str,
+    user_name: str,
+    user_email: str,
+    extra_recipients: Iterable[str] = (),
 ) -> None:
     """Notify the platform operator + superadmin that a new org awaits approval,
     with a link that opens the system-admin page on that org's approve prompt
-    (login first if needed — the ?redirect deep link keeps the query)."""
+    (login first if needed — the ?redirect deep link keeps the query).
+    fixes81 §3: `extra_recipients` = the superadmin-configured
+    pending_signup_notify_emails list, on top of the env addresses."""
     recipients: list[str] = []
-    for addr in (settings.platform_admin_email, settings.superadmin_email):
+    for addr in (settings.platform_admin_email, settings.superadmin_email, *extra_recipients):
         addr = (addr or "").strip()
         if addr and addr.lower() not in {r.lower() for r in recipients}:
             recipients.append(addr)

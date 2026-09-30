@@ -13,7 +13,12 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.config import settings
-from app.core.email import send_email, send_org_approved_user
+from app.core.email import (
+    get_pending_signup_emails,
+    send_email,
+    send_org_approved_user,
+    set_pending_signup_emails,
+)
 from app.core.org_clone import clone_organization
 from app.core import org_prefs
 from app.core.security import create_access_token, hash_password
@@ -29,6 +34,7 @@ from app.schemas import (
     EmailTemplateUpdate,
     OrgPrefsOut,
     OrgPrefsUpdate,
+    PendingSignupEmails,
     SystemConfigOut,
     SystemConfigUpdate,
     Token,
@@ -620,3 +626,25 @@ def update_system_settings(
     db.commit()
     logger.info("superadmin %s updated system settings", admin.email)
     return get_system_settings(db, admin)
+
+
+@router.get("/pending-signup-emails", response_model=PendingSignupEmails)
+def get_pending_signup_emails_setting(
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_superadmin),
+):
+    """fixes81 §3: who (besides the env addresses) is emailed when a new
+    organization signs up and awaits approval."""
+    return PendingSignupEmails(emails=get_pending_signup_emails(db))
+
+
+@router.put("/pending-signup-emails", response_model=PendingSignupEmails)
+def update_pending_signup_emails_setting(
+    payload: PendingSignupEmails,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_superadmin),
+):
+    emails = set_pending_signup_emails(db, payload.emails)
+    db.commit()
+    logger.info("superadmin %s set pending-signup notify emails (%d)", admin.email, len(emails))
+    return PendingSignupEmails(emails=emails)

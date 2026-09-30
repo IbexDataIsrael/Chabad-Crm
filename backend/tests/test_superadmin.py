@@ -211,3 +211,46 @@ def test_email_templates_list_and_update(client, superadmin_headers):
 
 def test_email_templates_require_superadmin(client, admin_headers):
     assert client.get("/api/admin/email-templates", headers=admin_headers).status_code == 403
+
+
+def test_pending_signup_notify_emails(client, superadmin_headers, admin_headers, monkeypatch):
+    """fixes81 §3: superadmin-configured extra recipients of the new-org
+    pending-approval email, on top of the env addresses (deduplicated)."""
+    from app.config import settings
+
+    url = "/api/admin/pending-signup-emails"
+    assert client.get(url, headers=admin_headers).status_code == 403
+    assert client.get(url, headers=superadmin_headers).json() == {"emails": []}
+    r = client.put(url, json={"emails": ["not-an-email"]}, headers=superadmin_headers)
+    assert r.status_code == 422
+    r = client.put(
+        url,
+        json={"emails": ["A@x.com", "b@x.com", "a@x.com", " "]},
+        headers=superadmin_headers,
+    )
+    assert r.status_code == 200 and r.json() == {"emails": ["a@x.com", "b@x.com"]}
+    assert client.get(url, headers=superadmin_headers).json() == {"emails": ["a@x.com", "b@x.com"]}
+    # Not leaked through the public title config.
+    assert "emails" not in client.get("/api/metadata/system-config").json()
+
+    monkeypatch.setattr(settings, "platform_admin_email", "ops@x.com")
+    monkeypatch.setattr(settings, "superadmin_email", "b@x.com")
+    sent = []
+    monkeypatch.setattr(
+        "app.core.email.send_email",
+        lambda to, subject, body, **kw: sent.append(to),
+    )
+    r = client.post(
+        "/api/auth/signup",
+        json={
+            "organization_name": "Notify Org",
+            "first_name": "א",
+            "last_name": "ב",
+            "email": "owner@x.com",
+            "phone": "050-1234567",
+            "username": "owner1",
+            "password": "pw12345",
+        },
+    )
+    assert r.status_code == 201, r.text
+    assert sorted(to for to in sent if to != "owner@x.com") == ["a@x.com", "b@x.com", "ops@x.com"]

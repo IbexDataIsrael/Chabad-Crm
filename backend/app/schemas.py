@@ -391,6 +391,25 @@ class SystemConfigUpdate(BaseModel):
     fallback_name: Optional[str] = None
 
 
+class PendingSignupEmails(BaseModel):
+    """fixes81 §3: extra recipients of the "new organization pending approval"
+    email. Superadmin-only — kept out of the public SystemConfigOut."""
+
+    emails: list[str]
+
+    @field_validator("emails")
+    @classmethod
+    def _check_emails(cls, v: list[str]) -> list[str]:
+        out = []
+        for e in v:
+            if not e or not e.strip():
+                continue
+            if not _EMAIL_RE.match(e.strip()):
+                raise ValueError(f"Invalid email address: {e}")
+            out.append(e.strip().lower())
+        return out
+
+
 class AdminOrgCreate(BaseModel):
     """Superadmin provisions an org + its (already-verified) admin directly."""
     organization_name: str

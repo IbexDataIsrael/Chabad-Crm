@@ -10,8 +10,10 @@ import {
   Home,
   LayoutDashboard,
   LayoutGrid,
+  Landmark,
   Languages,
   ListChecks,
+  Mail,
   MapPin,
   MessageSquare,
   Receipt,
@@ -21,6 +23,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   UserCog,
+  UserSearch,
   Users,
   Users2,
   type LucideIcon,
@@ -65,6 +68,11 @@ const ICONS: Record<string, LucideIcon> = {
   "/dashboard/localization": Languages,
   "/dashboard/shliach-config": UserCog,
   "/dashboard/settings": Settings,
+  // fixes81 §1: superadmin pages.
+  "/dashboard/admin": Landmark,
+  "/dashboard/admin/users": UserSearch,
+  "/dashboard/admin/email-templates": Mail,
+  "/dashboard/admin/settings": Settings,
 };
 
 // Longest-prefix match, same rule NavMenu used (fixes50 §3.3): a shorter

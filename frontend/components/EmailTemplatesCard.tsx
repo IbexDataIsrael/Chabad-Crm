@@ -33,12 +33,12 @@ const TEMPLATE_PLACEHOLDERS: Record<string, string> = {
 
 /** Superadmin editor for the platform's bilingual email templates. Each row
  * edits subject + Hebrew body + English body; the sent mail combines both. */
-export function EmailTemplatesCard() {
+export function EmailTemplatesCard({ defaultOpen = false }: { defaultOpen?: boolean } = {}) {
   const { t } = useLocalization();
   const { success, error } = useToast();
 
   const [templates, setTemplates] = useState<EmailTemplate[] | null>(null);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [drafts, setDrafts] = useState<Record<string, EmailTemplate>>({});
   const [savingKey, setSavingKey] = useState<string | null>(null);
 

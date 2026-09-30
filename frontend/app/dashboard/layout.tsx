@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { LogOut, Menu, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
@@ -182,7 +181,7 @@ function DashboardChrome({ children }: { children: ReactNode }) {
     { href: "/dashboard/settings", label: t("nav.settings", "הגדרות") },
   ]);
 
-  const groups: SidebarGroup[] = [
+  const orgGroups: SidebarGroup[] = [
     // Ungrouped (no section heading) so the Home icon sits first, above every
     // labeled group — same URL for every role; /dashboard itself renders the
     // right thing per role (admin/staff dashboard, shliach's activist landing
@@ -196,78 +195,75 @@ function DashboardChrome({ children }: { children: ReactNode }) {
     { label: t("nav.group.campaigns", "קמפיינים ומשימות"), items: campaignItems },
     { label: t("nav.group.more", "עוד"), items: moreItems },
   ];
+  // fixes81 §1: the superadmin gets the same sidebar as everyone else, with
+  // the platform-admin pages instead of the org's modules (the superadmin
+  // has no org data of their own).
+  const superadminGroups: SidebarGroup[] = [
+    {
+      label: "",
+      items: [
+        { href: "/dashboard/admin", label: t("admin.nav_orgs", "ארגונים") },
+        { href: "/dashboard/admin/users", label: t("admin.nav_users", "חיפוש משתמשים") },
+        { href: "/dashboard/admin/email-templates", label: t("admin.nav_email_templates", "תבניות מייל") },
+        { href: "/dashboard/admin/settings", label: t("admin.system_settings_title", "הגדרות מערכת") },
+      ],
+    },
+  ];
+  const groups = isSuperadmin ? superadminGroups : orgGroups;
 
   return (
     <div className="min-h-screen bg-background">
       <LabelStyleInjector />
-      {!isSuperadmin && (
-        <Sidebar
-          groups={groups}
-          orgName={orgName}
-          logoUrl={logoUrl}
-          shliachSuffix={isShliach ? t("header.shliach_display_suffix", "תצוגת פעילים") : undefined}
-          open={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
-          desktopCollapsed={desktopCollapsed}
-        />
-      )}
+      <Sidebar
+        groups={groups}
+        orgName={isSuperadmin ? t("admin.title", "ניהול מערכת") : orgName}
+        logoUrl={isSuperadmin ? null : logoUrl}
+        shliachSuffix={isShliach ? t("header.shliach_display_suffix", "תצוגת פעילים") : undefined}
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        desktopCollapsed={desktopCollapsed}
+      />
 
       <div
-        className={
-          !isSuperadmin
-            ? `flex min-h-screen flex-col ${
-                desktopCollapsed
-                  ? isRtl
-                    ? "lg:mr-0"
-                    : "lg:ml-0"
-                  : isRtl
-                    ? "lg:mr-64"
-                    : "lg:ml-64"
-              }`
-            : "flex min-h-screen flex-col"
-        }
+        className={`flex min-h-screen flex-col ${
+          desktopCollapsed
+            ? isRtl
+              ? "lg:mr-0"
+              : "lg:ml-0"
+            : isRtl
+              ? "lg:mr-64"
+              : "lg:ml-64"
+        }`}
       >
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-border bg-background/80 px-4 py-3 backdrop-blur-lg md:px-6">
           <div className="flex items-center gap-2">
-            {!isSuperadmin && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="min-h-[44px] min-w-[44px] lg:hidden"
-                onClick={() => setSidebarOpen(true)}
-              >
-                <Menu className="h-5 w-5" />
-              </Button>
-            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="min-h-[44px] min-w-[44px] lg:hidden"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
             {/* fixes57 §4: desktop-only collapse toggle — the mirror of the
                 mobile hamburger above (lg:hidden), shown only from lg up. */}
-            {!isSuperadmin && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="hidden min-h-[44px] min-w-[44px] lg:flex"
-                onClick={() => setDesktopCollapsed((v) => !v)}
-                title={
-                  desktopCollapsed
-                    ? t("nav.expand_sidebar", "הצג תפריט")
-                    : t("nav.collapse_sidebar", "צמצם תפריט")
-                }
-              >
-                {desktopCollapsed ? (
-                  <PanelRightOpen className="h-5 w-5" />
-                ) : (
-                  <PanelRightClose className="h-5 w-5" />
-                )}
-              </Button>
-            )}
-            {isSuperadmin && (
-              <Link
-                href="/dashboard/admin"
-                className="rounded-md px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
-              >
-                {t("nav.system_admin", "מנהל מערכת")}
-              </Link>
-            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hidden min-h-[44px] min-w-[44px] lg:flex"
+              onClick={() => setDesktopCollapsed((v) => !v)}
+              title={
+                desktopCollapsed
+                  ? t("nav.expand_sidebar", "הצג תפריט")
+                  : t("nav.collapse_sidebar", "צמצם תפריט")
+              }
+            >
+              {desktopCollapsed ? (
+                <PanelRightOpen className="h-5 w-5" />
+              ) : (
+                <PanelRightClose className="h-5 w-5" />
+              )}
+            </Button>
           </div>
 
           {!isSuperadmin && (

@@ -18,11 +18,11 @@ interface SystemConfig {
 
 /** Superadmin editor for the platform title configuration (fixes9 §1):
  *  the <title> template and the fallback org name. */
-export function SystemSettingsCard() {
+export function SystemSettingsCard({ defaultOpen = false }: { defaultOpen?: boolean } = {}) {
   const { t } = useLocalization();
   const { success, error } = useToast();
 
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [config, setConfig] = useState<SystemConfig | null>(null);
   const [saving, setSaving] = useState(false);
 
