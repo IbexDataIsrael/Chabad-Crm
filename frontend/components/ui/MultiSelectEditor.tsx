@@ -47,9 +47,11 @@ export function MultiSelectEditor({
           e.preventDefault();
           onApply();
         }}
-        // relative z-50: higher than the picker's own open-dropdown panel
-        // (position:absolute z-30), which renders in this same spot.
-        className="relative z-50 w-full rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium hover:bg-primary/90"
+        // fixes76: deliberately NOT positioned/z-indexed — the picker's open
+        // panel (absolute z-40) must paint over this button, not under it
+        // (the old `relative z-50` made the button cover the list). Close the
+        // panel (click outside / Esc) to reach the button.
+        className="w-full rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium hover:bg-primary/90"
       >
         ✓ {t("action.save", "שמור")}
       </button>

@@ -546,6 +546,7 @@ export function ContactForm({
             <div className="sm:col-span-2">
               <Field label={t("contact_shliach.areas", "אזורים באחריות הפעיל")}>
                 <AreaMultiSelect
+                  className="w-full"
                   value={values.shliach.area_ids}
                   onChange={(ids) => setShliach("area_ids", ids)}
                 />

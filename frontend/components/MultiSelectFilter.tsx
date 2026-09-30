@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { useLocalization } from "@/lib/localization";
 
+import { useKeepInViewport } from "./ui/useKeepInViewport";
+
 /**
  * Generic multi-select dropdown filter (fixes15 §4.1/§5.1/§7.1): a compact
  * button showing the selection summary that opens a checkbox list. An empty
@@ -16,6 +18,7 @@ export function MultiSelectFilter<Id extends number | string>({
   options,
   value,
   onChange,
+  className = "",
 }: {
   /** Button text while nothing is selected, e.g. "כל האזורים". */
   allLabel: string;
@@ -28,11 +31,14 @@ export function MultiSelectFilter<Id extends number | string>({
   options: { id: Id; label: string }[];
   value: Id[];
   onChange: (ids: Id[]) => void;
+  /** fixes76: extra root classes, e.g. "w-full" inside a form. */
+  className?: string;
 }) {
   const { t } = useLocalization();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   // fixes62 (follow-up): selected items float to the top, but only settle
   // there between dropdown sessions — the sort order is snapshotted the
   // moment the dropdown opens and held fixed while it stays open, so
@@ -53,6 +59,8 @@ export function MultiSelectFilter<Id extends number | string>({
     const bFirst = frozenSelected.has(b.id) ? 0 : 1;
     return aFirst - bFirst;
   });
+
+  useKeepInViewport(panelRef, open);
 
   useEffect(() => {
     if (open) setFrozenSelected(new Set(value));
@@ -84,20 +92,38 @@ export function MultiSelectFilter<Id extends number | string>({
     value.length === 0 ? allLabel : label ? `${label}: ${selectedText}` : selectedText;
 
   return (
-    <div ref={rootRef} className="relative inline-block">
+    <div ref={rootRef} className={`relative inline-block max-w-full ${className}`}
+      // fixes76: Esc while open closes only the panel — handled on the root
+      // (not the panel) since focus may still be on the trigger, and stopped
+      // so an enclosing InlineEdit doesn't treat it as "cancel the edit".
+      onKeyDown={(e) => {
+        if (open && e.key === "Escape") {
+          e.stopPropagation();
+          setOpen(false);
+        }
+      }}
+    >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`rounded-md border px-3 py-2 text-sm ${
+        className={`flex w-full max-w-full items-center justify-between gap-1 rounded-md border px-3 py-2 text-sm text-start ${
           value.length > 0
             ? "border-primary text-primary bg-primary/5"
             : "border-input text-foreground hover:bg-accent"
         }`}
       >
-        {summary} <span className="text-xs">▾</span>
+        <span className="min-w-0 truncate" title={summary}>{summary}</span>
+        <span className="shrink-0 text-xs">▾</span>
       </button>
       {open && (
-        <div className="absolute z-30 mt-1 min-w-[12rem] max-h-64 overflow-y-auto rounded-xl border border-border bg-card shadow-lg p-2 space-y-1 text-sm">
+        // fixes76: same anchoring/width/stacking contract as
+        // MultiSelectSearchFilter's panel — trigger width (min 12rem, max
+        // screen), start-anchored right under the trigger, z-40 over
+        // MultiSelectEditor's Save button; Esc closes only the panel.
+        <div
+          ref={panelRef}
+          className="absolute start-0 top-full z-40 mt-1 w-full min-w-[min(12rem,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] max-h-64 overflow-y-auto rounded-xl border border-border bg-card shadow-lg p-2 space-y-1 text-sm"
+        >
           {searchable && (
             <input
               className="w-full rounded-md border border-input px-2 py-1.5 focus:border-primary focus:outline-none"
@@ -120,11 +146,11 @@ export function MultiSelectFilter<Id extends number | string>({
               >
                 <input
                   type="checkbox"
-                  className="accent-primary"
+                  className="shrink-0 accent-primary"
                   checked={value.includes(o.id)}
                   onChange={() => toggle(o.id)}
                 />
-                {o.label}
+                <span className="min-w-0 truncate" title={o.label}>{o.label}</span>
               </label>
             ))
           )}

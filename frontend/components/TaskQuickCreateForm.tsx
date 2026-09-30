@@ -282,6 +282,7 @@ export function TaskQuickCreateForm({
         <label className="block space-y-1">
           <span className="block text-sm font-medium">{t("task.report_numbers", "מספרי דוח")}</span>
           <MultiSelectSearchFilter
+            className="w-full"
             allLabel={t("contact_shliach.no_report_numbers_selected", "לא נבחרו מספרי דוח")}
             options={reportNumbers.map((rn) => ({ id: rn.id, label: rn.name }))}
             value={pickedRnIds}

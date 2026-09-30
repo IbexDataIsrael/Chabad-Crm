@@ -302,6 +302,7 @@ export function ApartmentEditor({
             </span>
             {/* fixes51 §2.2: multi-select (was a single PicklistSelect). */}
             <MultiSelectFilter
+              className="w-full"
               allLabel={t("filter.all_languages", "כל השפות")}
               options={languagePicklist.options.map((o) => ({
                 id: o.value,

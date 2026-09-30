@@ -20,12 +20,15 @@ export function AreaMultiSelect({
   value,
   onChange,
   excludeContactId,
+  className,
 }: {
   value: number[];
   onChange: (ids: number[]) => void;
   /** The shliach contact being edited — its own existing coverage never
    *  counts as a conflict with itself. */
   excludeContactId?: number;
+  /** Passed to the picker root, e.g. "w-full" inside a form. */
+  className?: string;
 }) {
   const { t } = useLocalization();
   const confirmDialog = useConfirm();
@@ -61,6 +64,7 @@ export function AreaMultiSelect({
 
   return (
     <MultiSelectSearchFilter
+      className={className}
       allLabel={t("contact_shliach.no_areas_selected", "לא נבחרו אזורים")}
       options={areas.map((a) => ({ id: a.id, label: a.area_name }))}
       value={value}

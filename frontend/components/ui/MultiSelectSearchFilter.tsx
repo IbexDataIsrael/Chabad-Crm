@@ -4,6 +4,8 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { useLocalization } from "@/lib/localization";
 
+import { useKeepInViewport } from "./useKeepInViewport";
+
 /**
  * MultiSelectSearchFilter (fixes23 §1) — a reusable filter that combines a
  * multi-select checkbox list with an always-present text search box, so it
@@ -83,6 +85,8 @@ export function MultiSelectSearchFilter<Id extends number | string>({
   const [frozenSelected, setFrozenSelected] = useState<Set<Id>>(new Set());
   const rootRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  useKeepInViewport(panelRef, open);
   const listboxId = useId();
 
   const filtered = useMemo(() => {
@@ -192,28 +196,41 @@ export function MultiSelectSearchFilter<Id extends number | string>({
   }, [value, lockedIds, locked, options, knownLabels, allLabel, label, t]);
 
   return (
-    <div ref={rootRef} className={`relative inline-block ${className}`}>
+    <div ref={rootRef} className={`relative inline-block max-w-full ${className}`}
+      // fixes76: Esc while open closes only the panel — handled on the root
+      // (not the panel) since focus may still be on the trigger, and stopped
+      // so an enclosing InlineEdit doesn't treat it as "cancel the edit".
+      onKeyDown={(e) => {
+        if (open && e.key === "Escape") {
+          e.stopPropagation();
+          setOpen(false);
+        }
+      }}
+    >
       <button
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}
         onClick={() => setOpen((v) => !v)}
-        className={`w-full rounded-md border px-3 py-2 text-sm text-start ${
+        className={`flex w-full items-center justify-between gap-1 rounded-md border px-3 py-2 text-sm text-start ${
           value.length > 0 || locked.size > 0
             ? "border-primary text-primary bg-primary/5"
             : "border-input text-foreground hover:bg-accent"
         } ${buttonClassName}`}
       >
-        <span className="truncate">{selectedLabel}</span>{" "}
-        <span className="text-xs">▾</span>
+        <span className="min-w-0 truncate" title={selectedLabel}>{selectedLabel}</span>
+        <span className="shrink-0 text-xs">▾</span>
       </button>
       {open && (
+        // fixes76: same width as the trigger (never below 14rem, never wider
+        // than the screen), anchored to its start edge right under it, and
+        // z-40 so it paints over MultiSelectEditor's Save button and sticky
+        // headers. Without the width/anchor the longest label stretched the
+        // panel and, in RTL, it grew leftward off-screen.
         <div
-          className="absolute z-30 mt-1 min-w-[14rem] rounded-xl border border-border bg-card shadow-lg p-2 text-sm"
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setOpen(false);
-          }}
+          ref={panelRef}
+          className="absolute start-0 top-full z-40 mt-1 w-full min-w-[min(14rem,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] rounded-xl border border-border bg-card shadow-lg p-2 text-sm"
         >
           <input
             ref={searchRef}
@@ -291,12 +308,12 @@ export function MultiSelectSearchFilter<Id extends number | string>({
                     >
                       <input
                         type="checkbox"
-                        className="accent-primary"
+                        className="shrink-0 accent-primary"
                         checked={checked}
                         disabled={isLocked}
                         onChange={() => toggle(o.id)}
                       />
-                      <span className="truncate">{o.label}</span>
+                      <span className="min-w-0 truncate" title={o.label}>{o.label}</span>
                       {isLocked && lockedHint && (
                         <span className="ms-auto shrink-0 text-xs">{lockedHint}</span>
                       )}
