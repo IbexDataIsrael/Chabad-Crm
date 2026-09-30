@@ -280,16 +280,29 @@ export default function UserDetailPage() {
           <div className="flex flex-col">
             <dt className="text-xs text-muted-foreground">{t("users.login_status", "סטטוס כניסה")}</dt>
             <dd className="text-sm">
-              <label className="flex items-center gap-1.5">
+              {/* inline-flex, not flex: a block-level label made the whole
+                  column width an invisible "suspend login" click target right
+                  under the name field — clicking away from a name edit
+                  silently suspended the user (and hid them from the grid). */}
+              <label className="inline-flex w-fit items-center gap-1.5 cursor-pointer">
                 <input
                   type="checkbox"
                   disabled={isSelf}
                   checked={user.is_active}
-                  onChange={(e) =>
-                    patchUser({ is_active: e.target.checked }).catch((err) =>
-                      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה")),
+                  onChange={async (e) => {
+                    const active = e.target.checked;
+                    if (
+                      !active &&
+                      !(await confirmDialog({
+                        message: t("users.suspend_confirm", "להשעות את הכניסה למערכת של המשתמש?"),
+                        detail: user.full_name,
+                      }))
                     )
-                  }
+                      return;
+                    patchUser({ is_active: active }).catch((err) =>
+                      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה")),
+                    );
+                  }}
                 />
                 {user.is_active
                   ? t("admin.active", "פעיל")

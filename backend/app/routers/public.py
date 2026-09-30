@@ -354,11 +354,10 @@ def register_google(
     if not email:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Google account has no email")
     org, task, source = _resolve_registration_target(db, payload.org_slug, payload.claim_token)
-    full_name = " ".join((info.get("name") or email.split("@")[0]).split())
     user = _create_activist(
         db,
         org,
-        full_name=full_name,
+        full_name=payload.full_name,
         email=email,
         phone=payload.phone,
         password=None,

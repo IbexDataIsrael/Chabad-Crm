@@ -1957,9 +1957,20 @@ class PublicRegisterRequest(BaseModel):
 
 class PublicGoogleRegisterRequest(BaseModel):
     credential: str
+    # The name typed in the signup form — required, same as the password
+    # path. The Google profile name identifies the Google account, not what
+    # the activist asked to be called.
+    full_name: str
     phone: Optional[str] = None
     org_slug: Optional[str] = None
     claim_token: Optional[str] = None
+
+    @field_validator("full_name")
+    @classmethod
+    def _check_name(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Full name is required")
+        return " ".join(v.split())
 
 
 class PublicRegisterResponse(BaseModel):

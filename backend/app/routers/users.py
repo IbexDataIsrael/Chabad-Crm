@@ -331,6 +331,11 @@ def update_user(
     if "full_name" in data:
         full_name = data.pop("full_name")
         user.full_name = full_name
+        # Keep the split copy in step too — otherwise a self-registered
+        # activist's Google name lingers in welcome-mail {{first_name}} and
+        # the global search after an admin renames them.
+        user.first_name, _, last = full_name.partition(" ")
+        user.last_name = last or None
         # GET /api/auth/me's display_name (dashboard header, activist landing
         # greeting) is resolved from Contact.name/last_name, not from this
         # User row (see auth._resolve_display_name) — without this, renaming

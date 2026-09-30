@@ -149,9 +149,30 @@ export function ActivistRegisterForm({
     setError("");
     setBusy(true);
     try {
+      // The typed name is required for Google too — the account used to be
+      // created under the Google profile name, ignoring this form. With the
+      // name blank this can only be a returning user, so just try signing in.
+      if (!fullName.trim()) {
+        if (organizationId != null) {
+          try {
+            await signInWithGoogle(credential, organizationId);
+            await onSignedIn?.();
+            return;
+          } catch {
+            // Not registered yet — fall through to the name-required prompt.
+          }
+        }
+        setError(t("public.full_name_required", "יש למלא שם מלא."));
+        return;
+      }
       const res = await apiFetch<PublicRegisterResponse>("/api/public/register-google", {
         method: "POST",
-        body: JSON.stringify({ credential, phone: phone.trim() || null, ...target }),
+        body: JSON.stringify({
+          credential,
+          full_name: fullName.trim(),
+          phone: phone.trim() || null,
+          ...target,
+        }),
       });
       await finish(res);
     } catch (err) {
@@ -177,7 +198,7 @@ export function ActivistRegisterForm({
 
   return (
     <form onSubmit={submit} className="space-y-4" noValidate>
-      <PublicField label={t("public.full_name", "שם מלא")}>
+      <PublicField label={`${t("public.full_name", "שם מלא")} *`}>
         <input
           className={publicInputClass}
           value={fullName}

@@ -166,6 +166,46 @@ def test_public_registration_creates_activist(client, admin_headers, public_org,
     assert r.status_code == 409
 
 
+def test_google_registration_uses_typed_name(client, public_org, monkeypatch):
+    """The account takes the name typed in the form, not the Google profile
+    name — and the typed name is required."""
+    from app.routers import public as public_router
+
+    monkeypatch.setattr(
+        public_router,
+        "verify_google_token",
+        lambda cred: {"email": "g.user@gmail.com", "name": "Google Profile Name", "sub": "g-123"},
+    )
+    r = client.post(
+        "/api/public/register-google",
+        json={"credential": "x", "full_name": "  ", "org_slug": "test-org"},
+    )
+    assert r.status_code == 422
+    r = client.post("/api/public/register-google", json={"credential": "x", "org_slug": "test-org"})
+    assert r.status_code == 422
+    r = client.post(
+        "/api/public/register-google",
+        json={"credential": "x", "full_name": "דוד  לוי", "org_slug": "test-org"},
+    )
+    assert r.status_code == 201, r.text
+    me = _me(client, _bearer(r.json()["access_token"]))
+    assert me["full_name"] == "דוד לוי"
+
+
+def test_admin_rename_updates_split_name(client, admin_headers, public_org, db_session):
+    r = client.post(
+        "/api/public/register",
+        json={"full_name": "old name", "email": "rn@example.com", "password": "Passw0rd1", "org_slug": "test-org"},
+    )
+    uid = _me(client, _bearer(r.json()["access_token"]))["id"]
+    r = client.put(f"/api/users/{uid}", json={"full_name": "שם חדש לגמרי"}, headers=admin_headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["is_active"] is True
+    user = db_session.get(models.User, uid)
+    db_session.refresh(user)
+    assert (user.first_name, user.last_name) == ("שם", "חדש לגמרי")
+
+
 def test_registration_requires_email_and_strong_password(client, public_org):
     r = client.post(
         "/api/public/register",

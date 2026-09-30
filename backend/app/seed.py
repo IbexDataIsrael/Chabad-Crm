@@ -917,6 +917,10 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("users", "users.login_suspended", "הכניסה למערכת הושעתה", "System access is suspended"),
     # fixes54 §1: is_active toggle on the user detail page.
     ("users", "users.login_status", "סטטוס כניסה", "Login status"),
+    ("users", "users.suspend_confirm", "להשעות את הכניסה למערכת של המשתמש?", "Suspend this user's system access?"),
+    ("users", "users.email_exists", "כבר קיים משתמש עם אימייל זה.", "A user with this email already exists."),
+    ("users", "users.email_exists_suspended", "כבר קיים משתמש עם אימייל זה, והכניסה שלו מושעית.", "A user with this email already exists, and their access is suspended."),
+    ("users", "users.open_existing", "פתח את המשתמש הקיים", "Open the existing user"),
     ("users", "users.recreate_user", "צור משתמש מחדש", "Re-create user"),
     ("users", "users.user_recreated", "המשתמש נוצר מחדש", "The user was re-created"),
     # --- fixes27: visit-level contact filters + visit-field visibility ---

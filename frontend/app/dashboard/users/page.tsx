@@ -978,6 +978,7 @@ export default function UsersPage() {
 
       {adding && (
         <UserForm
+          existingUsers={orgUsers}
           onClose={() => setAdding(false)}
           onSaved={async () => {
             setAdding(false);
@@ -1466,9 +1467,11 @@ export default function UsersPage() {
  *  (dashboard/users/{id}), the same split Contacts has between its list
  *  page and dashboard/contacts/{id}. */
 function UserForm({
+  existingUsers,
   onClose,
   onSaved,
 }: {
+  existingUsers: OrgUser[];
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
@@ -1484,10 +1487,27 @@ function UserForm({
   const [isManual, setIsManual] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // A suspended user is hidden from the grid by default, so a bare "Email
+  // already registered" left the admin with no way to find the account.
+  const [existing, setExisting] = useState<OrgUser | null>(null);
 
   async function save(e: FormEvent) {
     e.preventDefault();
     setError("");
+    setExisting(null);
+    const typed = email.trim().toLowerCase();
+    const dup = typed
+      ? existingUsers.find((u) => (u.email ?? "").toLowerCase() === typed)
+      : undefined;
+    if (dup) {
+      setExisting(dup);
+      setError(
+        dup.is_active
+          ? t("users.email_exists", "כבר קיים משתמש עם אימייל זה.")
+          : t("users.email_exists_suspended", "כבר קיים משתמש עם אימייל זה, והכניסה שלו מושעית."),
+      );
+      return;
+    }
     if (!emailValid) {
       setError(t("msg.invalid_email", "כתובת אימייל לא תקינה"));
       return;
@@ -1588,7 +1608,16 @@ function UserForm({
           </span>
         </label>
       </div>
-      {error && <p className="text-sm text-status-darkred">{error}</p>}
+      {error && (
+        <p className="text-sm text-status-darkred">
+          {error}{" "}
+          {existing && (
+            <Link href={`/dashboard/users/${existing.id}`} className="text-primary underline">
+              {t("users.open_existing", "פתח את המשתמש הקיים")}
+            </Link>
+          )}
+        </p>
+      )}
       <div className="flex items-center gap-2">
         <Button type="submit" disabled={busy}>
           {busy ? t("action.saving", "שומר…") : t("action.save", "שמור")}
