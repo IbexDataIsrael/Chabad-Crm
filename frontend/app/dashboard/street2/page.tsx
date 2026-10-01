@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Check, Lock, MapPin, Pencil } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Check, Lock, MapPin } from "lucide-react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import BuildingCelebration from "@/components/BuildingCelebration";
 import { ActivistActivityPanel, ActivistPicker } from "@/components/street/ActivistActivityPanel";
@@ -154,6 +154,9 @@ export default function Street2Page() {
   const [customDraft, setCustomDraft] = useState<string | number | boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState("");
+  // fixes88: autosave — a field tapped while another one is still saving
+  // opens as soon as that save lands (on the new apartment version).
+  const pendingEditRef = useRef<string | null>(null);
 
   const [celebration, setCelebration] = useState<{ open: boolean; label: string }>({
     open: false,
@@ -474,18 +477,27 @@ export default function Street2Page() {
 
   const openApt = items.find((a) => a.id === openId) ?? null;
 
-  function beginEdit(field: string) {
-    if (!openApt) return;
+  // fixes88: every field opens by a tap on its row (no pencil) and saves
+  // itself (no Save/Cancel) — see EditableRow / PicklistRow.
+  function startEdit(apt: ApartmentListItem, field: string) {
     setSaveErr("");
     setEditingField(field);
     if (field === "name" || field === "phone" || field === "email" || field === "apartment_notes") {
-      setTextDraft((openApt[field as TextField] as string | null) ?? "");
+      setTextDraft((apt[field as TextField] as string | null) ?? "");
     } else if (field === "language") {
-      setChipDraft(openApt.language ?? []);
-    } else if (field === "jewish_status" || field === "campaign_status" || field === "mezuzah_status") {
-      const v = openApt[field as PicklistField];
-      setChipDraft(v ? [v] : []);
+      setChipDraft(apt.language ?? []);
+    } else if (field.startsWith(CUSTOM_FIELD_PREFIX)) {
+      setCustomDraft(apt.custom_field_values?.[field.slice(CUSTOM_FIELD_PREFIX.length)] ?? null);
     }
+  }
+
+  function beginEdit(field: string) {
+    if (!openApt) return;
+    if (saving) {
+      pendingEditRef.current = field;
+      return;
+    }
+    startEdit(openApt, field);
   }
 
   function toggleChip(value: string, multi: boolean) {
@@ -497,8 +509,8 @@ export default function Street2Page() {
     });
   }
 
-  async function commitPatch(patch: Record<string, unknown>) {
-    if (!openApt) return;
+  async function commitPatch(patch: Record<string, unknown>, field: string) {
+    if (!openApt || saving) return;
     const buildingId = openApt.building_id;
     // fixes71 §C.4: building-level before/after (not a single-apartment
     // "was this door done" flag) — correctly avoids a refire if a
@@ -572,16 +584,33 @@ export default function Street2Page() {
         return next;
       });
       setOpenId(merged.id);
-      setEditingField(null);
+      setEditingField((cur) => (cur === field ? null : cur));
+      const queued = pendingEditRef.current;
+      pendingEditRef.current = null;
+      if (queued) startEdit(merged, queued);
     } catch (err) {
+      pendingEditRef.current = null;
       setSaveErr(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
     } finally {
       setSaving(false);
     }
   }
 
+  // fixes88: autosave only on a real change — every PUT makes a new
+  // apartment version and counts the door as done, so leaving a field
+  // untouched must never save.
+  function closeEdit(field: string) {
+    setSaveErr("");
+    setEditingField((cur) => (cur === field ? null : cur));
+  }
+
   function saveText(field: TextField) {
+    if (!openApt) return;
     const v = textDraft.trim();
+    if (v === ((openApt[field] as string | null) ?? "").trim()) {
+      closeEdit(field);
+      return;
+    }
     if (field === "phone" && v !== "" && !isValidPhone(v)) {
       setSaveErr(t("validation.phone_hint", PHONE_HINT));
       return;
@@ -590,15 +619,26 @@ export default function Street2Page() {
       setSaveErr(t("validation.email_hint", EMAIL_HINT));
       return;
     }
-    commitPatch({ [field]: v === "" ? null : v });
+    commitPatch({ [field]: v === "" ? null : v }, field);
   }
 
-  function saveSinglePicklist(field: PicklistField) {
-    commitPatch({ [field]: chipDraft[0] ?? null });
+  function saveSinglePicklist(field: PicklistField, value: string | null) {
+    if (!openApt) return;
+    if ((openApt[field] ?? null) === value) {
+      closeEdit(field);
+      return;
+    }
+    commitPatch({ [field]: value }, field);
   }
 
   function saveLanguage() {
-    commitPatch({ language: chipDraft });
+    if (!openApt) return;
+    const before = [...(openApt.language ?? [])].sort().join("|");
+    if ([...chipDraft].sort().join("|") === before) {
+      closeEdit("language");
+      return;
+    }
+    commitPatch({ language: chipDraft }, "language");
   }
 
   const doorStateLabel = {
@@ -836,7 +876,7 @@ export default function Street2Page() {
                   locked={fieldLocked(TEXT_FIELD_LOCK_KEY.name)}
                   editingField={editingField}
                   onBeginEdit={beginEdit}
-                  onCancel={() => setEditingField(null)}
+                  onCancel={() => closeEdit("name")}
                   onSave={() => saveText("name")}
                   saving={saving}
                   saveErr={saveErr}
@@ -859,14 +899,19 @@ export default function Street2Page() {
                   locked={fieldLocked(TEXT_FIELD_LOCK_KEY.phone)}
                   editingField={editingField}
                   onBeginEdit={beginEdit}
-                  onCancel={() => setEditingField(null)}
+                  onCancel={() => closeEdit("phone")}
                   onSave={() => saveText("phone")}
                   saving={saving}
                   saveErr={saveErr}
                   t={t}
                   display={
                     openApt.phone ? (
-                      <a href={`tel:${openApt.phone}`} dir="ltr" className={styles.rowLink}>
+                      <a
+                        href={`tel:${openApt.phone}`}
+                        dir="ltr"
+                        className={styles.rowLink}
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         {openApt.phone}
                       </a>
                     ) : (
@@ -891,14 +936,19 @@ export default function Street2Page() {
                   locked={fieldLocked(TEXT_FIELD_LOCK_KEY.email)}
                   editingField={editingField}
                   onBeginEdit={beginEdit}
-                  onCancel={() => setEditingField(null)}
+                  onCancel={() => closeEdit("email")}
                   onSave={() => saveText("email")}
                   saving={saving}
                   saveErr={saveErr}
                   t={t}
                   display={
                     openApt.email ? (
-                      <a href={`mailto:${openApt.email}`} dir="ltr" className={styles.rowLink}>
+                      <a
+                        href={`mailto:${openApt.email}`}
+                        dir="ltr"
+                        className={styles.rowLink}
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         {openApt.email}
                       </a>
                     ) : (
@@ -924,8 +974,8 @@ export default function Street2Page() {
                   locked={fieldLocked("jewish_status")}
                   editingField={editingField}
                   onBeginEdit={beginEdit}
-                  onCancel={() => setEditingField(null)}
-                  onSave={() => saveSinglePicklist("jewish_status")}
+                  onCancel={() => closeEdit("jewish_status")}
+                  onPick={(v) => saveSinglePicklist("jewish_status", v)}
                   saving={saving}
                   saveErr={saveErr}
                   t={t}
@@ -944,8 +994,8 @@ export default function Street2Page() {
                   locked={fieldLocked("campaign_status")}
                   editingField={editingField}
                   onBeginEdit={beginEdit}
-                  onCancel={() => setEditingField(null)}
-                  onSave={() => saveSinglePicklist("campaign_status")}
+                  onCancel={() => closeEdit("campaign_status")}
+                  onPick={(v) => saveSinglePicklist("campaign_status", v)}
                   saving={saving}
                   saveErr={saveErr}
                   t={t}
@@ -964,8 +1014,8 @@ export default function Street2Page() {
                   locked={fieldLocked("mezuzah_status")}
                   editingField={editingField}
                   onBeginEdit={beginEdit}
-                  onCancel={() => setEditingField(null)}
-                  onSave={() => saveSinglePicklist("mezuzah_status")}
+                  onCancel={() => closeEdit("mezuzah_status")}
+                  onPick={(v) => saveSinglePicklist("mezuzah_status", v)}
                   saving={saving}
                   saveErr={saveErr}
                   t={t}
@@ -984,8 +1034,9 @@ export default function Street2Page() {
                   locked={fieldLocked("language")}
                   editingField={editingField}
                   onBeginEdit={beginEdit}
-                  onCancel={() => setEditingField(null)}
+                  onCancel={() => closeEdit("language")}
                   onSave={saveLanguage}
+                  multi
                   saving={saving}
                   saveErr={saveErr}
                   t={t}
@@ -1011,56 +1062,23 @@ export default function Street2Page() {
               )],
 
               [FIELD_KEY.apartment_notes, campaignVisible(FIELD_KEY.apartment_notes) && (
-                <div className={`${styles.row} ${styles.rowTop}`}>
-                  <div className={styles.lbl}>{t("apartments.apartment_notes", "הערות")}</div>
-                  {editingField === "apartment_notes" ? (
-                    <div className={styles.editbox}>
-                      <textarea
-                        value={textDraft}
-                        onChange={(e) => setTextDraft(e.target.value)}
-                      />
-                      <div className={styles.editActions}>
-                        <button
-                          type="button"
-                          className={styles.saveBtn}
-                          disabled={saving}
-                          onClick={() => saveText("apartment_notes")}
-                        >
-                          {t("action.save", "שמור")}
-                        </button>
-                        <button
-                          type="button"
-                          className={styles.cancelBtn}
-                          disabled={saving}
-                          onClick={() => setEditingField(null)}
-                        >
-                          {t("action.cancel", "ביטול")}
-                        </button>
-                      </div>
-                      {saveErr && <div className={styles.editErr}>{saveErr}</div>}
-                    </div>
-                  ) : (
-                    <>
-                      <div
-                        className={`${styles.notesCard} ${styles.val} ${
-                          openApt.apartment_notes ? "" : styles.valEmpty
-                        }`}
-                      >
-                        {openApt.apartment_notes || "—"}
-                      </div>
-                      {!fieldLocked(TEXT_FIELD_LOCK_KEY.apartment_notes) && (
-                        <button
-                          type="button"
-                          className={styles.act}
-                          onClick={() => beginEdit("apartment_notes")}
-                          title={t("action.edit", "ערוך")}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
+                <EditableRow
+                  label={t("apartments.apartment_notes", "הערות")}
+                  field="apartment_notes"
+                  top
+                  multiline
+                  locked={fieldLocked(TEXT_FIELD_LOCK_KEY.apartment_notes)}
+                  editingField={editingField}
+                  onBeginEdit={beginEdit}
+                  onCancel={() => closeEdit("apartment_notes")}
+                  onSave={() => saveText("apartment_notes")}
+                  saving={saving}
+                  saveErr={saveErr}
+                  t={t}
+                  display={<div className={styles.notesCard}>{openApt.apartment_notes || "—"}</div>}
+                  empty={!openApt.apartment_notes}
+                  editor={<textarea value={textDraft} onChange={(e) => setTextDraft(e.target.value)} />}
+                />
               )],
 
               /* fixes71 §C.5/§C.6: every remaining apartment field (custom
@@ -1082,16 +1100,15 @@ export default function Street2Page() {
                           field={d.field_key}
                           locked={fieldLocked(d.field_key)}
                           editingField={editingField}
-                          onBeginEdit={(f) => {
-                            setSaveErr("");
-                            const v = openApt.picklist_values?.[d.field_key];
-                            setChipDraft(v ? [v] : []);
-                            setEditingField(f);
+                          onBeginEdit={beginEdit}
+                          onCancel={() => closeEdit(d.field_key)}
+                          onPick={(v) => {
+                            if ((openApt.picklist_values?.[d.field_key] ?? null) === v) {
+                              closeEdit(d.field_key);
+                              return;
+                            }
+                            commitPatch({ picklist_values: { [d.field_key]: v } }, d.field_key);
                           }}
-                          onCancel={() => setEditingField(null)}
-                          onSave={() =>
-                            commitPatch({ picklist_values: { [d.field_key]: chipDraft[0] ?? null } })
-                          }
                           saving={saving}
                           saveErr={saveErr}
                           t={t}
@@ -1120,15 +1137,16 @@ export default function Street2Page() {
                             field={key}
                             locked={fieldLocked(key)}
                             editingField={editingField}
-                            onBeginEdit={(f) => {
-                              setSaveErr("");
-                              setCustomDraft(value);
-                              setEditingField(f);
+                            onBeginEdit={beginEdit}
+                            onCancel={() => closeEdit(key)}
+                            onSave={() => {
+                              const norm = (x: unknown) => (x === "" || x === undefined ? null : x);
+                              if (norm(customDraft) === norm(value)) {
+                                closeEdit(key);
+                                return;
+                              }
+                              commitPatch({ custom_field_values: { [d.field_key]: customDraft } }, key);
                             }}
-                            onCancel={() => setEditingField(null)}
-                            onSave={() =>
-                              commitPatch({ custom_field_values: { [d.field_key]: customDraft } })
-                            }
                             saving={saving}
                             saveErr={saveErr}
                             t={t}
@@ -1266,6 +1284,9 @@ export default function Street2Page() {
   );
 }
 
+/** fixes88: the custom-field edit key prefix (matches shliach-config locks). */
+const CUSTOM_FIELD_PREFIX = "customfield.apartment.";
+
 interface EditableRowProps {
   label: string;
   field: string;
@@ -1280,8 +1301,15 @@ interface EditableRowProps {
   display: ReactNode;
   empty: boolean;
   editor: ReactNode;
+  /** Top-align label + value (notes). */
+  top?: boolean;
+  /** Enter adds a line instead of saving (textarea). */
+  multiline?: boolean;
 }
 
+/** fixes88: tap the row to edit — no pencil, no Save/Cancel. The value saves
+ *  when focus leaves the field (or Enter on a single-line field); Esc drops
+ *  the change. Locked fields keep their lock and never open. */
 function EditableRow({
   label,
   field,
@@ -1296,42 +1324,74 @@ function EditableRow({
   display,
   empty,
   editor,
+  top,
+  multiline,
 }: EditableRowProps) {
   const isEditing = editingField === field;
-  return (
-    <div className={styles.row}>
-      <div className={styles.lbl}>{label}</div>
-      {isEditing ? (
-        <div className={styles.editbox}>
+  const boxRef = useRef<HTMLDivElement>(null);
+  // Esc unmounts the editor; a blur that follows must not save the draft.
+  const cancelledRef = useRef(false);
+
+  useEffect(() => {
+    if (!isEditing) return;
+    cancelledRef.current = false;
+    const el = boxRef.current?.querySelector<HTMLElement>("input, textarea, select, button");
+    el?.focus();
+  }, [isEditing]);
+
+  const rowClass = `${styles.row} ${top ? styles.rowTop : ""}`;
+  if (isEditing) {
+    return (
+      <div className={rowClass}>
+        <div className={styles.lbl}>{label}</div>
+        <div
+          ref={boxRef}
+          className={styles.editbox}
+          onBlur={(e) => {
+            if (cancelledRef.current) return;
+            if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+            onSave();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              cancelledRef.current = true;
+              onCancel();
+            } else if (e.key === "Enter" && !multiline && (e.target as HTMLElement).tagName === "INPUT") {
+              e.preventDefault();
+              onSave();
+            }
+          }}
+        >
           {editor}
-          <div className={styles.editActions}>
-            <button type="button" className={styles.saveBtn} disabled={saving} onClick={onSave}>
-              {t("action.save", "שמור")}
-            </button>
-            <button type="button" className={styles.cancelBtn} disabled={saving} onClick={onCancel}>
-              {t("action.cancel", "ביטול")}
-            </button>
-          </div>
+          {saving && <div className={doorStyles.savingHint}>{t("action.saving", "שומר…")}</div>}
           {saveErr && <div className={styles.editErr}>{saveErr}</div>}
         </div>
-      ) : (
-        <>
-          <div className={`${styles.val} ${empty ? styles.valEmpty : ""}`}>{display}</div>
-          {locked ? (
-            <span className={`${styles.act} ${styles.lock}`}>
-              <Lock className="h-3.5 w-3.5" />
-            </span>
-          ) : (
-            <button
-              type="button"
-              className={styles.act}
-              onClick={() => onBeginEdit(field)}
-              title={t("action.edit", "ערוך")}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </>
+      </div>
+    );
+  }
+  return (
+    <div
+      className={`${rowClass} ${locked ? "" : doorStyles.editableRow}`}
+      role={locked ? undefined : "button"}
+      tabIndex={locked ? undefined : 0}
+      onClick={locked ? undefined : () => onBeginEdit(field)}
+      onKeyDown={
+        locked
+          ? undefined
+          : (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onBeginEdit(field);
+              }
+            }
+      }
+    >
+      <div className={styles.lbl}>{label}</div>
+      <div className={`${styles.val} ${empty ? styles.valEmpty : ""}`}>{display}</div>
+      {locked && (
+        <span className={`${styles.act} ${styles.lock}`}>
+          <Lock className="h-3.5 w-3.5" />
+        </span>
       )}
     </div>
   );
@@ -1344,7 +1404,11 @@ interface PicklistRowProps {
   editingField: string | null;
   onBeginEdit: (field: string) => void;
   onCancel: () => void;
-  onSave: () => void;
+  /** Single-select: tapping a chip saves it right away (null = clear). */
+  onPick?: (value: string | null) => void;
+  /** Multi-select: saves the toggled set when the user taps outside the row. */
+  onSave?: () => void;
+  multi?: boolean;
   saving: boolean;
   saveErr: string;
   t: (key: string, fallback?: string) => string;
@@ -1356,6 +1420,10 @@ interface PicklistRowProps {
   onToggleChip: (value: string) => void;
 }
 
+/** fixes88: tap the row to open the chips. Single-select saves on the tap
+ *  of a chip (an explicit "נקה" clears — so an accidental tap never wipes a
+ *  value); multi-select saves when you tap outside the row. Esc / tapping
+ *  outside a single-select closes it unchanged. */
 function PicklistRow({
   label,
   field,
@@ -1363,7 +1431,9 @@ function PicklistRow({
   editingField,
   onBeginEdit,
   onCancel,
+  onPick,
   onSave,
+  multi,
   saving,
   saveErr,
   t,
@@ -1377,103 +1447,105 @@ function PicklistRow({
   const isEditing = editingField === field;
   const values = Array.isArray(value) ? value : value ? [value] : [];
   const hasValue = values.length > 0;
-  // fixes72 street2 §2: Save with nothing picked used to silently PUT an
-  // empty value (a new apartment version, and the door counted as edited).
-  // Now it stops and asks: cancel, or — only if there was a value —
-  // deliberately clear it. Picking a chip dismisses the notice.
-  const [emptyWarn, setEmptyWarn] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
+  // Latest callbacks for the document listeners below.
+  const leaveRef = useRef<() => void>(() => {});
+  leaveRef.current = multi ? () => onSave?.() : onCancel;
+  const cancelRef = useRef(onCancel);
+  cancelRef.current = onCancel;
+
   useEffect(() => {
-    if (!isEditing || chipDraft.length > 0) setEmptyWarn(false);
-  }, [isEditing, chipDraft.length]);
-  function handleSave() {
-    if (chipDraft.length === 0) {
-      setEmptyWarn(true);
-      return;
-    }
-    onSave();
-  }
-  return (
-    <div className={styles.row}>
-      <div className={styles.lbl}>{label}</div>
-      {isEditing ? (
+    if (!isEditing) return;
+    const onDown = (e: PointerEvent) => {
+      if (rowRef.current && !rowRef.current.contains(e.target as Node)) leaveRef.current();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") cancelRef.current();
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [isEditing]);
+
+  if (isEditing) {
+    return (
+      <div ref={rowRef} className={styles.row}>
+        <div className={styles.lbl}>{label}</div>
         <div className={styles.editbox}>
           {options.length === 0 ? (
             <div className={styles.muted}>{t("apt.no_options", "אין אפשרויות מוגדרות בשדה הזה.")}</div>
           ) : (
             <div className={styles.chips}>
               {options.map((o) => {
-                const on = chipDraft.includes(o.value);
+                const on = multi ? chipDraft.includes(o.value) : values.includes(o.value);
                 return (
                   <button
                     key={o.id}
                     type="button"
+                    disabled={saving}
                     className={`${styles.chip} ${on ? styles.chipOn : ""}`}
-                    onClick={() => onToggleChip(o.value)}
+                    onClick={() => (multi ? onToggleChip(o.value) : onPick?.(o.value))}
                   >
                     {display(o)}
                   </button>
                 );
               })}
-            </div>
-          )}
-          {emptyWarn ? (
-            <div className={doorStyles.emptyWarn} role="alert">
-              {hasValue
-                ? t("street.nothing_chosen_clear", "לא נבחר ערך. לנקות את הערך הקיים, או לבטל?")
-                : t("street.nothing_chosen", "לא נבחר ערך. יש לבחור אפשרות, או לבטל.")}
-              <div className={doorStyles.emptyWarnActions}>
-                {hasValue && (
-                  <button type="button" className={doorStyles.clearBtn} disabled={saving} onClick={onSave}>
-                    {t("street.clear_value", "נקה ערך")}
-                  </button>
-                )}
-                <button type="button" className={styles.cancelBtn} disabled={saving} onClick={onCancel}>
-                  {t("action.cancel", "ביטול")}
+              {!multi && hasValue && (
+                <button
+                  type="button"
+                  disabled={saving}
+                  className={doorStyles.clearChip}
+                  onClick={() => onPick?.(null)}
+                >
+                  {t("street.clear_value", "נקה ערך")}
                 </button>
-              </div>
-            </div>
-          ) : (
-            <div className={styles.editActions}>
-              <button type="button" className={styles.saveBtn} disabled={saving} onClick={handleSave}>
-                {t("action.save", "שמור")}
-              </button>
-              <button type="button" className={styles.cancelBtn} disabled={saving} onClick={onCancel}>
-                {t("action.cancel", "ביטול")}
-              </button>
+              )}
             </div>
           )}
+          {saving && <div className={doorStyles.savingHint}>{t("action.saving", "שומר…")}</div>}
           {saveErr && <div className={styles.editErr}>{saveErr}</div>}
         </div>
-      ) : (
-        <>
-          <div className={`${styles.val} ${hasValue ? "" : styles.valEmpty}`}>
-            {hasValue ? (
-              <div className={styles.chips}>
-                {values.map((v) => (
-                  <span key={v} className={`${styles.chip} ${styles.chipOn} ${styles.chipView}`}>
-                    {labelFor(v)}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              "—"
-            )}
+      </div>
+    );
+  }
+  return (
+    <div
+      className={`${styles.row} ${locked ? "" : doorStyles.editableRow}`}
+      role={locked ? undefined : "button"}
+      tabIndex={locked ? undefined : 0}
+      onClick={locked ? undefined : () => onBeginEdit(field)}
+      onKeyDown={
+        locked
+          ? undefined
+          : (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onBeginEdit(field);
+              }
+            }
+      }
+    >
+      <div className={styles.lbl}>{label}</div>
+      <div className={`${styles.val} ${hasValue ? "" : styles.valEmpty}`}>
+        {hasValue ? (
+          <div className={styles.chips}>
+            {values.map((v) => (
+              <span key={v} className={`${styles.chip} ${styles.chipOn} ${styles.chipView}`}>
+                {labelFor(v)}
+              </span>
+            ))}
           </div>
-          {locked ? (
-            <span className={`${styles.act} ${styles.lock}`}>
-              <Lock className="h-3.5 w-3.5" />
-            </span>
-          ) : (
-            <button
-              type="button"
-              className={styles.act}
-              onClick={() => onBeginEdit(field)}
-              title={t("action.edit", "ערוך")}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </>
+        ) : (
+          "—"
+        )}
+      </div>
+      {locked && (
+        <span className={`${styles.act} ${styles.lock}`}>
+          <Lock className="h-3.5 w-3.5" />
+        </span>
       )}
     </div>
   );
