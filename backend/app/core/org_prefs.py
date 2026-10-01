@@ -21,9 +21,12 @@ CASCADE_KEYS = (
     "activist_system_enabled",
 )
 # Toggles outside the display cascade (independent on/off switches).
-STANDALONE_KEYS = ("ai_query_enabled",)
+STANDALONE_KEYS = ("ai_query_enabled", "localization_page_enabled")
 ALL_KEYS = CASCADE_KEYS + STANDALONE_KEYS
 DEFAULTS: dict[str, bool] = {key: True for key in ALL_KEYS}
+# fixes93: the org admin's localization (translations) page is hidden unless
+# the superadmin turns it on for that org — the one toggle that defaults OFF.
+DEFAULTS["localization_page_enabled"] = False
 
 
 class EffectiveFlags(TypedDict):
@@ -32,6 +35,7 @@ class EffectiveFlags(TypedDict):
     apartment_display_enabled: bool
     activist_system_enabled: bool
     ai_query_enabled: bool
+    localization_page_enabled: bool
 
 
 def get_raw_prefs(db: Session, organization_id: int) -> dict[str, bool]:
@@ -70,6 +74,7 @@ def effective_flags(db: Session, organization_id: int) -> EffectiveFlags:
         apartment_display_enabled=apartment,
         activist_system_enabled=activist,
         ai_query_enabled=raw["ai_query_enabled"],
+        localization_page_enabled=raw["localization_page_enabled"],
     )
 
 

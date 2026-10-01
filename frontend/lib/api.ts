@@ -497,6 +497,7 @@ export type OrgPrefsUpdate = Partial<{
   apartment_display_enabled: boolean;
   activist_system_enabled: boolean;
   ai_query_enabled: boolean;
+  localization_page_enabled: boolean;
 }>;
 
 export const adminGetOrgPrefs = (orgId: number): Promise<OrgPrefs> =>

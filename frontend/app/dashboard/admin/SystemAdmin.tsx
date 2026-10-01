@@ -279,7 +279,7 @@ export function SystemAdmin({ section }: { section: AdminSection }) {
       return;
     }
     if (
-      !(await confirmDialog({ message: t("admin.confirm_impersonate", `להתחבר כמנהל של "${org.name}"? תנותק מחשבון המנהל.`) }))
+      !(await confirmDialog({ message: t("admin.confirm_impersonate", 'להתחבר כמנהל של "{name}"? תנותק מחשבון המנהל.').replace("{name}", org.name) }))
     )
       return;
     try {
@@ -332,7 +332,7 @@ export function SystemAdmin({ section }: { section: AdminSection }) {
 
   async function onRejectOrg(org: AdminOrganization) {
     if (
-      !(await confirmDialog({ message: t("admin.confirm_reject_org", `לדחות ולמחוק את בקשת הארגון "${org.name}"?`) }))
+      !(await confirmDialog({ message: t("admin.confirm_reject_org", 'לדחות ולמחוק את בקשת הארגון "{name}"?').replace("{name}", org.name) }))
     )
       return;
     await run(async () => {
@@ -1162,6 +1162,16 @@ function OrgFeatureToggles({
             onChange={(e) => onChange({ ai_query_enabled: e.target.checked })}
           />
           {t("admin.feature_ai_query", "שאילתת AI")}
+        </label>
+        {/* fixes93: the org admin's translations page — hidden by default. */}
+        <label className="mt-2 flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            disabled={busy}
+            checked={prefs.raw.localization_page_enabled ?? false}
+            onChange={(e) => onChange({ localization_page_enabled: e.target.checked })}
+          />
+          {t("admin.feature_localization_page", "עמוד תרגומים (לוקליזציה)")}
         </label>
       </div>
     </div>

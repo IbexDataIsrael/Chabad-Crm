@@ -376,6 +376,8 @@ class OrgPrefsUpdate(BaseModel):
     apartment_display_enabled: Optional[bool] = None
     activist_system_enabled: Optional[bool] = None
     ai_query_enabled: Optional[bool] = None
+    # fixes93: default OFF (see app.core.org_prefs.DEFAULTS).
+    localization_page_enabled: Optional[bool] = None
 
 
 class EmailTemplateOut(BaseModel):

@@ -36,15 +36,17 @@ const ENTITY_LABELS: Record<string, string> = {
 const ENTITY_ORDER = ["error", "msg", "page", "action", "auth"];
 
 export default function LocalizationPage() {
-  const { isAdmin, loading } = useAuth();
+  const { isAdmin, loading, user } = useAuth();
+  // fixes93: off unless the superadmin enabled this page for the org.
+  const pageEnabled = user?.organization?.feature_flags?.localization_page_enabled === true;
   const { t } = useLocalization();
   const [rows, setRows] = useState<LocalizationRow[]>([]);
   const [filter, setFilter] = useState("");
 
   useEffect(() => {
-    if (loading || !isAdmin) return;
+    if (loading || !isAdmin || !pageEnabled) return;
     listLocalization().then(setRows).catch(() => {});
-  }, [loading, isAdmin]);
+  }, [loading, isAdmin, pageEnabled]);
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
@@ -73,6 +75,13 @@ export default function LocalizationPage() {
   }, [filtered]);
 
   if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
+  if (!pageEnabled) {
+    return (
+      <p className="text-muted-foreground">
+        {t("localization.page_disabled", "עמוד התרגומים אינו פעיל בארגון זה. ניתן להפעיל אותו דרך מנהל המערכת.")}
+      </p>
+    );
+  }
   if (!isAdmin) {
     return (
       <p className="text-status-darkred">

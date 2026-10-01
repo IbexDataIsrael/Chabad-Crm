@@ -334,3 +334,24 @@ def test_delete_org_leaves_cloudinary_alone_when_disabled(
     r = client.delete(f"/api/admin/organizations/{org.id}", headers=superadmin_headers)
     assert r.status_code == 204
     assert calls == []
+
+
+def test_localization_page_off_by_default_superadmin_can_enable(
+    client, superadmin_headers, admin_headers
+):
+    """fixes93: the translations page is hidden unless the superadmin turns
+    it on for the org (the one feature toggle that defaults OFF)."""
+    me = client.get("/api/auth/me", headers=admin_headers).json()
+    assert me["organization"]["feature_flags"]["localization_page_enabled"] is False
+    org_id = me["organization_id"]
+    r = client.put(
+        f"/api/admin/organizations/{org_id}/prefs",
+        json={"localization_page_enabled": True},
+        headers=superadmin_headers,
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["effective"]["localization_page_enabled"] is True
+    me = client.get("/api/auth/me", headers=admin_headers).json()
+    assert me["organization"]["feature_flags"]["localization_page_enabled"] is True
+    # Other toggles keep their default (on).
+    assert me["organization"]["feature_flags"]["ai_query_enabled"] is True

@@ -134,8 +134,13 @@ function DashboardChrome({ children }: { children: ReactNode }) {
             // link from the Users page (?activist=<id>) still opens it.
             roles: ["shliach"],
           },
-          // fixes92: /dashboard/route ("מסלול השליחות") is taken off the menu
-          // until it's fixed — the page itself still exists at its URL.
+          // fixes92: the game-path road map — activists only, beside street2,
+          // marked BETA while it's being tried out.
+          {
+            href: "/dashboard/route",
+            label: t("nav.route_jewish_points", "נקודות יהודיות בטא"),
+            roles: ["shliach"],
+          },
           {
             href: "/dashboard/apartments",
             label: t("nav.apartments_grid", "ניהול דירות"),
@@ -176,7 +181,10 @@ function DashboardChrome({ children }: { children: ReactNode }) {
     { href: "/dashboard/picklists", label: t("nav.picklists", "רשימות בחירה"), admin: true },
     { href: "/dashboard/custom-fields", label: t("nav.custom_fields", "שדות מותאמים"), admin: true },
     { href: "/dashboard/fields", label: t("page.fields_title", "ניהול שדות"), admin: true },
-    { href: "/dashboard/localization", label: t("nav.localization", "תרגומים"), admin: true },
+    // fixes93: hidden unless the superadmin enabled it for this org.
+    ...(user?.organization?.feature_flags?.localization_page_enabled === true
+      ? [{ href: "/dashboard/localization", label: t("nav.localization", "תרגומים"), admin: true }]
+      : []),
     // fixes75 §6: entry log + error log.
     { href: "/dashboard/logs", label: t("nav.logs", "לוגים"), admin: true },
     // fixes51 §4: config panel for the Shliach role's Apartments view.

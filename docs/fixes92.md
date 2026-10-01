@@ -136,3 +136,14 @@ sheet screenshot — it showed the bug.)
   work. No page errors.
 
 Still off the menu; not committed.
+
+## Back on the menu as BETA (2026-10-01)
+
+- [x] Menu entry restored for activists as **"הסיבוב שלי · BETA"** /
+      "My round · BETA" (Claude's name suggestion — matches the page title;
+      alternatives offered: "דלת אחר דלת · BETA", "מסלול השליחות · BETA").
+      New localization key `nav.route_beta`. Verified live: shown beside
+      "דירות", opens /dashboard/route. Not committed.
+
+- [x] Renamed by the user: **"נקודות יהודיות בטא"** / **"Jewish points BETA"**
+      (key `nav.route_jewish_points`; replaces `nav.route_beta`).
