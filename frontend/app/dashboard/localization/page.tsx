@@ -11,29 +11,34 @@ import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { Input } from "@/components/ui/input";
 
-// Friendly section headings per entity_type — fallback values for the
-// t(`loc.entity.${entity}`, ...) calls below. Unknown types fall back to the raw key.
-const ENTITY_LABELS: Record<string, string> = {
-  error: "הודעות שגיאה",
-  msg: "הודעות מערכת",
-  table: "טבלאות",
-  column: "שדות",
-  page: "דפים",
-  nav: "ניווט",
-  action: "פעולות",
-  auth: "התחברות",
-  field: "ניהול שדות",
-  filter: "סינון",
-  apt: "דירות",
-  apm: "מפת אזורים",
-  shliach: "פעיל",
-  verify: "אימות",
-  signup: "הרשמה",
-  interaction_category: "קטגוריות אינטראקציה",
-};
-
-// Sections most useful to edit first.
-const ENTITY_ORDER = ["error", "msg", "page", "action", "auth"];
+/** fixes95: the translations page is split by SCREEN (tabs), by each key's
+ *  prefix — the part before the first dot ("users.login_status" → users).
+ *  Unknown prefixes fall into "כללי". Order = tab order. */
+const PAGE_GROUPS: { id: string; he: string; prefixes: string[] }[] = [
+  { id: "contacts", he: "אנשי קשר", prefixes: ["contacts", "contact", "contact_mekurav", "contact_shliach", "sd", "significant_dates"] },
+  { id: "users", he: "משתמשים", prefixes: ["users", "shliach"] },
+  { id: "visits", he: "ביקורים", prefixes: ["visits", "visit", "visitsummary"] },
+  { id: "apartments", he: "דירות", prefixes: ["apt", "apartments", "apartment", "bulkedit"] },
+  { id: "buildings", he: "בניינים", prefixes: ["buildings", "building", "floors"] },
+  { id: "areas", he: "אזורים", prefixes: ["areas", "admin_areas", "apm", "geo", "map"] },
+  { id: "tasks", he: "משימות וקמפיינים", prefixes: ["task", "task_pdf", "campaign", "claim", "paper", "batch", "report_number"] },
+  { id: "activist", he: "מסך הפעיל", prefixes: ["street", "street_view", "route", "activist_route", "activist_home", "shliach_msg", "messages_from_activists"] },
+  { id: "reports", he: "דוחות", prefixes: ["reports", "report"] },
+  { id: "donations", he: "תרומות", prefixes: ["donation"] },
+  { id: "dashboard", he: "לוח בקרה וחיפוש", prefixes: ["dashboard", "search", "ai", "ai_query"] },
+  { id: "fields", he: "רשימות ושדות", prefixes: ["pl", "picklist", "picklist_def", "cf", "field", "fields", "columns", "column", "select"] },
+  { id: "settings", he: "הגדרות", prefixes: ["settings", "shliach_config", "public_settings", "logo", "gallery", "image_picker", "backup", "localization", "lang", "loc"] },
+  { id: "auth", he: "כניסה והרשמה", prefixes: ["auth", "signup", "verify", "public"] },
+  { id: "admin", he: "מנהל מערכת", prefixes: ["admin", "logs"] },
+  { id: "errors", he: "הודעות שגיאה", prefixes: ["error", "msg", "validation", "confirm"] },
+  { id: "menu", he: "תפריט", prefixes: ["nav", "header"] },
+  { id: "general", he: "כללי", prefixes: [] },
+];
+const GROUP_BY_PREFIX = new Map(
+  PAGE_GROUPS.flatMap((g) => g.prefixes.map((pfx) => [pfx, g.id] as const)),
+);
+const groupOf = (row: LocalizationRow) =>
+  GROUP_BY_PREFIX.get(row.technical_name.split(".")[0]) ?? "general";
 
 export default function LocalizationPage() {
   const { isAdmin, loading, user } = useAuth();
@@ -59,20 +64,24 @@ export default function LocalizationPage() {
     );
   }, [rows, filter]);
 
-  // Group rows into sections by entity_type, ordered with the most-edited first.
+  // fixes95: rows grouped by screen (PAGE_GROUPS), keys sorted inside.
   const groups = useMemo(() => {
     const m = new Map<string, LocalizationRow[]>();
     for (const r of filtered) {
-      if (!m.has(r.entity_type)) m.set(r.entity_type, []);
-      m.get(r.entity_type)!.push(r);
+      const g = groupOf(r);
+      if (!m.has(g)) m.set(g, []);
+      m.get(g)!.push(r);
     }
-    return Array.from(m.entries()).sort(([a], [b]) => {
-      const ia = ENTITY_ORDER.indexOf(a);
-      const ib = ENTITY_ORDER.indexOf(b);
-      if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-      return a.localeCompare(b);
-    });
+    return PAGE_GROUPS.filter((g) => m.has(g.id)).map(
+      (g) =>
+        [g, m.get(g.id)!.sort((a, b) => a.technical_name.localeCompare(b.technical_name))] as const,
+    );
   }, [filtered]);
+  // "all" = every group with a divider; otherwise the one tab.
+  const [tab, setTab] = useState<string>("all");
+  const visibleGroups = tab === "all" ? groups : groups.filter(([g]) => g.id === tab);
+  const tabCount = (id: string) =>
+    id === "all" ? filtered.length : (groups.find(([g]) => g.id === id)?.[1].length ?? 0);
 
   if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!pageEnabled) {
@@ -102,16 +111,45 @@ export default function LocalizationPage() {
       <Input
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
-        placeholder="🔍"
+        placeholder={t("loc.search", "חיפוש לפי טקסט או מפתח…")}
         className="max-w-sm"
       />
 
+      {/* fixes95: one tab per screen (+ "הכל"); counts follow the search. */}
+      <div role="tablist" className="flex flex-wrap gap-2">
+        {[{ id: "all", he: "הכל" }, ...PAGE_GROUPS].map((g) => {
+          const n = tabCount(g.id);
+          if (g.id !== "all" && n === 0) return null;
+          const active = tab === g.id;
+          return (
+            <button
+              key={g.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setTab(g.id)}
+              className={`min-h-[36px] rounded-full border px-3 text-sm transition-colors ${
+                active
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-card hover:bg-muted"
+              }`}
+            >
+              {t(`loc.group.${g.id}`, g.he)}{" "}
+              <span className={active ? "opacity-80" : "text-muted-foreground"}>({n})</span>
+            </button>
+          );
+        })}
+      </div>
+
       <div className="space-y-6">
-        {groups.map(([entity, entityRows]) => (
-          <section key={entity}>
-            <h2 className="text-sm font-semibold mb-2">
-              {t(`loc.entity.${entity}`, ENTITY_LABELS[entity] ?? entity)}{" "}
-              <span className="text-muted-foreground font-normal">({entityRows.length})</span>
+        {visibleGroups.length === 0 && (
+          <p className="text-sm text-muted-foreground">{t("loc.no_results", "לא נמצאו טקסטים.")}</p>
+        )}
+        {visibleGroups.map(([group, entityRows]) => (
+          <section key={group.id}>
+            <h2 className="mb-2 flex items-center gap-2 border-b border-border pb-1 text-base font-semibold">
+              {t(`loc.group.${group.id}`, group.he)}
+              <span className="text-sm font-normal text-muted-foreground">({entityRows.length})</span>
             </h2>
             <div className="bg-card rounded-xl shadow-sm overflow-hidden">
               <table className="w-full text-sm">
