@@ -51,11 +51,29 @@ def _load_html(name: str) -> str:
 LEGACY_EMAIL_SUBJECTS: dict[str, str] = {
     "aignummail1": "בקשתך התקבלה — מיני CRM",
     "aignummail2": "הארגון אושר — מיני CRM",
+    # fixes90: the welcome title is now "Welcome to Jewish Points".
+    "shliach_welcome": "Welcome to the system",
+}
+
+# fixes90: exact snippets of a shipped default body that a later default
+# replaced. seed_email_templates swaps one only while a stored body still
+# contains the old snippet verbatim — a body the superadmin edited (or that
+# no longer has it) is left alone.
+LEGACY_EMAIL_BODY_SNIPPETS: dict[str, list[tuple[str, str]]] = {
+    "shliach_welcome": [
+        (
+            '<h1 style="margin:0 0 16px;font-size:22px;color:#1f2937;">Welcome to the system</h1>',
+            '<h1 dir="rtl" style="margin:0 0 4px;font-size:22px;color:#1f2937;text-align:right;">'
+            "ברוכים הבאים לנקודות יהודיות</h1>\n"
+            '                <h1 style="margin:0 0 16px;font-size:22px;color:#1f2937;">'
+            "Welcome to Jewish Points</h1>",
+        ),
+    ],
 }
 
 DEFAULT_EMAIL_TEMPLATES: dict[str, dict[str, str]] = {
     "shliach_welcome": {
-        "subject": "Welcome to the system",
+        "subject": "ברוכים הבאים לנקודות יהודיות / Welcome to Jewish Points",
         "body_hebrew": "",
         "body": _load_html("hello_shliach.html"),
     },

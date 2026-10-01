@@ -104,3 +104,31 @@ def test_seed_upgrades_legacy_subject_but_keeps_edited_one(db_session):
 def test_verify_invalid_token(client):
     # The legacy verify-email endpoint still rejects a bad token.
     assert client.get("/api/auth/verify-email?token=not-a-token").status_code == 400
+
+
+def test_seed_upgrades_welcome_title_but_keeps_edited_one(db_session):
+    """fixes90: the welcome title becomes "Welcome to Jewish Points" /
+    "ברוכים הבאים לנקודות יהודיות" — only on a row still holding the old default."""
+    from app.core.email import LEGACY_EMAIL_BODY_SNIPPETS
+    from app.seed import seed_email_templates
+
+    old_h1, _ = LEGACY_EMAIL_BODY_SNIPPETS["shliach_welcome"][0]
+    db_session.query(models.EmailTemplate).filter_by(key="shliach_welcome").delete()
+    db_session.add(models.EmailTemplate(
+        key="shliach_welcome", subject="Welcome to the system",
+        body=f"<html>{old_h1}<p>x</p></html>", body_hebrew="",
+    ))
+    db_session.commit()
+    seed_email_templates(db_session)
+    row = db_session.query(models.EmailTemplate).filter_by(key="shliach_welcome").one()
+    assert row.subject == "ברוכים הבאים לנקודות יהודיות / Welcome to Jewish Points"
+    assert "Welcome to Jewish Points" in row.body and "ברוכים הבאים לנקודות יהודיות" in row.body
+    assert "Welcome to the system" not in row.body
+
+    # An edited subject/body is never touched.
+    row.subject = "My own subject"
+    row.body = "<p>my own body</p>"
+    db_session.commit()
+    seed_email_templates(db_session)
+    db_session.refresh(row)
+    assert (row.subject, row.body) == ("My own subject", "<p>my own body</p>")

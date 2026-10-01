@@ -2588,7 +2588,11 @@ def seed_superadmin(db: Session) -> None:
 def seed_email_templates(db: Session) -> None:
     """Insert any missing editable email templates (idempotent, never overwrites
     an admin's edits). Defaults live in app.core.email.DEFAULT_EMAIL_TEMPLATES."""
-    from app.core.email import DEFAULT_EMAIL_TEMPLATES, LEGACY_EMAIL_SUBJECTS
+    from app.core.email import (
+        DEFAULT_EMAIL_TEMPLATES,
+        LEGACY_EMAIL_BODY_SNIPPETS,
+        LEGACY_EMAIL_SUBJECTS,
+    )
 
     existing = {
         k for (k,) in db.query(models.EmailTemplate.key).all()
@@ -2618,6 +2622,14 @@ def seed_email_templates(db: Session) -> None:
         if row:
             row.subject = DEFAULT_EMAIL_TEMPLATES[key]["subject"]
             added = True
+    for key, swaps in LEGACY_EMAIL_BODY_SNIPPETS.items():
+        row = db.query(models.EmailTemplate).filter(models.EmailTemplate.key == key).first()
+        if row is None:
+            continue
+        for old, new in swaps:
+            if old in (row.body or ""):
+                row.body = row.body.replace(old, new)
+                added = True
     if added:
         db.commit()
 
