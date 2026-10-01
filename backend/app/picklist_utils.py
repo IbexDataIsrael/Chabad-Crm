@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import models
+from app.core.errors import api_error
 
 # The full set of admin-managed picklists: Hebrew display label + the logical
 # entity each belongs to ("contact_mekurav" | "contact_shliach" | "apartment"
@@ -79,9 +80,9 @@ def validate_picklist_value(
         return
     options = active_values(db, organization_id, field_key)
     if options and value not in options:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"'{value}' is not an allowed value for {field_key}",
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST, "error.value_not_allowed",
+            "'{value}' is not an allowed value for {field}", value=value, field=field_key,
         )
 
 
@@ -356,8 +357,9 @@ def set_value(
     )
     if definition is None:
         if field_key not in PICKLIST_FIELDS:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST, f"unknown picklist '{field_key}'"
+            raise api_error(
+                status.HTTP_400_BAD_REQUEST, "error.unknown_picklist",
+                "unknown picklist '{field}'", field=field_key,
             )
         hebrew_label, entity_type = PICKLIST_FIELDS[field_key]
         definition = models.PicklistDefinition(
@@ -512,8 +514,9 @@ def set_multi_values(
     )
     if definition is None:
         if field_key not in PICKLIST_FIELDS:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST, f"unknown picklist '{field_key}'"
+            raise api_error(
+                status.HTTP_400_BAD_REQUEST, "error.unknown_picklist",
+                "unknown picklist '{field}'", field=field_key,
             )
         hebrew_label, entity_type = PICKLIST_FIELDS[field_key]
         definition = models.PicklistDefinition(

@@ -19,6 +19,7 @@ from app.field_registry import (
     default_visible,
     label_and_entity,
 )
+from app.core.errors import api_error
 
 router = APIRouter(prefix="/api/field-settings", tags=["field-settings"])
 
@@ -204,8 +205,9 @@ def set_field_setting(
         and payload.field_key not in _custom_picklist_keys(db, admin.organization_id)
         and custom_field_definition is None
     ):
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, f"unknown field_key '{payload.field_key}'"
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST, "error.unknown_field_key",
+            "unknown field_key '{field}'", field=payload.field_key,
         )
     # fixes40 round 2 §3: sort_order lives on whichever table actually
     # carries ordering for this key's category — custom fields/picklists

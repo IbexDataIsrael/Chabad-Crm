@@ -422,7 +422,7 @@ class PendingSignupEmails(BaseModel):
             if not e or not e.strip():
                 continue
             if not _EMAIL_RE.match(e.strip()):
-                raise ValueError(f"Invalid email address: {e}")
+                raise ValueError("Invalid email address")
             out.append(e.strip().lower())
         return out
 

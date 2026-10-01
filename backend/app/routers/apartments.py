@@ -42,6 +42,7 @@ from app.schemas import (
     DoorOutcomeOut,
     ReportNumberBuildingLink,
 )
+from app.core.errors import api_error
 
 router = APIRouter(prefix="/api/apartments", tags=["apartments"])
 
@@ -932,9 +933,9 @@ def batch_create_apartments(
     for floor_id in dict.fromkeys(payload.floor_ids):  # de-dupe, keep order
         floor = floors_by_id.get(floor_id)
         if floor is None:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                f"floor {floor_id} does not belong to this building",
+            raise api_error(
+                status.HTTP_400_BAD_REQUEST, "error.floor_not_in_building",
+                "floor {floor_id} does not belong to this building", floor_id=floor_id,
             )
         floors.append(floor)
     labels = [l.strip() for l in dict.fromkeys(payload.labels) if l.strip()]
@@ -1338,8 +1339,9 @@ def restore_apartment_field(
     if not active.is_display:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Apartment not found")
     if payload.field not in _RESTORABLE_FIELDS:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, f"field '{payload.field}' cannot be restored"
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST, "error.field_not_restorable",
+            "field '{field}' cannot be restored", field=payload.field,
         )
     # The source version must belong to this apartment's lineage.
     root_id = active.root_id or active.id

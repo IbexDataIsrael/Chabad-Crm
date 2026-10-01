@@ -41,6 +41,7 @@ from app.schemas import (
     UserOut,
     UserRecreateIn,
 )
+from app.core.errors import api_error
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -402,8 +403,9 @@ def restore_shliach_field(
     if not linked:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No linked shliach contact")
     if payload.field not in _SHLIACH_RESTORABLE_FIELDS:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, f"field '{payload.field}' cannot be restored"
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST, "error.field_not_restorable",
+            "field '{field}' cannot be restored", field=payload.field,
         )
     root_id = linked.root_id or linked.id
     version = (
@@ -484,7 +486,7 @@ def recreate_user(
         if user.role != "shliach":
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "כתובת אימייל זו שייכת למשתמש קיים בארגון שאינו פעיל",
+                "This email belongs to an existing user in the organization who is not an activist",
             )
         # The account may serve another shliach contact — never steal a login.
         linked_elsewhere = (

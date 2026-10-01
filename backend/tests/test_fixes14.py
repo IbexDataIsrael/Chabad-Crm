@@ -346,5 +346,8 @@ def test_same_org_duplicate_names_the_existing_activist(client, admin_headers):
     assert first.status_code == 201
     r = _mk_shliach(client, admin_headers, "named@example.com")
     assert r.status_code == 400
+    # fixes94: a coded error — the UI shows t(code) with these params.
     detail = r.json()["detail"]
-    assert "יוסי כהן" in detail and f"#{first.json()['id']}" in detail
+    assert detail["code"] == "error.email_taken_by_activist"
+    assert detail["params"] == {"name": "יוסי כהן", "id": str(first.json()["id"])}
+    assert "יוסי כהן" in detail["message"] and f"#{first.json()['id']}" in detail["message"]

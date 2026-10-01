@@ -11,6 +11,7 @@ from app import models
 from app.database import get_db
 from app.deps import require_admin
 from app.schemas import LocalizationCreate, LocalizationOut, LocalizationUpdate
+from app.core.errors import api_error
 
 router = APIRouter(prefix="/api/localization", tags=["localization"])
 
@@ -38,9 +39,9 @@ def create_string(
         .filter(models.FieldLocalization.technical_name == payload.technical_name)
         .first()
     ):
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f"technical_name '{payload.technical_name}' already exists",
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST, "error.technical_name_exists",
+            "technical_name '{name}' already exists", name=payload.technical_name,
         )
     row = models.FieldLocalization(**payload.model_dump())
     db.add(row)

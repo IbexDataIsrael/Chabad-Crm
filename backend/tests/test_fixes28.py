@@ -89,7 +89,8 @@ class TestRestrictedUserNoShliach:
         _mk_staff_user(client, admin_headers, "restricted28b@x.com")
         r = _mk_shliach(client, admin_headers, "restricted28b@x.com")
         assert r.status_code == 400
-        assert "אינו פעיל" in r.json()["detail"]
+        # fixes94: English in the code; the Hebrew lives in the localization table.
+        assert r.json()["detail"] == "This email belongs to an existing user in the organization who is not an activist"
 
     def test_recreate_with_staff_email_rejected(
         self, client, admin_headers, db_session
@@ -111,7 +112,8 @@ class TestRestrictedUserNoShliach:
             headers=admin_headers,
         )
         assert r.status_code == 400
-        assert "אינו פעיל" in r.json()["detail"]
+        # fixes94: English in the code; the Hebrew lives in the localization table.
+        assert r.json()["detail"] == "This email belongs to an existing user in the organization who is not an activist"
 
     def test_shluchim_list_excludes_staff_linked_row(
         self, client, admin_headers, db_session

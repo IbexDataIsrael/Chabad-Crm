@@ -35,7 +35,7 @@ Findings:
   These never pass through the table, so they can't be seen or translated
   there. Only the login errors (fixes75) use translation codes.
 
-Proposal (not done — needs approval):
+Proposal — **implemented in fixes94** (see docs/fixes94.md):
 - One central change in the frontend's error handling: a backend error
   message is looked up in the localization table (category `error`, key
   derived from the message) before it's shown — all 97 places get it at once.

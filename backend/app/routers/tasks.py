@@ -40,6 +40,7 @@ from app.schemas import (
     TaskPrintOut,
     TaskUpdate,
 )
+from app.core.errors import api_error
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
@@ -406,18 +407,18 @@ def _parse_range_text(text: str) -> list[int]:
             continue
         m = re.fullmatch(r"(\d+)-(\d+)|(\d+)", part)
         if not m:
-            raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
-                f"Can't read '{part}' — use numbers and ranges like 10-40",
+            raise api_error(
+                status.HTTP_422_UNPROCESSABLE_ENTITY, "error.cannot_read_range",
+                "Can't read '{part}' — use numbers and ranges like 10-40", part=part,
             )
         if m.group(3) is not None:
             lo = hi = int(m.group(3))
         else:
             lo, hi = sorted((int(m.group(1)), int(m.group(2))))
         if hi - lo + 1 > _MAX_BULK_NUMBERS:
-            raise HTTPException(
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
-                f"A range can cover at most {_MAX_BULK_NUMBERS} numbers",
+            raise api_error(
+                status.HTTP_422_UNPROCESSABLE_ENTITY, "error.range_too_big",
+                "A range can cover at most {max} numbers", max=_MAX_BULK_NUMBERS,
             )
         numbers.extend(range(lo, hi + 1))
     return list(dict.fromkeys(numbers))
@@ -502,9 +503,9 @@ def preview_bulk_tasks(
         elif rn_id not in wanted:
             wanted.append(rn_id)
     if len(wanted) > _MAX_BULK_NUMBERS:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            f"At most {_MAX_BULK_NUMBERS} report numbers at once",
+        raise api_error(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "error.too_many_report_numbers",
+            "At most {max} report numbers at once", max=_MAX_BULK_NUMBERS,
         )
 
     conflicts = _conflicting_tasks(db, payload.campaign_id, wanted)
@@ -537,9 +538,9 @@ def create_bulk_tasks(
     if not ids:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No report numbers selected")
     if len(ids) > _MAX_BULK_NUMBERS:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            f"At most {_MAX_BULK_NUMBERS} report numbers at once",
+        raise api_error(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "error.too_many_report_numbers",
+            "At most {max} report numbers at once", max=_MAX_BULK_NUMBERS,
         )
     _validate_report_numbers(db, org_id, ids)
     if payload.volunteer_user_id is not None:

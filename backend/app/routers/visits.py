@@ -36,6 +36,7 @@ from app.schemas import (
     VisitSummaryOut,
     VisitUpdate,
 )
+from app.core.errors import api_error
 
 router = APIRouter(prefix="/api/contacts", tags=["visits"])
 all_router = APIRouter(prefix="/api/visits", tags=["visits"])
@@ -515,9 +516,9 @@ def set_visit_custom_fields(
     existing = {val.definition_id: val for val in v.custom_values}
     for item in payload:
         if item.definition_id not in valid_ids:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                f"definition_id {item.definition_id} does not exist",
+            raise api_error(
+                status.HTTP_400_BAD_REQUEST, "error.definition_not_found",
+                "definition_id {id} does not exist", id=item.definition_id,
             )
         val = existing.get(item.definition_id)
         if val:

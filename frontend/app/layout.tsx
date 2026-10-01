@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   // Pre-hydration default only — TitleManager applies the configured template
   // ("{public.organizations.name} CRM" + fallback name) on every page (fixes9).
   title: "Jewish Points CRM",
-  description: "Bilingual Hebrew/English Mini CRM",
+  description: "Jewish Points — נקודות יהודיות",
   // The generated favicon package lives in /public (Next.js only auto-serves
   // arbitrary filenames from there, not from app/ — only the bare
   // favicon.ico convention is special-cased in app/) and needs explicit

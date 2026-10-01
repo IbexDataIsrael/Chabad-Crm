@@ -20,6 +20,7 @@ from app.core import org_prefs
 from app.database import get_db
 from app.deps import require_staff_or_admin
 from app.schemas import AiQueryRequest, AiQueryResponse
+from app.core.errors import api_error
 
 logger = logging.getLogger("app.ai_query")
 
@@ -105,26 +106,27 @@ def query(
         )
     except anthropic.APIError as exc:
         logger.warning("Anthropic request failed: %s", exc)
-        raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY, f"AI service returned an error: {exc}"
+        raise api_error(
+            status.HTTP_502_BAD_GATEWAY, "error.ai_service_error",
+            "AI service returned an error: {detail}", detail=exc,
         )
 
     try:
         text = _extract_text(response)
     except AttributeError:
         logger.warning("Unexpected Anthropic response shape: %s", response)
-        raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY,
-            f"Unexpected AI response shape: {response!r:.200}",
+        raise api_error(
+            status.HTTP_502_BAD_GATEWAY, "error.ai_unexpected_shape",
+            "Unexpected AI response shape: {detail}", detail=repr(response)[:200],
         )
 
     try:
         intent = _parse_intent(text)
     except json.JSONDecodeError:
         logger.warning("Non-JSON AI response: %s", text[:300])
-        raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY,
-            f"Unexpected AI response (not valid JSON): {text[:200]!r}",
+        raise api_error(
+            status.HTTP_502_BAD_GATEWAY, "error.ai_invalid_json",
+            "Unexpected AI response (not valid JSON): {detail}", detail=repr(text[:200]),
         )
 
     try:

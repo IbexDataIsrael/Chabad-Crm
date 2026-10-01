@@ -24,6 +24,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app import models
+from app.core.errors import api_error
 
 FieldValue = Union[str, float, bool, None]
 
@@ -64,15 +65,17 @@ def _parse_for_type(field_type: str, value: FieldValue) -> FieldValue:
         try:
             return float(value)  # type: ignore[arg-type]
         except (TypeError, ValueError):
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST, f"'{value}' is not a valid number"
+            raise api_error(
+                status.HTTP_400_BAD_REQUEST, "error.not_a_number",
+                "'{value}' is not a valid number", value=value,
             )
     if field_type == "date":
         try:
             datetime.date.fromisoformat(str(value)[:10])
         except ValueError:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST, f"'{value}' is not a valid ISO date"
+            raise api_error(
+                status.HTTP_400_BAD_REQUEST, "error.not_a_date",
+                "'{value}' is not a valid ISO date", value=value,
             )
         return str(value)
     if field_type == "boolean":
@@ -168,13 +171,15 @@ def set_value(
         .first()
     )
     if definition is None:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, f"unknown custom field '{field_key}'"
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST, "error.unknown_custom_field",
+            "unknown custom field '{field}'", field=field_key,
         )
     if definition.field_type == "select":
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f"'{field_key}' is a select field — set it via picklist_values, not custom_field_values",
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST, "error.select_field_use_picklist",
+            "'{field}' is a select field — set it via picklist_values, not custom_field_values",
+            field=field_key,
         )
     parsed = _parse_for_type(definition.field_type, value)
     table = storage_table(entity_type)

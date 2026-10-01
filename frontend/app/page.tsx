@@ -202,7 +202,7 @@ export default function LoginPage() {
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <LogIn className="h-6 w-6" />
           </div>
-          <h1 className="text-2xl font-bold">{t("auth.app_title", "מיני CRM")}</h1>
+          <h1 className="text-2xl font-bold">{t("auth.app_title", "נקודות יהודיות")}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{t("auth.login_subtitle")}</p>
         </div>
 

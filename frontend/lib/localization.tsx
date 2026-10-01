@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { apiFetch, getToken } from "./api";
+import { registerErrorTranslator } from "@/lib/errorText";
 import { useAuth } from "./auth";
 
 export type Lang = "he" | "en";
@@ -106,6 +107,13 @@ export function LocalizationProvider({ children }: { children: ReactNode }) {
       },
     };
   }, [loading, lang, data, setLang]);
+
+  // fixes94: API error messages are translated centrally (lib/errorText) —
+  // give it the current translator.
+  useEffect(() => {
+    registerErrorTranslator((key, fallback) => value.t(key, fallback));
+    return () => registerErrorTranslator(null);
+  }, [value]);
 
   return (
     <LocalizationContext.Provider value={value}>

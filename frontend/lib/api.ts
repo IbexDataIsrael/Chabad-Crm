@@ -3,6 +3,8 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 const TOKEN_KEY = "crm_token";
 
+import { localizeError } from "@/lib/errorText";
+
 export class ApiError extends Error {
   status: number;
   /** fixes33 §2: the raw parsed JSON error body, when the response had one and
@@ -22,8 +24,10 @@ export class ApiError extends Error {
   }
 }
 
-/** Parse a failed response's `detail`: a plain string, or fixes75's
- * `{code, message}` object (message becomes the Error text). */
+/** Parse a failed response's `detail`: a plain string, fixes75's / fixes94's
+ * `{code, message, params}` object, or a validation (422) list. fixes94: the
+ * message is translated through the localization table (lib/errorText) —
+ * every caller that shows `err.message` gets the user's language. */
 async function readErrorDetail(
   res: Response,
   fallback: string,
@@ -31,15 +35,22 @@ async function readErrorDetail(
   try {
     const data = await res.json();
     const detail = data?.detail;
-    if (typeof detail === "string") return { message: detail };
+    if (typeof detail === "string") return { message: localizeError(detail) };
+    if (Array.isArray(detail) && detail.length > 0) {
+      // Pydantic validation: "Value error, Invalid email address" → the message.
+      const first = detail[0] as { msg?: unknown };
+      const msg =
+        typeof first?.msg === "string" ? first.msg.replace(/^Value error, /, "") : fallback;
+      return { message: localizeError(msg), body: detail };
+    }
     if (detail && typeof detail === "object") {
       const message = typeof detail.message === "string" ? detail.message : fallback;
-      return { message, body: detail };
+      return { message: localizeError(message, detail), body: detail };
     }
   } catch {
     /* not JSON */
   }
-  return { message: fallback };
+  return { message: localizeError(fallback) };
 }
 
 export function getToken(): string | null {

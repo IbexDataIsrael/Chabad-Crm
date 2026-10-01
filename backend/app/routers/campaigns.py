@@ -30,6 +30,7 @@ from app.schemas import (
     CampaignOut,
     CampaignUpdate,
 )
+from app.core.errors import api_error
 
 router = APIRouter(prefix="/api/campaigns", tags=["campaigns"])
 
@@ -270,8 +271,9 @@ def set_campaign_field_visibility(
     }
     meta = catalog.get(payload.field_key)
     if meta is None:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, f"unknown field_key '{payload.field_key}'"
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST, "error.unknown_field_key",
+            "unknown field_key '{field}'", field=payload.field_key,
         )
     row = (
         db.query(models.CampaignFieldVisibility)

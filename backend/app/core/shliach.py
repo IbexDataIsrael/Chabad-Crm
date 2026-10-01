@@ -21,6 +21,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app import models
+from app.core.errors import api_error
 
 
 def resolve_shliach(
@@ -61,11 +62,18 @@ def email_taken_error(contact: Optional[models.Contact]) -> HTTPException:
     naming that activist (and its contact id). The bare message sent admins
     hunting, e.g. in a cloned org whose copied activists keep their emails
     but have no login, so they never show up as users."""
-    msg = "כתובת אימייל זו כבר משויכת לפעיל אחר בארגון"
-    if contact is not None:
-        name = " ".join(filter(None, [contact.name, contact.last_name])).strip()
-        msg += f": {name} (#{contact.id})" if name else f" (#{contact.id})"
-    return HTTPException(status.HTTP_400_BAD_REQUEST, msg)
+    if contact is None:
+        return HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "This email already belongs to another activist in the organization",
+        )
+    name = " ".join(filter(None, [contact.name, contact.last_name])).strip()
+    # fixes94: coded, so the UI shows it translated with the name filled in.
+    return api_error(
+        status.HTTP_400_BAD_REQUEST, "error.email_taken_by_activist",
+        "This email already belongs to another activist in the organization: {name} (#{id})",
+        name=name or "—", id=contact.id,
+    )
 
 
 def activist_names_by_contact(db: Session, contact_ids) -> dict[int, str]:

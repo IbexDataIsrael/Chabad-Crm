@@ -6,6 +6,7 @@ from app import models
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.schemas import OrganizationOut, OrganizationUpdate
+from app.core.errors import api_error
 
 router = APIRouter(prefix="/api/organizations", tags=["organizations"])
 
@@ -120,9 +121,9 @@ def update_my_org(
             if isinstance(u, str) and u.strip().startswith(("https://", "http://"))
         ]
         if len(gallery) > MAX_GALLERY_IMAGES:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                f"A gallery holds at most {MAX_GALLERY_IMAGES} images",
+            raise api_error(
+                status.HTTP_400_BAD_REQUEST, "error.gallery_max",
+                "A gallery holds at most {max} images", max=MAX_GALLERY_IMAGES,
             )
         org.public_gallery = gallery
     if data.get("self_registration_enabled") is not None:

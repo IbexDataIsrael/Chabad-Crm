@@ -219,7 +219,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("action", "common.or", "או", "or"),
     ("action", "lang.toggle", "English", "עברית"),
     # --- Auth (login / signup) ---
-    ("auth", "auth.app_title", "מיני CRM", "Mini CRM"),
+    ("auth", "auth.app_title", "נקודות יהודיות", "Jewish Points"),
     ("auth", "auth.login_subtitle", "התחברות למערכת", "Sign in to the system"),
     ("auth", "auth.username", "שם משתמש", "Username"),
     ("auth", "auth.password", "סיסמה", "Password"),
@@ -632,6 +632,28 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("column", "contact_mekurav.admin_area_id", "אזור מותאם אישית", "Custom area"),
     ("column", "contact_mekurav.tzedaka_potential", "פוטנציאל לצדקה", "Tzedaka potential"),
     ("admin", "admin.system_settings_title", "הגדרות מערכת", "System settings"),
+    # fixes95: translations page tabs (one per screen).
+    ("loc", "loc.group.contacts", "אנשי קשר", "Contacts"),
+    ("loc", "loc.group.users", "משתמשים", "Users"),
+    ("loc", "loc.group.visits", "ביקורים", "Visits"),
+    ("loc", "loc.group.apartments", "דירות", "Apartments"),
+    ("loc", "loc.group.buildings", "בניינים", "Buildings"),
+    ("loc", "loc.group.areas", "אזורים", "Areas"),
+    ("loc", "loc.group.tasks", "משימות וקמפיינים", "Tasks & campaigns"),
+    ("loc", "loc.group.activist", "מסך הפעיל", "Activist screens"),
+    ("loc", "loc.group.reports", "דוחות", "Reports"),
+    ("loc", "loc.group.donations", "תרומות", "Donations"),
+    ("loc", "loc.group.dashboard", "לוח בקרה וחיפוש", "Dashboard & search"),
+    ("loc", "loc.group.fields", "רשימות ושדות", "Lists & fields"),
+    ("loc", "loc.group.settings", "הגדרות", "Settings"),
+    ("loc", "loc.group.auth", "כניסה והרשמה", "Login & sign-up"),
+    ("loc", "loc.group.admin", "מנהל מערכת", "System admin"),
+    ("loc", "loc.group.errors", "הודעות שגיאה", "Error messages"),
+    ("loc", "loc.group.menu", "תפריט", "Menu"),
+    ("loc", "loc.group.general", "כללי", "General"),
+    ("loc", "loc.group.all", "הכל", "All"),
+    ("loc", "loc.search", "חיפוש לפי טקסט או מפתח…", "Search by text or key…"),
+    ("loc", "loc.no_results", "לא נמצאו טקסטים.", "No texts found."),
     # Localization audit 2026-10-01 (whole frontend): remaining t() fallbacks.
     ("apt", "apt.no_apartments_building", "אין דירות בבניין זה.", "No apartments in this building."),
     ("page", "buildings.coords", "קואורדינטות", "Coordinates"),
@@ -2027,8 +2049,17 @@ def seed_system_settings(db: Session) -> None:
 # Deliberate renames of previously-seeded labels (fixes13). Re-seeding never
 # overwrites, so each entry force-updates a row — but ONLY while its current
 # text is one of the known old seeds, so admin-customized labels survive.
+# fixes94: every user-facing API error message (category "error").
+from app.error_localization import localization_rows as _error_localization_rows  # noqa: E402
+
+LOCALIZATION += _error_localization_rows()
+
 LOCALIZATION_RENAMES: dict[str, tuple[set, str, set, str]] = {
     # key: (old hebrew variants, new hebrew, old english variants, new english)
+    # fixes94: the app is "Jewish Points" / "נקודות יהודיות", not "Mini CRM".
+    "auth.app_title": (
+        {"מיני CRM"}, "נקודות יהודיות", {"Mini CRM"}, "Jewish Points",
+    ),
     "apartments.apartment_name": (
         {"כותרת", "תווית"}, "מספר דירה", {"Title", "Label"}, "Apartment number",
     ),

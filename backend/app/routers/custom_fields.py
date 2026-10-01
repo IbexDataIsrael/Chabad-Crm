@@ -17,6 +17,7 @@ from app.schemas import (
     CustomFieldDefinitionUpdate,
     UsageOut,
 )
+from app.core.errors import api_error
 
 router = APIRouter(prefix="/api/custom-fields", tags=["custom-fields"])
 
@@ -65,12 +66,14 @@ def create_definition(
 ):
     org_id = admin.organization_id
     if payload.entity_type not in _VALID_ENTITY_TYPES:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, f"unknown entity_type '{payload.entity_type}'"
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST, "error.unknown_entity_type",
+            "unknown entity_type '{value}'", value=payload.entity_type,
         )
     if payload.field_type not in _VALID_FIELD_TYPES:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, f"unknown field_type '{payload.field_type}'"
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST, "error.unknown_field_type",
+            "unknown field_type '{value}'", value=payload.field_type,
         )
     dup = (
         db.query(models.CustomFieldDefinition)
@@ -82,9 +85,10 @@ def create_definition(
         .first()
     )
     if dup:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f"field_key '{payload.field_key}' already exists for {payload.entity_type}",
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST, "error.field_key_exists",
+            "field_key '{field}' already exists for {entity}",
+            field=payload.field_key, entity=payload.entity_type,
         )
 
     data = payload.model_dump(exclude={"picklist_options"})
@@ -110,9 +114,9 @@ def create_definition(
             .first()
         )
         if dup_picklist:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                f"picklist '{system_name}' already exists",
+            raise api_error(
+                status.HTTP_400_BAD_REQUEST, "error.picklist_exists",
+                "picklist '{name}' already exists", name=system_name,
             )
         picklist_def = models.PicklistDefinition(
             organization_id=org_id,

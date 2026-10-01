@@ -380,7 +380,8 @@ class TestShliachWelcomeTemplate:
             email="new-shliach@x.com",
         )
         assert sent["to"] == "new-shliach@x.com"
-        assert sent["subject"] == "Welcome to the system"
+        # fixes90: the welcome title is "Welcome to Jewish Points" (+ Hebrew).
+        assert sent["subject"] == "ברוכים הבאים לנקודות יהודיות / Welcome to Jewish Points"
         # Placeholders substituted into the HTML body (sent verbatim, not
         # wrapped in the notification shell).
         assert "new-shliach@x.com" in sent["html"]

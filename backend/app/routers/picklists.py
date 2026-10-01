@@ -19,6 +19,7 @@ from app.schemas import (
     PicklistValueUpdate,
     UsageOut,
 )
+from app.core.errors import api_error
 
 router = APIRouter(prefix="/api/picklists", tags=["picklists"])
 
@@ -88,9 +89,9 @@ def create_definition(
         .first()
     )
     if dup:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f"picklist '{payload.system_name}' already exists",
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST, "error.picklist_exists",
+            "picklist '{name}' already exists", name=payload.system_name,
         )
     last = _definitions_query(db, org_id).all()
     # fixes37: shliach.* is a real sub-namespace of "contact_mekurav" (fixes35
@@ -251,9 +252,9 @@ def add_option(
         .first()
     )
     if dup:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f"value '{payload.value}' already exists for {field_key}",
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST, "error.picklist_value_exists",
+            "value '{value}' already exists for {field}", value=payload.value, field=field_key,
         )
     row = models.PicklistValue(
         organization_id=org_id, field_key=field_key, **payload.model_dump()
@@ -287,9 +288,9 @@ def update_option(
             .first()
         )
         if dup:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                f"value '{new_value}' already exists for {row.field_key}",
+            raise api_error(
+                status.HTTP_400_BAD_REQUEST, "error.picklist_value_exists",
+                "value '{value}' already exists for {field}", value=new_value, field=row.field_key,
             )
     for field, value in data.items():
         setattr(row, field, value)
@@ -370,9 +371,9 @@ def reorder_options(
     for index, picklist_id in enumerate(payload.ordered_ids):
         row = rows.get(picklist_id)
         if row is None:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                f"id {picklist_id} does not belong to {field_key}",
+            raise api_error(
+                status.HTTP_400_BAD_REQUEST, "error.picklist_id_mismatch",
+                "id {id} does not belong to {field}", id=picklist_id, field=field_key,
             )
         row.sort_order = index
     db.commit()

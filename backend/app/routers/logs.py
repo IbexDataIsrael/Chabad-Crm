@@ -152,7 +152,7 @@ class ErrorEmailsIn(BaseModel):
             if not email:
                 continue
             if not _EMAIL_RE.match(email):
-                raise ValueError(f"Invalid email address: {raw}")
+                raise ValueError("Invalid email address")
             if email not in out:
                 out.append(email)
         return out

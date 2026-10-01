@@ -59,6 +59,7 @@ from app.schemas import (
     SignificantDateOut,
     SignificantDateUpdate,
 )
+from app.core.errors import api_error
 
 router = APIRouter(prefix="/api/contacts", tags=["contacts"])
 logger = logging.getLogger("app.contacts")
@@ -181,7 +182,7 @@ def _check_phone_unique(
     if exclude_id is not None:
         query = query.filter(models.Contact.id != exclude_id)
     if query.first():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "מספר טלפון זה כבר קיים בארגון")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "This phone number already exists in the organization")
 
 
 def _geocode_fallback(data: dict) -> None:
@@ -238,9 +239,9 @@ def _check_admin_only_picklist_fields(
         return
     blocked = _ADMIN_ONLY_PICKLIST_FIELDS & values.keys()
     if blocked:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN,
-            f"Only admins may set {', '.join(sorted(blocked))}",
+        raise api_error(
+            status.HTTP_403_FORBIDDEN, "error.admin_only_fields",
+            "Only admins may set {fields}", fields=", ".join(sorted(blocked)),
         )
 
 
@@ -385,7 +386,7 @@ def _sync_user_email(db: Session, user: models.User, email: Optional[str]) -> bo
     if dup:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "כתובת אימייל זו כבר בשימוש אצל משתמש אחר בארגון",
+            "This email is already used by another user in the organization",
         )
     if user.username == user.email:
         username_taken = (
@@ -464,7 +465,7 @@ def _provision_shliach_user(
         if existing.role != "shliach":
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "כתובת אימייל זו שייכת למשתמש קיים בארגון שאינו פעיל",
+                "This email belongs to an existing user in the organization who is not an activist",
             )
         linked_elsewhere = (
             db.query(models.ContactShliach)
@@ -780,9 +781,9 @@ def _contacts_query(
         }
         for key in custom_fields:
             if key not in org_keys:
-                raise HTTPException(
-                    status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    f"'{key}' is not a custom field",
+                raise api_error(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY, "error.not_a_custom_field",
+                    "'{key}' is not a custom field", key=key,
                 )
             # fixes28 §3: a deactivated (hidden) custom field never filters.
             if not org_keys[key]:

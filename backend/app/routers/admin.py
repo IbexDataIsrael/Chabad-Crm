@@ -44,6 +44,7 @@ from app.schemas import (
     Token,
 )
 from app.seed import provision_org
+from app.core.errors import api_error
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -268,7 +269,7 @@ def clone_organization_endpoint(
         db.commit()
     except ValueError as e:
         db.rollback()
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+        raise api_error(status.HTTP_400_BAD_REQUEST, "error.clone_failed", "Clone failed: {reason}", reason=e)
     except Exception:
         db.rollback()
         raise
