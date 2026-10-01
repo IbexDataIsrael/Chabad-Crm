@@ -453,3 +453,23 @@
     animation: none !important;
   }
 }
+
+/* The door sheet's scope: street2's exact color variables + dark ink, in the
+   app's normal font (the sheet is street2's, spec §4b). Same values as
+   street.module.css .pageBg. */
+.sheetScope {
+  --green-900: #123d22;
+  --green-800: #14532d;
+  --green-700: #1b6b3a;
+  --green-600: #22863f;
+  --green-500: #27a04c;
+  --green-400: #3fbd62;
+  --green-100: #dcf3e3;
+  --green-50: #effaf2;
+  --ink: #17251c;
+  --ink-soft: #5c6f62;
+  --line: #e2eee6;
+  --danger: #c0392b;
+  --amber: #e8a013;
+  color: var(--ink);
+}

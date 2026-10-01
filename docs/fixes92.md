@@ -115,3 +115,24 @@ removed (`layout.tsx`); the page stays at `/dashboard/route` for fixing.
 Verified locally: an activist's menu no longer has it, "דירות" is still there,
 and `/dashboard/route` still loads by URL. What exactly fails for the user is
 not yet known — to be investigated.
+
+## Fix 2026-10-01: door sheet was white-on-white
+
+**Cause:** the sheet is street2's, and street2 defines its colors (`--ink`,
+`--line`, `--green-…` and dark text) on its own page wrapper. The route page
+rendered the sheet inside its green wrapper with **white text** and **none of
+those variables**, so labels, building name and most values came out white on
+white. (My earlier test checked counts and saves but I did not look at the
+sheet screenshot — it showed the bug.)
+
+- [x] The sheet + dialogs now render outside the green wrapper, in a
+      `sheetScope` with street2's exact color variables and dark text.
+- Verified live (activist #5, 390px), screenshots reviewed: labels dark ink
+  (rgb 23,37,28), sheet identical to street2's; name edit → 1 PUT; invalid
+  phone → inline error, 0 PUTs; mezuzah chip → 1; language → 1; notes → 1;
+  sheet stays open; overlay tap closes; counter "2 מתוך 6"; next building
+  (Avenue V 2932, "0 מתוך 1"); opening a door there shows street2's
+  "building not completed" warning (4 pending); "stay" + previous building
+  work. No page errors.
+
+Still off the menu; not committed.

@@ -790,6 +790,7 @@ export default function RoutePage() {
       : `${t("route.apartment", "דירה")} ${a.apartment_name || "—"}`;
 
   return (
+    <>
     <div className={routeStyles.page} dir="rtl">
       <main className={routeStyles.phone}>
         <header className={routeStyles.header}>
@@ -960,7 +961,13 @@ export default function RoutePage() {
           />
         )}
       </main>
+    </div>
 
+    {/* The door sheet + dialogs render OUTSIDE the route's green, white-text
+        wrapper, in street2's own color scope (sheetScope) — inside it the
+        sheet inherited white text and had none of street2's color
+        variables, so it came out white-on-white. */}
+    <div className={routeStyles.sheetScope} dir="rtl">
       {openApt && (
         <div
           className={styles.overlay}
@@ -1414,6 +1421,7 @@ export default function RoutePage() {
       )}
 
     </div>
+    </>
   );
 }
 
