@@ -19,6 +19,7 @@ from app.core.email import (
     send_org_approved_user,
     set_pending_signup_emails,
 )
+from app.core.cloudinary_assets import delete_images, plan_org_image_cleanup
 from app.core.org_clone import clone_organization, plan_demo_clone
 from app.core import org_prefs
 from app.core.security import create_access_token, hash_password
@@ -399,8 +400,17 @@ def delete_organization(
     if _is_system_org(db, org_id):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot delete the system organization")
     _get_org(db, org_id)
+    # fixes91: decide which Cloudinary images go BEFORE the rows are gone
+    # (the logo / gallery / announcement URLs live on them).
+    image_ids = plan_org_image_cleanup(db, org_id)
     _delete_organization_cascade(db, org_id)
     logger.warning("superadmin %s DELETED org %s and all its data", admin.email, org_id)
+    # Only after the DB delete succeeded; never fails the request.
+    if image_ids:
+        try:
+            delete_images(image_ids)
+        except Exception:  # noqa: BLE001
+            logger.exception("Cloudinary cleanup for deleted org %s failed", org_id)
 
 
 @router.post("/organizations/{org_id}/impersonate", response_model=Token)

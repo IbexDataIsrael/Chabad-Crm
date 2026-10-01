@@ -260,3 +260,77 @@ def test_pending_signup_notify_emails(client, superadmin_headers, admin_headers,
     )
     assert r.status_code == 201, r.text
     assert sorted(to for to in sent if to != "owner@x.com") == ["a@x.com", "b@x.com", "ops@x.com"]
+
+
+# --- fixes91: Cloudinary images go with a deleted org ------------------------
+def _cloud(monkeypatch, enabled=True):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "cloudinary_cloud_name", "testcloud")
+    monkeypatch.setattr(settings, "cloudinary_api_key", "k")
+    monkeypatch.setattr(settings, "cloudinary_api_secret", "s")
+    monkeypatch.setattr(settings, "cloudinary_delete_on_org_delete", enabled)
+    calls = []
+
+    class _Resp:
+        ok = True
+        status_code = 200
+        text = ""
+
+        def __init__(self, ids):
+            self._ids = ids
+
+        def json(self):
+            return {"deleted": {i: "deleted" for i in self._ids}}
+
+    def fake_delete(url, params=None, auth=None, timeout=None):
+        ids = [v for k, v in params if k == "public_ids[]"]
+        calls.append(ids)
+        return _Resp(ids)
+
+    monkeypatch.setattr("app.core.cloudinary_assets.requests.delete", fake_delete)
+    return calls
+
+
+def _org_with_images(db_session, name, logo):
+    base = "https://res.cloudinary.com/testcloud/image/upload"
+    org = _make_org(db_session, name)
+    org.logo_url = logo
+    org.public_gallery = [f"{base}/v1/orgs/{org.id}/gallery/g1.jpg"]
+    db_session.add(models.ShliachAnnouncement(
+        organization_id=org.id, message_title="t",
+        message_content=f'<p>hi</p><img src="{base}/v2/orgs/{org.id}/announcements/a1.png">',
+    ))
+    db_session.commit()
+    return org
+
+
+def test_delete_org_removes_its_cloudinary_images_but_not_shared_ones(
+    client, superadmin_headers, db_session, monkeypatch
+):
+    calls = _cloud(monkeypatch)
+    shared_logo = "https://res.cloudinary.com/testcloud/image/upload/v9/org_logos/shared"
+    victim = _org_with_images(db_session, "Victim", shared_logo)
+    keeper = _make_org(db_session, "Keeper (a clone)")
+    keeper.logo_url = shared_logo  # clones reuse the source's logo
+    db_session.commit()
+
+    r = client.delete(f"/api/admin/organizations/{victim.id}", headers=superadmin_headers)
+    assert r.status_code == 204, r.text
+    deleted = sorted(i for batch in calls for i in batch)
+    assert deleted == [
+        f"orgs/{victim.id}/announcements/a1",
+        f"orgs/{victim.id}/gallery/g1",
+    ]  # the shared logo is kept
+
+
+def test_delete_org_leaves_cloudinary_alone_when_disabled(
+    client, superadmin_headers, db_session, monkeypatch
+):
+    calls = _cloud(monkeypatch, enabled=False)
+    org = _org_with_images(
+        db_session, "Local Org", "https://res.cloudinary.com/testcloud/image/upload/v1/org_logos/x"
+    )
+    r = client.delete(f"/api/admin/organizations/{org.id}", headers=superadmin_headers)
+    assert r.status_code == 204
+    assert calls == []

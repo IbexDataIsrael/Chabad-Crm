@@ -65,6 +65,11 @@ class Settings(BaseSettings):
     cloudinary_api_secret: str = ""
     # Folder all uploaded logos land in (namespaces the asset library).
     cloudinary_upload_folder: str = "org_logos"
+    # fixes91: delete an org's images from Cloudinary when the org is deleted.
+    # OFF by default — every environment shares one Cloudinary account and
+    # local data points at production's image URLs, so turn this on ONLY on
+    # the production backend (CLOUDINARY_DELETE_ON_ORG_DELETE=true).
+    cloudinary_delete_on_org_delete: bool = False
 
     @property
     def cloudinary_configured(self) -> bool:
