@@ -134,6 +134,12 @@ function DashboardChrome({ children }: { children: ReactNode }) {
             // link from the Users page (?activist=<id>) still opens it.
             roles: ["shliach"],
           },
+          // fixes92: the game-path road map — activists only, beside street2.
+          {
+            href: "/dashboard/route",
+            label: t("nav.route", "מסלול השליחות"),
+            roles: ["shliach"],
+          },
           {
             href: "/dashboard/apartments",
             label: t("nav.apartments_grid", "ניהול דירות"),

@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>המסלול שלי - minicrm</title>
+<style>
+  :root{
+    --green-900:#123d22; --green-800:#14532d; --green-700:#1b6b3a; --green-600:#22863f;
+    --green-500:#27a04c; --green-400:#3fbd62; --green-100:#dcf3e3; --green-50:#effaf2;
+    --ink:#17251c; --ink-soft:#5c6f62; --line:#e2eee6; --danger:#c0392b; --amber:#e8a013;
+    --radius:22px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:"Noto Sans Hebrew","Segoe UI",Arial,sans-serif;
+    background:
+      radial-gradient(circle at 12% 18%, rgba(255,255,255,.07) 0 10px, transparent 11px),
+      radial-gradient(circle at 78% 8%, rgba(255,255,255,.06) 0 7px, transparent 8px),
+      radial-gradient(circle at 62% 30%, rgba(255,255,255,.05) 0 12px, transparent 13px),
+      radial-gradient(circle at 30% 55%, rgba(255,255,255,.05) 0 8px, transparent 9px),
+      radial-gradient(circle at 88% 48%, rgba(255,255,255,.06) 0 9px, transparent 10px),
+      radial-gradient(circle at 8% 78%, rgba(255,255,255,.05) 0 11px, transparent 12px),
+      radial-gradient(circle at 70% 85%, rgba(255,255,255,.06) 0 7px, transparent 8px),
+      linear-gradient(180deg,#0f3820 0%, #123d22 55%, #0d2f1b 100%);
+    background-attachment:fixed;
+    color:var(--ink);
+    min-height:100vh;
+  }
+  .topbar{
+    position:sticky; top:0; z-index:20; display:flex; justify-content:center; align-items:center;
+    gap:10px; padding:14px 12px 10px;
+    background:linear-gradient(180deg, rgba(15,56,32,.96), rgba(15,56,32,.75) 80%, transparent);
+  }
+  .topbar .pill{
+    background:#0b2b18; color:#dff5e6; font-weight:700; font-size:17px;
+    border-radius:999px; padding:8px 26px; letter-spacing:.5px;
+    box-shadow:0 2px 10px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.08);
+  }
+  .topbar .logout{
+    position:absolute; inset-inline-start:12px; top:14px;
+    background:rgba(255,255,255,.12); color:#dff5e6; border:1px solid rgba(255,255,255,.25);
+    border-radius:999px; font-size:12px; padding:5px 12px; cursor:pointer; font-family:inherit;
+  }
+  .wrap{max-width:520px; margin:0 auto; padding:6px 14px 60px;}
+
+  /* ---------- login ---------- */
+  .login-card{
+    background:#fff; border-radius:26px; padding:28px 22px 24px; margin-top:8vh;
+    box-shadow:0 14px 40px rgba(0,0,0,.35);
+  }
+  .login-card h1{margin:0 0 4px; font-size:22px; color:var(--green-800);}
+  .login-card p{margin:0 0 18px; color:var(--ink-soft); font-size:13px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block; font-size:13px; font-weight:700; margin-bottom:5px; color:var(--green-800);}
+  .field input{
+    width:100%; border:1.5px solid var(--line); border-radius:14px; padding:12px 14px; font-size:16px;
+    font-family:inherit; outline:none; background:#fbfdfc;
+  }
+  .field input:focus{border-color:var(--green-500); box-shadow:0 0 0 3px var(--green-100);}
+  .btn{
+    display:block; width:100%; border:none; border-radius:16px; padding:14px; font-size:17px; font-weight:800;
+    font-family:inherit; cursor:pointer; background:linear-gradient(180deg,var(--green-400),var(--green-600));
+    color:#fff; box-shadow:0 4px 0 #15623068, 0 6px 14px rgba(0,0,0,.18);
+  }
+  .btn:active{transform:translateY(2px); box-shadow:0 2px 0 #15623068;}
+  .btn[disabled]{opacity:.6; cursor:default;}
+  .err{
+    background:#fdecea; color:var(--danger); border:1px solid #f3c4bd; border-radius:12px;
+    padding:10px 12px; font-size:13px; margin-bottom:12px; white-space:pre-wrap;
+  }
+  .org-pick{display:flex; flex-direction:column; gap:8px; margin-bottom:14px;}
+  .org-pick button{
+    border:1.5px solid var(--green-500); background:var(--green-50); color:var(--green-800);
+    border-radius:14px; padding:12px; font-size:15px; font-weight:700; cursor:pointer; font-family:inherit;
+  }
+
+  /* ---------- states ---------- */
+  .state{
+    background:#fff; border-radius:var(--radius); padding:40px 22px; text-align:center;
+    color:var(--ink-soft); box-shadow:0 10px 30px rgba(0,0,0,.25);
+  }
+  .state .big{font-size:40px; margin-bottom:10px;}
+  .state .retry{
+    margin-top:16px; display:inline-block; background:var(--green-600); color:#fff; border:none;
+    border-radius:999px; padding:10px 26px; font-size:15px; font-weight:700; cursor:pointer; font-family:inherit;
+  }
+  .spinner{
+    width:34px; height:34px; margin:0 auto 12px; border-radius:50%;
+    border:4px solid var(--green-100); border-top-color:var(--green-600);
+    animation:spin 0.9s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ---------- street ---------- */
+  .building{
+    background:#fff; border-radius:var(--radius); margin-bottom:18px; overflow:hidden;
+    box-shadow:0 10px 26px rgba(0,0,0,.28);
+  }
+  .b-head{
+    display:flex; align-items:center; gap:12px; padding:14px 16px;
+    background:linear-gradient(180deg,#eefaf1,#e2f5e8); border-bottom:1px solid var(--line);
+  }
+  .b-badge{
+    min-width:52px; height:52px; border-radius:14px; background:linear-gradient(180deg,var(--green-400),var(--green-600));
+    color:#fff; font-size:22px; font-weight:800; display:flex; align-items:center; justify-content:center;
+    box-shadow:inset 0 -3px 0 rgba(0,0,0,.18); padding:0 8px;
+  }
+  .b-info{flex:1; min-width:0;}
+  .b-name{font-size:17px; font-weight:800; color:var(--green-900); line-height:1.25;}
+  .b-addr{font-size:13px; color:var(--ink-soft); margin-top:2px;}
+  .b-area{
+    display:inline-block; margin-top:5px; font-size:11px; font-weight:700; color:var(--green-800);
+    background:var(--green-100); border-radius:999px; padding:2px 10px;
+  }
+  .b-map{
+    width:42px; height:42px; flex:none; border-radius:50%; background:var(--green-100);
+    display:flex; align-items:center; justify-content:center; text-decoration:none;
+    border:1.5px solid var(--green-500);
+  }
+  .b-map svg{width:20px; height:20px; fill:var(--green-700);}
+  .doors{
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:12px; padding:16px;
+  }
+  .door{
+    border:2px solid var(--green-700); background:linear-gradient(180deg,#f4fbf6,#e6f5ea);
+    border-radius:48px 48px 14px 14px; padding:16px 6px 10px; cursor:pointer; font-family:inherit;
+    text-align:center; position:relative; box-shadow:0 3px 0 rgba(20,83,45,.25);
+    transition:transform .08s;
+  }
+  .door:active{transform:scale(.96);}
+  .door .knob{
+    position:absolute; top:46%; inset-inline-start:9px; width:7px; height:7px; border-radius:50%;
+    background:var(--green-600);
+  }
+  .door .d-apt{font-size:19px; font-weight:800; color:var(--green-900); line-height:1.1;}
+  .door .d-floor{font-size:11px; color:var(--ink-soft); margin-top:3px;}
+  .door .d-name{
+    font-size:11px; color:var(--green-800); font-weight:700; margin-top:5px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .door .d-dot{position:absolute; top:8px; inset-inline-end:8px; width:9px; height:9px; border-radius:50%;}
+
+  /* ---------- sheet ---------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(6,26,15,.55); z-index:40;
+    display:flex; align-items:flex-end; justify-content:center;
+  }
+  .sheet{
+    background:#fff; width:100%; max-width:520px; max-height:92vh; overflow-y:auto;
+    border-radius:26px 26px 0 0; padding:10px 18px 30px;
+    animation:up .22s ease-out;
+  }
+  @keyframes up{from{transform:translateY(40px); opacity:.6} to{transform:none; opacity:1}}
+  .grab{width:46px; height:5px; border-radius:99px; background:#cfded4; margin:4px auto 12px;}
+  .s-head{
+    display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:18px;
+    background:linear-gradient(180deg,#eefaf1,#e2f5e8); border:1px solid var(--line); margin-bottom:6px;
+  }
+  .s-close{
+    position:absolute; inset-inline-start:14px; top:14px; width:34px; height:34px; border-radius:50%;
+    border:none; background:rgba(255,255,255,.16); color:#fff; font-size:16px; cursor:pointer;
+  }
+  .apt-title{
+    display:flex; align-items:center; gap:8px; justify-content:center; margin:14px 0 4px;
+    font-size:21px; font-weight:800; color:var(--ink);
+  }
+  .apt-auto{font-size:11px; color:var(--ink-soft); display:flex; align-items:center; gap:4px; justify-content:center; margin-bottom:10px;}
+  .rows{border-top:1px solid var(--line);}
+  .row{
+    display:flex; align-items:center; gap:10px; padding:13px 2px; border-bottom:1px solid var(--line);
+  }
+  .row .lbl{flex:none; width:96px; font-size:14px; font-weight:800; color:var(--ink);}
+  .row .val{flex:1; min-width:0; font-size:14px; color:#333; word-break:break-word;}
+  .row .val.empty{color:#b6c6bb;}
+  .row .act{
+    flex:none; width:34px; height:34px; border-radius:50%; border:none; cursor:pointer;
+    background:var(--green-50); color:var(--green-700); display:flex; align-items:center; justify-content:center;
+  }
+  .row .act svg{width:15px; height:15px; fill:currentColor;}
+  .row .lock{color:#a9bcb0; background:#f4f8f5; cursor:default;}
+  .row a{color:var(--green-700); font-weight:700; text-decoration:none;}
+  .chips{display:flex; flex-wrap:wrap; gap:7px;}
+  .chip{
+    border:1.5px solid #cfe3d4; background:#fff; color:var(--ink-soft); border-radius:999px;
+    padding:6px 14px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;
+  }
+  .chip.on{background:var(--green-500); border-color:var(--green-600); color:#fff;}
+  .chip.view{cursor:default;}
+  .chip.view.off{display:none;}
+  .editbox{flex:1; min-width:0;}
+  .editbox input[type=text],.editbox input[type=email],.editbox input[type=tel],.editbox textarea{
+    width:100%; border:1.5px solid var(--green-500); border-radius:12px; padding:9px 12px; font-size:15px;
+    font-family:inherit; outline:none; background:#fbfdfc;
+  }
+  .editbox textarea{min-height:74px; resize:vertical;}
+  .edit-actions{display:flex; gap:8px; margin-top:9px;}
+  .edit-actions .save{
+    flex:1; background:var(--green-600); color:#fff; border:none; border-radius:10px; padding:9px;
+    font-weight:800; font-size:14px; cursor:pointer; font-family:inherit;
+  }
+  .edit-actions .cancel{
+    flex:1; background:#eef3ef; color:var(--ink-soft); border:none; border-radius:10px; padding:9px;
+    font-weight:700; font-size:14px; cursor:pointer; font-family:inherit;
+  }
+  .edit-err{color:var(--danger); font-size:12px; margin-top:7px; white-space:pre-wrap;}
+  .notes-card{
+    background:#f4faf5; border:1px solid var(--line); border-radius:14px; padding:12px 14px;
+  }
+  .section{
+    margin-top:18px; background:#f4faf5; border:1px solid var(--line); border-radius:18px; padding:14px 16px;
+  }
+  .section h3{
+    margin:0 0 6px; font-size:16px; color:var(--green-900); display:flex; align-items:center; gap:8px;
+  }
+  .soon{
+    background:var(--amber); color:#fff; font-size:11px; font-weight:800; border-radius:999px; padding:2px 10px;
+  }
+  .section .muted{color:var(--ink-soft); font-size:13px;}
+  .foot-note{
+    margin-top:18px; background:var(--green-100); color:var(--green-900); font-size:12px; font-weight:700;
+    border-radius:12px; padding:10px 14px; text-align:center;
+  }
+  .ro-extra{font-size:12px; color:var(--ink-soft);}
+</style>
+</head>
+<body>
+<div class="topbar" id="topbar" style="visibility:hidden">
+  <div class="pill">המסלול שלי</div>
+  <button class="logout" id="logoutBtn">התנתק</button>
+</div>
+<div class="wrap" id="app"></div>
+<div id="sheetRoot"></div>
+
+<script>
+"use strict";
+const API = "https://minicrm-1-phw9.onrender.com";
+const TOKEN_KEY = "minicrm_street_token";
+const PICKLIST_FIELDS = {
+  jewish_status:   { key: "apartment.Jewish_status",   label: "יהדות" },
+  mezuzah_status:  { key: "apartment.mezuzah_status",  label: "מזוזה" },
+  campaign_status: { key: "apartment.campaign_status", label: "סטטוס קמפיין" },
+  language:        { key: "apartment.language",        label: "שפה", multi: true }
+};
+
+const state = {
+  token: localStorage.getItem(TOKEN_KEY) || null,
+  items: [],
+  picklists: {},       // field -> [{value, hebrew_label}]
+  picklistErrors: {},
+  currentId: null,
+  editing: null        // field currently in edit mode
+};
+
+const app = document.getElementById("app");
+const sheetRoot = document.getElementById("sheetRoot");
+const topbar = document.getElementById("topbar");
+
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+function mapsUrl(addr){ return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(addr); }
+const pinSvg = '<svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>';
+const pencilSvg = '<svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
+const lockSvg = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>';
+
+async function api(path, opts){
+  opts = opts || {};
+  opts.headers = Object.assign({}, opts.headers || {});
+  if(state.token) opts.headers["Authorization"] = "Bearer " + state.token;
+  let res;
+  try{
+    res = await fetch(API + path, opts);
+  }catch(netErr){
+    const e = new Error("NETWORK");
+    e.network = true;
+    throw e;
+  }
+  if(res.status === 401){
+    const e = new Error("AUTH"); e.auth = true; throw e;
+  }
+  let body = null;
+  try{ body = await res.json(); }catch(_){}
+  if(!res.ok){
+    const e = new Error("API " + res.status);
+    e.status = res.status;
+    e.detail = body && body.detail ? (typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail)) : ("שגיאה " + res.status);
+    throw e;
+  }
+  return body;
+}
+
+function showLogin(msg){
+  topbar.style.visibility = "hidden";
+  sheetRoot.innerHTML = "";
+  app.innerHTML =
+    '<div class="login-card">' +
+      '<h1>המסלול שלי</h1>' +
+      '<p>כניסה למערכת minicrm</p>' +
+      (msg ? '<div class="err">' + esc(msg) + '</div>' : '') +
+      '<div id="loginErr"></div>' +
+      '<form id="loginForm">' +
+        '<div class="field"><label>שם משתמש או אימייל</label><input id="lu" autocomplete="username" required></div>' +
+        '<div class="field"><label>סיסמה</label><input id="lp" type="password" autocomplete="current-password" required></div>' +
+        '<button class="btn" id="loginBtn" type="submit">כניסה</button>' +
+      '</form>' +
+      '<div id="orgPick"></div>' +
+    '</div>';
+  document.getElementById("loginForm").addEventListener("submit", function(ev){
+    ev.preventDefault();
+    doLogin(document.getElementById("lu").value, document.getElementById("lp").value, null);
+  });
+}
+
+async function doLogin(username, password, orgId){
+  const btn = document.getElementById("loginBtn");
+  const errBox = document.getElementById("loginErr");
+  if(btn) btn.disabled = true;
+  if(errBox) errBox.innerHTML = "";
+  try{
+    const params = new URLSearchParams({ username: username, password: password });
+    if(orgId != null) params.set("organization_id", String(orgId));
+    const res = await fetch(API + "/api/auth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params
+    }).catch(function(){ throw { network: true }; });
+    const body = await res.json().catch(function(){ return null; });
+    if(!res.ok){
+      const d = body && body.detail ? (typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail)) : ("שגיאה " + res.status);
+      throw { detail: d };
+    }
+    if(body.requires_org_selection){
+      const box = document.getElementById("orgPick");
+      box.innerHTML = '<div style="font-size:13px;font-weight:700;margin:14px 0 8px;color:var(--green-800)">בחר ארגון:</div>' +
+        '<div class="org-pick">' + body.organizations.map(function(o){
+          return '<button type="button" data-org="' + o.id + '">' + esc(o.name) + '</button>';
+        }).join("") + '</div>';
+      Array.prototype.forEach.call(box.querySelectorAll("button[data-org]"), function(b){
+        b.addEventListener("click", function(){ doLogin(username, password, Number(b.getAttribute("data-org"))); });
+      });
+      return;
+    }
+    state.token = body.access_token;
+    localStorage.setItem(TOKEN_KEY, state.token);
+    boot();
+  }catch(e){
+    if(errBox){
+      errBox.innerHTML = '<div class="err">' + (e && e.network
+        ? "אין חיבור לשרת. אם פתחת את הקובץ ישירות (file://), הדפדפן חוסם את הגישה - צריך לפתוח את הדף מכתובת מאושרת."
+        : esc(e && e.detail ? e.detail : "ההתחברות נכשלה")) + '</div>';
+    }
+  }finally{
+    if(btn) btn.disabled = false;
+  }
+}
+
+function loadingState(text){
+  app.innerHTML = '<div class="state" style="margin-top:6vh"><div class="spinner"></div>' + esc(text || "טוען...") + '</div>';
+}
+function errorState(text){
+  app.innerHTML = '<div class="state" style="margin-top:6vh"><div class="big">&#9888;&#65039;</div><div>' +
+    esc(text) + '</div><button class="retry" id="retryBtn">נסה שוב</button></div>';
+  document.getElementById("retryBtn").addEventListener("click", boot);
+}
+
+async function boot(){
+  topbar.style.visibility = "visible";
+  loadingState("טוען דירות...");
+  try{
+    // Full pagination pass, page_size=100.
+    const all = [];
+    let page = 1, total = Infinity;
+    while(all.length < total){
+      const d = await api("/api/apartments/list?page=" + page + "&page_size=100");
+      total = d.total;
+      all.push.apply(all, d.items);
+      if(!d.items.length) break;
+      page++;
+    }
+    state.items = all;
+    // Picklists in parallel; a failure never blocks the street.
+    await Promise.all(Object.keys(PICKLIST_FIELDS).map(async function(field){
+      const key = PICKLIST_FIELDS[field].key;
+      try{
+        const opts = await api("/api/picklists/" + encodeURIComponent(key));
+        state.picklists[field] = opts.filter(function(o){ return o.is_active; })
+          .sort(function(a,b){ return (a.sort_order - b.sort_order); });
+        delete state.picklistErrors[field];
+      }catch(e){
+        state.picklists[field] = null;
+        state.picklistErrors[field] = e && e.detail ? e.detail : "שגיאה בטעינת אפשרויות";
+      }
+    }));
+    renderStreet();
+    // Deep link: #apt=<id>
+    const m = location.hash.match(/apt=(\d+)/);
+    if(m) openApartment(Number(m[1]), false);
+  }catch(e){
+    if(e && e.auth){ doLogout("ההתחברות פגה. התחבר שוב."); return; }
+    errorState(e && e.network
+      ? "אין חיבור לשרת. אם פתחת את הקובץ ישירות (file://), הדפדפן חוסם את הגישה - צריך לפתוח את הדף מכתובת מאושרת."
+      : (e && e.detail ? e.detail : "טעינה נכשלה"));
+  }
+}
+
+function groupByBuilding(items){
+  const map = new Map();
+  items.forEach(function(a){
+    if(!map.has(a.building_id)){
+      map.set(a.building_id, {
+        id: a.building_id,
+        name: a.building_name,
+        address: a.building_address,
+        area: a.area_name,
+        apartments: []
+      });
+    }
+    map.get(a.building_id).apartments.push(a);
+  });
+  return Array.from(map.values());
+}
+
+function renderStreet(){
+  if(!state.items.length){
+    app.innerHTML = '<div class="state" style="margin-top:6vh"><div class="big">&#127968;</div><div>לא נמצאו דירות במסלול שלך.</div></div>';
+    return;
+  }
+  const buildings = groupByBuilding(state.items);
+  app.innerHTML = buildings.map(function(b){
+    const title = b.name || b.address || ("בניין " + b.id);
+    const doors = b.apartments.map(function(a){
+      return '<button class="door" data-apt="' + a.id + '">' +
+        '<span class="knob"></span>' +
+        '<div class="d-apt">' + esc(a.apartment_name || "—") + '</div>' +
+        (a.floor != null && a.floor !== "" ? '<div class="d-floor">קומה ' + esc(a.floor) + '</div>' : '<div class="d-floor">&nbsp;</div>') +
+        '<div class="d-name">' + esc(a.name || "") + '</div>' +
+      '</button>';
+    }).join("");
+    return '<div class="building">' +
+      '<div class="b-head">' +
+        '<div class="b-badge">' + b.apartments.length + '</div>' +
+        '<div class="b-info">' +
+          '<div class="b-name">' + esc(title) + '</div>' +
+          (b.name && b.address ? '<div class="b-addr">' + esc(b.address) + '</div>' : '') +
+          (b.area ? '<span class="b-area">' + esc(b.area) + '</span>' : '') +
+        '</div>' +
+        (b.address ? '<a class="b-map" target="_blank" rel="noopener" href="' + esc(mapsUrl(b.address)) + '" title="פתח במפות">' + pinSvg + '</a>' : '') +
+      '</div>' +
+      '<div class="doors">' + doors + '</div>' +
+    '</div>';
+  }).join("");
+  Array.prototype.forEach.call(app.querySelectorAll(".door"), function(d){
+    d.addEventListener("click", function(){ openApartment(Number(d.getAttribute("data-apt")), true); });
+  });
+}
+
+function findApt(id){ return state.items.find(function(a){ return a.id === id; }) || null; }
+
+function aptTitle(a){
+  const parts = [];
+  if(a.floor != null && a.floor !== "") parts.push("קומה " + a.floor);
+  parts.push("דירה " + (a.apartment_name || "—"));
+  return parts.join(" ");
+}
+
+function picklistLabel(field, value){
+  const opts = state.picklists[field] || [];
+  const hit = opts.find(function(o){ return o.value === value; });
+  return hit ? hit.hebrew_label : value;
+}
+
+function openApartment(id, push){
+  const a = findApt(id);
+  if(!a) return;
+  state.currentId = id;
+  state.editing = null;
+  if(push){ try{ history.replaceState(null, "", "#apt=" + id); }catch(_){} }
+  renderSheet(a);
+}
+
+function closeSheet(){
+  sheetRoot.innerHTML = "";
+  state.currentId = null;
+  state.editing = null;
+  try{ history.replaceState(null, "", location.pathname + location.search); }catch(_){}
+}
+
+function rowShell(label, inner, opts){
+  opts = opts || {};
+  const icon = opts.locked
+    ? '<span class="act lock">' + lockSvg + '</span>'
+    : '<button class="act" data-edit="' + esc(opts.field) + '" title="ערוך">' + pencilSvg + '</button>';
+  return '<div class="row">' +
+    '<div class="lbl">' + esc(label) + '</div>' +
+    '<div class="val' + (opts.empty ? " empty" : "") + '">' + inner + '</div>' +
+    icon +
+  '</div>';
+}
+
+function renderSheet(a){
+  const b = { name: a.building_name, address: a.building_address, area: a.area_name };
+  const bTitle = b.name || b.address || ("בניין " + a.building_id);
+  const bCount = state.items.filter(function(x){ return x.building_id === a.building_id; }).length;
+
+  const rows = [];
+  // שם דייר
+  rows.push(rowShell("שם דייר", a.name ? esc(a.name) : "לא הוזן", { field: "name", empty: !a.name }));
+  // טלפון
+  rows.push(rowShell("טלפון",
+    a.phone ? '<a href="tel:' + esc(a.phone) + '">' + esc(a.phone) + ' <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align:-2px"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg></a>' : "לא הוזן",
+    { field: "phone", empty: !a.phone }));
+  // אימייל
+  rows.push(rowShell("אימייל",
+    a.email ? '<a href="mailto:' + esc(a.email) + '">' + esc(a.email) + "</a>" : "לא הוזן",
+    { field: "email", empty: !a.email }));
+  // picklists
+  Object.keys(PICKLIST_FIELDS).forEach(function(field){
+    const def = PICKLIST_FIELDS[field];
+    if(def.multi){
+      const vals = a.language || [];
+      const inner = vals.length
+        ? '<div class="chips">' + vals.map(function(v){ return '<span class="chip view on">' + esc(picklistLabel(field, v)) + '</span>'; }).join("") + '</div>'
+        : "לא הוזן";
+      rows.push(rowShell(def.label, inner, { field: field, empty: !vals.length }));
+    }else{
+      const v = a[field];
+      const inner = v ? '<div class="chips"><span class="chip view on">' + esc(picklistLabel(field, v)) + '</span></div>' : "לא הוזן";
+      rows.push(rowShell(def.label, inner, { field: field, empty: !v }));
+    }
+  });
+  // מספר דוח - locked
+  rows.push(rowShell("מספר דוח", esc(a.report_number_name || (a.report_number_id != null ? a.report_number_id : "—")), { locked: true, empty: a.report_number_id == null }));
+  // הערות
+  rows.push(
+    '<div class="row" style="align-items:flex-start">' +
+      '<div class="lbl">הערות</div>' +
+      '<div class="notes-card val' + (a.apartment_notes ? "" : " empty") + '" style="flex:1">' +
+        (a.apartment_notes ? esc(a.apartment_notes) : "אין הערות") +
+        '<div style="margin-top:8px"><button class="act" data-edit="apartment_notes" title="ערוך">' + pencilSvg + '</button></div>' +
+      '</div>' +
+    '</div>'
+  );
+  // איש קשר - locked
+  rows.push(rowShell("איש קשר", a.contact_name ? "<b>" + esc(a.contact_name) + "</b>" : "—", { locked: true, empty: !a.contact_name }));
+
+  // org custom picklists + custom fields (read-only, only if present)
+  const extras = [];
+  const pv = a.picklist_values || {};
+  Object.keys(pv).forEach(function(k){
+    if(pv[k] != null && pv[k] !== "") extras.push('<div class="ro-extra"><b>' + esc(k) + ":</b> " + esc(pv[k]) + "</div>");
+  });
+  const cf = a.custom_field_values || {};
+  Object.keys(cf).forEach(function(k){
+    if(cf[k] != null && cf[k] !== "") extras.push('<div class="ro-extra"><b>' + esc(k) + ":</b> " + esc(cf[k]) + "</div>");
+  });
+
+  sheetRoot.innerHTML =
+    '<div class="overlay" id="ovl">' +
+      '<div class="sheet" role="dialog" aria-modal="true">' +
+        '<div class="grab"></div>' +
+        '<div class="s-head">' +
+          '<div class="b-badge">' + bCount + '</div>' +
+          '<div class="b-info">' +
+            '<div class="b-name">' + esc(bTitle) + '</div>' +
+            (b.name && b.address ? '<div class="b-addr">' + esc(b.address) + '</div>' : '') +
+            (b.area ? '<span class="b-area">' + esc(b.area) + '</span>' : '') +
+          '</div>' +
+          (b.address ? '<a class="b-map" target="_blank" rel="noopener" href="' + esc(mapsUrl(b.address)) + '">' + pinSvg + '</a>' : '') +
+        '</div>' +
+        '<div class="apt-title">' + esc(aptTitle(a)) + '</div>' +
+        '<div class="apt-auto">' + lockSvg + ' אוטומטי</div>' +
+        '<div class="rows" id="rowsBox">' + rows.join("") + '</div>' +
+        (extras.length ? '<div class="section"><h3>שדות נוספים</h3>' + extras.join("") + '</div>' : '') +
+        '<div class="section"><h3>ביקורים <span class="soon">בקרוב</span></h3>' +
+          '<div class="muted">רשימת הביקורים לדירה תופיע כאן כשהמערכת תתמוך בזה.</div>' +
+        '</div>' +
+        '<div class="foot-note">כל שדה מהמערכת הנוכחית מופיע כאן - שום דבר לא הלך לאיבוד</div>' +
+        '<div style="height:14px"></div>' +
+        '<button class="btn" id="closeSheet" style="background:#eef3ef;color:var(--ink-soft);box-shadow:none">סגור</button>' +
+      '</div>' +
+    '</div>';
+
+  document.getElementById("closeSheet").addEventListener("click", closeSheet);
+  document.getElementById("ovl").addEventListener("click", function(ev){
+    if(ev.target === ev.currentTarget) closeSheet();
+  });
+  Array.prototype.forEach.call(sheetRoot.querySelectorAll("[data-edit]"), function(btn){
+    btn.addEventListener("click", function(){ startEdit(btn.getAttribute("data-edit")); });
+  });
+}
+
+function startEdit(field){
+  const a = findApt(state.currentId);
+  if(!a) return;
+  state.editing = field;
+  const rowsBox = document.getElementById("rowsBox");
+  // Re-render whole sheet, then swap the one row into edit mode.
+  renderSheet(a);
+  const btn = sheetRoot.querySelector('[data-edit="' + field + '"]');
+  if(!btn) return;
+  const row = btn.closest(".row");
+  const valBox = row.querySelector(".val");
+  btn.style.display = "none";
+
+  let editorHtml = "";
+  if(field === "name" || field === "phone" || field === "email"){
+    const type = field === "phone" ? "tel" : (field === "email" ? "email" : "text");
+    editorHtml = '<input type="' + type + '" id="edInput" value="' + esc(a[field] || "") + '">';
+  }else if(field === "apartment_notes"){
+    editorHtml = '<textarea id="edInput">' + esc(a.apartment_notes || "") + "</textarea>";
+  }else if(PICKLIST_FIELDS[field]){
+    const opts = state.picklists[field];
+    if(opts === null){
+      editorHtml = '<div class="edit-err">' + esc(state.picklistErrors[field] || "לא ניתן לטעון אפשרויות") + "</div>";
+    }else if(!opts.length){
+      editorHtml = '<div class="muted" style="font-size:13px;color:var(--ink-soft)">אין אפשרויות מוגדרות בשדה הזה.</div>';
+    }else{
+      const multi = !!PICKLIST_FIELDS[field].multi;
+      const cur = multi ? (a.language || []) : (a[field] ? [a[field]] : []);
+      editorHtml = '<div class="chips" id="edChips" data-multi="' + (multi ? "1" : "") + '">' +
+        opts.map(function(o){
+          const on = cur.indexOf(o.value) >= 0;
+          return '<button type="button" class="chip' + (on ? " on" : "") + '" data-v="' + esc(o.value) + '">' + esc(o.hebrew_label) + "</button>";
+        }).join("") + "</div>";
+    }
+  }
+
+  valBox.innerHTML = '<div class="editbox">' + editorHtml +
+    '<div class="edit-actions">' +
+      '<button class="save" id="edSave">שמור</button>' +
+      '<button class="cancel" id="edCancel">ביטול</button>' +
+    "</div>" +
+    '<div class="edit-err" id="edErr"></div>' +
+  "</div>";
+
+  const chipsBox = document.getElementById("edChips");
+  if(chipsBox){
+    const multi = chipsBox.getAttribute("data-multi") === "1";
+    Array.prototype.forEach.call(chipsBox.querySelectorAll(".chip"), function(ch){
+      ch.addEventListener("click", function(){
+        if(multi){ ch.classList.toggle("on"); }
+        else{
+          const was = ch.classList.contains("on");
+          Array.prototype.forEach.call(chipsBox.querySelectorAll(".chip"), function(x){ x.classList.remove("on"); });
+          if(!was) ch.classList.add("on");
+        }
+      });
+    });
+  }
+  document.getElementById("edCancel").addEventListener("click", function(){ renderSheet(findApt(state.currentId)); });
+  document.getElementById("edSave").addEventListener("click", function(){ saveEdit(field); });
+}
+
+async function saveEdit(field){
+  const a = findApt(state.currentId);
+  if(!a) return;
+  const errBox = document.getElementById("edErr");
+  const saveBtn = document.getElementById("edSave");
+  const cancelBtn = document.getElementById("edCancel");
+  errBox.textContent = "";
+  let patch = {};
+  if(field === "name" || field === "phone" || field === "email" || field === "apartment_notes"){
+    const v = document.getElementById("edInput").value.trim();
+    patch[field] = v === "" ? null : v;
+  }else if(PICKLIST_FIELDS[field]){
+    if(state.picklists[field] === null || !state.picklists[field].length) return;
+    const chipsBox = document.getElementById("edChips");
+    const selected = Array.prototype.filter.call(chipsBox.querySelectorAll(".chip.on"), function(x){
+      return x.getAttribute("data-v");
+    }).map(function(x){ return x.getAttribute("data-v"); });
+    if(PICKLIST_FIELDS[field].multi){ patch.language = selected; }
+    else{ patch[field] = selected.length ? selected[0] : null; }
+  }else{
+    return;
+  }
+  saveBtn.disabled = true; cancelBtn.disabled = true;
+  saveBtn.textContent = "שומר...";
+  try{
+    const updated = await api("/api/apartments/" + a.id, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch)
+    });
+    // The API versions the row: the response carries a NEW id. Adopt it.
+    const merged = Object.assign({}, a, updated);
+    const idx = state.items.findIndex(function(x){ return x.id === a.id; });
+    if(idx >= 0) state.items[idx] = merged;
+    state.currentId = merged.id;
+    try{ history.replaceState(null, "", "#apt=" + merged.id); }catch(_){}
+    renderStreet();
+    renderSheet(merged);
+  }catch(e){
+    saveBtn.disabled = false; cancelBtn.disabled = false;
+    saveBtn.textContent = "שמור";
+    if(e && e.auth){ closeSheet(); doLogout("ההתחברות פגה. התחבר שוב."); return; }
+    errBox.textContent = e && e.network
+      ? "אין חיבור לשרת - השינוי לא נשמר. נסה שוב."
+      : (e && e.detail ? e.detail : "השמירה נכשלה");
+  }
+}
+
+function doLogout(msg){
+  state.token = null;
+  state.items = [];
+  localStorage.removeItem(TOKEN_KEY);
+  showLogin(msg || null);
+}
+
+document.getElementById("logoutBtn").addEventListener("click", function(){ doLogout(null); });
+
+if(state.token){ boot(); } else { showLogin(null); }
+</script>
+</body>
+</html>
