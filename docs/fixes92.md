@@ -107,3 +107,11 @@ Not verified live: "לבניין הבא ←" moving to a *following* building (n
 real building completed on local data); its logic is the same id hand-off.
 
 Committed (incl. everything in `frontend/public`), **not pushed**.
+
+## Follow-up 2026-10-01: taken off the menu
+
+User report: "the route page is not working". The "מסלול השליחות" menu entry is
+removed (`layout.tsx`); the page stays at `/dashboard/route` for fixing.
+Verified locally: an activist's menu no longer has it, "דירות" is still there,
+and `/dashboard/route` still loads by URL. What exactly fails for the user is
+not yet known — to be investigated.
