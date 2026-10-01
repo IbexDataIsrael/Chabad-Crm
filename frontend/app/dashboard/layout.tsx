@@ -129,7 +129,10 @@ function DashboardChrome({ children }: { children: ReactNode }) {
           {
             href: "/dashboard/street2",
             label: t("nav.apartments", "דירות"),
-            roles: ["staff", "shliach", "campaign_manager"],
+            // fixes89: activists only — hidden from campaign_manager and the
+            // restricted (staff) user. The admin/campaign-manager activist-view
+            // link from the Users page (?activist=<id>) still opens it.
+            roles: ["shliach"],
           },
           {
             href: "/dashboard/apartments",

@@ -404,7 +404,10 @@ export default function UsersPage() {
   // contacts by email — the old heuristic silently broke when a shliach's
   // login email differed from their contact record's email.
   const userRows: UserRow[] = orgUsers.map((u) => {
-    const role: Role = u.role === "admin" || u.role === "shliach" ? u.role : "staff";
+    // fixes89: campaign_manager used to be folded into "staff" here, so it
+    // showed (and filtered) as a restricted user.
+    const role: Role =
+      u.role === "admin" || u.role === "shliach" || u.role === "campaign_manager" ? u.role : "staff";
     return {
       kind: "user",
       key: `u${u.id}`,

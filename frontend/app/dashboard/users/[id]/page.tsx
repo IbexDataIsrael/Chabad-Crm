@@ -156,7 +156,9 @@ export default function UserDetailPage() {
       ? t("users.role_admin", "מנהל מערכת")
       : user.role === "shliach"
         ? t("users.role_shliach", "פעיל")
-        : t("users.role_staff", "משתמש מוגבל");
+        : user.role === "campaign_manager"
+          ? t("users.role_campaign_manager", "מנהל קמפיינים")
+          : t("users.role_staff", "משתמש מוגבל");
 
   function areaNamesText(ids: number[]): string {
     if (ids.length === 0) return "—";
@@ -269,6 +271,9 @@ export default function UserDetailPage() {
                 >
                   <option value="staff">{t("users.role_staff", "משתמש מוגבל")}</option>
                   <option value="admin">{t("users.role_admin", "מנהל מערכת")}</option>
+                  <option value="campaign_manager">
+                    {t("users.role_campaign_manager", "מנהל קמפיינים")}
+                  </option>
                 </select>
               )}
             </dd>
