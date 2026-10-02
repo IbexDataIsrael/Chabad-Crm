@@ -136,6 +136,12 @@ function DashboardChrome({ children }: { children: ReactNode }) {
           },
           // fixes92: the game-path road map — activists only, beside street2,
           // marked BETA while it's being tried out.
+          // fixes96: the activist's buildings + area polygons on a Google map.
+          {
+            href: "/dashboard/activist-map",
+            label: t("nav.activist_map", "מפת גוגל"),
+            roles: ["shliach"],
+          },
           {
             href: "/dashboard/route",
             label: t("nav.route_jewish_points", "נקודות יהודיות בטא"),

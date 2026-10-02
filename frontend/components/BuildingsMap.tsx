@@ -45,8 +45,17 @@ function markerIcon(isTownHouse: boolean, g: any) {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
     scaledSize: new g.maps.Size(28, 34),
     anchor: new g.maps.Point(14, 34),
+    // fixes96: an optional marker label (task numbers) sits under the icon.
+    labelOrigin: new g.maps.Point(14, 46),
   };
 }
+
+/** fixes96: the building fields the map needs — a full Building or the
+ *  slimmer rows of GET /api/tasks/map both fit. */
+export type MapBuilding = Pick<
+  Building,
+  "id" | "building_name" | "building_address" | "latitude" | "longitude"
+> & { is_town_house?: boolean };
 
 /**
  * A Google map plotting every building that has coordinates, with a marker per
@@ -58,9 +67,20 @@ function markerIcon(isTownHouse: boolean, g: any) {
 export function BuildingsMap({
   buildings,
   areas = [],
+  labels,
+  showBuildingLink = true,
+  infoExtra,
+  heightClass = "h-96",
 }: {
-  buildings: Building[];
-  areas?: Area[];
+  buildings: MapBuilding[];
+  areas?: Pick<Area, "area_polygon">[];
+  /** fixes96: text drawn under a building's marker (e.g. "#12, #15"). */
+  labels?: Record<number, string>;
+  /** The popup's "view building" link (admin pages only — activists can't open it). */
+  showBuildingLink?: boolean;
+  /** Extra plain-text line in the popup (e.g. apartment count / tasks). */
+  infoExtra?: (b: MapBuilding) => string | null;
+  heightClass?: string;
 }) {
   const { t } = useLocalization();
   const mapsLang = useMapsLang();
@@ -79,7 +99,7 @@ export function BuildingsMap({
   );
   // Stable dependency so the map only rebuilds when the plotted set changes.
   const signature =
-    located.map((b) => `${b.id}:${b.latitude},${b.longitude}`).join("|") +
+    located.map((b) => `${b.id}:${b.latitude},${b.longitude}:${labels?.[b.id] ?? ""}`).join("|") +
     "@" +
     zones.map((z) => z.length).join(",");
 
@@ -111,19 +131,27 @@ export function BuildingsMap({
         located.forEach((b) => {
           const pos = { lat: b.latitude as number, lng: b.longitude as number };
           const display = buildingDisplayName(b);
+          const label = labels?.[b.id];
           const marker = new g.maps.Marker({
             position: pos,
             map,
-            title: display,
+            title: label ? `${display} · ${label}` : display,
             icon: markerIcon(!!b.is_town_house, g),
+            label: label
+              ? { text: label, color: "#0b3d2e", fontSize: "12px", fontWeight: "700" }
+              : undefined,
           });
           marker.addListener("click", () => {
+            const extra = infoExtra?.(b);
             info.setContent(
               `<div style="font-size:13px;line-height:1.4">` +
                 `<strong>${escapeHtml(display)}</strong>` +
                 (b.building_address ? `<br/>${escapeHtml(b.building_address)}` : "") +
-                `<br/><a href="/dashboard/buildings/${b.id}" style="color:#d6249f;text-decoration:none">` +
-                `${escapeHtml(t("buildings.view", "הצג בניין »"))}</a>` +
+                (extra ? `<br/>${escapeHtml(extra)}` : "") +
+                (showBuildingLink
+                  ? `<br/><a href="/dashboard/buildings/${b.id}" style="color:#d6249f;text-decoration:none">` +
+                    `${escapeHtml(t("buildings.view", "הצג בניין »"))}</a>`
+                  : "") +
                 `</div>`,
             );
             info.open({ anchor: marker, map });
@@ -158,5 +186,5 @@ export function BuildingsMap({
     );
   }
 
-  return <div ref={ref} className="w-full h-96 rounded-md border border-border" />;
+  return <div ref={ref} className={`w-full ${heightClass} rounded-md border border-border`} />;
 }

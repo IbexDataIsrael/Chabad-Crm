@@ -16,6 +16,7 @@ import {
   UserCheck,
   UserMinus,
   X,
+  Map as MapIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -23,6 +24,7 @@ import { useEffect, useState } from "react";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { ReportStatusBadge } from "@/components/ReportStatusBadge";
 import { TaskQuickCreateForm } from "@/components/TaskQuickCreateForm";
+import { TaskMapView } from "@/components/TaskMapView";
 import { TaskLinkButton } from "@/components/tasks/TaskLinkButton";
 import { TaskSheetFieldsModal } from "@/components/tasks/TaskSheetFieldsModal";
 import { Button } from "@/components/ui/button";
@@ -86,6 +88,16 @@ export default function TasksPage() {
   );
   const [activists, setActivists] = useState<ActivistOption[]>([]);
   const [printingId, setPrintingId] = useState<number | null>(null);
+  // fixes96: the task whose map is open in the modal.
+  const [mapTaskId, setMapTaskId] = useState<number | null>(null);
+  useEffect(() => {
+    if (mapTaskId == null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMapTaskId(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mapTaskId]);
   const [sort, setSort] = usePersistentState<SortKey>("crm.tasks.sort", "created_at");
   const [dir, setDir] = usePersistentState<"asc" | "desc">("crm.tasks.dir", "desc");
   const [page, setPage] = usePersistentState("crm.tasks.page", 1);
@@ -304,6 +316,31 @@ export default function TasksPage() {
         </div>
       </div>
       {fieldsModalOpen && <TaskSheetFieldsModal onClose={() => setFieldsModalOpen(false)} />}
+      {mapTaskId != null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setMapTaskId(null);
+          }}
+        >
+          <div role="dialog" aria-modal="true" className="w-full max-w-4xl space-y-3 rounded-xl bg-card p-4 shadow-xl">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-bold">
+                {t("task.map_title", "מפת משימה #{id}").replace("{id}", String(mapTaskId))}
+              </h2>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setMapTaskId(null)}
+                aria-label={t("action.close", "סגור")}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <TaskMapView taskId={mapTaskId} heightClass="h-[65vh]" />
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <input
@@ -468,6 +505,17 @@ export default function TasksPage() {
                         ) : (
                           <Printer className="h-3.5 w-3.5" />
                         )}
+                      </Button>
+                      {/* fixes96: the task's buildings on a map (modal). */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={task.apartment_count === 0}
+                        title={t("task.map", "מפת המשימה")}
+                        aria-label={t("task.map", "מפת המשימה")}
+                        onClick={() => setMapTaskId(task.id)}
+                      >
+                        <MapIcon className="h-3.5 w-3.5" />
                       </Button>
                       <TaskLinkButton task={task} />
                       <Button size="sm" variant="outline" asChild>

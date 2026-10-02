@@ -306,6 +306,106 @@ def list_tasks(
     )
 
 
+@router.get("/map")
+def task_map(
+    task_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+) -> dict:
+    """fixes96: buildings to show on a Google map + the polygons of their areas.
+
+    - no task_id (activist): every building the activist can work in — the
+      SAME apartments street2 shows (active tasks under an active campaign,
+      plus area coverage: apartments._shliach_apartment_ids) — each with the
+      task numbers that cover it;
+    - task_id (admin / campaign manager, or that task's own activist): the
+      buildings of that one task.
+    Defined before the /{task_id} routes so "map" isn't read as a task id."""
+    from app.routers.apartments import _shliach_apartment_ids
+
+    org_id = current_user.organization_id
+    A, T, TRN = models.Apartment, models.Task, models.TaskReportNumber
+    if task_id is not None:
+        task = db.query(T).filter(T.id == task_id, T.organization_id == org_id).first()
+        if task is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Task not found")
+        if current_user.role not in ("admin", "campaign_manager") and task.volunteer_user_id != current_user.id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Not one of your tasks")
+        tasks = [task]
+        apt_ids = [
+            aid for (aid,) in db.query(A.id)
+            .join(TRN, TRN.report_number_id == A.report_number_id)
+            .filter(TRN.task_id == task.id, A.organization_id == org_id, A.is_display.is_(True))
+        ]
+    elif current_user.role == "shliach":
+        apt_ids = _shliach_apartment_ids(db, current_user)
+        tasks = (
+            db.query(T)
+            .join(models.Campaign, models.Campaign.id == T.campaign_id)
+            .filter(
+                T.organization_id == org_id,
+                T.volunteer_user_id == current_user.id,
+                T.status == "ACTIVE",
+                models.Campaign.is_active.is_(True),
+                models.Campaign.deleted_at.is_(None),
+            )
+            .all()
+        )
+    else:
+        return {"buildings": [], "areas": [], "task_count": 0}
+
+    rns_by_task: dict[int, set[int]] = {}
+    for tid, rn in db.query(TRN.task_id, TRN.report_number_id).filter(
+        TRN.task_id.in_([t.id for t in tasks] or [0])
+    ):
+        rns_by_task.setdefault(tid, set()).add(rn)
+
+    apartments_by_building: dict[int, int] = {}
+    tasks_by_building: dict[int, set[int]] = {}
+    for bid, rn in db.query(A.building_id, A.report_number_id).filter(
+        A.id.in_(apt_ids or [0]), A.is_display.is_(True)
+    ):
+        if bid is None:
+            continue
+        apartments_by_building[bid] = apartments_by_building.get(bid, 0) + 1
+        for tid, rns in rns_by_task.items():
+            if rn in rns:
+                tasks_by_building.setdefault(bid, set()).add(tid)
+
+    buildings = (
+        db.query(models.Building)
+        .filter(models.Building.id.in_(apartments_by_building.keys() or [0]))
+        .all()
+    )
+    area_ids = {b.area_id for b in buildings if b.area_id is not None}
+    areas = (
+        db.query(models.Area)
+        .filter(models.Area.id.in_(area_ids or [0]), models.Area.area_polygon.isnot(None))
+        .all()
+    )
+    return {
+        "task_count": len(tasks),
+        "buildings": [
+            {
+                "id": b.id,
+                "building_name": b.building_name,
+                "building_address": b.building_address,
+                "latitude": b.latitude,
+                "longitude": b.longitude,
+                "is_town_house": bool(b.is_town_house),
+                "area_id": b.area_id,
+                "apartment_count": apartments_by_building.get(b.id, 0),
+                "task_ids": sorted(tasks_by_building.get(b.id, ())),
+            }
+            for b in buildings
+        ],
+        "areas": [
+            {"id": a.id, "area_name": a.area_name, "area_polygon": a.area_polygon}
+            for a in areas
+        ],
+    }
+
+
 @router.post("", response_model=TaskOut, status_code=status.HTTP_201_CREATED)
 def create_task(
     payload: TaskCreate,

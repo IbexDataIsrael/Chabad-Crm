@@ -632,6 +632,16 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("column", "contact_mekurav.admin_area_id", "אזור מותאם אישית", "Custom area"),
     ("column", "contact_mekurav.tzedaka_potential", "פוטנציאל לצדקה", "Tzedaka potential"),
     ("admin", "admin.system_settings_title", "הגדרות מערכת", "System settings"),
+    # fixes96: Google map (activist page + task map).
+    ("nav", "nav.activist_map", "מפת גוגל", "Google map"),
+    ("map", "map.activist_title", "מפת הבניינים שלי", "My buildings map"),
+    ("map", "map.summary", "{b} בניינים · {a} אזורים", "{b} buildings · {a} areas"),
+    ("map", "map.unlocated", "{n} בלי מיקום על המפה", "{n} without a map location"),
+    ("map", "map.apartments", "{n} דירות", "{n} apartments"),
+    ("map", "map.tasks", "משימות", "Tasks"),
+    ("map", "map.load_failed", "טעינת המפה נכשלה.", "The map failed to load."),
+    ("task", "task.map", "מפת המשימה", "Task map"),
+    ("task", "task.map_title", "מפת משימה #{id}", "Task #{id} map"),
     # fixes95: translations page tabs (one per screen).
     ("loc", "loc.group.contacts", "אנשי קשר", "Contacts"),
     ("loc", "loc.group.users", "משתמשים", "Users"),
