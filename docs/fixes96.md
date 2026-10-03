@@ -61,4 +61,5 @@ Note: local test data has a few buildings geocoded far away (Israel vs.
 Brooklyn), so the local maps zoom out to the world — the map fits all
 located buildings; real coordinates zoom to the neighborhood.
 
-Not committed.
+Committed as c8068b3 (not pushed). Re-verified after commit: test_fixes96 +
+error-localization tests 7 passed, localization audit 0 missing, tsc clean.
