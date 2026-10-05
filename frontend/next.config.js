@@ -1,10 +1,20 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  async rewrites() {
+    return {
+      beforeFiles: [
+        // MAINTENANCE MODE: every route serves the renovation page.
+        // To reopen: restore this file from main.
+        {
+          source: "/:path*",
+          destination: "/maintenance.html",
+        },
+      ],
+    };
+  },
   async redirects() {
     return [
-      // fixes74 §6: the dedicated paper-entry page is gone — old links land
-      // on the Apartments view filtered to that task's report numbers.
       {
         source: "/dashboard/tasks/:id/paper-entry",
         destination: "/dashboard/apartments?task_id=:id",
