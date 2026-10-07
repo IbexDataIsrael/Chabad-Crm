@@ -11,6 +11,7 @@ import { googleClientId } from "@/lib/google";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { isValidEmail } from "@/lib/validation";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import type { PublicRegisterResponse } from "@/lib/types";
 
 /** fixes65: shared by the org landing page (/org/<slug>) and the QR claim
@@ -225,8 +226,7 @@ export function ActivistRegisterForm({
         label={t("auth.password", "סיסמה")}
         hint={t("public.password_rule", "לפחות 8 תווים, עם אות גדולה, אות קטנה וספרה (באנגלית).")}
       >
-        <input
-          type="password"
+        <PasswordInput
           dir="ltr"
           className={publicInputClass}
           value={password}
@@ -321,8 +321,7 @@ export function OrgSignInForm({
         />
       </PublicField>
       <PublicField label={t("auth.password", "סיסמה")}>
-        <input
-          type="password"
+        <PasswordInput
           dir="ltr"
           className={publicInputClass}
           value={password}

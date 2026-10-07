@@ -89,6 +89,7 @@ def get_public_org(slug: str, db: Session = Depends(get_db)):
         logo_url=org.logo_url,
         gallery=list(org.public_gallery or []),
         self_registration_enabled=org.self_registration_enabled,
+        public_footer_html=org.public_footer_html,
     )
 
 

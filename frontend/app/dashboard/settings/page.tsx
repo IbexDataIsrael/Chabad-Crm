@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 
 // fixes40 §4: global field-label text styling options.
 const LABEL_FONT_SIZES = [10, 11, 12, 13, 14, 16, 18, 20, 24];
@@ -367,8 +368,7 @@ function ChangePasswordCard() {
       <h2 className="text-lg font-semibold">{t("settings.change_password", "שינוי סיסמה")}</h2>
       <label className="block space-y-1">
         <Label className="block text-sm font-medium">{t("settings.current_password", "סיסמה נוכחית")}</Label>
-        <Input
-          type="password"
+        <PasswordInput
           value={current}
           onChange={(e) => setCurrent(e.target.value)}
           autoComplete="current-password"
@@ -377,8 +377,7 @@ function ChangePasswordCard() {
       </label>
       <label className="block space-y-1">
         <Label className="block text-sm font-medium">{t("settings.new_password", "סיסמה חדשה")}</Label>
-        <Input
-          type="password"
+        <PasswordInput
           value={next}
           onChange={(e) => setNext(e.target.value)}
           autoComplete="new-password"
@@ -387,8 +386,7 @@ function ChangePasswordCard() {
       </label>
       <label className="block space-y-1">
         <Label className="block text-sm font-medium">{t("signup.verify_password", "אימות סיסמה")}</Label>
-        <Input
-          type="password"
+        <PasswordInput
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
           autoComplete="new-password"

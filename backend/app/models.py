@@ -110,6 +110,7 @@ class Organization(Base):
     self_registration_enabled = Column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    public_footer_html = Column(Text, nullable=True)
     # fixes75 §9: "Errors Admin Emails" — every address here is emailed when
     # a server error happens in this organization (list of strings).
     errors_admin_emails = Column(JSON, nullable=True)

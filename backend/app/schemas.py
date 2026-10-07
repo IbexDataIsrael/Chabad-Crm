@@ -88,6 +88,7 @@ class OrganizationOut(BaseModel):
     # fixes85: English title + subtitle (null = use the Hebrew ones).
     name_en: Optional[str] = None
     public_subtitle_en: Optional[str] = None
+    public_footer_html: Optional[str] = None
 
 
 class OrganizationUpdate(BaseModel):
@@ -111,6 +112,7 @@ class OrganizationUpdate(BaseModel):
     # fixes85
     name_en: Optional[str] = None
     public_subtitle_en: Optional[str] = None
+    public_footer_html: Optional[str] = None
 
     @field_validator("slug")
     @classmethod
@@ -2011,6 +2013,7 @@ class PublicOrgOut(BaseModel):
     logo_url: Optional[str] = None
     gallery: list[str] = []
     self_registration_enabled: bool = False
+    public_footer_html: Optional[str] = None
 
 
 class PublicRegisterRequest(BaseModel):

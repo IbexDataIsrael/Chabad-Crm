@@ -204,6 +204,17 @@ export function OrgPageClient() {
           />
         </div>
       </div>
+
+      {org.public_footer_html && (
+        <section aria-label={t("public.footer_section", "מידע נוסף")} className="mx-auto max-w-6xl px-4 pb-14 sm:px-8">
+          <div className="rounded-2xl bg-white p-6 shadow-[0_12px_40px_-12px_rgba(14,59,74,0.15)] sm:p-8">
+            <div
+              className="prose max-w-none text-[#13232B] leading-relaxed [&_img]:max-w-full [&_img]:rounded-lg"
+              dangerouslySetInnerHTML={{ __html: org.public_footer_html }}
+            />
+          </div>
+        </section>
+      )}
     </main>
   );
 }

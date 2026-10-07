@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { RichTextEditor } from "@/components/RichTextEditor";
 import { apiFetch, ApiError, uploadGalleryImage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
@@ -26,6 +27,7 @@ export function PublicPageSettingsCard() {
   const [subtitleEn, setSubtitleEn] = useState(""); // fixes85
   const [gallery, setGallery] = useState<string[]>([]);
   const [selfRegistration, setSelfRegistration] = useState(false);
+  const [publicFooterHtml, setPublicFooterHtml] = useState("");
   const [savedSlug, setSavedSlug] = useState<string | null>(null);
   const [uploading, setUploading] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -66,6 +68,7 @@ export function PublicPageSettingsCard() {
         setSubtitleEn(o.public_subtitle_en ?? "");
         setGallery(o.public_gallery ?? []);
         setSelfRegistration(o.self_registration_enabled ?? false);
+        setPublicFooterHtml(o.public_footer_html ?? "");
       })
       .catch(() => {});
   }, []);
@@ -118,6 +121,7 @@ export function PublicPageSettingsCard() {
           public_subtitle_en: subtitleEn.trim() || null,
           public_gallery: gallery,
           self_registration_enabled: selfRegistration,
+          public_footer_html: publicFooterHtml.trim() || null,
         }),
       });
       setSavedSlug(o.slug ?? null);
@@ -301,6 +305,43 @@ export function PublicPageSettingsCard() {
             "כאשר פעיל, כל אחד יכול להירשם כפעיל מדף הארגון ולקבל גישה מיידית. המנהלים יקבלו הודעה במייל על כל הרשמה.",
           )}
         </p>
+
+        <div className="space-y-2">
+          <span className="block text-sm font-medium">
+            {t("public_settings.footer_html", "תוכן חופשי בתחתית דף ההתחברות (WYSIWYG)")}
+          </span>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              "public_settings.footer_html_hint",
+              "תוכן מעוצב או קוד HTML שיוצג בחלק התחתון של דף הארגון הציבורי.",
+            )}
+          </p>
+          <RichTextEditor
+            value={publicFooterHtml}
+            onChange={setPublicFooterHtml}
+            imagePicker={async () => {
+              const fileInput = document.createElement("input");
+              fileInput.type = "file";
+              fileInput.accept = "image/*";
+              return new Promise((resolve) => {
+                fileInput.onchange = async () => {
+                  const file = fileInput.files?.[0];
+                  if (!file) return resolve(null);
+                  try {
+                    const url = await uploadGalleryImage(file);
+                    resolve(url);
+                  } catch (err) {
+                    toastError(
+                      err instanceof Error ? err.message : t("gallery.upload_failed", "העלאת התמונה נכשלה"),
+                    );
+                    resolve(null);
+                  }
+                };
+                fileInput.click();
+              });
+            }}
+          />
+        </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
         <Button

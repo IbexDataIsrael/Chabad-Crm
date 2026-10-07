@@ -13,6 +13,7 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 
 /** fixes75 §7: choose a new password from the emailed reset link. */
 function ResetInner() {
@@ -78,9 +79,8 @@ function ResetInner() {
           <>
             <div className="space-y-1">
               <Label htmlFor="new-password">{t("auth.new_password", "סיסמה חדשה")}</Label>
-              <Input
+              <PasswordInput
                 id="new-password"
-                type="password"
                 dir="ltr"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -91,9 +91,8 @@ function ResetInner() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="confirm-password">{t("auth.confirm_password", "אימות סיסמה")}</Label>
-              <Input
+              <PasswordInput
                 id="confirm-password"
-                type="password"
                 dir="ltr"
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}

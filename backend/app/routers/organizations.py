@@ -96,6 +96,7 @@ def update_my_org(
         "public_subtitle",
         # fixes85: English title + subtitle.
         "public_subtitle_en",
+        "public_footer_html",
     ):
         if field in data:
             setattr(org, field, data[field])

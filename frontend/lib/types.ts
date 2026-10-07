@@ -459,6 +459,7 @@ export interface OrgDetails {
   public_subtitle_en?: string | null;
   public_gallery?: string[] | null;
   self_registration_enabled?: boolean;
+  public_footer_html?: string | null;
 }
 
 /** One org restore point (fixes16) — metadata only, the blob stays server-side. */
@@ -624,6 +625,7 @@ export interface PublicOrg {
   logo_url: string | null;
   gallery: string[];
   self_registration_enabled: boolean;
+  public_footer_html?: string | null;
 }
 
 export type ClaimState = "available" | "claimed" | "yours" | "taken" | "invalid";

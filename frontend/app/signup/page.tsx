@@ -12,6 +12,7 @@ import { LogoUpload } from "@/components/LogoUpload";
 import { PhoneInput } from "@/components/PhoneInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import {
   checkPassword,
   isMediumPassword,
@@ -235,10 +236,10 @@ export default function SignupPage() {
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label={t("auth.password", "סיסמה")}>
-            <Input type="password" value={form.password} onChange={(e) => set("password", e.target.value)} autoComplete="new-password" required />
+            <PasswordInput value={form.password} onChange={(e) => set("password", e.target.value)} autoComplete="new-password" required />
           </Field>
           <Field label={t("signup.verify_password", "אימות סיסמה")}>
-            <Input type="password" value={form.verify_password} onChange={(e) => set("verify_password", e.target.value)} autoComplete="new-password" required />
+            <PasswordInput value={form.verify_password} onChange={(e) => set("verify_password", e.target.value)} autoComplete="new-password" required />
           </Field>
         </div>
         <PasswordRequirements password={form.password} />

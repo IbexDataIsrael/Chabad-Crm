@@ -15,6 +15,7 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 
 /** Post-login destination from ?redirect= (fixes8 §3), restricted to internal
  *  paths — absolute and protocol-relative URLs fall back to the dashboard. */
@@ -221,9 +222,8 @@ export default function LoginPage() {
 
         <div className="space-y-1">
           <Label htmlFor="password">{t("auth.password")}</Label>
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"

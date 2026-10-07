@@ -2779,7 +2779,7 @@ def seed_all(db: Session) -> None:
             .first()
         )
         if org is None:
-            org = models.Organization(name=settings.demo_org_name)
+            org = models.Organization(name=settings.demo_org_name, slug="demo-org")
             db.add(org)
             db.flush()
 
