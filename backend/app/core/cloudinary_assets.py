@@ -1,18 +1,22 @@
 """fixes91: remove an organization's images from Cloudinary when the
-organization is deleted.
+organization is deleted. fixes99: also when a user removes an image —
+replaces/clears the logo, drops a gallery photo, or edits/deletes an
+announcement (or the public-page footer) so an image is no longer in it.
 
 Safety rules (the Cloudinary account is shared by every environment — local
 data is a copy of prod and points at the very same image URLs, and a clone
 reuses its source org's logo):
 
 - Only runs when `settings.cloudinary_delete_on_org_delete` is on (set it on
-  the production backend only), so deleting an org locally never deletes a
-  production image.
+  the production backend only), so deleting an org — or removing an image —
+  locally never deletes a production image.
 - Deletes by reference, never by folder: only image URLs the org itself uses
   (logo, public-page gallery, images inside its announcements) — folder ids
   like `orgs/<id>/` mean different orgs in different environments.
 - Skips any image another organization in this database still uses (e.g. a
-  clone sharing its source's logo).
+  clone sharing its source's logo). fixes99: a removed image the same org
+  still uses somewhere else (e.g. the old logo is also a gallery photo) is
+  kept too — "removed" = in the org's images before the change, not after.
 - Only our own cloud's `image/upload` URLs are touched.
 """
 import json
@@ -60,7 +64,12 @@ def _org_urls(org: models.Organization, announcements: Iterable[str]) -> set[str
     for u in gallery or []:
         if isinstance(u, str):
             urls.add(u)
-    for html in announcements:
+    # fixes99: the public page's WYSIWYG footers can hold images too.
+    for html in (
+        *announcements,
+        getattr(org, "public_footer_html", None),
+        getattr(org, "public_footer_html_en", None),
+    ):
         urls.update(_IMG_SRC_RE.findall(html or ""))
     return urls
 
@@ -94,10 +103,31 @@ def urls_used_by_other_orgs(db: Session, org_id: int, urls: set[str]) -> set[str
     return used
 
 
+def cleanup_enabled() -> bool:
+    return bool(settings.cloudinary_delete_on_org_delete and settings.cloudinary_configured)
+
+
+def images_before_change(db: Session, org_id: int) -> set[str]:
+    """fixes99: snapshot the org's image URLs before an edit that may remove
+    some (empty — and no query — when the feature is off)."""
+    return org_image_urls(db, org_id) if cleanup_enabled() else set()
+
+
+def removed_image_ids(db: Session, org_id: int, before: set[str]) -> list[str]:
+    """fixes99: public ids of images the org used before the change and no
+    longer uses anywhere (call after the change is committed), minus any
+    another organization still uses."""
+    if not before or not cleanup_enabled():
+        return []
+    removed = before - org_image_urls(db, org_id)
+    removed -= urls_used_by_other_orgs(db, org_id, removed)
+    return sorted({pid for pid in (public_id_from_url(u) for u in removed) if pid})
+
+
 def plan_org_image_cleanup(db: Session, org_id: int) -> list[str]:
     """Cloudinary public ids safe to delete with this org (call before the
     org's rows are deleted). Empty when the feature is off."""
-    if not (settings.cloudinary_delete_on_org_delete and settings.cloudinary_configured):
+    if not cleanup_enabled():
         return []
     urls = org_image_urls(db, org_id)
     urls -= urls_used_by_other_orgs(db, org_id, urls)

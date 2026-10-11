@@ -118,6 +118,8 @@ PLAIN_ERRORS: list[tuple[str, str]] = [
     ("This task link is no longer valid", "הקישור למשימה אינו בתוקף עוד"),
     ("User not found", "המשתמש לא נמצא"),
     ("Username already taken", "שם המשתמש כבר תפוס"),
+    ("Username is required", "יש להזין שם משתמש"),
+    ("Username must be at most 50 characters", "שם המשתמש יכול להכיל עד 50 תווים"),
     ("Visit not found", "הביקור לא נמצא"),
     ("You can only edit apartments assigned to you", "אפשר לערוך רק דירות שמשויכות אליך"),
     ("You cannot delete yourself", "לא ניתן למחוק את עצמך"),

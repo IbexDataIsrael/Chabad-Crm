@@ -5,10 +5,11 @@ self-scoped (resolved via their own login, never an arbitrary contact_id);
 reads (the org-wide log for /dashboard/messages-from-activists) are
 admin-only.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app import models
+from app.core import cloudinary_assets
 from app.core.shliach import activist_names_by_contact, resolve_shliach
 from app.database import get_db
 from app.deps import get_current_user, require_admin
@@ -259,23 +260,38 @@ def _get_announcement_or_404(
 def update_announcement(
     announcement_id: int,
     payload: ShliachAnnouncementUpdate,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     admin: models.User = Depends(require_admin),
 ):
     row = _get_announcement_or_404(announcement_id, admin.organization_id, db)
+    images_before = cloudinary_assets.images_before_change(db, admin.organization_id)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(row, field, value)
     db.commit()
     db.refresh(row)
+    _delete_removed_images(background, db, admin.organization_id, images_before)
     return row
+
+
+def _delete_removed_images(
+    background: BackgroundTasks, db: Session, org_id: int, before: set[str]
+) -> None:
+    """fixes99: images an edit/delete took out of the org → Cloudinary."""
+    removed = cloudinary_assets.removed_image_ids(db, org_id, before)
+    if removed:
+        background.add_task(cloudinary_assets.delete_images, removed)
 
 
 @router.delete("/announcements/{announcement_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_announcement(
     announcement_id: int,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     admin: models.User = Depends(require_admin),
 ):
     row = _get_announcement_or_404(announcement_id, admin.organization_id, db)
+    images_before = cloudinary_assets.images_before_change(db, admin.organization_id)
     db.delete(row)
     db.commit()
+    _delete_removed_images(background, db, admin.organization_id, images_before)

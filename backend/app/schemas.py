@@ -221,6 +221,8 @@ class OrgUserCreate(BaseModel):
 
 class OrgUserUpdate(BaseModel):
     full_name: Optional[str] = None
+    # fixes99: the login name (unique per organization, max 50 characters).
+    username: Optional[str] = None
     email: Optional[str] = None  # fixes14: propagates to a linked shliach contact
     phone: Optional[str] = None
     role: Optional[OrgRole] = None

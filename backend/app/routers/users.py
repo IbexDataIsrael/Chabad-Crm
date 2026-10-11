@@ -329,6 +329,29 @@ def update_user(
             )
         except Exception:  # pragma: no cover — email must not block the edit
             logger.exception("Failed to send welcome email to %s", email)
+    # fixes99: an explicit username edit (after the email block, so it wins
+    # over the "username follows the email" rule above).
+    if "username" in data:
+        username = (data.pop("username") or "").strip()
+        if not username:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Username is required")
+        if len(username) > 50:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "Username must be at most 50 characters"
+            )
+        if username != user.username:
+            taken = (
+                db.query(models.User.id)
+                .filter(
+                    models.User.organization_id == admin.organization_id,
+                    models.User.username == username,
+                    models.User.id != user.id,
+                )
+                .first()
+            )
+            if taken:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Username already taken")
+            user.username = username
     if "phone" in data:
         phone = data.pop("phone")
         user.phone = phone

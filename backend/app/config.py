@@ -66,6 +66,8 @@ class Settings(BaseSettings):
     # Folder all uploaded logos land in (namespaces the asset library).
     cloudinary_upload_folder: str = "org_logos"
     # fixes91: delete an org's images from Cloudinary when the org is deleted.
+    # fixes99: the same switch also deletes an image a user removes (logo,
+    # gallery photo, announcement/footer image) once nothing references it.
     # OFF by default — every environment shares one Cloudinary account and
     # local data points at production's image URLs, so turn this on ONLY on
     # the production backend (CLOUDINARY_DELETE_ON_ORG_DELETE=true).

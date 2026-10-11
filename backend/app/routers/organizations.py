@@ -1,8 +1,9 @@
 """Organization (tenant) settings — read for any member, edit for admins."""
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app import models
+from app.core import cloudinary_assets
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.schemas import OrganizationOut, OrganizationUpdate
@@ -49,6 +50,7 @@ def slug_available(
 @router.put("/me", response_model=OrganizationOut)
 def update_my_org(
     payload: OrganizationUpdate,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
@@ -68,6 +70,9 @@ def update_my_org(
     org = db.get(models.Organization, current_user.organization_id)
     if not org:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Organization not found")
+    # fixes99: images this edit removes (logo / gallery / footer) are deleted
+    # from Cloudinary after it's saved.
+    images_before = cloudinary_assets.images_before_change(db, org.id)
     if data.get("name"):
         org.name = data["name"]
     if "logo_url" in data:  # present-but-null clears the logo
@@ -131,4 +136,7 @@ def update_my_org(
         org.self_registration_enabled = data["self_registration_enabled"]
     db.commit()
     db.refresh(org)
+    removed = cloudinary_assets.removed_image_ids(db, org.id, images_before)
+    if removed:
+        background.add_task(cloudinary_assets.delete_images, removed)
     return org
