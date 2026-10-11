@@ -8,6 +8,7 @@
 import datetime
 import logging
 
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app import custom_field_utils, models, picklist_utils
@@ -2692,9 +2693,25 @@ def seed_superadmin(db: Session) -> None:
         )
         return
 
+    # Since fixes14 an email is unique per organization only, so a regular
+    # user in a tenant org may share the superadmin's email. Never pick that
+    # row: only the account in the System org (or one already superadmin) is
+    # the superadmin — an email-only `.first()` once promoted an org-1 user
+    # to superadmin and overwrote their password on every restart.
     existing = (
         db.query(models.User)
-        .filter(models.User.email == settings.superadmin_email)
+        .join(models.Organization, models.Organization.id == models.User.organization_id)
+        .filter(
+            func.lower(models.User.email) == settings.superadmin_email.strip().lower(),
+            or_(
+                models.Organization.name == settings.system_org_name,
+                models.User.role == "superadmin",
+            ),
+        )
+        .order_by(
+            (models.Organization.name == settings.system_org_name).desc(),
+            models.User.id,
+        )
         .first()
     )
     if existing is not None:
