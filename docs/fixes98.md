@@ -49,7 +49,7 @@ should be able to change password without typing the old password
 
 ## Status — closeout (2026-10-11)
 
-Nothing committed or pushed. Migration `98a1b2c3d4e5` (applied locally).
+Committed ed5bc14 (not pushed). Migration `98a1b2c3d4e5` (applied locally).
 Backend: `tests/test_fixes98.py` (14 tests). Frontend: `tsc --noEmit` clean,
 `node --test lib/celebrationItems.test.mjs` (5 tests). Live-driven in
 Playwright's bundled Chromium against local Docker (admin pages at desktop
