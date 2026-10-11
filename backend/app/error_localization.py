@@ -109,6 +109,8 @@ PLAIN_ERRORS: list[tuple[str, str]] = [
     ("Superadmin privileges required", "נדרשות הרשאות מנהל מערכת"),
     ("System picklists cannot be deleted", "לא ניתן למחוק רשימות מערכת"),
     ("Task not found", "המשימה לא נמצאה"),
+    ("Message not found", "ההודעה לא נמצאה"),
+    ("A text task needs text and no report numbers", "משימת טקסט צריכה טקסט וללא מספרי דוח"),
     ("The activist system is disabled for this organization", "מערכת הפעילים כבויה בארגון זה"),
     ("This email is already registered — please sign in instead", "כתובת האימייל כבר רשומה — יש להתחבר במקום להירשם"),
     ("This page address is already taken", "כתובת הדף כבר תפוסה"),

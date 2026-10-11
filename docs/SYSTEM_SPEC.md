@@ -159,6 +159,13 @@ entities that matter for orienting yourself:
   to the pool and old printouts keep working. **TaskPaperEntry** logs each
   office data-entry session with who performed the work (registered user /
   free-text name / unknown).
+  fixes98: a **text task** (`tasks.task_text`) has free-text instructions
+  instead of report numbers (no apartments). Assigning a task to an activist
+  (create / bulk / reassign — not a self-claim) emails them in the
+  background (`core/activist_emails.py`): the org's Hebrew + English text from
+  shliach-config (`shliach_view_config.task_email_text_he/en`), each task's
+  first address or text, and a link to `/org/<slug>`. Self-registration
+  (org page or task QR) sends the standard welcome email with that link.
 - **ShliachReportCompletion / ShliachSystemComment / ShliachAnnouncement** —
   the activist self-service loop: activists submit the first two, admins
   author the third (see §6).
@@ -171,6 +178,14 @@ entities that matter for orienting yourself:
   Header logo = the org's logo for activist mail (welcome, password reset),
   the platform logo otherwise; footer = platform logo.
 - **OrgBackup** — org-scoped DB snapshots (admin-triggered, 10 kept/org).
+- **ActivistMessage / OrgActivistStats** (fixes98) — admin "messages for
+  activists" (`language` he|en, shliach-config tab) shown in street2's
+  every-5-apartments celebration, alternating with the Rebbe quotes (merged
+  client-side, `lib/celebrationItems.ts`). Messages keep
+  `{organization_name}` / `{number_of_apartments}` / `{number_of_jews}`; the
+  device fills them from the org's one stats row, which is computed once on
+  first use (and seeds the first he/en message), then admin-edited or
+  recalculated in Settings → "Activist data" (`/api/activist-messages/*`).
 
 ## 5. Feature areas (by dashboard route)
 

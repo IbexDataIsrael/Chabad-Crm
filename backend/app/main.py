@@ -45,6 +45,7 @@ def _run_migrations() -> None:
     cfg.set_main_option("script_location", os.path.join(backend_dir, "alembic"))
     command.upgrade(cfg, "head")
 from app.routers import (
+    activist_messages,
     admin,
     admin_areas,
     ai_query,
@@ -131,6 +132,7 @@ app.include_router(field_settings.router)
 app.include_router(admin_areas.router)
 app.include_router(report_numbers.router)
 app.include_router(shliach_messages.router)
+app.include_router(activist_messages.router)
 app.include_router(areas.router)
 app.include_router(buildings.router)
 app.include_router(apartments.router)

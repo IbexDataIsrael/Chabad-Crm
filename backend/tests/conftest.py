@@ -60,6 +60,15 @@ def _no_real_email(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _background_sessions_use_test_db(monkeypatch):
+    """Background tasks (fixes98 activist emails) open their own session via
+    app.database.SessionLocal — point it at the in-memory test DB."""
+    import app.database as database
+
+    monkeypatch.setattr(database, "SessionLocal", TestingSessionLocal)
+
+
+@pytest.fixture(autouse=True)
 def _setup_db():
     Base.metadata.create_all(bind=engine)
     # Seed the roles table (users.role FK target), the building_type table

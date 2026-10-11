@@ -61,7 +61,9 @@ export function TaskQuickCreateForm({
   const [busy, setBusy] = useState(false);
   // fixes74 §3: "one task for all selected numbers" (the original behavior)
   // or "a separate task per number" — picked numbers and/or a typed range.
-  const [mode, setMode] = useState<"single" | "per_number">("single");
+  // fixes98: "text" = a text task — instructions instead of report numbers.
+  const [mode, setMode] = useState<"single" | "per_number" | "text">("single");
+  const [taskText, setTaskText] = useState("");
   const [rangeText, setRangeText] = useState("");
   const [bulkPreview, setBulkPreview] = useState<TaskBulkPreview | null>(null);
   // fixes75 §2: report_number_id -> campaign_id -> its task, for every
@@ -121,6 +123,10 @@ export function TaskQuickCreateForm({
     }
     if (mode === "per_number") {
       void previewBulk();
+      return;
+    }
+    if (mode === "text" && !taskText.trim()) {
+      setError(t("task.text_required", "יש להזין את טקסט המשימה"));
       return;
     }
     if (selectedVolunteerId === "") {
@@ -190,7 +196,8 @@ export function TaskQuickCreateForm({
         body: JSON.stringify({
           campaign_id: campaignId,
           volunteer_user_id: selectedVolunteerId === "" ? null : selectedVolunteerId,
-          report_number_ids: pickedRnIds,
+          report_number_ids: mode === "text" ? [] : pickedRnIds,
+          task_text: mode === "text" ? taskText.trim() : null,
           custom_date_value_id: customDateValueId === "" ? null : customDateValueId,
           status: shownStatus,
         }),
@@ -277,8 +284,31 @@ export function TaskQuickCreateForm({
             />
             {t("task.mode_per_number", "משימה נפרדת לכל מספר דוח")}
           </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="radio"
+              name="task-create-mode"
+              checked={mode === "text"}
+              onChange={() => setMode("text")}
+            />
+            {t("task.mode_text", "משימת טקסט (במקום מספרי דוח)")}
+          </label>
         </fieldset>
 
+        {mode === "text" && (
+          <label className="block space-y-1">
+            <span className="block text-sm font-medium">{t("task.text", "טקסט המשימה")}</span>
+            <textarea
+              className={inputClass}
+              rows={4}
+              value={taskText}
+              onChange={(e) => setTaskText(e.target.value)}
+              placeholder={t("task.text_placeholder", "מה הפעיל צריך לעשות?")}
+            />
+          </label>
+        )}
+
+        {mode !== "text" && (
         <label className="block space-y-1">
           <span className="block text-sm font-medium">{t("task.report_numbers", "מספרי דוח")}</span>
           <MultiSelectSearchFilter
@@ -300,6 +330,7 @@ export function TaskQuickCreateForm({
             </span>
           )}
         </label>
+        )}
 
         {mode === "per_number" && (
           <label className="block space-y-1">

@@ -2,16 +2,24 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Check, Lock, MapPin } from "lucide-react";
+import { ArrowDownUp, Check, ChevronLeft, ChevronRight, Lock, MapPin, X } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import BuildingCelebration from "@/components/BuildingCelebration";
+import BuildingCelebration, { loadQuotes } from "@/components/BuildingCelebration";
 import { ActivistActivityPanel, ActivistPicker } from "@/components/street/ActivistActivityPanel";
 import { CustomFieldValueDisplay, CustomFieldValueInput } from "@/components/CustomFieldValueInput";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useActiveCampaignFieldVisibility } from "@/lib/campaignFieldVisibility";
+import {
+  CELEBRATE_EVERY,
+  fillPlaceholders,
+  mergeCelebrationItems,
+  messagesForLanguage,
+  shuffled,
+  type CelebrationItem,
+} from "@/lib/celebrationItems";
 import { mapsHref } from "@/lib/contactActions";
 import { useCustomFieldDefs } from "@/lib/customFields";
 import { sortByFieldOrder, useFieldSettings } from "@/lib/fieldSettings";
@@ -29,6 +37,7 @@ import {
 import {
   apartmentTitle,
   buildingDisplayName,
+  type ActivistMessagesFeed,
   type Apartment,
   type ApartmentPage,
   type ApartmentListItem,
@@ -158,10 +167,67 @@ export default function Street2Page() {
   // opens as soon as that save lands (on the new apartment version).
   const pendingEditRef = useRef<string | null>(null);
 
-  const [celebration, setCelebration] = useState<{ open: boolean; label: string }>({
+  const [celebration, setCelebration] = useState<{
+    open: boolean;
+    label: string;
+    // fixes98: the merged-list item to show, and "N more apartments" mode.
+    item?: CelebrationItem | null;
+    milestone?: number;
+  }>({
     open: false,
     label: "",
   });
+
+  // fixes98: every CELEBRATE_EVERY doors an activist finishes (first edit)
+  // a celebration shows the next item of one list that alternates the
+  // regular celebration text (Rebbe quotes) with the org's "messages for
+  // activists" — merged once, on first load. The {fields} in a message are
+  // filled from the org's stats here on the device.
+  const [celebrationItems, setCelebrationItems] = useState<CelebrationItem[]>([]);
+  const celebrationLoaded = useRef(false);
+  useEffect(() => {
+    if (viewer || authLoading || !user || celebrationLoaded.current) return;
+    celebrationLoaded.current = true;
+    void Promise.all([
+      loadQuotes(),
+      apiFetch<ActivistMessagesFeed>("/api/activist-messages/feed").catch(() => null),
+    ]).then(([quotes, feed]) => {
+      const messages = feed
+        ? messagesForLanguage(feed.messages, lang).map((m) => fillPlaceholders(m.text, feed.stats))
+        : [];
+      setCelebrationItems(mergeCelebrationItems(shuffled(quotes), messages));
+    });
+  }, [viewer, authLoading, user, lang]);
+
+  /** Count one more finished door; on every CELEBRATE_EVERY-th, return the
+   *  next list item (kept per user across reloads). */
+  function countFinishedDoor(): { hit: boolean; item: CelebrationItem | null } {
+    if (!user) return { hit: false, item: null };
+    const key = `crm.street2.celebration.${user.id}`;
+    let state = { done: 0, next: 0 };
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(key) ?? "null");
+      if (parsed && typeof parsed.done === "number" && typeof parsed.next === "number") state = parsed;
+    } catch {
+      /* unreadable — start over */
+    }
+    state.done += 1;
+    let hit = false;
+    let item: CelebrationItem | null = null;
+    if (state.done % CELEBRATE_EVERY === 0) {
+      hit = true;
+      if (celebrationItems.length > 0) {
+        item = celebrationItems[state.next % celebrationItems.length];
+        state.next += 1;
+      }
+    }
+    try {
+      window.localStorage.setItem(key, JSON.stringify(state));
+    } catch {
+      /* storage unavailable — the count restarts after a reload */
+    }
+    return { hit, item };
+  }
 
   // fixes74 §12: the viewed activist's synced log + last-sync time, polled.
   // A newer sync also reloads the apartments, so the view follows the
@@ -475,7 +541,82 @@ export default function Street2Page() {
     setLeaveWarn(null);
   }
 
+  // fixes98: per-building floor order — bottom to top (the default, the
+  // backend's floor order) or top to bottom. Remembered per user.
+  const [topDownBuildingIds, setTopDownBuildingIds] = useState<Set<number>>(new Set());
+  const topDownKey = user ? `crm.street2.topDownBuildings.${user.id}` : null;
+  useEffect(() => {
+    if (!topDownKey) return;
+    try {
+      const parsed: unknown = JSON.parse(window.localStorage.getItem(topDownKey) ?? "[]");
+      setTopDownBuildingIds(new Set(Array.isArray(parsed) ? parsed.filter((n) => typeof n === "number") : []));
+    } catch {
+      setTopDownBuildingIds(new Set());
+    }
+  }, [topDownKey]);
+
+  function toggleTopDown(buildingId: number) {
+    const next = new Set(topDownBuildingIds);
+    if (next.has(buildingId)) next.delete(buildingId);
+    else next.add(buildingId);
+    setTopDownBuildingIds(next);
+    if (topDownKey) {
+      try {
+        window.localStorage.setItem(topDownKey, JSON.stringify([...next]));
+      } catch {
+        /* storage unavailable — the order resets after a reload */
+      }
+    }
+  }
+
+  function floorsOf(b: { id: number; apartments: ApartmentListItem[] }) {
+    const floors = groupByFloor(b.apartments);
+    return topDownBuildingIds.has(b.id) ? floors.reverse() : floors;
+  }
+
+  // fixes98: every door in on-screen order — swipe / ‹ › move along it.
+  const routeOrder = useMemo(
+    () => buildings.flatMap((b) => floorsOf(b).flatMap((f) => f.apartments)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [buildings, topDownBuildingIds],
+  );
+
   const openApt = items.find((a) => a.id === openId) ?? null;
+  const openIndex = openApt ? routeOrder.findIndex((a) => a.id === openApt.id) : -1;
+
+  /** -1 = the apartment before, +1 = the one after (same as tapping it). */
+  function goRelative(delta: -1 | 1) {
+    if (saving || openIndex < 0) return;
+    const target = routeOrder[openIndex + delta];
+    if (!target) return;
+    pendingEditRef.current = null;
+    setEditingField(null);
+    setSaveErr("");
+    openDoor(target);
+  }
+
+  // Swipe on the open apartment: left = before, right = after. Ignored while
+  // a field is being edited or when the touch starts in a form control.
+  const touchStart = useRef<{ x: number; y: number; skip: boolean } | null>(null);
+  function onSheetTouchStart(e: React.TouchEvent) {
+    const p0 = e.touches[0];
+    const target = e.target as HTMLElement;
+    touchStart.current = {
+      x: p0.clientX,
+      y: p0.clientY,
+      skip: !!target.closest("input, textarea, select, [contenteditable='true']"),
+    };
+  }
+  function onSheetTouchEnd(e: React.TouchEvent) {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start || start.skip || editingField) return;
+    const p1 = e.changedTouches[0];
+    const dx = p1.clientX - start.x;
+    const dy = p1.clientY - start.y;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    goRelative(dx < 0 ? -1 : 1);
+  }
 
   // fixes88: every field opens by a tap on its row (no pencil) and saves
   // itself (no Save/Cancel) — see EditableRow / PicklistRow.
@@ -537,6 +678,19 @@ export default function Street2Page() {
       });
       // fixes74 §12: a door's first edit marks it done — log it for the
       // admin's view of this activist (queued + synced, see lib/streetActivity).
+      // fixes98: a newly finished door counts towards the next celebration.
+      const milestone =
+        !viewer && !wasDone && isDone(merged) ? countFinishedDoor() : { hit: false, item: null };
+      const completesBuilding =
+        !wasComplete &&
+        buildingComplete(
+          items
+            .map((it) => (it.id === openApt.id ? merged : it))
+            .filter((a) => a.building_id === buildingId),
+        );
+      if (milestone.hit && !completesBuilding) {
+        setCelebration({ open: true, label: "", item: milestone.item, milestone: CELEBRATE_EVERY });
+      }
       if (user && isShliach && !sampleMode && !wasDone && isDone(merged)) {
         recordStreetEvent(user.id, {
           event_type: "mark",
@@ -558,11 +712,16 @@ export default function Street2Page() {
               label: bLabel,
             });
           }
-          setCelebration({ open: true, label: buildingDisplayName({
-            id: buildingId,
-            building_name: merged.building_name,
-            building_address: merged.building_address,
-          }) });
+          setCelebration({
+            open: true,
+            label: buildingDisplayName({
+              id: buildingId,
+              building_name: merged.building_name,
+              building_address: merged.building_address,
+            }),
+            // fixes98: a milestone reached on the same door rides along.
+            item: milestone.hit ? milestone.item : null,
+          });
           // fixes72 §A: persist the completion (best-effort — a failed POST
           // here must never surface as a save error, the apartment edit
           // itself already succeeded; the self-healing effect will retry
@@ -773,10 +932,31 @@ export default function Street2Page() {
                   </a>
                 )}
               </div>
+              <div className={doorStyles.sortRow}>
+                {/* fixes98: floor order — bottom to top (default) or top to bottom. */}
+                <button
+                  type="button"
+                  className={doorStyles.sortBtn}
+                  onClick={() => toggleTopDown(b.id)}
+                  aria-pressed={topDownBuildingIds.has(b.id)}
+                  title={
+                    topDownBuildingIds.has(b.id)
+                      ? t("street.sort_bottom_up", "מלמטה למעלה")
+                      : t("street.sort_top_down", "מלמעלה למטה")
+                  }
+                >
+                  <ArrowDownUp className="h-4 w-4" />
+                  <span>
+                    {topDownBuildingIds.has(b.id)
+                      ? t("street.sort_bottom_up", "מלמטה למעלה")
+                      : t("street.sort_top_down", "מלמעלה למטה")}
+                  </span>
+                </button>
+              </div>
               {/* fixes77: one section per floor (stored floor name, backend
                   order kept), divider between sections via floorStyles; the
                   door tiles inside are unchanged. */}
-              {groupByFloor(b.apartments).map((f) => (
+              {floorsOf(b).map((f) => (
                 <section key={f.floor ?? ""} className={floorStyles.floor}>
                   <div className={floorStyles.floorLabel}>
                     {f.floor !== null
@@ -830,8 +1010,53 @@ export default function Street2Page() {
             if (e.target === e.currentTarget) setOpenId(null);
           }}
         >
-          <div className={styles.sheet} role="dialog" aria-modal="true">
+          <div
+            className={styles.sheet}
+            role="dialog"
+            aria-modal="true"
+            onTouchStart={onSheetTouchStart}
+            onTouchEnd={onSheetTouchEnd}
+          >
             <div className={styles.grab} />
+            {/* fixes98: close on top + before/after (also by swiping). The
+                pair is laid out left→right: left = before, right = after,
+                matching the swipe directions. */}
+            <div className={doorStyles.sheetTopBar}>
+              <div className={doorStyles.navPair} dir="ltr">
+                <button
+                  type="button"
+                  className={doorStyles.navBtn}
+                  onClick={() => goRelative(-1)}
+                  disabled={saving || openIndex <= 0}
+                  aria-label={t("street.prev_apartment", "הדירה הקודמת")}
+                  title={t("street.prev_apartment", "הדירה הקודמת")}
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <span className={doorStyles.navPos}>
+                  {openIndex >= 0 ? `${openIndex + 1}/${routeOrder.length}` : ""}
+                </span>
+                <button
+                  type="button"
+                  className={doorStyles.navBtn}
+                  onClick={() => goRelative(1)}
+                  disabled={saving || openIndex < 0 || openIndex >= routeOrder.length - 1}
+                  aria-label={t("street.next_apartment", "הדירה הבאה")}
+                  title={t("street.next_apartment", "הדירה הבאה")}
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              </div>
+              <button
+                type="button"
+                className={doorStyles.closeX}
+                onClick={() => setOpenId(null)}
+                aria-label={t("action.close", "סגור")}
+                title={t("action.close", "סגור")}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
             <div className={styles.sHead}>
               <div className={styles.bBadge}>{buildingCountFor(openApt.building_id)}</div>
               <div className={styles.bInfo}>
@@ -1278,6 +1503,8 @@ export default function Street2Page() {
       <BuildingCelebration
         open={celebration.open}
         buildingLabel={celebration.label}
+        item={celebration.item}
+        milestoneCount={celebration.milestone}
         onClose={() => setCelebration((c) => ({ ...c, open: false }))}
       />
     </div>

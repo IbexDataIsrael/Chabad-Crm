@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { Plus } from "lucide-react";
+import { ActivistMessagesEditor } from "@/components/ActivistMessagesEditor";
 import { ImagePickerModal } from "@/components/ImagePickerModal";
 import { MultiSelectFilter } from "@/components/MultiSelectFilter";
 import { RichTextEditor } from "@/components/RichTextEditor";
@@ -11,11 +12,13 @@ import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TabBar } from "@/components/ui/TabBar";
 import { useConfirm } from "@/lib/confirm";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCustomFieldDefs } from "@/lib/customFields";
 import { useLocalization } from "@/lib/localization";
+import { usePersistentState } from "@/lib/persist";
 import { FIXED_APARTMENT_PICKLIST_KEYS, usePicklist } from "@/lib/picklists";
 import { useToast } from "@/lib/toast";
 import {
@@ -80,7 +83,22 @@ interface ShliachViewConfigShape {
   customize_fields_locked?: boolean;
   // fixes74 §13: order of the street2 apartment-card fields.
   street2_field_order?: string[];
+  // fixes98: the org's "a new task has been assigned to you" email text.
+  task_email_text_he?: string;
+  task_email_text_en?: string;
 }
+
+// fixes98: the page is split into tabs by topic. The first three edit the
+// one shliach_view_config form (one Save); the last two save per item.
+type ConfigTab = "apartments" | "profile" | "task_email" | "announcements" | "messages";
+const FORM_TABS: ConfigTab[] = ["apartments", "profile", "task_email"];
+
+// Same defaults the server uses when the org hasn't set its own text
+// (backend app/core/activist_emails.py DEFAULT_TASK_EMAIL_TEXT).
+const DEFAULT_TASK_EMAIL_TEXT = {
+  he: "שובצה לך משימה חדשה.",
+  en: "A new task has been assigned to you.",
+};
 
 export default function ShliachConfigPage() {
   const { isAdmin, loading } = useAuth();
@@ -151,6 +169,10 @@ export default function ShliachConfigPage() {
   // applies); otherwise the exact set of columns a shliach starts with.
   const [useDefaultColumns, setUseDefaultColumns] = useState(false);
   const [defaultColumns, setDefaultColumns] = useState<ApartmentFieldKey[]>([]);
+
+  const [taskEmailHe, setTaskEmailHe] = useState("");
+  const [taskEmailEn, setTaskEmailEn] = useState("");
+  const [tab, setTab] = usePersistentState<ConfigTab>("crm.shliachConfig.tab", "apartments");
 
   const [loaded, setLoaded] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -236,6 +258,8 @@ export default function ShliachConfigPage() {
         setJewishFilter(cfg.default_filters?.jewish_status ?? []);
         setMezuzahFilter(cfg.default_filters?.mezuzah_status ?? []);
         setLanguageFilter(cfg.default_filters?.language ?? []);
+        setTaskEmailHe(cfg.task_email_text_he || DEFAULT_TASK_EMAIL_TEXT.he);
+        setTaskEmailEn(cfg.task_email_text_en || DEFAULT_TASK_EMAIL_TEXT.en);
         if (cfg.default_columns) {
           setUseDefaultColumns(true);
           setDefaultColumns(cfg.default_columns as ApartmentFieldKey[]);
@@ -343,6 +367,8 @@ export default function ShliachConfigPage() {
           language: languageFilter,
         },
         default_columns: useDefaultColumns ? defaultColumns : null,
+        task_email_text_he: taskEmailHe.trim(),
+        task_email_text_en: taskEmailEn.trim(),
       };
       await apiFetch("/api/organizations/me", {
         method: "PUT",
@@ -383,7 +409,21 @@ export default function ShliachConfigPage() {
         </p>
       </div>
 
+      <TabBar
+        tabs={[
+          { id: "apartments", label: t("shliach_config.tab_apartments", "תצוגת דירות") },
+          { id: "profile", label: t("shliach_config.tab_profile", "פרופיל הפעיל") },
+          { id: "task_email", label: t("shliach_config.tab_task_email", "מייל משימה חדשה") },
+          { id: "announcements", label: t("shliach_config.tab_announcements", "מודעות בעמוד הבית") },
+          { id: "messages", label: t("shliach_config.tab_messages", "הודעות לפעילים") },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
+
+      {FORM_TABS.includes(tab) && (
       <form onSubmit={save} className="bg-card rounded-xl shadow-sm p-6 space-y-6">
+        {tab === "apartments" && (<>
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -469,13 +509,17 @@ export default function ShliachConfigPage() {
           </div>
         </div>
 
+        </>)}
+
+        {tab === "profile" && (
+        <>
         {/* fixes53 §7/§8: field-level locks for a shliach's own "עריכת המידע
             שלך" self-edit — Email/Areas/Report Numbers are always locked
             (never listed here); anything else is opt-in per org. fixes54 §6:
             renamed from "נעילת שדות לעריכה עצמית" — that generic label read
             as being about the same apartment editing as the section above,
             when it's actually about the activist's own contact profile. */}
-        <div className="border-t border-border pt-4 space-y-3">
+        <div className="space-y-3">
           <span className="block text-sm font-medium">
             {t("shliach_config.self_edit_locks", "נעילת שדות בפרופיל האישי של הפעיל")}
           </span>
@@ -527,6 +571,10 @@ export default function ShliachConfigPage() {
           </div>
         </div>
 
+        </>
+        )}
+
+        {tab === "apartments" && (<>
         {/* fixes74 §13: order of every field in the activist's street2
             apartment card (built-in + additional). */}
         <div className="border-t border-border pt-4 space-y-3">
@@ -633,6 +681,48 @@ export default function ShliachConfigPage() {
             </div>
           )}
         </div>
+        </>)}
+
+        {/* fixes98: the org's own text for the "new task" email (Hebrew +
+            English); the email adds the task details and the org's link. */}
+        {tab === "task_email" && (
+          <div className="space-y-4">
+            <div>
+              <span className="block text-sm font-medium">
+                {t("shliach_config.task_email_title", "מייל \"שובצה לך משימה חדשה\"")}
+              </span>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t(
+                  "shliach_config.task_email_hint",
+                  "נשלח לפעיל כששובצה לו משימה. המייל כולל את שני הטקסטים (עברית ואנגלית), את פרטי המשימה — הכתובת הראשונה, או הטקסט במשימת טקסט — וקישור לדף הארגון.",
+                )}
+              </p>
+            </div>
+            <label className="block space-y-1">
+              <span className="block text-sm">{t("shliach_config.task_email_he", "טקסט בעברית")}</span>
+              <textarea
+                dir="rtl"
+                rows={3}
+                className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
+                value={taskEmailHe}
+                onChange={(e) => setTaskEmailHe(e.target.value)}
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="block text-sm">{t("shliach_config.task_email_en", "טקסט באנגלית")}</span>
+              <textarea
+                dir="ltr"
+                rows={3}
+                className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
+                value={taskEmailEn}
+                onChange={(e) => setTaskEmailEn(e.target.value)}
+              />
+            </label>
+            <p className="text-xs text-muted-foreground">
+              {t("shliach_config.task_email_empty_hint", "שדה ריק = הטקסט שמוגדר כברירת מחדל במערכת.")}
+            </p>
+          </div>
+        )}
 
         <div className="flex items-center gap-3">
           <Button type="submit" disabled={busy}>
@@ -641,9 +731,13 @@ export default function ShliachConfigPage() {
           {saved && <span className="text-sm text-success">{t("action.saved", "נשמר ✓")}</span>}
         </div>
       </form>
+      )}
+
+      {tab === "messages" && <ActivistMessagesEditor />}
 
       {/* fixes54 §5: announcements for the activist landing page's feed —
           WYSIWYG-authored HTML messages, full CRUD. */}
+      {tab === "announcements" && (
       <div className="bg-card rounded-xl shadow-sm p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -718,6 +812,7 @@ export default function ShliachConfigPage() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.core import org_prefs
+from app.core.activist_emails import send_registration_welcome
 from app.core.email import send_email
 from app.core.shliach import apply_shliach_versioned_update
 from app.core.security import (
@@ -294,6 +295,9 @@ def _finish_registration(
         claim_state = claim(db, task, user)
     db.commit()
     db.refresh(user)
+    # fixes98: the new activist gets the standard welcome email, linking to
+    # the org's page — for both org-page and task-QR registrations.
+    background.add_task(send_registration_welcome, org.id, user.id)
     try:
         admin_emails = [
             e

@@ -8,11 +8,12 @@ import datetime
 import re
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app import custom_field_utils, models, picklist_utils
+from app.core.activist_emails import send_task_assigned
 from app.core.claim_token import make_claim_token
 from app.core.task_claim import (
     assign,
@@ -152,6 +153,7 @@ def _to_out(
         custom_date_value=task.custom_date_value.value if task.custom_date_value else None,
         report_number_ids=[rn_id for rn_id, _ in report_numbers],
         report_number_names=[name for _, name in report_numbers],
+        task_text=task.task_text,
         status=task.status,
         volunteer_report_summary=task.volunteer_report_summary,
         latest_report_status=latest_report[0] if latest_report else None,
@@ -406,9 +408,30 @@ def task_map(
     }
 
 
+def _clean_task_text(text: Optional[str]) -> Optional[str]:
+    return (text or "").strip() or None
+
+
+def _check_text_task(task_text: Optional[str], report_number_ids: list[int]) -> None:
+    """fixes98: a text task has instructions *instead of* report numbers."""
+    if task_text and report_number_ids:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "A text task needs text and no report numbers"
+        )
+
+
+def _email_assignment(
+    background: BackgroundTasks, org_id: int, user_id: Optional[int], task_ids: list[int]
+) -> None:
+    """fixes98: "a new task has been assigned to you", after the response."""
+    if user_id is not None and task_ids:
+        background.add_task(send_task_assigned, org_id, user_id, task_ids)
+
+
 @router.post("", response_model=TaskOut, status_code=status.HTTP_201_CREATED)
 def create_task(
     payload: TaskCreate,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_admin_or_campaign_manager),
 ):
@@ -439,6 +462,8 @@ def create_task(
         if not cdv:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "custom_date_value_id does not exist")
     _validate_report_numbers(db, org_id, payload.report_number_ids)
+    task_text = _clean_task_text(payload.task_text)
+    _check_text_task(task_text, payload.report_number_ids)
 
     task = _new_task(
         db,
@@ -449,9 +474,11 @@ def create_task(
         payload.status,
         payload.volunteer_report_summary,
         payload.report_number_ids,
+        task_text=task_text,
     )
     db.commit()
     db.refresh(task)
+    _email_assignment(background, org_id, task.volunteer_user_id, [task.id])
     return _single_out(db, org_id, task)
 
 
@@ -464,6 +491,7 @@ def _new_task(
     task_status: str,
     summary: Optional[str],
     report_number_ids: list[int],
+    task_text: Optional[str] = None,
 ) -> models.Task:
     """Add one task + its report numbers (no commit). fixes74 §2: without an
     activist a new task is AVAILABLE, never ACTIVE ("taken"); picking one at
@@ -476,6 +504,7 @@ def _new_task(
         custom_date_value_id=custom_date_value_id,
         status=task_status,
         volunteer_report_summary=summary,
+        task_text=task_text,
     )
     if volunteer_user_id is not None:
         assign(task, volunteer_user_id, "manual")
@@ -626,6 +655,7 @@ def preview_bulk_tasks(
 @router.post("/bulk", response_model=TaskBulkCreateOut, status_code=status.HTTP_201_CREATED)
 def create_bulk_tasks(
     payload: TaskBulkCreate,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_admin_or_campaign_manager),
 ):
@@ -683,6 +713,8 @@ def create_bulk_tasks(
         )
         created.append(task.id)
     db.commit()
+    # One email listing every task the activist just got.
+    _email_assignment(background, org_id, payload.volunteer_user_id, created)
     return TaskBulkCreateOut(
         created_task_ids=created,
         skipped=[
@@ -695,6 +727,7 @@ def create_bulk_tasks(
 def update_task(
     task_id: int,
     payload: TaskUpdate,
+    background: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(require_admin_or_campaign_manager),
 ):
@@ -736,9 +769,11 @@ def update_task(
     # also clears the claim audit. fixes74 §4: recorded as a manual
     # assignment — status "taken" and the claim link switched off.
     new_volunteer = data.get("volunteer_user_id")
+    newly_assigned = None
     if new_volunteer is not None and new_volunteer != task.volunteer_user_id:
         _validate_volunteer(db, org_id, new_volunteer)
         assign(task, new_volunteer, "manual")
+        newly_assigned = new_volunteer
     if data.get("status") is not None:
         # fixes74 §2: "available" and "taken" follow the assignment — an
         # unassigned task can't be taken, an assigned one can't be available.
@@ -754,6 +789,17 @@ def update_task(
         task.status = data["status"]
     if "volunteer_report_summary" in data:
         task.volunteer_report_summary = data["volunteer_report_summary"]
+    if "task_text" in data:
+        task.task_text = _clean_task_text(data["task_text"])
+    if task.task_text:
+        rn_ids = data.get("report_number_ids")
+        if rn_ids is None:
+            rn_ids = [
+                r for (r,) in db.query(models.TaskReportNumber.report_number_id).filter(
+                    models.TaskReportNumber.task_id == task.id
+                )
+            ]
+        _check_text_task(task.task_text, rn_ids)
     if "report_number_ids" in data and data["report_number_ids"] is not None:
         _validate_report_numbers(db, org_id, data["report_number_ids"])
         db.query(models.TaskReportNumber).filter(
@@ -768,6 +814,7 @@ def update_task(
 
     db.commit()
     db.refresh(task)
+    _email_assignment(background, org_id, newly_assigned, [task.id])
     return _single_out(db, org_id, task)
 
 

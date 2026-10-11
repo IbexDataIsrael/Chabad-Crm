@@ -537,9 +537,12 @@ def change_password(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ) -> dict:
-    """Let a logged-in user change their own password."""
-    if not current_user.password_hash or not verify_password(
-        payload.current_password, current_user.password_hash
+    """Let a logged-in user change their own password. fixes98: the old
+    password isn't required — being signed in is enough. When one is sent
+    anyway it must still be right."""
+    if payload.current_password and (
+        not current_user.password_hash
+        or not verify_password(payload.current_password, current_user.password_hash)
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

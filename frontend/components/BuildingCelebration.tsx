@@ -28,9 +28,10 @@
 import { useEffect, useState } from "react";
 import confetti from "canvas-confetti";
 
+import type { CelebrationItem, CelebrationQuote } from "@/lib/celebrationItems";
 import { useLocalization } from "@/lib/localization";
 
-type Quote = { id: number; he: string; en: string; ref: string };
+type Quote = CelebrationQuote;
 
 /** How many photos exist in public/rebbe/ (1.jpg .. N.jpg). Must match the files the user adds. */
 const REBBE_IMAGE_COUNT = 9;
@@ -103,7 +104,7 @@ export function fireBuildingCelebration() {
 
 let cachedQuotes: Quote[] | null = null;
 
-async function loadQuotes(): Promise<Quote[]> {
+export async function loadQuotes(): Promise<Quote[]> {
   if (cachedQuotes) return cachedQuotes;
   try {
     const res = await fetch("/rebbe-quotes.json");
@@ -119,10 +120,17 @@ export default function BuildingCelebration({
   open,
   buildingLabel,
   onClose,
+  item,
+  milestoneCount,
 }: {
   open: boolean;
   buildingLabel?: string;
   onClose: () => void;
+  /** fixes98: show this (the next item of street2's merged list) instead
+   *  of a random quote. */
+  item?: CelebrationItem | null;
+  /** fixes98: a "finished N more apartments" celebration, not a building. */
+  milestoneCount?: number;
 }) {
   const { t, dir } = useLocalization();
   const [quote, setQuote] = useState<Quote | null>(null);
@@ -130,14 +138,21 @@ export default function BuildingCelebration({
 
   useEffect(() => {
     if (!open) return;
-    loadQuotes().then((quotes) => {
-      if (quotes.length > 0) {
-        setQuote(quotes[Math.floor(Math.random() * quotes.length)]);
-      }
-    });
+    if (item) {
+      setQuote(item.kind === "quote" ? item.quote : null);
+    } else {
+      loadQuotes().then((quotes) => {
+        if (quotes.length > 0) {
+          setQuote(quotes[Math.floor(Math.random() * quotes.length)]);
+        }
+      });
+    }
     setImgSrc(`/rebbe/${1 + Math.floor(Math.random() * REBBE_IMAGE_COUNT)}.jpg`);
     fireBuildingCelebration();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  const message = item?.kind === "message" ? item.text : null;
 
   if (!open) return null;
 
@@ -197,10 +212,30 @@ export default function BuildingCelebration({
           {t("street.celebration_title", "כל הכבוד! 🎉")}
         </h2>
         <p style={{ margin: "0 0 18px 0", fontSize: "18px", color: "#7a5a10" }}>
-          {buildingLabel
-            ? t("street.celebration_body", "סיימתם את הבניין - {name}!").replace("{name}", buildingLabel)
-            : t("street.celebration_body_no_name", "סיימתם את הבניין!")}
+          {milestoneCount != null
+            ? t("street.celebration_milestone", "סיימת עוד {n} דירות!").replace("{n}", String(milestoneCount))
+            : buildingLabel
+              ? t("street.celebration_body", "סיימתם את הבניין - {name}!").replace("{name}", buildingLabel)
+              : t("street.celebration_body_no_name", "סיימתם את הבניין!")}
         </p>
+
+        {message && (
+          <p
+            style={{
+              margin: "0 0 20px 0",
+              padding: "14px 16px",
+              background: "rgba(255, 215, 0, 0.12)",
+              borderRadius: "12px",
+              border: "1px solid rgba(255, 215, 0, 0.5)",
+              fontSize: "17px",
+              fontWeight: 600,
+              color: "#3d2e05",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {message}
+          </p>
+        )}
 
         {quote && (
           <blockquote

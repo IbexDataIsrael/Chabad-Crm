@@ -288,6 +288,25 @@ export default function TaskDetailPage() {
             />
           </Field>
 
+          {/* fixes98: a text task has instructions instead of report numbers. */}
+          {task.task_text != null ? (
+          <Field label={t("task.text", "טקסט המשימה")} wide>
+            <InlineEdit<string>
+              value={task.task_text}
+              display={<span className="whitespace-pre-wrap">{task.task_text}</span>}
+              enterCommits={false}
+              onSave={(v) => (v.trim() ? patch({ task_text: v.trim() }) : Promise.resolve())}
+              editor={(draft, setDraft) => (
+                <textarea
+                  className={inputClass}
+                  rows={4}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                />
+              )}
+            />
+          </Field>
+          ) : (
           <Field label={t("task.report_numbers", "מספרי דוח")} wide>
             <InlineEdit<number[]>
               value={task.report_number_ids}
@@ -307,6 +326,7 @@ export default function TaskDetailPage() {
               )}
             />
           </Field>
+          )}
 
           <Field label={t("task.custom_date", "תאריך מותאם")}>
             <InlineEdit<number | "">

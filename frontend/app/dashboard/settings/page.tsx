@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 
+import { ActivistStatsCard } from "@/components/ActivistStatsCard";
 import { AddressAutocomplete, type PlaceResult } from "@/components/AddressAutocomplete";
 import { BackupRestoreCard } from "@/components/BackupRestoreCard";
 import { LogoUpload } from "@/components/LogoUpload";
@@ -10,6 +11,7 @@ import { PublicPageSettingsCard } from "@/components/PublicPageSettingsCard";
 import { apiFetch, changePassword } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
+import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 import type { OrgDetails } from "@/lib/types";
 import { isMediumPassword, PASSWORD_HINT } from "@/lib/validation";
@@ -18,6 +20,10 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/PasswordInput";
+import { TabBar } from "@/components/ui/TabBar";
+
+// fixes98: the page is split into tabs by topic.
+type SettingsTab = "general" | "public" | "activist_data" | "backup" | "password";
 
 // fixes40 §4: global field-label text styling options.
 const LABEL_FONT_SIZES = [10, 11, 12, 13, 14, 16, 18, 20, 24];
@@ -59,6 +65,7 @@ export default function SettingsPage() {
   // fixes22 §1: block Save while the logo upload is still in flight, so we
   // never persist the old logo_url over a just-picked (not-yet-uploaded) one.
   const [logoUploading, setLogoUploading] = useState(false);
+  const [tab, setTab] = usePersistentState<SettingsTab>("crm.settings.tab", "general");
 
   useEffect(() => {
     apiFetch<OrgDetails>("/api/organizations/me")
@@ -114,11 +121,25 @@ export default function SettingsPage() {
 
   if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
 
+  // Non-admins only have the password tab — no tab bar for them.
+  const tabs: { id: SettingsTab; label: string }[] = isAdmin
+    ? [
+        { id: "general", label: t("settings.tab_general", "כללי") },
+        { id: "public", label: t("settings.tab_public", "דף ציבורי והרשמה") },
+        { id: "activist_data", label: t("settings.tab_activist_data", "נתונים לפעילים") },
+        { id: "backup", label: t("settings.tab_backup", "גיבוי ושחזור") },
+        { id: "password", label: t("settings.tab_password", "סיסמה") },
+      ]
+    : [];
+  const current: SettingsTab = isAdmin && tabs.some((x) => x.id === tab) ? tab : "password";
+
   return (
     <div className="space-y-5 max-w-lg">
       <h1 className="text-2xl font-bold">{t("nav.settings", "הגדרות")}</h1>
 
-      {isAdmin && (
+      {isAdmin && <TabBar tabs={tabs} value={current} onChange={setTab} />}
+
+      {isAdmin && current === "general" && (
       <Card className="p-0">
       <form onSubmit={save} className="p-6 space-y-4">
         <label className="block space-y-1">
@@ -316,12 +337,15 @@ export default function SettingsPage() {
       )}
 
       {/* fixes65 §1: branded public page + self-registration (admin-only). */}
-      {isAdmin && <PublicPageSettingsCard />}
+      {isAdmin && current === "public" && <PublicPageSettingsCard />}
+
+      {/* fixes98: the numbers quoted by the messages for activists. */}
+      {isAdmin && current === "activist_data" && <ActivistStatsCard />}
 
       {/* fixes16: backup & restore points (admin-only). */}
-      {isAdmin && <BackupRestoreCard />}
+      {isAdmin && current === "backup" && <BackupRestoreCard />}
 
-      <ChangePasswordCard />
+      {current === "password" && <ChangePasswordCard />}
     </div>
   );
 }
@@ -329,7 +353,6 @@ export default function SettingsPage() {
 function ChangePasswordCard() {
   const { t } = useLocalization();
   const { success, error: toastError } = useToast();
-  const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
@@ -348,8 +371,7 @@ function ChangePasswordCard() {
     }
     setBusy(true);
     try {
-      await changePassword(current, next);
-      setCurrent("");
+      await changePassword(next);
       setNext("");
       setConfirm("");
       success(t("settings.password_changed", "הסיסמה עודכנה"));
@@ -366,15 +388,7 @@ function ChangePasswordCard() {
     <Card className="p-0">
     <form onSubmit={submit} className="p-6 space-y-4">
       <h2 className="text-lg font-semibold">{t("settings.change_password", "שינוי סיסמה")}</h2>
-      <label className="block space-y-1">
-        <Label className="block text-sm font-medium">{t("settings.current_password", "סיסמה נוכחית")}</Label>
-        <PasswordInput
-          value={current}
-          onChange={(e) => setCurrent(e.target.value)}
-          autoComplete="current-password"
-          required
-        />
-      </label>
+      {/* fixes98: no "current password" — being signed in is enough. */}
       <label className="block space-y-1">
         <Label className="block text-sm font-medium">{t("settings.new_password", "סיסמה חדשה")}</Label>
         <PasswordInput

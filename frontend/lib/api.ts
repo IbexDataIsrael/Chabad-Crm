@@ -377,14 +377,11 @@ export async function login(
   return (await res.json()) as LoginResult;
 }
 
-/** Change the logged-in user's own password. */
-export const changePassword = (
-  currentPassword: string,
-  newPassword: string,
-): Promise<{ status: string }> =>
+/** Change the logged-in user's own password (fixes98: no old password). */
+export const changePassword = (newPassword: string): Promise<{ status: string }> =>
   apiFetch("/api/auth/change-password", {
     method: "POST",
-    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    body: JSON.stringify({ new_password: newPassword }),
   });
 
 // --- Platform superadmin (/admin dashboard) --------------------------------

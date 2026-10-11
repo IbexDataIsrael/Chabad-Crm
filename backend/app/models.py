@@ -111,6 +111,7 @@ class Organization(Base):
         Boolean, nullable=False, default=False, server_default=text("false")
     )
     public_footer_html = Column(Text, nullable=True)
+    public_footer_html_en = Column(Text, nullable=True)
     # fixes75 §9: "Errors Admin Emails" — every address here is emailed when
     # a server error happens in this organization (list of strings).
     errors_admin_emails = Column(JSON, nullable=True)
@@ -641,6 +642,9 @@ class Task(Base):
     # rules in _shliach_apartment_ids keep working) | COMPLETED | PAUSED.
     status = Column(String(20), nullable=False, default="ACTIVE")
     volunteer_report_summary = Column(Text, nullable=True)
+    # fixes98: a "text task" — free-text instructions instead of report
+    # numbers (such a task has no TaskReportNumber rows / apartments).
+    task_text = Column(Text, nullable=True)
     # fixes65 §4 claim audit: when/how the task left the orphan pool —
     # 'qr' (scanned printout), 'paper' (office entered the paper sheet; locks
     # the task even with no registered performer), fixes74 §4 'manual' (an
@@ -1566,6 +1570,54 @@ class OrganizationPreference(Base):
     )
     key = Column(String(100), nullable=False)  # e.g. 'area_display_enabled'
     value = Column(Text, nullable=False, default="null")  # JSON-encoded
+    updated_at = Column(
+        DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+
+class ActivistMessage(Base):
+    """fixes98: an admin-authored short message shown to activists in the
+    street2 celebration popups (alternating with the regular celebration
+    text). `language` is 'he' | 'en'. The text may hold the placeholders
+    {organization_name}, {number_of_apartments}, {number_of_jews} — stored
+    as-is and filled on the activist's device from OrgActivistStats."""
+
+    __tablename__ = "activist_messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    text = Column(Text, nullable=False)
+    language = Column(String(5), nullable=False, default="he")
+    sort_order = Column(Integer, nullable=False, default=0, server_default="0")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(
+        DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+
+class OrgActivistStats(Base):
+    """fixes98: one row per organization of computed numbers the activist
+    messages quote. Calculated once (the first time the org needs it), then
+    admin-editable; "recalculate" refreshes it from the live data."""
+
+    __tablename__ = "org_activist_stats"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    organization_id = Column(
+        Integer,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    organization_name = Column(String(200), nullable=False, default="")
+    number_of_apartments = Column(Integer, nullable=False, default=0)
+    number_of_jews = Column(Integer, nullable=False, default=0)
+    calculated_at = Column(DateTime, nullable=True)
     updated_at = Column(
         DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
     )

@@ -312,6 +312,7 @@ def send_shliach_welcome(
     org_name: str = "",
     reply_to: Optional[str] = None,
     org_logo_url: Optional[str] = None,
+    url_to_system: Optional[str] = None,
 ) -> None:
     """Send (or log) the access-link email to a newly-created shliach / user.
 
@@ -328,7 +329,8 @@ def send_shliach_welcome(
         reply_to=reply_to,
         first_name=first_name,
         last_name=last_name,
-        url_to_system=settings.frontend_url,
+        # fixes98: self-registered activists get their org's page instead.
+        url_to_system=url_to_system or settings.frontend_url,
         shliach_email=shliach_email,
         org_name=org_name,
         logo_url=_org_logo_url(org_logo_url),

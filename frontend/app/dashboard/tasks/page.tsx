@@ -436,7 +436,16 @@ export default function TasksPage() {
                       {task.campaign_name}
                     </Link>
                   </td>
-                  <td className="px-3 py-2">{task.report_number_names.join(", ") || "—"}</td>
+                  <td className="px-3 py-2">
+                    {/* fixes98: a text task shows its text instead. */}
+                    {task.task_text ? (
+                      <span className="line-clamp-2 whitespace-pre-wrap" title={task.task_text}>
+                        📝 {task.task_text}
+                      </span>
+                    ) : (
+                      task.report_number_names.join(", ") || "—"
+                    )}
+                  </td>
                   <td className="px-3 py-2">
                     <InlineEdit<TaskStatus>
                       value={task.status}

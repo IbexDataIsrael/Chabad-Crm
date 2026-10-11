@@ -114,6 +114,7 @@ def my_reportable_tasks(
             id=t.id,
             campaign_name=t.campaign.name if t.campaign else "",
             report_number_names=sorted(rn.report_number.name for rn in t.report_numbers),
+            task_text=t.task_text,
             status=t.status,
             assigned_at=t.assigned_at,
         )

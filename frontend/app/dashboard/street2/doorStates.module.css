@@ -161,3 +161,80 @@
   background: #fff;
   cursor: pointer;
 }
+
+/* fixes98: the open apartment's top bar — close + before/after. Sticky so
+   it stays reachable while the sheet scrolls. */
+.sheetTopBar {
+  position: sticky;
+  top: -10px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 -18px 8px;
+  padding: 6px 12px;
+  background: #fff;
+  border-bottom: 1px solid #e4efe7;
+}
+.navPair {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.navPos {
+  min-width: 52px;
+  text-align: center;
+  font-size: 13px;
+  color: #6b8a75;
+  font-variant-numeric: tabular-nums;
+}
+.navBtn,
+.closeX {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #d6e6db;
+  border-radius: 12px;
+  background: #f4faf6;
+  color: #1f3d2b;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.navBtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.closeX {
+  background: #eef3ef;
+}
+
+/* fixes98: per-building floor order toggle, in a row under the building
+   header (the header itself is full on a phone). */
+.sortRow {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 12px 0;
+}
+.sortBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid #cfe5d6;
+  border-radius: 12px;
+  background: #fff;
+  color: #1f3d2b;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.sortBtn[aria-pressed="true"] {
+  background: #dff3e5;
+  border-color: #8cc9a0;
+}

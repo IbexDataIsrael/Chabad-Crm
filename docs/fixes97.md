@@ -49,4 +49,4 @@
 - [ ] Not done: prod (Neon) rows upgrade on the next deploy's startup seed — only
       rows still holding an old default; any template the superadmin edited on
       prod keeps the edit and must be re-pasted manually.
-- [ ] Not done: not committed / pushed (awaiting ask).
+- [x] Committed c3a2ab3 (not pushed).

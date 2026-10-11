@@ -524,7 +524,9 @@ class TokenData(BaseModel):
 
 
 class ChangePasswordRequest(BaseModel):
-    current_password: str
+    # fixes98: optional — a signed-in user changes their password without
+    # re-typing the old one.
+    current_password: Optional[str] = None
     new_password: str
 
 
@@ -702,6 +704,8 @@ class MyTaskOut(BaseModel):
     id: int
     campaign_name: str
     report_number_names: list[str] = []
+    # fixes98: a text task's instructions (no report numbers).
+    task_text: Optional[str] = None
     status: str
     assigned_at: Optional[datetime] = None
 
@@ -760,6 +764,51 @@ class ShliachAnnouncementOut(BaseModel):
     is_visible: bool
     created_at: datetime
     updated_at: datetime
+
+
+# --- fixes98: messages for activists + the numbers they quote --------------
+ActivistMessageLanguage = Literal["he", "en"]
+
+
+class ActivistMessageCreate(BaseModel):
+    text: str = Field(min_length=1, max_length=1000)
+    language: ActivistMessageLanguage
+
+
+class ActivistMessageUpdate(BaseModel):
+    text: Optional[str] = Field(default=None, min_length=1, max_length=1000)
+    language: Optional[ActivistMessageLanguage] = None
+
+
+class ActivistMessageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    text: str
+    language: str
+    sort_order: int
+
+
+class OrgActivistStatsOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    organization_name: str
+    number_of_apartments: int
+    number_of_jews: int
+    calculated_at: Optional[datetime] = None
+
+
+class OrgActivistStatsUpdate(BaseModel):
+    organization_name: Optional[str] = Field(default=None, max_length=200)
+    number_of_apartments: Optional[int] = Field(default=None, ge=0)
+    number_of_jews: Optional[int] = Field(default=None, ge=0)
+
+
+class ActivistMessagesFeed(BaseModel):
+    """What the activist app needs for its celebration popups."""
+
+    messages: list[ActivistMessageOut] = []
+    stats: OrgActivistStatsOut
 
 
 # --- Areas / Buildings / Apartments ----------------------------------------
@@ -1877,6 +1926,8 @@ class TaskCreate(BaseModel):
     report_number_ids: list[int] = []
     status: TaskStatus = "ACTIVE"
     volunteer_report_summary: Optional[str] = None
+    # fixes98: a "text task" — instructions instead of report numbers.
+    task_text: Optional[str] = None
 
 
 # --- fixes74 §12: street2 activity log --------------------------------------
@@ -1962,6 +2013,7 @@ class TaskUpdate(BaseModel):
     report_number_ids: Optional[list[int]] = None
     status: Optional[TaskStatus] = None
     volunteer_report_summary: Optional[str] = None
+    task_text: Optional[str] = None
 
 
 class TaskOut(BaseModel):
@@ -1980,6 +2032,7 @@ class TaskOut(BaseModel):
     custom_date_value: Optional[str] = None
     report_number_ids: list[int] = []
     report_number_names: list[str] = []
+    task_text: Optional[str] = None
     status: TaskStatus
     volunteer_report_summary: Optional[str] = None
     # fixes74 §11: this task's own latest report (linked to it, sent after

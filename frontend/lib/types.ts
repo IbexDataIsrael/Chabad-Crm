@@ -580,6 +580,8 @@ export interface Task {
   custom_date_value: string | null;
   report_number_ids: number[];
   report_number_names: string[];
+  /** fixes98: a text task's instructions (it has no report numbers). */
+  task_text: string | null;
   status: TaskStatus;
   volunteer_report_summary: string | null;
   // fixes60 §1: the volunteer's own most recent ShliachReportCompletion —
@@ -750,6 +752,8 @@ export interface MyTask {
   id: number;
   campaign_name: string;
   report_number_names: string[];
+  /** fixes98: a text task's instructions. */
+  task_text: string | null;
   status: string;
   assigned_at: string | null;
 }
@@ -900,4 +904,28 @@ export interface StreetActivity {
   full_name: string;
   last_sync_at: string | null;
   events: StreetActivityEvent[];
+}
+
+/** fixes98: an admin message shown to activists in the street2 celebration
+ *  popups. `text` may contain {organization_name} / {number_of_apartments} /
+ *  {number_of_jews} — filled on the device from OrgActivistStats. */
+export interface ActivistMessage {
+  id: number;
+  text: string;
+  language: "he" | "en";
+  sort_order: number;
+}
+
+/** fixes98: per-org numbers the activist messages quote (calculated once,
+ *  then admin-editable / recalculable). */
+export interface OrgActivistStats {
+  organization_name: string;
+  number_of_apartments: number;
+  number_of_jews: number;
+  calculated_at: string | null;
+}
+
+export interface ActivistMessagesFeed {
+  messages: ActivistMessage[];
+  stats: OrgActivistStats;
 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Footprints, Home, MessageSquare, UserRound } from "lucide-react";
+import { ClipboardList, Footprints, Home, MessageSquare, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import {
@@ -16,7 +16,7 @@ import { useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
-import type { ApartmentPage, CampaignActiveStat, ShliachAnnouncement } from "@/lib/types";
+import type { ApartmentPage, CampaignActiveStat, MyTask, ShliachAnnouncement } from "@/lib/types";
 
 /** fixes54 §6.1: a standalone landing page for the shliach role — replaces
  *  landing directly on the generic contact-edit page (`/dashboard/contacts/
@@ -42,6 +42,14 @@ export default function ActivistLandingPage() {
   const [commentModalOpen, setCommentModalOpen] = useState(false);
   // fixes58 §3.2/Phase 6: one dynamic stat tile per active campaign.
   const [campaignStats, setCampaignStats] = useState<CampaignActiveStat[]>([]);
+  // fixes98: text tasks have no apartments — their instructions show here.
+  const [textTasks, setTextTasks] = useState<MyTask[]>([]);
+  useEffect(() => {
+    if (!isShliach) return;
+    apiFetch<MyTask[]>("/api/shliach-messages/my-tasks")
+      .then((rows) => setTextTasks(rows.filter((r) => (r.task_text ?? "").trim())))
+      .catch(() => setTextTasks([]));
+  }, [isShliach]);
 
   // The count here used to ignore every filter, so it always showed the
   // activist's *full* assigned set — bigger than what the Apartments page
@@ -162,6 +170,29 @@ export default function ActivistLandingPage() {
           )}
         </Card>
       </Link>
+
+      {textTasks.length > 0 && (
+        <Card className="border-2 border-status-orange/60 p-5 space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-status-orange/10 text-status-orange">
+              <ClipboardList className="h-5 w-5" />
+            </div>
+            <div className="text-lg font-semibold">
+              {t("activist_home.text_tasks", "המשימות שלי")}
+            </div>
+          </div>
+          <ul className="space-y-2">
+            {textTasks.map((task) => (
+              <li key={task.id} className="rounded-lg bg-muted/50 p-3">
+                {task.campaign_name && (
+                  <div className="text-xs text-muted-foreground">{task.campaign_name}</div>
+                )}
+                <div className="whitespace-pre-wrap text-sm">{task.task_text}</div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         {contactId && (
