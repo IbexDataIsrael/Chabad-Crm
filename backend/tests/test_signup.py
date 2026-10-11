@@ -91,7 +91,7 @@ def test_seed_upgrades_legacy_subject_but_keeps_edited_one(db_session):
 
     seed_email_templates(db_session)
     rows = {r.key: r for r in db_session.query(models.EmailTemplate).all()}
-    rows["aignummail1"].subject = LEGACY_EMAIL_SUBJECTS["aignummail1"]
+    rows["aignummail1"].subject = LEGACY_EMAIL_SUBJECTS["aignummail1"][0]
     rows["aignummail2"].subject = "My custom subject"
     db_session.commit()
 

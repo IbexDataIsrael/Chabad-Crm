@@ -1289,6 +1289,8 @@ def create_contact(
                     org_name=org_name,
                     # fixes17 §1.3: replies go to the admin who created them.
                     reply_to=current_user.email,
+                    # Activist mail carries the organization's logo.
+                    org_logo_url=current_user.organization.logo_url if current_user.organization else None,
                 )
             except Exception:  # pragma: no cover - email must not block creation
                 logger.exception("Failed to send shliach welcome email")
@@ -1614,6 +1616,8 @@ def update_contact(
                 shliach_email=welcome_to,
                 org_name=current_user.organization.name if current_user.organization else "",
                 reply_to=current_user.email,
+                # Activist mail carries the organization's logo.
+                org_logo_url=current_user.organization.logo_url if current_user.organization else None,
             )
         except Exception:  # pragma: no cover — email must not block the edit
             logger.exception("Failed to send welcome email to %s", welcome_to)

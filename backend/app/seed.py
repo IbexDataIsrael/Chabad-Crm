@@ -805,6 +805,10 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("admin", "admin.deps_areas", "אזורים באחריות: {n}", "Areas covered: {n}"),
     ("admin", "admin.deps_note", "בעת המחיקה השיוכים יוסרו והנתונים יישארו ללא משתמש מקושר.", "On deletion the links are removed; the data remains without a linked user."),
     ("admin", "admin.template.shliach_welcome", "מייל קבלת פנים (פעיל / משתמש חדש)", "Welcome email (new activist / user)"),
+    ("admin", "admin.template.aignummail1", "מייל בקשה התקבלה (למשתמש)", "Request received email (to the user)"),
+    ("admin", "admin.template.aignummail2", "מייל אישור הארגון (למשתמש)", "Organization approved email (to the user)"),
+    ("admin", "admin.template.tenant_verification", "מייל אימות הרשמת ארגון", "Organization signup verification email"),
+    ("admin", "admin.template.password_reset", "מייל איפוס סיסמה", "Password reset email"),
     ("editor", "editor.visual", "עיצוב", "Visual"),
     ("editor", "editor.html", "HTML", "HTML"),
     ("editor", "editor.bold", "מודגש", "Bold"),
@@ -2690,8 +2694,10 @@ def seed_email_templates(db: Session) -> None:
     an admin's edits). Defaults live in app.core.email.DEFAULT_EMAIL_TEMPLATES."""
     from app.core.email import (
         DEFAULT_EMAIL_TEMPLATES,
+        LEGACY_BODY_FINGERPRINTS,
         LEGACY_EMAIL_BODY_SNIPPETS,
         LEGACY_EMAIL_SUBJECTS,
+        fingerprint,
     )
 
     existing = {
@@ -2710,12 +2716,12 @@ def seed_email_templates(db: Session) -> None:
             )
         )
         added = True
-    for key, old_subject in LEGACY_EMAIL_SUBJECTS.items():
+    for key, old_subjects in LEGACY_EMAIL_SUBJECTS.items():
         row = (
             db.query(models.EmailTemplate)
             .filter(
                 models.EmailTemplate.key == key,
-                models.EmailTemplate.subject == old_subject,
+                models.EmailTemplate.subject.in_(old_subjects),
             )
             .first()
         )
@@ -2729,6 +2735,16 @@ def seed_email_templates(db: Session) -> None:
         for old, new in swaps:
             if old in (row.body or ""):
                 row.body = row.body.replace(old, new)
+                added = True
+    # Branded Hebrew/English HTML layouts: a body still holding any default this
+    # repo ever shipped (fingerprint match) moves to the current default.
+    for key, fields in LEGACY_BODY_FINGERPRINTS.items():
+        row = db.query(models.EmailTemplate).filter(models.EmailTemplate.key == key).first()
+        if row is None:
+            continue
+        for field, old_prints in fields.items():
+            if fingerprint(getattr(row, field) or "") in old_prints:
+                setattr(row, field, DEFAULT_EMAIL_TEMPLATES[key][field])
                 added = True
     if added:
         db.commit()

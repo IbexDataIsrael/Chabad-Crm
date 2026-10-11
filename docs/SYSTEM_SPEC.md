@@ -165,6 +165,11 @@ entities that matter for orienting yourself:
 - **EmailTemplate** — admin-editable (WYSIWYG) HTML templates for
   transactional mail (activist/user welcome, tenant verification, etc.),
   sent with the org's name/reply-to so mail reads as coming from the org.
+  Each template = a Hebrew RTL + an English LTR full HTML document, built
+  from `backend/HTML/email_layout_{he,en}.html` (defaults in
+  `core/email_templates.py`); the sent mail stacks Hebrew above English.
+  Header logo = the org's logo for activist mail (welcome, password reset),
+  the platform logo otherwise; footer = platform logo.
 - **OrgBackup** — org-scoped DB snapshots (admin-triggered, 10 kept/org).
 
 ## 5. Feature areas (by dashboard route)

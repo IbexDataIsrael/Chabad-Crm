@@ -226,6 +226,8 @@ def create_user(
                 org_name=org_name,
                 # fixes17 §1.3: replies go to the admin who created the account.
                 reply_to=admin.email,
+                # Activist mail carries the organization's logo.
+                org_logo_url=admin.organization.logo_url if admin.organization else None,
             )
         except Exception:  # pragma: no cover — email must not block creation
             logger.exception("Failed to send welcome email to %s", email)
@@ -322,6 +324,8 @@ def update_user(
                 shliach_email=email,
                 org_name=org_name,
                 reply_to=admin.email,
+                # Activist mail carries the organization's logo.
+                org_logo_url=admin.organization.logo_url if admin.organization else None,
             )
         except Exception:  # pragma: no cover — email must not block the edit
             logger.exception("Failed to send welcome email to %s", email)

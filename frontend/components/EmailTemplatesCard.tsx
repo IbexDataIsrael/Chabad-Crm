@@ -21,14 +21,20 @@ const TEMPLATE_LABELS: Record<string, string> = {
   aignummail1: "מייל בקשה התקבלה (למשתמש)",
   aignummail2: "מייל אישור הארגון (למשתמש)",
   shliach_welcome: "מייל קבלת פנים (פעיל / משתמש חדש)",
+  tenant_verification: "מייל אימות הרשמת ארגון",
+  password_reset: "מייל איפוס סיסמה",
 };
+
+// Every template can use {{logo_url}} (header) and {{system_logo_url}} (footer).
+const LOGOS = "{{logo_url}}, {{system_logo_url}}";
 
 // Which {{placeholders}} each template understands (shown as a hint).
 const TEMPLATE_PLACEHOLDERS: Record<string, string> = {
-  aignummail1: "{{user_name}}, {{org_name}}",
-  aignummail2: "{{user_name}}, {{org_name}}, {{login_link}}",
-  shliach_welcome:
-    "{{first_name}}, {{last_name}}, {{url_to_system}}, {{shliach_email}}, {{org_name}}, {{logo_url}}",
+  aignummail1: `{{user_name}}, {{org_name}}, ${LOGOS}`,
+  aignummail2: `{{user_name}}, {{org_name}}, {{login_link}}, ${LOGOS}`,
+  shliach_welcome: `{{first_name}}, {{last_name}}, {{url_to_system}}, {{shliach_email}}, {{org_name}}, ${LOGOS}`,
+  tenant_verification: `{{first_name}}, {{last_name}}, {{organization_name}}, {{email}}, {{phone}}, {{username}}, {{verify_url}}, {{expire_hours}}, ${LOGOS}`,
+  password_reset: `{{user_name}}, {{org_name}}, {{reset_url}}, {{expire_minutes}}, ${LOGOS}`,
 };
 
 /** Superadmin editor for the platform's bilingual email templates. Each row

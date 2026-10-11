@@ -307,7 +307,7 @@ class TestEmailBranding:
         link = send_verification_email(db_session, user, "tok123")
         assert "token=tok123" in link
         assert sent["to"] == "boss@x.com"
-        # The seeded hello_tenant HTML with every placeholder substituted.
+        # The seeded tenant_verification HTML with every placeholder substituted.
         assert "token=tok123" in sent["html"]
         assert "{{" not in sent["html"]
 
