@@ -41,6 +41,7 @@ Builds on fixes100 (the two superadmin lists: new-org signups, errors).
       It refreshes as soon as a list is saved. Live-verified.
 - Localization rows: `admin.notify_emails_effective/_nobody/_missing/_configure`,
   `error_page.title/body/retry/reload`.
+- Committed 66f440a together with fixes102 (not pushed).
 - Tests: `backend/tests/test_fixes101.py` (8 tests). conftest turns the
   logged-error capture off by default (tests log expected failures).
 

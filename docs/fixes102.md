@@ -56,6 +56,7 @@ no org.
       (`activity_log.purge_old`).
 - [x] Org delete removes its rows; user delete keeps them (user cleared).
       Backups and clones don't include them (fixed table lists).
+- Committed 66f440a together with fixes101 (not pushed).
 - Tests: `backend/tests/test_fixes102.py` (9 tests).
 - Live (local, org 1 admin): 2 page views + area add/update/delete showed
   up in the tab with the right labels and `#id`. Found and fixed page views
