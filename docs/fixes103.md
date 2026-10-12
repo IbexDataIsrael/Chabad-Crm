@@ -22,7 +22,7 @@ Fallback: if the POST to EMAIL_SERVICE_URL throws, times out (use a 5s timeout),
 
 ---
 
-## Closeout (2026-10-13), not committed, not pushed (waiting for review)
+## Closeout (2026-10-13), committed b4ffccf, not pushed
 
 - [x] 1. Client module `backend/app/core/email_service.py`: `send(to, subject,
       html, text, from_address, reply_to)` → POST `/send`, header
