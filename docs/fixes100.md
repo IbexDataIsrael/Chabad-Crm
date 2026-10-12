@@ -31,6 +31,7 @@ error / new registration"
       `error_notify_emails`); no migration.
 - [x] Localization: new rows for the error card + empty-state text; the
       signup card's title/intro reworded via guarded `LOCALIZATION_RENAMES`.
+- Committed 4bd0e77 (not pushed).
 - Tests: `backend/tests/test_superadmin.py` (signup list replaces env;
   error-list endpoint; org + platform recipient combining + env fallback),
   `test_fixes75.py` adjusted. Live: superadmin settings page — added 2
