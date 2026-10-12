@@ -238,7 +238,13 @@ entities that matter for orienting yourself:
 - **`/dashboard/settings`**, **`/dashboard/admin`** — org settings/branding;
   platform superadmin tenant management, including per-org feature toggles
   (Area/Building/Apartment/Activist display cascade + AI query — fixes54
-  §8, see OrganizationPreference in §4).
+  §8, see OrganizationPreference in §4). System settings
+  (`/dashboard/admin/settings`) hold two notification recipient lists in
+  `system_settings` (fixes100): new-organization signups
+  (`pending_signup_notify_emails`) and server errors
+  (`error_notify_emails`, every error in every org, on top of the org's own
+  `errors_admin_emails`). While a list is empty, mail falls back to env
+  `PLATFORM_ADMIN_EMAIL` / `SUPERADMIN_EMAIL`.
 - **Instinct API** (`backend/app/routers/instinct/`, no UI route) — a
   shared-key (`X-Instinct-Key`) machine API for a WhatsApp/voice assistant,
   scoped to env `INSTINCT_ORG_ID`: contact search/create, visits with a

@@ -220,8 +220,8 @@ def test_email_templates_require_superadmin(client, admin_headers):
 
 
 def test_pending_signup_notify_emails(client, superadmin_headers, admin_headers, monkeypatch):
-    """fixes81 §3: superadmin-configured extra recipients of the new-org
-    pending-approval email, on top of the env addresses (deduplicated)."""
+    """fixes81 §3 / fixes100: superadmin-configured recipients of the new-org
+    pending-approval email. Once set, the list replaces the env addresses."""
     from app.config import settings
 
     url = "/api/admin/pending-signup-emails"
@@ -259,7 +259,41 @@ def test_pending_signup_notify_emails(client, superadmin_headers, admin_headers,
         },
     )
     assert r.status_code == 201, r.text
-    assert sorted(to for to in sent if to != "owner@x.com") == ["a@x.com", "b@x.com", "ops@x.com"]
+    assert sorted(to for to in sent if to != "owner@x.com") == ["a@x.com", "b@x.com"]
+
+
+# --- fixes100: superadmin-managed error-alert recipients ----------------------
+def test_error_notify_emails_setting(client, superadmin_headers, admin_headers):
+    url = "/api/admin/error-notify-emails"
+    assert client.get(url, headers=admin_headers).status_code == 403
+    assert client.get(url, headers=superadmin_headers).json() == {"emails": []}
+    assert client.put(url, json={"emails": ["bad"]}, headers=superadmin_headers).status_code == 422
+    r = client.put(url, json={"emails": ["Dev@x.com", "dev@x.com", "qa@x.com"]}, headers=superadmin_headers)
+    assert r.status_code == 200 and r.json() == {"emails": ["dev@x.com", "qa@x.com"]}
+    # Independent of the new-organization list.
+    assert client.get("/api/admin/pending-signup-emails", headers=superadmin_headers).json() == {"emails": []}
+
+
+def test_error_recipients_combine_org_and_platform_lists(db_session, monkeypatch):
+    from app.config import settings
+    from app.core.email import ERROR_NOTIFY_EMAILS_KEY, set_notify_emails
+    from app.core.error_log import recipients_for
+
+    monkeypatch.setattr(settings, "platform_admin_email", "ops@x.com")
+    monkeypatch.setattr(settings, "superadmin_email", "Super@x.com")
+    org = _make_org(db_session, "Err Org")
+    org.errors_admin_emails = ["orgdev@x.com", "ops@x.com"]
+    db_session.commit()
+
+    # Empty platform list -> env addresses stand in.
+    assert recipients_for(db_session, None) == ["ops@x.com", "super@x.com"]
+    assert recipients_for(db_session, org) == ["orgdev@x.com", "ops@x.com", "super@x.com"]
+
+    # Configured list replaces the env addresses, for every error.
+    set_notify_emails(db_session, ERROR_NOTIFY_EMAILS_KEY, ["dev@x.com", "orgdev@x.com"])
+    db_session.commit()
+    assert recipients_for(db_session, None) == ["dev@x.com", "orgdev@x.com"]
+    assert recipients_for(db_session, org) == ["orgdev@x.com", "ops@x.com", "dev@x.com"]
 
 
 # --- fixes91: Cloudinary images go with a deleted org ------------------------

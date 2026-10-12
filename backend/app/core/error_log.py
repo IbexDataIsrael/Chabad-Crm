@@ -1,9 +1,11 @@
 """fixes75 §4/§9: unhandled server errors are written to the `error_logs`
 table and emailed to the organization's "Errors Admin Emails" list.
 
-An error with no organization behind it (no/invalid token) is emailed to the
-platform operator (PLATFORM_ADMIN_EMAIL) instead. The same error (type + path)
-is emailed at most once per THROTTLE_SECONDS per organization, so an error
+fixes100: every error — with or without an organization behind it — also goes
+to the superadmin's "error alerts" list (system settings), falling back to
+PLATFORM_ADMIN_EMAIL / SUPERADMIN_EMAIL while that list is empty. The same
+error (type + path) is emailed at most once per THROTTLE_SECONDS per
+organization, so an error
 storm can't flood the inboxes or get the SMTP account blocked; every
 occurrence is still logged.
 """
@@ -16,8 +18,7 @@ from typing import Optional
 from fastapi import Request
 
 from app import models
-from app.config import settings
-from app.core.email import send_email
+from app.core.email import ERROR_NOTIFY_EMAILS_KEY, platform_notify_recipients, send_email
 from app.core.security import decode_access_token
 from app.database import get_db
 
@@ -47,10 +48,14 @@ def _user_id_from_request(request: Request) -> Optional[int]:
         return None
 
 
-def recipients_for(org: Optional[models.Organization]) -> list[str]:
-    if org is not None:
-        return [e for e in (org.errors_admin_emails or []) if e]
-    return [settings.platform_admin_email] if settings.platform_admin_email else []
+def recipients_for(db, org: Optional[models.Organization]) -> list[str]:
+    out: list[str] = []
+    org_list = (org.errors_admin_emails or []) if org is not None else []
+    for addr in (*org_list, *platform_notify_recipients(db, ERROR_NOTIFY_EMAILS_KEY)):
+        addr = (addr or "").strip().lower()
+        if addr and addr not in out:
+            out.append(addr)
+    return out
 
 
 def _should_email(key: tuple) -> bool:
@@ -100,7 +105,7 @@ def record_error(request: Request, exc: BaseException) -> Optional[int]:
         db.commit()
         row_id = row.id
 
-        to = recipients_for(org)
+        to = recipients_for(db, org)
         if to and _should_email((row.organization_id, row.error_type, row.path)):
             subject = f"[{org.name if org else 'Mini CRM'}] Server error: {row.error_type}"
             body = (

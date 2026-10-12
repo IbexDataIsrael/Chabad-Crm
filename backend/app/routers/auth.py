@@ -19,7 +19,8 @@ from sqlalchemy.orm import Session
 from app import models
 from app.config import settings
 from app.core.email import (
-    get_pending_signup_emails,
+    PENDING_SIGNUP_EMAILS_KEY,
+    platform_notify_recipients,
     send_org_pending_admin,
     send_org_pending_user,
     send_password_reset,
@@ -188,7 +189,7 @@ def _create_pending_org(db: Session, org: models.Organization, user: models.User
             org.name,
             user.full_name,
             user.email or "",
-            extra_recipients=get_pending_signup_emails(db),
+            recipients=platform_notify_recipients(db, PENDING_SIGNUP_EMAILS_KEY),
         )
     except Exception:
         logger.exception("Failed to send pending-admin notification for org %s", org.name)

@@ -14,10 +14,12 @@ from sqlalchemy.orm import Session
 from app import models
 from app.config import settings
 from app.core.email import (
-    get_pending_signup_emails,
+    ERROR_NOTIFY_EMAILS_KEY,
+    PENDING_SIGNUP_EMAILS_KEY,
+    get_notify_emails,
     send_email,
     send_org_approved_user,
-    set_pending_signup_emails,
+    set_notify_emails,
 )
 from app.core.cloudinary_assets import delete_images, plan_org_image_cleanup
 from app.core.org_clone import clone_organization, plan_demo_clone
@@ -38,7 +40,7 @@ from app.schemas import (
     EmailTemplateUpdate,
     OrgPrefsOut,
     OrgPrefsUpdate,
-    PendingSignupEmails,
+    NotifyEmails,
     SystemConfigOut,
     SystemConfigUpdate,
     Token,
@@ -688,23 +690,31 @@ def update_system_settings(
     return get_system_settings(db, admin)
 
 
-@router.get("/pending-signup-emails", response_model=PendingSignupEmails)
-def get_pending_signup_emails_setting(
-    db: Session = Depends(get_db),
-    _: models.User = Depends(require_superadmin),
-):
-    """fixes81 §3: who (besides the env addresses) is emailed when a new
-    organization signs up and awaits approval."""
-    return PendingSignupEmails(emails=get_pending_signup_emails(db))
+def _notify_emails_routes(path: str, key: str, label: str) -> None:
+    """fixes81 §3 / fixes100: GET/PUT one superadmin-managed recipient list.
+    An empty list means "fall back to the env addresses"
+    (see email.platform_notify_recipients)."""
+
+    @router.get(path, response_model=NotifyEmails, name=f"get_{key}")
+    def get_list(
+        db: Session = Depends(get_db),
+        _: models.User = Depends(require_superadmin),
+    ):
+        return NotifyEmails(emails=get_notify_emails(db, key))
+
+    @router.put(path, response_model=NotifyEmails, name=f"update_{key}")
+    def update_list(
+        payload: NotifyEmails,
+        db: Session = Depends(get_db),
+        admin: models.User = Depends(require_superadmin),
+    ):
+        emails = set_notify_emails(db, key, payload.emails)
+        db.commit()
+        logger.info("superadmin %s set %s notify emails (%d)", admin.email, label, len(emails))
+        return NotifyEmails(emails=emails)
 
 
-@router.put("/pending-signup-emails", response_model=PendingSignupEmails)
-def update_pending_signup_emails_setting(
-    payload: PendingSignupEmails,
-    db: Session = Depends(get_db),
-    admin: models.User = Depends(require_superadmin),
-):
-    emails = set_pending_signup_emails(db, payload.emails)
-    db.commit()
-    logger.info("superadmin %s set pending-signup notify emails (%d)", admin.email, len(emails))
-    return PendingSignupEmails(emails=emails)
+# Who is emailed when a new organization signs up and awaits approval.
+_notify_emails_routes("/pending-signup-emails", PENDING_SIGNUP_EMAILS_KEY, "pending-signup")
+# Who gets every server-error alert (on top of the org's own list).
+_notify_emails_routes("/error-notify-emails", ERROR_NOTIFY_EMAILS_KEY, "error")

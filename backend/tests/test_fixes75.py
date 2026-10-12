@@ -215,9 +215,13 @@ def test_superadmin_sees_every_orgs_logs_with_org_name(
 def test_unhandled_error_is_logged_and_emailed(client, admin_headers, monkeypatch, org_id):
     from fastapi.testclient import TestClient
 
+    from app.config import settings
     from app.core import error_log
     from app.main import app
 
+    # fixes100: no platform recipients either, so only the org's list is mailed.
+    monkeypatch.setattr(settings, "platform_admin_email", "")
+    monkeypatch.setattr(settings, "superadmin_email", "")
     r = client.put(
         "/api/logs/settings",
         json={"errors_admin_emails": ["Ops@Example.com", "ops@example.com", "", "dev@example.com"]},

@@ -412,9 +412,10 @@ class SystemConfigUpdate(BaseModel):
     fallback_name: Optional[str] = None
 
 
-class PendingSignupEmails(BaseModel):
-    """fixes81 §3: extra recipients of the "new organization pending approval"
-    email. Superadmin-only — kept out of the public SystemConfigOut."""
+class NotifyEmails(BaseModel):
+    """fixes81 §3 / fixes100: a superadmin-managed recipient list (new-org
+    signups, server errors). Superadmin-only — kept out of the public
+    SystemConfigOut."""
 
     emails: list[str]
 

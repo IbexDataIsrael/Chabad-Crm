@@ -31,7 +31,7 @@ import {
 import { Plus } from "lucide-react";
 
 import { EmailTemplatesCard } from "@/components/EmailTemplatesCard";
-import { PendingSignupEmailsCard } from "@/components/PendingSignupEmailsCard";
+import { NotifyEmailsCard } from "@/components/NotifyEmailsCard";
 import { SystemSettingsCard } from "@/components/SystemSettingsCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -745,7 +745,20 @@ export function SystemAdmin({ section }: { section: AdminSection }) {
       {section === "email-templates" && <EmailTemplatesCard defaultOpen />}
       {section === "settings" && (
         <>
-          <PendingSignupEmailsCard />
+          <NotifyEmailsCard
+            endpoint="/api/admin/pending-signup-emails"
+            titleKey="admin.pending_signup_emails_title"
+            titleFallback="התראות על הרשמת ארגון חדש"
+            introKey="admin.pending_signup_emails_intro"
+            introFallback="כתובות שיקבלו מייל כשארגון חדש נרשם וממתין לאישור."
+          />
+          <NotifyEmailsCard
+            endpoint="/api/admin/error-notify-emails"
+            titleKey="admin.error_notify_emails_title"
+            titleFallback="התראות על שגיאות מערכת"
+            introKey="admin.error_notify_emails_intro"
+            introFallback="כתובות שיקבלו מייל על כל שגיאת שרת, בכל הארגונים (בנוסף לרשימת השגיאות של כל ארגון)."
+          />
           <SystemSettingsCard defaultOpen />
         </>
       )}

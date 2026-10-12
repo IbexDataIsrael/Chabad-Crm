@@ -11,10 +11,26 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
-/** fixes81 §3: superadmin editor for who gets the "new organization pending
- *  approval" email — one or more addresses, on top of the server's own
+export interface NotifyEmailsCardProps {
+  /** e.g. "/api/admin/pending-signup-emails" — GET/PUT `{ emails: string[] }`. */
+  endpoint: string;
+  titleKey: string;
+  titleFallback: string;
+  introKey: string;
+  introFallback: string;
+}
+
+/** fixes81 §3 / fixes100: superadmin editor for one notification recipient
+ *  list (new-organization signups, server errors) — one or more addresses.
+ *  While a list is empty the server falls back to its own
  *  PLATFORM_ADMIN_EMAIL / SUPERADMIN_EMAIL. */
-export function PendingSignupEmailsCard() {
+export function NotifyEmailsCard({
+  endpoint,
+  titleKey,
+  titleFallback,
+  introKey,
+  introFallback,
+}: NotifyEmailsCardProps) {
   const { t } = useLocalization();
   const { success, error } = useToast();
 
@@ -25,7 +41,7 @@ export function PendingSignupEmailsCard() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    apiFetch<{ emails: string[] }>("/api/admin/pending-signup-emails")
+    apiFetch<{ emails: string[] }>(endpoint)
       .then((r) => setEmails(r.emails))
       .catch((e) => {
         error(e instanceof Error ? e.message : t("msg.load_failed", "הטעינה נכשלה"));
@@ -57,7 +73,7 @@ export function PendingSignupEmailsCard() {
   async function save() {
     setSaving(true);
     try {
-      const r = await apiFetch<{ emails: string[] }>("/api/admin/pending-signup-emails", {
+      const r = await apiFetch<{ emails: string[] }>(endpoint, {
         method: "PUT",
         body: JSON.stringify({ emails: emails ?? [] }),
       });
@@ -75,13 +91,10 @@ export function PendingSignupEmailsCard() {
     <Card className="p-4 space-y-3">
       <div>
         <h2 className="font-semibold">
-          {t("admin.pending_signup_emails_title", "התראות על ארגון ממתין לאישור")}
+          {t(titleKey, titleFallback)}
         </h2>
         <p className="text-xs text-muted-foreground">
-          {t(
-            "admin.pending_signup_emails_intro",
-            "כתובות שיקבלו מייל כשארגון חדש נרשם וממתין לאישור (בנוסף לכתובת מנהל המערכת).",
-          )}
+          {t(introKey, introFallback)}
         </p>
       </div>
 
@@ -91,7 +104,10 @@ export function PendingSignupEmailsCard() {
         <>
           {emails.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              {t("admin.pending_signup_emails_none", "לא הוגדרו כתובות נוספות.")}
+              {t(
+                "admin.notify_emails_none",
+                "לא הוגדרו כתובות — נשלח לכתובת מנהל המערכת שבהגדרות השרת.",
+              )}
             </p>
           ) : (
             <ul className="flex flex-wrap gap-2">

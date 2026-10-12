@@ -706,9 +706,12 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("admin", "admin.nav_users", "חיפוש משתמשים", "Find users"),
     ("admin", "admin.nav_email_templates", "תבניות מייל", "Email templates"),
     ("admin", "admin.signed_up_at", "נרשם:", "Signed up:"),
-    ("admin", "admin.pending_signup_emails_title", "התראות על ארגון ממתין לאישור", "Pending organization notifications"),
-    ("admin", "admin.pending_signup_emails_intro", "כתובות שיקבלו מייל כשארגון חדש נרשם וממתין לאישור (בנוסף לכתובת מנהל המערכת).", "Addresses emailed when a new organization signs up and awaits approval (in addition to the system admin's address)."),
-    ("admin", "admin.pending_signup_emails_none", "לא הוגדרו כתובות נוספות.", "No additional addresses set."),
+    ("admin", "admin.pending_signup_emails_title", "התראות על הרשמת ארגון חדש", "New organization notifications"),
+    ("admin", "admin.pending_signup_emails_intro", "כתובות שיקבלו מייל כשארגון חדש נרשם וממתין לאישור.", "Addresses emailed when a new organization signs up and awaits approval."),
+    # fixes100: server-error recipients, managed next to the signup list.
+    ("admin", "admin.error_notify_emails_title", "התראות על שגיאות מערכת", "System error notifications"),
+    ("admin", "admin.error_notify_emails_intro", "כתובות שיקבלו מייל על כל שגיאת שרת, בכל הארגונים (בנוסף לרשימת השגיאות של כל ארגון).", "Addresses emailed about every server error, in every organization (on top of each organization's own errors list)."),
+    ("admin", "admin.notify_emails_none", "לא הוגדרו כתובות — נשלח לכתובת מנהל המערכת שבהגדרות השרת.", "No addresses set — mail goes to the system admin address from the server settings."),
     # fixes82: org id + "why can't I delete this org" modal.
     ("admin", "admin.org_id", "מזהה ארגון", "Organization ID"),
     ("admin", "admin.system_org_badge", "ארגון מערכת", "System organization"),
@@ -2130,6 +2133,18 @@ LOCALIZATION_RENAMES: dict[str, tuple[set, str, set, str]] = {
     "shliach_config.announcements_title": (
         {"הודעות לפעילים"}, "מודעות בעמוד הבית",
         {"Announcements to activists"}, "Home-page announcements",
+    ),
+    # fixes100: the configured list now replaces the env addresses, so the
+    # "in addition to the system admin's address" wording is wrong.
+    "admin.pending_signup_emails_title": (
+        {"התראות על ארגון ממתין לאישור"}, "התראות על הרשמת ארגון חדש",
+        {"Pending organization notifications"}, "New organization notifications",
+    ),
+    "admin.pending_signup_emails_intro": (
+        {"כתובות שיקבלו מייל כשארגון חדש נרשם וממתין לאישור (בנוסף לכתובת מנהל המערכת)."},
+        "כתובות שיקבלו מייל כשארגון חדש נרשם וממתין לאישור.",
+        {"Addresses emailed when a new organization signs up and awaits approval (in addition to the system admin's address)."},
+        "Addresses emailed when a new organization signs up and awaits approval.",
     ),
     "apartments.apartment_name": (
         {"כותרת", "תווית"}, "מספר דירה", {"Title", "Label"}, "Apartment number",
