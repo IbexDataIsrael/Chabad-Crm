@@ -183,6 +183,8 @@ def test_email(
     instead of guessing from logs. Returns no secrets (password length only).
     """
     config = {
+        # fixes103: the email-service is tried first; SMTP is the fallback.
+        "email_service_url": settings.email_service_url,
         "smtp_host": settings.smtp_host,
         "smtp_port": settings.smtp_port,
         "smtp_user": settings.smtp_user,

@@ -1,7 +1,9 @@
 """Email sending with optional HTML templates.
 
-When `SMTP_HOST` is unset (the dev default), emails are logged to the console
-instead of sent — the link is printed so you can copy it. HTML templates live in
+fixes103: every email goes through the email-service microservice
+(app/core/email_service.py); Gmail SMTP is the fallback when the service fails.
+When the Gmail path runs without SMTP_HOST/SMTP_PASSWORD, the email is logged
+to the console instead of sent. HTML templates live in
 the `/HTML` directory (repo `backend/HTML`): one English (LTR) and one Hebrew
 (RTL) branded layout; `{{placeholders}}` are substituted.
 """
@@ -10,6 +12,8 @@ import json
 import logging
 import re
 import smtplib
+import threading
+import time
 from email.message import EmailMessage
 from email.utils import formataddr, parseaddr
 from typing import Iterable, Optional
@@ -18,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.config import settings
+from app.core.email_service import EmailServiceError, send as send_via_service
 from app.core.email_templates import (  # noqa: F401 — re-exported for seed.py
     DEFAULT_EMAIL_TEMPLATES,
     LEGACY_BODY_FINGERPRINTS,
@@ -204,6 +209,14 @@ def render_notification(subject: str, content_html: str) -> str:
     )
 
 
+# fixes103: when the email-service is down, one urgent alert goes to the
+# superadmin per this many seconds (a burst of fallbacks — e.g. a bulk send —
+# would otherwise mail one alert per email).
+SERVICE_DOWN_ALERT_INTERVAL_SECONDS = 600
+_last_service_down_alert = 0.0
+_alert_lock = threading.Lock()
+
+
 def send_email(
     to: str,
     subject: str,
@@ -212,12 +225,88 @@ def send_email(
     from_name: Optional[str] = None,
     reply_to: Optional[str] = None,
 ) -> None:
-    """Send (or dev-log) one email. fixes17 §1.3: `from_name` shows the
-    organization's name as the sender (the address itself must stay the
-    authenticated SMTP account — Gmail rewrites spoofed senders); `reply_to`
-    points replies at the organization's address."""
+    """Send one email (fixes103: through the email-service microservice).
+
+    `to` may hold several comma-separated addresses; the service takes one
+    recipient per call, so each gets its own request. If the service fails
+    (exception, 5s timeout, non-200) the email goes through the Gmail path
+    instead, and the superadmin gets an "EMAIL-SERVICE DOWN" alert.
+    fixes17 §1.3: `from_name` shows the organization's name as the sender;
+    `reply_to` points replies at the organization's address."""
+    recipients = [a.strip() for a in to.split(",") if a.strip()]
+    from_address = None
+    if from_name and settings.email_service_from:
+        from_address = formataddr((from_name, parseaddr(settings.email_service_from)[1]))
+    failed: list[tuple[str, str]] = []
+    for address in recipients:
+        try:
+            send_via_service(
+                address,
+                subject,
+                html=html,
+                text=body,
+                from_address=from_address,
+                reply_to=reply_to,
+            )
+        except EmailServiceError as exc:
+            failed.append((address, str(exc)))
+    if not failed:
+        return
+    for address, error in failed:
+        # logger.error without a traceback: the fixes101 error capture only
+        # mails records that carry one, so this doesn't loop back into mail.
+        logger.error(
+            "email-service FAILED to=%s subject=%r (%s) — falling back to Gmail",
+            address,
+            subject,
+            error,
+        )
+    _send_service_down_alert(subject, failed)
+    send_via_gmail(", ".join(a for a, _ in failed), subject, body, html, from_name, reply_to)
+
+
+def _send_service_down_alert(subject: str, failed: list[tuple[str, str]]) -> None:
+    """Urgent mail to the superadmin, through Gmail (the service is down)."""
+    global _last_service_down_alert
+    admin = (settings.superadmin_email or settings.platform_admin_email or "").strip()
+    if not admin:
+        logger.error("EMAIL-SERVICE DOWN alert not sent: SUPERADMIN_EMAIL is not set")
+        return
+    with _alert_lock:
+        now = time.monotonic()
+        if _last_service_down_alert and now - _last_service_down_alert < SERVICE_DOWN_ALERT_INTERVAL_SECONDS:
+            logger.error("EMAIL-SERVICE DOWN alert suppressed (one was sent in the last 10 minutes)")
+            return
+        _last_service_down_alert = now
+    lines = [
+        "The email-service did not accept an email, so it was sent through Gmail instead.",
+        "",
+        f"Service: {settings.email_service_url}",
+        f"Subject of the email that fell back: {subject}",
+        "",
+    ]
+    for address, error in failed:
+        lines += [f"To: {address}", f"Error: {error}"]
+    try:
+        send_via_gmail(admin, "EMAIL-SERVICE DOWN", "\n".join(lines))
+        logger.error("EMAIL-SERVICE DOWN alert sent to %s", admin)
+    except Exception:
+        logger.error("EMAIL-SERVICE DOWN alert to %s FAILED (Gmail error)", admin)
+
+
+def send_via_gmail(
+    to: str,
+    subject: str,
+    body: str,
+    html: Optional[str] = None,
+    from_name: Optional[str] = None,
+    reply_to: Optional[str] = None,
+) -> None:
+    """The Gmail SMTP path (before fixes103 the only one; now the fallback).
+    The From address must stay the authenticated SMTP account — Gmail rewrites
+    spoofed senders — so `from_name` only brands the display name."""
     logger.info(
-        "send_email START to=%s subject=%r | host=%s port=%s user=%s from=%s pwd_set=%s pwd_len=%s",
+        "send_via_gmail START to=%s subject=%r | host=%s port=%s user=%s from=%s pwd_set=%s pwd_len=%s",
         to,
         subject,
         settings.smtp_host,
@@ -232,8 +321,8 @@ def send_email(
         # Triggers when no SMTP host OR no password (so a fresh dev without an
         # app password logs instead of erroring on an unauthenticated send).
         logger.warning(
-            "send_email DEV-FALLBACK — NOT sending (smtp_host set=%s, smtp_password set=%s). "
-            "On prod this means the SMTP_* env vars are missing on Render.",
+            "send_via_gmail DEV-FALLBACK — NOT sending (smtp_host set=%s, smtp_password set=%s). "
+            "On prod this means the SMTP_* env vars are missing.",
             bool(settings.smtp_host),
             bool(settings.smtp_password),
         )
@@ -266,13 +355,13 @@ def send_email(
                 server.login(settings.smtp_user, settings.smtp_password)
             refused = server.send_message(msg)
         logger.info(
-            "send_email SUCCESS to=%s subject=%r (Gmail accepted; refused_recipients=%s)",
+            "send_via_gmail SUCCESS to=%s subject=%r (Gmail accepted; refused_recipients=%s)",
             to,
             subject,
             refused or {},
         )
     except Exception:
-        logger.exception("send_email FAILED to=%s subject=%r", to, subject)
+        logger.exception("send_via_gmail FAILED to=%s subject=%r", to, subject)
         raise
 
 

@@ -42,8 +42,10 @@ Alembic migrations run against Neon on backend boot.
 
 **Third-party integrations:** Cloudinary (signed upload for the org logo),
 Google Maps JS + Geocoding APIs (address autocomplete, area-polygon drawing,
-building/area map markers), SMTP via Gmail (transactional email — welcome
-mail, verification, backup notices), Anthropic's API (the natural-language
+building/area map markers), transactional email (welcome mail, verification,
+backup notices) through the shared email-service microservice
+(`core/email_service.py`, `POST {EMAIL_SERVICE_URL}/send`, fixes103) with
+Gmail SMTP as the fallback when the service fails, Anthropic's API (the natural-language
 CRM query assistant, §5). All configured via env vars per host — see
 `docs/archive/deployment.md` for the exact var names (may lag newer
 integrations; the source of truth is `backend/app/config.py`).

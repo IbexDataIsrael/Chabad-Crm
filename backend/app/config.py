@@ -3,6 +3,7 @@
 Values come from `backend/.env` locally, or from the `env_file` injected by
 docker-compose in containers (see CLAUDE.md for the required keys).
 """
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -131,6 +132,37 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_user: str = "ibexprogrammer@gmail.com"
     smtp_password: str = ""
+
+    # fixes103: all email goes through the shared email-service microservice
+    # (app/core/email_service.py); the Gmail SMTP settings above are now the
+    # fallback for when the service can't be reached. Both are required — the
+    # app refuses to start without them (see _require_email_service).
+    email_service_url: str = ""
+    email_service_token: str = ""
+    # Optional: the service's sending address. When set, mail that carries an
+    # organization's name as sender goes out as "Org name <this address>";
+    # when empty the service's own default sender is used.
+    email_service_from: str = ""
+
+    @model_validator(mode="after")
+    def _require_email_service(self):
+        missing = [
+            name
+            for name, value in (
+                ("EMAIL_SERVICE_URL", self.email_service_url),
+                ("EMAIL_SERVICE_TOKEN", self.email_service_token),
+            )
+            if not value.strip()
+        ]
+        if missing:
+            raise ValueError(
+                f"Missing required environment variable(s): {', '.join(missing)}. "
+                "Set EMAIL_SERVICE_URL (no trailing slash) and EMAIL_SERVICE_TOKEN "
+                "for the email-service microservice."
+            )
+        self.email_service_url = self.email_service_url.strip().rstrip("/")
+        self.email_service_token = self.email_service_token.strip()
+        return self
 
     # Security hardening: `POST /api/auth/register` (legacy/dev path) creates
     # an immediately-active user + brand-new org with NO approval gate and NO

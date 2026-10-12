@@ -57,6 +57,9 @@ def _no_real_email(monkeypatch):
 
     monkeypatch.setattr(app_settings, "smtp_host", "")
     monkeypatch.setattr(app_settings, "smtp_password", "")
+    # fixes103: send_email goes through the email-service first; never hit
+    # the real service from tests (test_fixes103 calls it directly).
+    monkeypatch.setattr("app.core.email.send_via_service", lambda *a, **k: "test-id")
 
 
 @pytest.fixture(autouse=True)
