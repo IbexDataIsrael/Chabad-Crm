@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 
+import { ClientErrorReporter } from "@/components/ClientErrorReporter";
 import { TitleManager } from "@/components/TitleManager";
 import { AuthProvider } from "@/lib/auth";
 import { ConfirmProvider } from "@/lib/confirm";
@@ -12,6 +13,7 @@ import { ToastProvider } from "@/lib/toast";
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <AuthProvider>
+      <ClientErrorReporter />
       <TitleManager />
       <LocalizationProvider>
         <ToastProvider>

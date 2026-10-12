@@ -10,6 +10,7 @@ import { isValidEmail } from "@/lib/validation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ActivityLog } from "@/components/ActivityLog";
 
 /** fixes75 §6: the admin's Logs section — every login attempt (entry log)
  *  and every server error (error log) of this organization, plus the
@@ -58,7 +59,7 @@ function localTime(iso: string | null): string {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString("he-IL");
 }
 
-type Tab = "access" | "errors";
+type Tab = "access" | "errors" | "activity";
 
 /** "#3 System" — or "—" for a row with no organization (e.g. an unknown
  *  identifier's failed login). */
@@ -108,6 +109,12 @@ export function LogsView({ platform = false }: { platform?: boolean }) {
         <button type="button" className={tabClass(tab === "errors")} onClick={() => setTab("errors")}>
           {t("logs.tab_errors", "יומן שגיאות")}
         </button>
+        {/* fixes102: the per-org activity log is the superadmin's alone. */}
+        {platform && (
+          <button type="button" className={tabClass(tab === "activity")} onClick={() => setTab("activity")}>
+            {t("logs.tab_activity", "יומן פעילות")}
+          </button>
+        )}
         {platform && (
           <select
             className="h-10 rounded-md border border-input bg-background px-2 text-sm"
@@ -124,7 +131,11 @@ export function LogsView({ platform = false }: { platform?: boolean }) {
           </select>
         )}
       </div>
-      {tab === "access" ? <AccessLog platform={platform} orgId={orgId} /> : (
+      {tab === "activity" && platform ? (
+        <ActivityLog orgId={orgId} />
+      ) : tab === "access" ? (
+        <AccessLog platform={platform} orgId={orgId} />
+      ) : (
         <>
           {!platform && <ErrorEmailsCard />}
           <ErrorLog platform={platform} orgId={orgId} />

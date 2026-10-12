@@ -61,6 +61,7 @@ def clear_user_references(db: Session, user: models.User, actor: models.User) ->
         (models.ContactShliach, models.ContactShliach.editor_id),
         (models.SystemAccessLog, models.SystemAccessLog.user_id),
         (models.ErrorLog, models.ErrorLog.user_id),
+        (models.ActivityLog, models.ActivityLog.user_id),
     ):
         db.query(model).filter(column == user.id).update(
             {column: None}, synchronize_session=False

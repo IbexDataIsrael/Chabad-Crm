@@ -747,6 +747,7 @@ export function SystemAdmin({ section }: { section: AdminSection }) {
         <>
           <NotifyEmailsCard
             endpoint="/api/admin/pending-signup-emails"
+            statusKey="pending_signup"
             titleKey="admin.pending_signup_emails_title"
             titleFallback="התראות על הרשמת ארגון חדש"
             introKey="admin.pending_signup_emails_intro"
@@ -754,6 +755,7 @@ export function SystemAdmin({ section }: { section: AdminSection }) {
           />
           <NotifyEmailsCard
             endpoint="/api/admin/error-notify-emails"
+            statusKey="errors"
             titleKey="admin.error_notify_emails_title"
             titleFallback="התראות על שגיאות מערכת"
             introKey="admin.error_notify_emails_intro"
@@ -1185,6 +1187,16 @@ function OrgFeatureToggles({
             onChange={(e) => onChange({ localization_page_enabled: e.target.checked })}
           />
           {t("admin.feature_localization_page", "עמוד תרגומים (לוקליזציה)")}
+        </label>
+        {/* fixes102: per-org activity log — off by default, read on Logs → יומן פעילות. */}
+        <label className="mt-2 flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            disabled={busy}
+            checked={prefs.raw.activity_log_enabled ?? false}
+            onChange={(e) => onChange({ activity_log_enabled: e.target.checked })}
+          />
+          {t("admin.feature_activity_log", "יומן פעילות (פעולות וצפיות בעמודים)")}
         </label>
       </div>
     </div>

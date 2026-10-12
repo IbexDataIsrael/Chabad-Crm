@@ -1549,6 +1549,37 @@ class UserPreference(Base):
     )
 
 
+class ActivityLog(Base):
+    """fixes102: one thing a user did in an organization that has the activity
+    log turned on — a data change (`kind="action"`, from the request
+    middleware) or an opened page (`kind="page_view"`). Who / what / when +
+    the entity id only, no old/new values. Deleted with the org; kept (user
+    reference cleared) when the user is deleted; purged after 90 days."""
+
+    __tablename__ = "activity_logs"
+    __table_args__ = (
+        Index("ix_activity_logs_org_created", "organization_id", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    guid = _guid_column()
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False, index=True)
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    kind = Column(String(20), nullable=False)  # 'action' | 'page_view'
+    # "apartments.update" / "contacts.create" / "page_view"
+    action = Column(String(150), nullable=False)
+    method = Column(String(10), nullable=True)
+    route = Column(String(300), nullable=True)  # route template, e.g. /api/contacts/{contact_id}
+    entity_id = Column(Integer, nullable=True)
+    page = Column(String(500), nullable=True)  # page path, for page views
+    ip_address = Column(String(64), nullable=True)
+
+
 class OrganizationPreference(Base):
     """fixes54 §8: a platform-superadmin-managed feature toggle for one
     organization — e.g. whether the Area/Building/Apartment/Activist modules

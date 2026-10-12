@@ -382,6 +382,8 @@ class OrgPrefsUpdate(BaseModel):
     ai_query_enabled: Optional[bool] = None
     # fixes93: default OFF (see app.core.org_prefs.DEFAULTS).
     localization_page_enabled: Optional[bool] = None
+    # fixes102: default OFF.
+    activity_log_enabled: Optional[bool] = None
 
 
 class EmailTemplateOut(BaseModel):

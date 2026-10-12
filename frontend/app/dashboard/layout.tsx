@@ -1,14 +1,17 @@
 "use client";
 
 import { LogOut, Menu, PanelRightClose, PanelRightOpen } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { LabelStyleInjector } from "@/components/LabelStyleInjector";
 import { LanguageToggle } from "@/components/LanguageToggle";
+import { NotifyEmailsBanner } from "@/components/NotifyEmailsBanner";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Sidebar, type SidebarGroup, type SidebarNavItem } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/button";
+import { apiFetch } from "@/lib/api";
 import { isFeatureEnabled, useAuth } from "@/lib/auth";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
@@ -33,6 +36,21 @@ function DashboardChrome({ children }: { children: ReactNode }) {
   const { user, isAdmin, isShliach, isSuperadmin, isCampaignManager, signOut } = useAuth();
   const { t, dir } = useLocalization();
   const isRtl = dir === "rtl";
+  // fixes102: report each opened page to the org's activity log — only when
+  // the superadmin turned the log on for this org.
+  const activityLogOn = user?.organization?.feature_flags?.activity_log_enabled === true;
+  const pathname = usePathname();
+  // One report per navigation (dev StrictMode and auth refreshes re-run effects).
+  const lastReportedPage = useRef<string | null>(null);
+  useEffect(() => {
+    if (!activityLogOn || isSuperadmin || !pathname) return;
+    if (lastReportedPage.current === pathname) return;
+    lastReportedPage.current = pathname;
+    apiFetch("/api/activity/page-view", {
+      method: "POST",
+      body: JSON.stringify({ page: pathname }),
+    }).catch(() => undefined);
+  }, [activityLogOn, isSuperadmin, pathname]);
   // fixes85: the English title when the UI is in English (if one is set).
   const orgName =
     (dir === "ltr" && user?.organization?.name_en) ||
@@ -313,6 +331,8 @@ function DashboardChrome({ children }: { children: ReactNode }) {
             </Button>
           </div>
         </header>
+
+        {isSuperadmin && <NotifyEmailsBanner />}
 
         {!isSuperadmin && (
           <div className="border-b border-border px-4 py-2 md:hidden">

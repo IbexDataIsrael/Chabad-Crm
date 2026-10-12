@@ -245,6 +245,18 @@ entities that matter for orienting yourself:
   (`error_notify_emails`, every error in every org, on top of the org's own
   `errors_admin_emails`). While a list is empty, mail falls back to env
   `PLATFORM_ADMIN_EMAIL` / `SUPERADMIN_EMAIL`.
+- **Error capture** (fixes75/101/102) — server 500s, errors caught and
+  logged via `logger.exception` under `app.*` (`BackgroundErrorHandler`,
+  org taken from the request's user via a contextvar), and browser crashes
+  (`POST /api/logs/client-error`, React error boundaries) all land in
+  `error_logs` and are emailed (org list + superadmin error list,
+  throttled).
+- **Activity log** (fixes102) — `activity_logs`: per org, off by default
+  (`organization_prefs.activity_log_enabled`, superadmin toggle). Every
+  successful mutating `/api/*` request is recorded by middleware, with the
+  action derived from the route template; page views come from the
+  dashboard layout. Superadmin-only tab on the Logs page; 90-day purge
+  job in `scheduler.py`.
 - **Instinct API** (`backend/app/routers/instinct/`, no UI route) — a
   shared-key (`X-Instinct-Key`) machine API for a WhatsApp/voice assistant,
   scoped to env `INSTINCT_ORG_ID`: contact search/create, visits with a

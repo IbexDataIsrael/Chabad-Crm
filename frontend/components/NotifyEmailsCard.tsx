@@ -6,6 +6,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { apiFetch } from "@/lib/api";
 import { useLocalization } from "@/lib/localization";
 import { useToast } from "@/lib/toast";
+import { NOTIFY_EMAILS_CHANGED, useNotifyEmailsStatus, type NotifyListName } from "@/lib/notifyEmailsStatus";
 import { isValidEmail } from "@/lib/validation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,6 +15,8 @@ import { Input } from "@/components/ui/input";
 export interface NotifyEmailsCardProps {
   /** e.g. "/api/admin/pending-signup-emails" — GET/PUT `{ emails: string[] }`. */
   endpoint: string;
+  /** Which list in /api/admin/notify-emails-status this card edits. */
+  statusKey: NotifyListName;
   titleKey: string;
   titleFallback: string;
   introKey: string;
@@ -26,6 +29,7 @@ export interface NotifyEmailsCardProps {
  *  PLATFORM_ADMIN_EMAIL / SUPERADMIN_EMAIL. */
 export function NotifyEmailsCard({
   endpoint,
+  statusKey,
   titleKey,
   titleFallback,
   introKey,
@@ -33,6 +37,8 @@ export function NotifyEmailsCard({
 }: NotifyEmailsCardProps) {
   const { t } = useLocalization();
   const { success, error } = useToast();
+  const status = useNotifyEmailsStatus();
+  const effective = status?.[statusKey];
 
   const [emails, setEmails] = useState<string[] | null>(null);
   const [draft, setDraft] = useState("");
@@ -79,6 +85,7 @@ export function NotifyEmailsCard({
       });
       setEmails(r.emails);
       setDirty(false);
+      window.dispatchEvent(new Event(NOTIFY_EMAILS_CHANGED));
       success(t("msg.saved", "נשמר בהצלחה"));
     } catch (e) {
       error(e instanceof Error ? e.message : t("msg.save_failed", "שמירה נכשלה"));
@@ -128,6 +135,19 @@ export function NotifyEmailsCard({
                 </li>
               ))}
             </ul>
+          )}
+
+          {effective && (
+            <p className={`text-xs ${effective.configured ? "text-muted-foreground" : "font-medium text-foreground"}`}>
+              {t("admin.notify_emails_effective", "נשלח כעת אל:")}{" "}
+              {effective.effective.length > 0 ? (
+                <span dir="ltr" style={{ unicodeBidi: "isolate" }}>
+                  {effective.effective.join(", ")}
+                </span>
+              ) : (
+                t("admin.notify_emails_nobody", "אף אחד — המיילים לא נשלחים")
+              )}
+            </p>
           )}
 
           <form onSubmit={add} noValidate className="flex flex-wrap items-start gap-2">

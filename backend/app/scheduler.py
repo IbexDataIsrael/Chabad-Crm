@@ -163,6 +163,15 @@ def start_scheduler() -> None:
         seconds=settings.reminder_scan_interval_seconds,
         next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10),
     )
+    # fixes102: activity-log retention (90 days), once a day.
+    from app.core.activity_log import purge_old
+
+    _scheduler.add_job(
+        purge_old,
+        "interval",
+        hours=24,
+        next_run_time=datetime.datetime.now() + datetime.timedelta(minutes=2),
+    )
     _scheduler.start()
     logger.info("reminder scheduler started")
 

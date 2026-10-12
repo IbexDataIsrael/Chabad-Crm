@@ -1,6 +1,6 @@
 // API client: base URL, token storage, header injection, and 401 handling.
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 const TOKEN_KEY = "crm_token";
 
 import { localizeError } from "@/lib/errorText";
@@ -506,6 +506,7 @@ export type OrgPrefsUpdate = Partial<{
   activist_system_enabled: boolean;
   ai_query_enabled: boolean;
   localization_page_enabled: boolean;
+  activity_log_enabled: boolean;
 }>;
 
 export const adminGetOrgPrefs = (orgId: number): Promise<OrgPrefs> =>

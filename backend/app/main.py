@@ -3,6 +3,7 @@
 Phase 1: database models are wired in and tables are created on startup. Auth
 and the CRM routers are added in subsequent phases (see docs/plan.md).
 """
+import json
 import logging
 import os
 import sys
@@ -13,7 +14,7 @@ from alembic.config import Config as AlembicConfig
 from fastapi import FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect
 
@@ -32,6 +33,12 @@ if not _app_logger.handlers:
 _app_logger.setLevel(logging.INFO)
 _app_logger.propagate = False
 
+# fixes101 §2b: every `logger.exception(...)` under "app" is also written to
+# error_logs and emailed (errors that were caught, not just unhandled 500s).
+from app.core.error_log import install_background_error_handler  # noqa: E402
+
+install_background_error_handler()
+
 
 def _run_migrations() -> None:
     """Bring the database up to the latest Alembic revision on startup.
@@ -45,6 +52,7 @@ def _run_migrations() -> None:
     cfg.set_main_option("script_location", os.path.join(backend_dir, "alembic"))
     command.upgrade(cfg, "head")
 from app.routers import (
+    activity,
     activist_messages,
     admin,
     admin_areas,
@@ -151,6 +159,7 @@ app.include_router(street_activity.router)
 app.include_router(public.router)
 app.include_router(instinct.router)
 app.include_router(logs.router)
+app.include_router(activity.router)
 
 # fixes25 §6: locally stored uploads (logo fallback when Cloudinary is
 # unavailable) are served straight from the data volume.
@@ -165,6 +174,65 @@ async def _uploads_nosniff(request, call_next):
     response = await call_next(request)
     if request.url.path.startswith("/uploads/"):
         response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@app.middleware("http")
+async def _request_context_and_activity(request: Request, call_next):
+    """fixes102: (A) remember whose request this is (`current_user_id`) so a
+    caught+logged error knows its org; (B) record successful data changes
+    in the activity log of orgs that have it turned on."""
+    from app.core import activity_log
+    from app.core.error_log import _user_id_from_request, client_ip
+
+    user_id = _user_id_from_request(request)
+    ctx = activity_log.current_user_id.set(user_id)
+    try:
+        response = await call_next(request)
+    finally:
+        activity_log.current_user_id.reset(ctx)
+
+    path = request.url.path
+    if (
+        user_id is None
+        or not (200 <= response.status_code < 400)
+        or not activity_log.should_track(request.method, path)
+    ):
+        return response
+    org_id = await run_in_threadpool(activity_log.enabled_org_for_user, user_id)
+    if org_id is None:
+        return response
+
+    route = getattr(request.scope.get("route"), "path", None) or path
+    entity_id = activity_log.entity_id_from(request.scope.get("path_params") or {})
+    # A create has no id in the URL — read it from the (JSON) response body.
+    if entity_id is None and request.method == "POST" and response.headers.get(
+        "content-type", ""
+    ).startswith("application/json"):
+        body = b"".join([chunk async for chunk in response.body_iterator])
+        try:
+            data = json.loads(body)
+            if isinstance(data, dict) and isinstance(data.get("id"), int):
+                entity_id = data["id"]
+        except ValueError:
+            pass
+        headers = {k: v for k, v in response.headers.items() if k.lower() != "content-length"}
+        response = Response(
+            content=body,
+            status_code=response.status_code,
+            headers=headers,
+        )
+    await run_in_threadpool(
+        activity_log.write,
+        organization_id=org_id,
+        user_id=user_id,
+        kind="action",
+        action=f"{activity_log.describe(route)}.{activity_log.VERBS[request.method]}",
+        method=request.method,
+        route=route,
+        entity_id=entity_id,
+        ip=client_ip(request),
+    )
     return response
 
 

@@ -69,6 +69,16 @@ def _background_sessions_use_test_db(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_logged_error_capture(monkeypatch):
+    """fixes101: the logging handler that stores every logger.exception in
+    error_logs is off by default here (tests log expected failures on
+    purpose); test_fixes101 turns it back on."""
+    from app.core import error_log
+
+    monkeypatch.setattr(error_log, "capture_background_errors", False)
+
+
+@pytest.fixture(autouse=True)
 def _setup_db():
     Base.metadata.create_all(bind=engine)
     # Seed the roles table (users.role FK target), the building_type table

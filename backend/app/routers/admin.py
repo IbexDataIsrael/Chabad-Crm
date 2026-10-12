@@ -17,13 +17,14 @@ from app.core.email import (
     ERROR_NOTIFY_EMAILS_KEY,
     PENDING_SIGNUP_EMAILS_KEY,
     get_notify_emails,
+    platform_notify_recipients,
     send_email,
     send_org_approved_user,
     set_notify_emails,
 )
 from app.core.cloudinary_assets import delete_images, plan_org_image_cleanup
 from app.core.org_clone import clone_organization, plan_demo_clone
-from app.core import org_prefs
+from app.core import activity_log, org_prefs
 from app.core.security import create_access_token, hash_password
 from app.core.user_delete import clear_user_references
 from app.database import get_db
@@ -345,6 +346,7 @@ def update_organization_prefs(
 ):
     _get_org(db, org_id)
     org_prefs.set_prefs(db, org_id, payload.model_dump(exclude_unset=True))
+    activity_log.clear_cache()  # fixes102: the activity-log toggle applies at once
     return OrgPrefsOut(
         raw=org_prefs.get_raw_prefs(db, org_id),
         effective=org_prefs.effective_flags(db, org_id),
@@ -712,6 +714,23 @@ def _notify_emails_routes(path: str, key: str, label: str) -> None:
         db.commit()
         logger.info("superadmin %s set %s notify emails (%d)", admin.email, label, len(emails))
         return NotifyEmails(emails=emails)
+
+
+@router.get("/notify-emails-status")
+def notify_emails_status(
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_superadmin),
+) -> dict:
+    """fixes101 §1/§3: per list, whether the superadmin configured it and
+    where mail actually goes right now (the env fallback when empty) — drives
+    the "not configured" banner and each card's "currently sent to" line."""
+    out = {}
+    for name, key in (("pending_signup", PENDING_SIGNUP_EMAILS_KEY), ("errors", ERROR_NOTIFY_EMAILS_KEY)):
+        out[name] = {
+            "configured": bool(get_notify_emails(db, key)),
+            "effective": platform_notify_recipients(db, key),
+        }
+    return out
 
 
 # Who is emailed when a new organization signs up and awaits approval.
