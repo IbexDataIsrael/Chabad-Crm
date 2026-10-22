@@ -16,6 +16,7 @@ import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useConfirm } from "@/lib/confirm";
+import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
 import { TaskCustomFieldEditor, useTaskCustomFields, useTaskSheetFacts } from "@/lib/taskCustomFields";
@@ -66,6 +67,7 @@ export default function TaskDetailPage() {
   const { columns: taskSheetCatalog } = useTaskSheetCatalog();
   // fixes104 §2: the org's own task fields, editable here like the rest.
   const { fields: customFields, picklists: customPicklists } = useTaskCustomFields();
+  const { isFieldVisible } = useFieldSettings();
   const taskFacts = useTaskSheetFacts();
 
   useEffect(() => {
@@ -333,6 +335,7 @@ export default function TaskDetailPage() {
           </Field>
           )}
 
+          {isFieldVisible("task.custom_date") && (
           <Field label={t("task.custom_date", "תאריך מותאם")}>
             <InlineEdit<number | "">
               value={task.custom_date_value_id ?? ""}
@@ -359,6 +362,7 @@ export default function TaskDetailPage() {
               )}
             />
           </Field>
+          )}
 
           <Field label={t("task.status", "סטטוס")}>
             <InlineEdit<TaskStatus>

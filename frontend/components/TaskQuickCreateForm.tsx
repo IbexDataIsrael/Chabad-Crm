@@ -3,12 +3,16 @@
 import { useEffect, useState, type FormEvent } from "react";
 
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { CustomFieldValueInput } from "@/components/CustomFieldValueInput";
+import { PicklistSelect } from "@/components/PicklistSelect";
 import { BulkTaskPreviewModal } from "@/components/tasks/BulkTaskPreviewModal";
 import { MultiSelectSearchFilter } from "@/components/ui/MultiSelectSearchFilter";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
+import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
+import { useTaskCustomFields } from "@/lib/taskCustomFields";
 import { taskStatusLabels } from "@/lib/taskStatus";
 import type { Campaign, ReportNumber, TaskBulkPreview, TaskStatus } from "@/lib/types";
 
@@ -43,6 +47,15 @@ export function TaskQuickCreateForm({
 }) {
   const { t } = useLocalization();
   const customDate = usePicklist("task.custom_date");
+  // fixes108: the org's own task fields (picklists + custom fields) and the
+  // Fields-page toggle for the built-in custom date.
+  const { fields: customFields } = useTaskCustomFields();
+  const { isFieldVisible } = useFieldSettings();
+  const showCustomDate = isFieldVisible("task.custom_date");
+  const [picklistValues, setPicklistValues] = useState<Record<string, string | null>>({});
+  const [customFieldValues, setCustomFieldValues] = useState<
+    Record<string, string | number | boolean | null>
+  >({});
 
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [reportNumbers, setReportNumbers] = useState<ReportNumber[]>([]);
@@ -80,6 +93,13 @@ export function TaskQuickCreateForm({
           .map((rn) => rn.id);
   // A number picked before switching to a campaign where it's taken is dropped.
   const pickedRnIds = reportNumberIds.filter((id) => !assignedRnIds.includes(id));
+
+  /** Only the fields actually filled in (empty ones are left unset). */
+  function customValuesPayload() {
+    const filled = <V,>(m: Record<string, V>) =>
+      Object.fromEntries(Object.entries(m).filter(([, v]) => v != null && v !== "" && v !== false));
+    return { picklist_values: filled(picklistValues), custom_field_values: filled(customFieldValues) };
+  }
 
   const statusLabel = taskStatusLabels(t);
   // fixes74 §2: without an activist the new task is "available", with one it
@@ -174,6 +194,7 @@ export function TaskQuickCreateForm({
           custom_date_value_id: customDateValueId === "" ? null : customDateValueId,
           status: shownStatus,
           skip_conflicts: skipConflicts,
+          ...customValuesPayload(),
         }),
       });
       setBulkPreview(null);
@@ -200,6 +221,7 @@ export function TaskQuickCreateForm({
           task_text: mode === "text" ? taskText.trim() : null,
           custom_date_value_id: customDateValueId === "" ? null : customDateValueId,
           status: shownStatus,
+          ...customValuesPayload(),
         }),
       });
       await onSaved();
@@ -352,6 +374,7 @@ export function TaskQuickCreateForm({
           </label>
         )}
 
+        {showCustomDate && (
         <label className="block space-y-1">
           <span className="block text-sm font-medium">{t("task.custom_date", "תאריך מותאם")}</span>
           <select
@@ -367,6 +390,26 @@ export function TaskQuickCreateForm({
             ))}
           </select>
         </label>
+        )}
+
+        {customFields.map((f) => (
+          <label key={f.key} className={f.kind === "cf" && f.def.field_type === "boolean" ? "flex items-center gap-2" : "block space-y-1"}>
+            <span className="block text-sm font-medium">{f.label}</span>
+            {f.kind === "pl" ? (
+              <PicklistSelect
+                fieldKey={f.fieldKey}
+                value={picklistValues[f.fieldKey] ?? null}
+                onChange={(v) => setPicklistValues((prev) => ({ ...prev, [f.fieldKey]: v }))}
+              />
+            ) : (
+              <CustomFieldValueInput
+                fieldType={f.def.field_type}
+                value={customFieldValues[f.fieldKey] ?? null}
+                onChange={(v) => setCustomFieldValues((prev) => ({ ...prev, [f.fieldKey]: v }))}
+              />
+            )}
+          </label>
+        ))}
 
         <label className="block space-y-1">
           <span className="block text-sm font-medium">{t("task.status", "סטטוס")}</span>

@@ -587,6 +587,9 @@ def create_task(
         payload.report_number_ids,
         task_text=task_text,
     )
+    _apply_custom_values(
+        db, org_id, task.id, payload.picklist_values or {}, payload.custom_field_values or {},
+    )
     db.commit()
     db.refresh(task)
     _email_assignment(background, org_id, task.volunteer_user_id, [task.id])
@@ -821,6 +824,9 @@ def create_bulk_tasks(
             payload.status,
             None,
             [rn_id],
+        )
+        _apply_custom_values(
+            db, org_id, task.id, payload.picklist_values or {}, payload.custom_field_values or {},
         )
         created.append(task.id)
     db.commit()

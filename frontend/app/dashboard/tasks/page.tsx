@@ -36,6 +36,7 @@ import { TruncatedText } from "@/components/ui/TruncatedText";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useConfirm } from "@/lib/confirm";
+import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { usePicklist } from "@/lib/picklists";
@@ -91,7 +92,9 @@ const FIXED_COLUMNS = [
   "created_at",
 ] as const;
 type FixedColumn = (typeof FIXED_COLUMNS)[number];
-const DEFAULT_HIDDEN_COLUMNS: string[] = ["custom_date", "apartment_count"];
+// fixes108: custom_date shows by default (it was hidden, so it never appeared
+// among the task's fields unless a user went looking in the column chooser).
+const DEFAULT_HIDDEN_COLUMNS: string[] = ["apartment_count"];
 
 // The "blank" value the backend list filters understand (same as apartments).
 const EMPTY_FIELD_SENTINEL = "\u0000__empty__\u0000";
@@ -118,6 +121,7 @@ export default function TasksPage() {
   const { columns: taskSheetCatalog } = useTaskSheetCatalog();
   // fixes104 §2: the org's own task fields (Picklists page → Tasks tab).
   const { fields: customFields, picklists: customPicklists } = useTaskCustomFields();
+  const { isFieldVisible } = useFieldSettings();
   const taskFacts = useTaskSheetFacts();
 
   const [q, setQ] = usePersistentState("crm.tasks.q", "");
@@ -269,7 +273,11 @@ export default function TasksPage() {
     created_at: t("task.created_at", "תאריך יצירה"),
   };
   const customByKey = new Map<string, TaskCustomField>(customFields.map((f) => [f.key, f]));
-  const allColumnKeys: string[] = [...FIXED_COLUMNS, ...customFields.map((f) => f.key)];
+  // fixes108: an org that hid task.custom_date on the Fields page loses the column.
+  const allColumnKeys: string[] = [
+    ...FIXED_COLUMNS.filter((k) => k !== "custom_date" || isFieldVisible("task.custom_date")),
+    ...customFields.map((f) => f.key),
+  ];
   const columnLabel = (key: string) =>
     customByKey.get(key)?.label ?? fixedColumnLabels[key as FixedColumn] ?? key;
   const hidden = new Set(hiddenColumns ?? DEFAULT_HIDDEN_COLUMNS);

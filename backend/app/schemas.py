@@ -1933,6 +1933,9 @@ class TaskCreate(BaseModel):
     volunteer_report_summary: Optional[str] = None
     # fixes98: a "text task" — instructions instead of report numbers.
     task_text: Optional[str] = None
+    # fixes108: the org's task picklists / custom fields, set at creation.
+    picklist_values: Optional[dict[str, Optional[str]]] = None
+    custom_field_values: Optional[dict[str, CustomFieldValue]] = None
 
 
 # --- fixes74 §12: street2 activity log --------------------------------------
@@ -2003,6 +2006,9 @@ class TaskBulkCreate(BaseModel):
     # False = refuse (409) when any number is already in a task of this
     # campaign; True = create the rest and skip those.
     skip_conflicts: bool = False
+    # fixes108: applied to every created task.
+    picklist_values: Optional[dict[str, Optional[str]]] = None
+    custom_field_values: Optional[dict[str, CustomFieldValue]] = None
 
 
 class TaskBulkCreateOut(BaseModel):

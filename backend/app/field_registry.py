@@ -110,6 +110,10 @@ TOGGLEABLE_FIELDS: list[tuple[str, str, str]] = [
     # visit.type) join torah_thought as hideable visit fields.
     ("visits.location", "visits.location", "visit"),
     ("visits.visit_type", "visits.visit_type", "visit"),
+    # fixes108: the built-in task "custom date" picklist is a system picklist,
+    # so the dynamic picklist branch never listed it — registered here so the
+    # Fields page's Tasks tab shows (and can hide) it like the add-on fields.
+    ("task.custom_date", "task.custom_date", "task"),
 ]
 
 # Fields concealed by default (an explicit field_settings row overrides this).
