@@ -31,3 +31,6 @@ The "before" 100-parallel numbers come from the user's load test, not a local re
 - **Activist picker over 500 apartments**: `ApartmentPicker.tsx:56` calls unfiltered for an activist and now gets at most 500. If an activist can cover more than 500, that picker should move to `/api/apartments/list` + search. Not changed in this round.
 - **Multiple uvicorn workers** (`--workers N`): proposed as optional, not done (separate decision; memory per worker).
 - **Prod load test rerun**: not done (not deployed).
+
+## Commit
+- b3b1f86 (not pushed)
