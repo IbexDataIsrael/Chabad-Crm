@@ -11,7 +11,7 @@ c.	Fields that can be printed
 Activist registration - welcome email should be sent to activist! - right now not sending
 ---
 
-## Closeout (2026-10-22), not committed
+## Closeout (2026-10-22), committed f933b2c, not pushed
 
 Verified live on local Docker (backend + frontend + local Postgres, org 1)
 with a headless Chromium drive, using throwaway test fields (a task picklist,
