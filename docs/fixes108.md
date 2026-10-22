@@ -1,6 +1,6 @@
 # fixes108 — tasks: not all fields shown in CRUD
 
-Status: **done locally — not committed, not pushed.**
+Status: **committed d2e4d3a — not pushed.**
 
 ## Request (2026-10-23)
 > tasks is still not working properly! not all fields are displayed in CRUD. the insert new task does not have all custom fields appear on insert. on the other hand - task.custom_date is on insert but not on display of all fields
