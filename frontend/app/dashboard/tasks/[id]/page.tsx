@@ -18,6 +18,7 @@ import { useAuth } from "@/lib/auth";
 import { useConfirm } from "@/lib/confirm";
 import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
+import { TaskCustomFieldEditor, useTaskCustomFields, useTaskSheetFacts } from "@/lib/taskCustomFields";
 import { printTaskSheet } from "@/lib/taskPrint";
 import { useTaskSheetCatalog, useTaskSheetFields } from "@/lib/taskSheetFields";
 import { taskApartmentsHref, taskStatusLabels, taskStatusOptionsFor } from "@/lib/taskStatus";
@@ -63,6 +64,9 @@ export default function TaskDetailPage() {
   const [taskSheetFields] = useTaskSheetFields();
   // fixes74 §9: the printable columns (hidden fields excluded).
   const { columns: taskSheetCatalog } = useTaskSheetCatalog();
+  // fixes104 §2: the org's own task fields, editable here like the rest.
+  const { fields: customFields, picklists: customPicklists } = useTaskCustomFields();
+  const taskFacts = useTaskSheetFacts();
 
   useEffect(() => {
     if (loading || !allowed) return;
@@ -96,6 +100,7 @@ export default function TaskDetailPage() {
       lang,
       fields: taskSheetFields,
       catalog: taskSheetCatalog,
+      taskFacts,
     });
     setPrinting(false);
     if (err) toastError(err);
@@ -380,6 +385,17 @@ export default function TaskDetailPage() {
           <Field label={t("task.apartment_count", "מספר דירות")}>
             <span>{task.apartment_count}</span>
           </Field>
+
+          {customFields.map((f) => (
+            <Field key={f.key} label={f.label}>
+              <TaskCustomFieldEditor
+                task={task}
+                field={f}
+                labelFor={customPicklists.labelFor}
+                onSave={(data) => patch(data)}
+              />
+            </Field>
+          ))}
 
           <Field label={t("task.volunteer_report_summary", "דיווח הפעיל")} wide>
             <InlineEdit<string>

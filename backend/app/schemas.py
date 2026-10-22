@@ -2019,6 +2019,10 @@ class TaskUpdate(BaseModel):
     status: Optional[TaskStatus] = None
     volunteer_report_summary: Optional[str] = None
     task_text: Optional[str] = None
+    # fixes104 §2: the org's task picklists / custom fields (dynamic dicts,
+    # same shape as ApartmentUpdate's).
+    picklist_values: Optional[dict[str, Optional[str]]] = None
+    custom_field_values: Optional[dict[str, CustomFieldValue]] = None
 
 
 class TaskOut(BaseModel):
@@ -2053,6 +2057,9 @@ class TaskOut(BaseModel):
     # fixes74 §1: the signed claim link's token (the same one the printed QR
     # encodes) — None once the task was assigned manually (§4 disables it).
     claim_token: Optional[str] = None
+    # fixes104 §2: values of the org's task picklists / custom fields.
+    picklist_values: dict[str, Optional[str]] = {}
+    custom_field_values: dict[str, CustomFieldValue] = {}
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

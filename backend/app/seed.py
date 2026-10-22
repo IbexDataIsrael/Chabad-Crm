@@ -721,6 +721,13 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("page", "error_page.body", "התקלה נרשמה ונשלחה לצוות. אפשר לנסות שוב.", "The error was logged and sent to the team. You can try again."),
     ("page", "error_page.retry", "נסה שוב", "Try again"),
     ("page", "error_page.reload", "טען מחדש את הדף", "Reload the page"),
+    # fixes104: tasks page — print all displayed, task fields on the sheet.
+    ("task", "task.print_all", "הדפסת כל המשימות המוצגות", "Print all displayed tasks"),
+    ("task", "task.print_all_none", "אין משימות עם דירות להדפסה בעמוד זה", "No tasks with apartments to print on this page"),
+    ("task", "task.print_all_done", "הודפסו {n} משימות", "Printed {n} tasks"),
+    ("task", "task.print_all_done_skipped", "הודפסו {n} משימות ({skipped} ללא דירות דולגו)", "Printed {n} tasks ({skipped} without apartments skipped)"),
+    ("task", "task_pdf.task_fields_title", "שדות המשימה (בראש הדף)", "Task fields (top of the sheet)"),
+    ("filter", "filter.empty_hint_task", "הצג רק משימות ללא ערך בשדה זה", "Show only tasks with no value in this field"),
     # fixes102: activity log (superadmin) — toggle, tab, action names.
     ("admin", "admin.feature_activity_log", "יומן פעילות (פעולות וצפיות בעמודים)", "Activity log (actions and page views)"),
     ("page", "logs.tab_activity", "יומן פעילות", "Activity log"),

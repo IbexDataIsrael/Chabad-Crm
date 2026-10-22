@@ -34,6 +34,9 @@ _STORAGE_TABLE: dict[str, str] = {
     "contact_shliach": "contacts",
     "visit": "visit_history",
     "apartment": "apartments",
+    # fixes104 §2: task fields could be defined since fixes35 but had nowhere
+    # to store a value.
+    "task": "tasks",
 }
 
 # entity_type -> PicklistDefinition.system_name prefix for a select-type

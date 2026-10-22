@@ -597,6 +597,9 @@ export interface Task {
   apartment_count: number;
   /** fixes74 §1: the claim link's token; null once assigned manually (§4). */
   claim_token: string | null;
+  /** fixes104 §2: the org's task picklists / custom fields. */
+  picklist_values?: Record<string, string | null>;
+  custom_field_values?: CustomFieldValueMap;
   created_at: string | null;
   updated_at: string | null;
 }

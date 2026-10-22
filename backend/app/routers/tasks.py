@@ -9,10 +9,11 @@ import re
 from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app import custom_field_utils, models, picklist_utils
+from app.routers.apartments import EMPTY_FIELD_SENTINEL
 from app.core.activist_emails import send_task_assigned
 from app.core.claim_token import make_claim_token
 from app.core.task_claim import (
@@ -136,11 +137,99 @@ def _apartment_counts_by_task(db: Session, task_ids: list[int]) -> dict[int, int
     return {task_id: count for task_id, count in rows}
 
 
+def _custom_values_by_task(
+    db: Session, org_id: int, task_ids: list[int]
+) -> tuple[dict[int, dict], dict[int, dict]]:
+    """fixes104 §2: each task's task-picklist values and non-select custom
+    field values. `task.custom_date` is a real FK column, not a link, so it
+    never shows up here."""
+    return (
+        picklist_utils.get_values_bulk(db, org_id, "tasks", task_ids),
+        custom_field_utils.get_values_bulk(db, org_id, "task", task_ids),
+    )
+
+
+def _apply_custom_values(
+    db: Session, org_id: int, task_id: int, picklist_values: dict, custom_field_values: dict
+) -> None:
+    """fixes104 §2: write task picklist / custom field values. Only picklists
+    that belong to tasks are accepted, so no other entity's list can be
+    attached to a task by naming it in the payload."""
+    if picklist_values:
+        task_keys = {
+            name
+            for (name,) in db.query(models.PicklistDefinition.system_name).filter(
+                models.PicklistDefinition.organization_id == org_id,
+                models.PicklistDefinition.entity_type == "task",
+            )
+        }
+        for field_key, value in picklist_values.items():
+            if field_key not in task_keys or field_key == "task.custom_date":
+                raise api_error(
+                    status.HTTP_400_BAD_REQUEST, "error.unknown_picklist",
+                    "unknown picklist '{field}'", field=field_key,
+                )
+            picklist_utils.set_value(db, org_id, "tasks", task_id, field_key, value)
+    for field_key, value in (custom_field_values or {}).items():
+        custom_field_utils.set_value(db, org_id, "task", task_id, field_key, value)
+
+
+def _task_picklist_filter(query, field_key: str, values: list[str]):
+    """fixes104 §2: same semantics as the apartments list's picklist filter,
+    including the "empty" sentinel."""
+    real_values = [v for v in values if v != EMPTY_FIELD_SENTINEL]
+    conditions = []
+    if real_values:
+        conditions.append(
+            models.Task.id.in_(picklist_utils.matching_entity_ids("tasks", field_key, real_values))
+        )
+    if len(real_values) != len(values):
+        conditions.append(
+            models.Task.id.notin_(picklist_utils.unassigned_entity_ids("tasks", field_key))
+        )
+    return query.filter(or_(*conditions)) if conditions else query
+
+
+def _task_custom_field_filter(query, db: Session, org_id: int, field_key: str, text: str):
+    """fixes104 §2: same semantics as the apartments list's custom-field
+    filter (boolean = true/false, else "contains", or the empty sentinel)."""
+    definition = (
+        db.query(models.CustomFieldDefinition)
+        .filter(
+            models.CustomFieldDefinition.organization_id == org_id,
+            models.CustomFieldDefinition.entity_type == "task",
+            models.CustomFieldDefinition.field_key == field_key,
+        )
+        .first()
+    )
+    if definition is None:
+        return query
+    if text == EMPTY_FIELD_SENTINEL and definition.field_type != "boolean":
+        has_value = select(models.CustomFieldValue.entity_id).where(
+            models.CustomFieldValue.entity_table == "tasks",
+            models.CustomFieldValue.definition_id == definition.id,
+            models.CustomFieldValue.value.isnot(None),
+            models.CustomFieldValue.value != "",
+        )
+        return query.filter(models.Task.id.notin_(has_value))
+    sub = select(models.CustomFieldValue.entity_id).where(
+        models.CustomFieldValue.entity_table == "tasks",
+        models.CustomFieldValue.definition_id == definition.id,
+    )
+    if definition.field_type == "boolean":
+        sub = sub.where(models.CustomFieldValue.checked.is_(text.strip().lower() == "true"))
+    else:
+        sub = sub.where(models.CustomFieldValue.value.ilike(f"%{text.strip()}%"))
+    return query.filter(models.Task.id.in_(sub))
+
+
 def _to_out(
     task: models.Task,
     report_numbers: list[tuple[int, str]],
     latest_report: Optional[tuple[str, Optional[str]]] = None,
     apartment_count: int = 0,
+    picklist_values: Optional[dict] = None,
+    custom_field_values: Optional[dict] = None,
 ) -> TaskOut:
     return TaskOut(
         id=task.id,
@@ -164,6 +253,8 @@ def _to_out(
         is_orphan=is_orphan(task),
         apartment_count=apartment_count,
         claim_token=make_claim_token(task.guid) if claim_link_enabled(task) else None,
+        picklist_values=picklist_values or {},
+        custom_field_values=custom_field_values or {},
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -172,11 +263,14 @@ def _to_out(
 def _single_out(db: Session, org_id: int, task: models.Task) -> TaskOut:
     rn_by_task = _report_numbers_by_task(db, [task.id])
     reports = _latest_reports_by_task(db, [task])
+    pl_map, cf_map = _custom_values_by_task(db, org_id, [task.id])
     return _to_out(
         task,
         rn_by_task.get(task.id, []),
         reports.get(task.id),
         _apartment_counts_by_task(db, [task.id]).get(task.id, 0),
+        pl_map.get(task.id),
+        cf_map.get(task.id),
     )
 
 
@@ -211,6 +305,9 @@ def list_tasks(
     # fixes65 §8: "orphan" = the unassigned pool (printed, unclaimed).
     assignment: Optional[Literal["orphan", "assigned"]] = None,
     q: Optional[str] = None,
+    # fixes104 §2: "field_key:value" pairs, same format as the apartments list.
+    picklist: Optional[list[str]] = Query(None),
+    custom_field_filter: Optional[list[str]] = Query(None),
     sort: Literal["volunteer_name", "created_at", "report_number"] = "created_at",
     dir: Literal["asc", "desc"] = "desc",
     page: int = Query(1, ge=1),
@@ -258,6 +355,17 @@ def list_tasks(
                 models.Task.id.in_(rn_match),
             )
         )
+    picklist_filters: dict[str, list[str]] = {}
+    for entry in picklist or []:
+        key, sep, value = entry.partition(":")
+        if sep:
+            picklist_filters.setdefault(key, []).append(value)
+    for field_key, values in picklist_filters.items():
+        query = _task_picklist_filter(query, field_key, values)
+    for entry in custom_field_filter or []:
+        key, sep, value = entry.partition(":")
+        if sep and value != "":
+            query = _task_custom_field_filter(query, db, org_id, key, value)
 
     total = query.count()
 
@@ -292,6 +400,7 @@ def list_tasks(
     rn_by_task = _report_numbers_by_task(db, [t.id for t in rows])
     reports_by_task = _latest_reports_by_task(db, rows)
     apt_counts = _apartment_counts_by_task(db, [t.id for t in rows])
+    pl_map, cf_map = _custom_values_by_task(db, org_id, [t.id for t in rows])
     return TaskPageOut(
         items=[
             _to_out(
@@ -299,6 +408,8 @@ def list_tasks(
                 rn_by_task.get(t.id, []),
                 reports_by_task.get(t.id),
                 apt_counts.get(t.id, 0),
+                pl_map.get(t.id),
+                cf_map.get(t.id),
             )
             for t in rows
         ],
@@ -811,6 +922,10 @@ def update_task(
                     organization_id=org_id, task_id=task.id, report_number_id=rn_id
                 )
             )
+    _apply_custom_values(
+        db, org_id, task.id, data.get("picklist_values") or {},
+        data.get("custom_field_values") or {},
+    )
 
     db.commit()
     db.refresh(task)
@@ -825,6 +940,9 @@ def delete_task(
     current_user: models.User = Depends(require_admin_or_campaign_manager),
 ):
     task = _get_or_404(task_id, current_user.organization_id, db)
+    # fixes104 §2: links/values have no FK to tasks — clean them up by hand.
+    picklist_utils.delete_links(db, "tasks", task.id)
+    custom_field_utils.delete_values(db, "tasks", task.id)
     db.delete(task)
     db.commit()
 

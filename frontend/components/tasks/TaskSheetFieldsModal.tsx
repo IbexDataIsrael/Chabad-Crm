@@ -5,6 +5,7 @@ import { useEffect } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useLocalization } from "@/lib/localization";
+import { useTaskCustomFields } from "@/lib/taskCustomFields";
 import {
   DEFAULT_COLUMN_WIDTH,
   DEFAULT_TASK_SHEET_FIELDS,
@@ -30,6 +31,18 @@ export function TaskSheetFieldsModal({ onClose }: { onClose: () => void }) {
   const { t } = useLocalization();
   const [fields, setFields] = useTaskSheetFields();
   const { columns: catalog, ready } = useTaskSheetCatalog();
+  // fixes104 §2: the task's own add-on fields, printed under the title.
+  const { fields: taskFields } = useTaskCustomFields();
+  const taskFieldOn = (key: string) => fields.taskFields == null || fields.taskFields.includes(key);
+  function toggleTaskField(key: string) {
+    setFields((prev) => {
+      const current = prev.taskFields ?? taskFields.map((f) => f.key);
+      return {
+        ...prev,
+        taskFields: current.includes(key) ? current.filter((k) => k !== key) : [...current, key],
+      };
+    });
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -167,6 +180,28 @@ export function TaskSheetFieldsModal({ onClose }: { onClose: () => void }) {
                 <ul className="divide-y divide-border rounded-md border border-dashed border-border">
                   {unselected.map((c) => row(c, null))}
                 </ul>
+              )}
+              {taskFields.length > 0 && (
+                <div className="space-y-2 pt-2">
+                  <h3 className="text-sm font-semibold">
+                    {t("task_pdf.task_fields_title", "שדות המשימה (בראש הדף)")}
+                  </h3>
+                  <ul className="divide-y divide-border rounded-md border border-border">
+                    {taskFields.map((f) => (
+                      <li key={f.key} className="px-3 py-2">
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 shrink-0"
+                            checked={taskFieldOn(f.key)}
+                            onChange={() => toggleTaskField(f.key)}
+                          />
+                          <span className="min-w-0 break-words">{f.label}</span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </>
           )}

@@ -221,6 +221,15 @@ entities that matter for orienting yourself:
   the Tasks grid filters the orphan pool, prints a task sheet PDF
   (`lib/taskPdf.ts`, QR only while unassigned, disabled for 0 apartments),
   unassigns/assigns, and links to `/dashboard/tasks/<id>/paper-entry`.
+  fixes104: the grid has a contacts-style filter bar + column chooser
+  (DB prefs `tasks.hiddenColumns`/`tasks.columnOrder`), "print all
+  displayed tasks" (one PDF, one sheet per task, `generateTasksPdf`), and the
+  org's own task fields — task picklists (Picklists page → Tasks tab, or a
+  select custom field) + non-select `entity_type="task"` custom fields,
+  stored as PicklistLink/CustomFieldValue under `entity_table="tasks"` — as
+  columns, filters (`picklist=`/`custom_field_filter=` on
+  `/api/tasks/list`), editable fields on the task page, and lines under the
+  sheet title (chosen in the print-settings modal, `lib/taskCustomFields.tsx`).
 - **`/org/<slug>`**, **`/tasks/claim/<token>`** — the two public (no-login)
   pages; see §3.
 - **`/dashboard/activist`** — an activist's own dedicated landing page:

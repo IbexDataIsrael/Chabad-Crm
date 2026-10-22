@@ -42,6 +42,9 @@ export type TaskSheetFieldKey = string;
 export interface TaskSheetFieldsConfig {
   columns: TaskSheetFieldKey[];
   widths: Record<string, number>;
+  /** fixes104 §2: the task's own add-on fields (`pl:<key>` / `cf:<key>`,
+   *  lib/taskCustomFields.tsx) printed under the sheet title. Unset = all. */
+  taskFields?: string[];
 }
 
 export interface TaskSheetColumn {
@@ -227,6 +230,9 @@ function readStore(): TaskSheetFieldsConfig {
       resolved = {
         columns: columns.length > 0 ? columns : DEFAULT_TASK_SHEET_FIELDS.columns,
         widths: { ...DEFAULT_TASK_SHEET_FIELDS.widths, ...(parsed.widths ?? {}) },
+        ...(Array.isArray(parsed.taskFields)
+          ? { taskFields: parsed.taskFields.filter((k: unknown) => typeof k === "string") }
+          : {}),
       };
     }
   } catch {
