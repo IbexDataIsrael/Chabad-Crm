@@ -19,3 +19,6 @@
 
 ## Not done
 - Login match on username is still case-sensitive (`username == identifier`). Making it case-insensitive could make legacy rows that differ only in case ambiguous, so I left it unchanged.
+
+## Commit
+- 3a519f7 (not pushed)
