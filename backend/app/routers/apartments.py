@@ -290,6 +290,12 @@ def list_apartments(
     current_user: models.User = Depends(get_current_user),
     building_id: Optional[int] = None,
     q: Optional[str] = None,
+    # fixes106: paginated in SQL — unfiltered, this used to return the whole
+    # org (~26k rows / ~11 MB per call) and a 100-user load test swapped the
+    # server. 500 stays above the largest building, so the per-building
+    # callers still get every apartment.
+    limit: int = Query(500, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
 ):
     query = db.query(models.Apartment).filter(
         models.Apartment.organization_id == current_user.organization_id,
@@ -307,7 +313,12 @@ def list_apartments(
         query = query.filter(models.Apartment.building_id == building_id)
     if q:
         query = query.filter(models.Apartment.apartment_name.ilike(f"%{q}%"))
-    rows = query.order_by(models.Apartment.apartment_name).all()
+    rows = (
+        query.order_by(models.Apartment.apartment_name, models.Apartment.id)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
     picklist_map = picklist_utils.get_values_bulk(
         db, current_user.organization_id, "apartments", [r.id for r in rows]
     )

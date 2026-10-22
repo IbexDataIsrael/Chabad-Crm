@@ -14,6 +14,7 @@ from alembic.config import Config as AlembicConfig
 from fastapi import FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect
@@ -126,6 +127,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# fixes106: large JSON lists (apartments, contacts) are highly repetitive and
+# compress ~8-10x; small responses (<1 KB) are passed through untouched.
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.include_router(auth.router)
 app.include_router(contacts.router)
