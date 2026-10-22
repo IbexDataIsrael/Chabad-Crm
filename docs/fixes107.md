@@ -1,6 +1,6 @@
 # fixes107 — server stall under load (logins failing, pages/translations timing out)
 
-Status: **local only — not committed, not pushed, not deployed. Further production load tests stay on hold until this is reviewed.**
+Status: **committed 6668936 — not pushed, not deployed. Further production load tests stay on hold until this is reviewed.**
 
 ## Incident (prod)
 - After a load test, the frontend loaded but translations and `/api/health` timed out.
