@@ -4,6 +4,7 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001
 const TOKEN_KEY = "crm_token";
 
 import { localizeError } from "@/lib/errorText";
+import { RequestTimeoutError, fetchWithPolicy } from "@/lib/fetchPolicy";
 
 export class ApiError extends Error {
   status: number;
@@ -28,12 +29,12 @@ export class ApiError extends Error {
  * `{code, message, params}` object, or a validation (422) list. fixes94: the
  * message is translated through the localization table (lib/errorText) —
  * every caller that shows `err.message` gets the user's language. */
-async function readErrorDetail(
-  res: Response,
+function parseErrorDetail(
+  text: string,
   fallback: string,
-): Promise<{ message: string; body?: unknown }> {
+): { message: string; body?: unknown } {
   try {
-    const data = await res.json();
+    const data = JSON.parse(text);
     const detail = data?.detail;
     if (typeof detail === "string") return { message: localizeError(detail) };
     if (Array.isArray(detail) && detail.length > 0) {
@@ -180,61 +181,47 @@ export async function apiDownload(path: string, fallback: string): Promise<void>
   URL.revokeObjectURL(url);
 }
 
-// The Render free/starter backend spins down after idling and, while it's
-// booting back up, Render's own edge proxy returns 502/503/504 (or the
-// request fails at the network level entirely — a CORS preflight against a
-// 502 surfaces to the browser as a plain "Failed to fetch") until the app
-// process is actually listening. That's transient, not a real error, but
-// every page's silently-caught "empty" state used to treat it exactly like
-// one (see docs/fixes58.md-adjacent apartments-page fix). Retry a GET a few
-// times with backoff before giving up — covers the common few-seconds-long
-// wake-up without masking a genuinely down/broken backend forever. Mutating
-// requests are never auto-retried (a lost response to a POST that actually
-// reached the app would double-submit).
-const RETRY_DELAYS_MS = [1000, 3000, 6000, 10000];
+// fixes107: timeouts + retries live in lib/fetchPolicy (unit-tested there).
+// Reads (GET) get one 30s budget covering headers, body and any retries; a
+// 503 "busy" is retried at most once after its Retry-After, 502/504/network
+// errors (a proxy or a restart) at most twice — never past the budget.
+// Writes get no default budget and are never retried: bulk edits, backups,
+// clone and AI calls can legitimately run long, aborting a write in the
+// browser doesn't stop it on the server, and a lost response to a write that
+// did reach the server would double-submit. Any call can pass `timeoutMs`.
+const DEFAULT_GET_BUDGET_MS = 30000;
+const LOGIN_BUDGET_MS = 30000;
+const BUSY_MESSAGE = "Server is busy, please try again";
 
-function isRetryableStatus(status: number): boolean {
-  return status === 502 || status === 503 || status === 504;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function busyError(): ApiError {
+  return new ApiError(504, localizeError(BUSY_MESSAGE));
 }
 
 /** Authenticated JSON fetch. Throws ApiError on non-2xx; redirects to login on 401. */
 export async function apiFetch<T>(
   path: string,
-  options: RequestInit = {},
+  options: RequestInit & { timeoutMs?: number } = {},
 ): Promise<T> {
-  const headers = new Headers(options.headers);
-  if (options.body && !headers.has("Content-Type")) {
+  const { timeoutMs, ...init } = options;
+  const headers = new Headers(init.headers);
+  if (init.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const method = (options.method ?? "GET").toUpperCase();
-  const retryable = method === "GET";
-
+  const isGet = (init.method ?? "GET").toUpperCase() === "GET";
   let res: Response;
-  let attempt = 0;
-  for (;;) {
-    try {
-      res = await fetch(`${API_URL}${path}`, { ...options, headers });
-    } catch (networkErr) {
-      if (retryable && attempt < RETRY_DELAYS_MS.length) {
-        await sleep(RETRY_DELAYS_MS[attempt]);
-        attempt++;
-        continue;
-      }
-      throw networkErr;
-    }
-    if (retryable && isRetryableStatus(res.status) && attempt < RETRY_DELAYS_MS.length) {
-      await sleep(RETRY_DELAYS_MS[attempt]);
-      attempt++;
-      continue;
-    }
-    break;
+  let text: string;
+  try {
+    ({ res, text } = await fetchWithPolicy(
+      `${API_URL}${path}`,
+      { ...init, headers },
+      { budgetMs: timeoutMs ?? (isGet ? DEFAULT_GET_BUDGET_MS : 0), retry: isGet },
+    ));
+  } catch (err) {
+    if (err instanceof RequestTimeoutError) throw busyError();
+    throw err;
   }
 
   if (res.status === 401) {
@@ -243,17 +230,17 @@ export async function apiFetch<T>(
       window.location.href = "/";
     }
     // fixes75 §8: keep a login-flow error code (e.g. an invalid Google token).
-    const { body } = await readErrorDetail(res, "Unauthorized");
+    const { body } = parseErrorDetail(text, "Unauthorized");
     throw new ApiError(401, "Unauthorized", body);
   }
 
   if (!res.ok) {
-    const { message, body } = await readErrorDetail(res, res.statusText);
+    const { message, body } = parseErrorDetail(text, res.statusText);
     throw new ApiError(res.status, message, body);
   }
 
-  if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
+  if (res.status === 204 || !text) return undefined as T;
+  return JSON.parse(text) as T;
 }
 
 export interface LocalizationRow {
@@ -365,16 +352,28 @@ export async function login(
 ): Promise<LoginResult> {
   const body = new URLSearchParams({ username, password });
   if (organizationId != null) body.set("organization_id", String(organizationId));
-  const res = await fetch(`${API_URL}/api/auth/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-  });
+  // fixes107: bounded like reads (headers + body), never retried — a POST.
+  let res: Response;
+  let text: string;
+  try {
+    ({ res, text } = await fetchWithPolicy(
+      `${API_URL}/api/auth/token`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+      },
+      { budgetMs: LOGIN_BUDGET_MS, retry: false },
+    ));
+  } catch (err) {
+    if (err instanceof RequestTimeoutError) throw busyError();
+    throw err;
+  }
   if (!res.ok) {
-    const { message, body } = await readErrorDetail(res, "Login failed");
+    const { message, body } = parseErrorDetail(text, "Login failed");
     throw new ApiError(res.status, message, body);
   }
-  return (await res.json()) as LoginResult;
+  return JSON.parse(text) as LoginResult;
 }
 
 /** Change the logged-in user's own password (fixes98: no old password). */

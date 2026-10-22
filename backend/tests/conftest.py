@@ -69,6 +69,8 @@ def _background_sessions_use_test_db(monkeypatch):
     import app.database as database
 
     monkeypatch.setattr(database, "SessionLocal", TestingSessionLocal)
+    # fixes107: sessions opened outside get_db use the side pool.
+    monkeypatch.setattr(database, "SideSessionLocal", TestingSessionLocal)
 
 
 @pytest.fixture(autouse=True)

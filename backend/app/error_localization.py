@@ -164,6 +164,7 @@ PLAIN_ERRORS: list[tuple[str, str]] = [
     ("Unauthorized", "אין הרשאה — יש להתחבר מחדש"),
     ("Forbidden", "אין הרשאה"),
     ("Internal Server Error", "שגיאת שרת"),
+    ("Server is busy, please try again", "השרת עמוס, נסו שוב בעוד רגע"),
     ("Bad Request", "בקשה לא תקינה"),
     ("Unprocessable Entity", "הנתונים שנשלחו אינם תקינים"),
     ("Method Not Allowed", "הפעולה אינה מותרת"),

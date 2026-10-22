@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app import models, picklist_utils
 from app.config import settings
 from app.core.email import send_email
-from app.database import SessionLocal
+from app import database
 
 logger = logging.getLogger("app.scheduler")
 
@@ -111,7 +111,7 @@ def scan_reminders() -> int:
     """Send any due reminders. Returns the number of emails dispatched."""
     now = datetime.datetime.now()
     sent = 0
-    db = SessionLocal()
+    db = database.SideSessionLocal()  # fixes107: side pool
     try:
         reminders = (
             db.query(models.SignificantDateReminder)

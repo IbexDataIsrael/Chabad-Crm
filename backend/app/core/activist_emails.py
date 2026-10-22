@@ -134,7 +134,7 @@ def build_task_email(
 
 def send_task_assigned(org_id: int, user_id: int, task_ids: Iterable[int]) -> None:
     """Background task: email the activist about newly assigned task(s)."""
-    db = database.SessionLocal()  # looked up per call (tests patch it)
+    db = database.SideSessionLocal()  # side pool (fixes107); tests patch it
     try:
         user = db.get(models.User, user_id)
         org = db.get(models.Organization, org_id)
@@ -157,7 +157,7 @@ def send_task_assigned(org_id: int, user_id: int, task_ids: Iterable[int]) -> No
 def send_registration_welcome(org_id: int, user_id: int) -> None:
     """Background task: the standard welcome email after an activist registers
     themselves (org page or task QR), linking to the org's page."""
-    db = database.SessionLocal()  # looked up per call (tests patch it)
+    db = database.SideSessionLocal()  # side pool (fixes107); tests patch it
     try:
         user = db.get(models.User, user_id)
         org = db.get(models.Organization, org_id)

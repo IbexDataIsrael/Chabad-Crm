@@ -130,10 +130,23 @@ def record_error(request: Request, exc: BaseException) -> Optional[int]:
     """Log one unhandled error to the DB and email it out. Never raises.
     Returns the error_logs id (None if even the DB write failed)."""
     trace = "".join(tb.format_exception(type(exc), exc, exc.__traceback__))
-    # A fresh session (the request's own may be mid-failed-transaction),
-    # through get_db so a test's dependency override is honoured.
-    session_gen = request.app.dependency_overrides.get(get_db, get_db)()
-    db = next(session_gen)
+    # fixes107: never queue for a DB connection while handling an error.
+    if not _DB_LOG_SLOTS.acquire(blocking=False):
+        logger.error(
+            "error log busy, not stored: %s %s %s: %s",
+            request.method, request.url.path, type(exc).__name__, exc,
+        )
+        return None
+    # A fresh session (the request's own may be mid-failed-transaction) from
+    # the side pool (fixes107) — or a test's get_db override.
+    override = request.app.dependency_overrides.get(get_db)
+    session_gen = override() if override is not None else None
+    if session_gen is not None:
+        db = next(session_gen)
+    else:
+        from app import database  # looked up per call: tests swap it
+
+        db = database.SideSessionLocal()
     _guard.active = True
     try:
         user = None
@@ -160,7 +173,11 @@ def record_error(request: Request, exc: BaseException) -> Optional[int]:
         return None
     finally:
         _guard.active = False
-        session_gen.close()
+        if session_gen is not None:
+            session_gen.close()
+        else:
+            db.close()
+        _DB_LOG_SLOTS.release()
 
 
 def record_client_error(
@@ -211,6 +228,10 @@ def record_client_error(
 # `logger.exception(...)`. This handler on the "app" logger turns every such
 # ERROR record that carries a traceback into an error_logs row + alert. `_guard` stops recursion (a failing alert email logs again).
 _guard = threading.local()
+# fixes107: at most this many error-log DB writes at once (record_error and
+# the background handler share it). Under an error storm the rest go to the
+# server log only — handling an error must never queue for a DB connection.
+_DB_LOG_SLOTS = threading.BoundedSemaphore(2)
 # Off in the test suite (conftest) except where a test opts in.
 capture_background_errors = True
 
@@ -227,13 +248,17 @@ class BackgroundErrorHandler(logging.Handler):
         exc = record.exc_info[1]
         if exc is None:
             return
+        # fixes107: same non-blocking cap as record_error — the record is
+        # still in the normal server log either way.
+        if not _DB_LOG_SLOTS.acquire(blocking=False):
+            return
         _guard.active = True
         try:
             from app import database  # looked up per call: tests swap SessionLocal
 
             from app.core.activity_log import current_user_id
 
-            db = database.SessionLocal()
+            db = database.SideSessionLocal()  # fixes107: side pool
             try:
                 trace = "".join(tb.format_exception(*record.exc_info))
                 # fixes102 Part A: inside a request, whose request it was —
@@ -261,6 +286,7 @@ class BackgroundErrorHandler(logging.Handler):
             pass
         finally:
             _guard.active = False
+            _DB_LOG_SLOTS.release()
 
 
 def install_background_error_handler() -> None:

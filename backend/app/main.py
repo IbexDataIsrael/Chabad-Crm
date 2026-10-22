@@ -17,11 +17,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import inspect
+from sqlalchemy import exc as sa_exc, inspect
 
 from app import models  # noqa: F401 — ensures models register on Base.metadata
 from app.config import settings
-from app.database import SessionLocal, engine
+from app.core.concurrency import ApiConcurrencyLimit
+from app.database import API_QUEUE_TIMEOUT_SECONDS, REQUEST_CONNECTIONS, SessionLocal, engine
 
 # Ensure our `app.*` loggers actually reach stdout at INFO. Uvicorn configures
 # only its own loggers, so without this our diagnostic logs (seed outcome,
@@ -112,24 +113,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Allowed origins: explicit list from CORS_ORIGINS (localhost + any custom
-# domains) PLUS a regex scoped to this project's own Vercel deployments, so
-# preview URLs keep working without a CORS update on every deploy. The regex
-# used to accept *any* "*.vercel.app" origin — since allow_credentials=True
-# forbids a "*" wildcard, that effectively let every Vercel-hosted site (a
-# free, self-service domain anyone can register) make credentialed requests
-# to this API; narrowed to just this project (see config.py).
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
-    allow_origin_regex=settings.cors_vercel_preview_regex,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-# fixes106: large JSON lists (apartments, contacts) are highly repetitive and
-# compress ~8-10x; small responses (<1 KB) are passed through untouched.
-app.add_middleware(GZipMiddleware, minimum_size=1000)
+# Middleware (CORS, the fixes107 request gate, gzip) is added at the end of
+# the middleware section below, after the @app.middleware functions — the
+# last one added is the outermost.
 
 app.include_router(auth.router)
 app.include_router(contacts.router)
@@ -240,12 +226,63 @@ async def _request_context_and_activity(request: Request, call_next):
     return response
 
 
+# Order, outermost first (the last added is the outermost):
+#   GZip > CORS > request gate > the two @app.middleware functions above > routes
+# fixes107: the gate wraps the activity-log middleware, so its threads and
+# side-pool sessions run inside an admitted request; CORS wraps the gate, so
+# the browser can read the gate's 503.
+app.add_middleware(
+    ApiConcurrencyLimit,
+    limit=REQUEST_CONNECTIONS,
+    queue_timeout=API_QUEUE_TIMEOUT_SECONDS,
+)
+# Allowed origins: explicit list from CORS_ORIGINS (localhost + any custom
+# domains) PLUS a regex scoped to this project's own Vercel deployments, so
+# preview URLs keep working without a CORS update on every deploy. The regex
+# used to accept *any* "*.vercel.app" origin — since allow_credentials=True
+# forbids a "*" wildcard, that effectively let every Vercel-hosted site (a
+# free, self-service domain anyone can register) make credentialed requests
+# to this API; narrowed to just this project (see config.py).
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins_list,
+    allow_origin_regex=settings.cors_vercel_preview_regex,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+# fixes106: large JSON lists (apartments, contacts) are highly repetitive and
+# compress ~8-10x; small responses (<1 KB) are passed through untouched.
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+
+def _is_pool_timeout(exc: BaseException) -> bool:
+    """True when `exc` (or what it wraps) is SQLAlchemy's QueuePool timeout."""
+    seen = 0
+    while exc is not None and seen < 10:
+        if isinstance(exc, sa_exc.TimeoutError):
+            return True
+        exc = exc.__cause__ or exc.__context__
+        seen += 1
+    return False
+
+
 @app.exception_handler(Exception)
 async def _unhandled_error(request: Request, exc: Exception):
     """fixes75 §4/§9: every unhandled error (a 500) is written to the
     error_logs table and emailed to the org's Errors Admin Emails list."""
     from app.core.error_log import record_error
 
+    # fixes107: DB pool exhausted = overload, not a bug. Writing the error log
+    # would need yet another connection (and a worker thread) from the same
+    # exhausted pool — that wait used to double every stall. Answer 503 fast.
+    if _is_pool_timeout(exc):
+        _app_logger.warning("DB pool exhausted: %s %s", request.method, request.url.path)
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Server is busy, please try again"},
+            headers={"Retry-After": "5"},
+        )
     error_id = await run_in_threadpool(record_error, request, exc)
     return JSONResponse(
         status_code=500,

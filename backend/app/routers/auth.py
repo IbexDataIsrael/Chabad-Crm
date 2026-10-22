@@ -6,11 +6,15 @@
 - `register`      — legacy/dev path: creates an immediately-active user in a new org.
                     Retired in Phase 9.
 """
+import asyncio
 import datetime
 import logging
+import os
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError
 from sqlalchemy import func
@@ -302,18 +306,38 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> models.User:
     return user
 
 
-@router.post("/token", response_model=LoginResponse)
-def login(
-    request: Request,
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    organization_id: Optional[int] = Form(None),
-    db: Session = Depends(get_db),
-) -> LoginResponse:
-    """Password login. The identifier matches username *or* email; when the
-    verified credentials map to users in several organizations (fixes14), the
-    response asks for an explicit org selection instead of issuing a token —
-    the client retries with `organization_id`."""
-    identifier = form_data.username
+def _credentials_error() -> HTTPException:
+    return auth_error(
+        status.HTTP_401_UNAUTHORIZED,
+        "auth.error.invalid_credentials",
+        "Incorrect username or password",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+# fixes107: bcrypt is ~250 ms of CPU per check by design. Checks run on their
+# own pool sized to the CPU count, so a burst of logins queues here (holding
+# no worker thread and no DB connection) instead of filling the shared thread
+# pool that every other sync endpoint needs.
+_BCRYPT_EXECUTOR = ThreadPoolExecutor(
+    max_workers=os.cpu_count() or 2, thread_name_prefix="bcrypt"
+)
+
+
+async def _check_passwords(password: str, hashes: list[Optional[str]]) -> list[bool]:
+    loop = asyncio.get_running_loop()
+
+    async def one(h: Optional[str]) -> bool:
+        if not h:
+            return False
+        return await loop.run_in_executor(_BCRYPT_EXECUTOR, verify_password, password, h)
+
+    return list(await asyncio.gather(*(one(h) for h in hashes)))
+
+
+def _login_candidates(
+    db: Session, identifier: str, request: Request
+) -> tuple[list[models.User], list[Optional[str]]]:
     # Email matching is case-insensitive: new rows are stored lowercased, but
     # legacy rows (and typed identifiers) may carry uppercase letters.
     candidates = (
@@ -324,22 +348,49 @@ def login(
         )
         .all()
     )
-    credentials_error = auth_error(
-        status.HTTP_401_UNAUTHORIZED,
-        "auth.error.invalid_credentials",
-        "Incorrect username or password",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
     if not candidates:
         _log_access(db, identifier, "FAILED_NO_USER", request)
-        raise credentials_error
+        raise _credentials_error()
+    hashes = [u.password_hash for u in candidates]
+    # fixes107: hand the connection back to the pool for the bcrypt phase
+    # (read-only so far); the users reload on next attribute access.
+    db.rollback()
+    return candidates, hashes
 
+
+@router.post("/token", response_model=LoginResponse)
+async def login(
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    organization_id: Optional[int] = Form(None),
+    db: Session = Depends(get_db),
+) -> LoginResponse:
+    """Password login. The identifier matches username *or* email; when the
+    verified credentials map to users in several organizations (fixes14), the
+    response asks for an explicit org selection instead of issuing a token —
+    the client retries with `organization_id`.
+
+    fixes107: async, in three phases — DB lookup (worker thread), bcrypt (its
+    own CPU-sized pool, no DB connection held), then the rest (worker thread)."""
+    identifier = form_data.username
+    candidates, hashes = await run_in_threadpool(_login_candidates, db, identifier, request)
+    ok = await _check_passwords(form_data.password, hashes)
     # Credentials first: org names are never revealed for a wrong password.
-    verified = [
-        u
-        for u in candidates
-        if u.password_hash and verify_password(form_data.password, u.password_hash)
-    ]
+    verified = [u for u, good in zip(candidates, ok) if good]
+    return await run_in_threadpool(
+        _finish_login, db, identifier, organization_id, request, candidates, verified
+    )
+
+
+def _finish_login(
+    db: Session,
+    identifier: str,
+    organization_id: Optional[int],
+    request: Request,
+    candidates: list[models.User],
+    verified: list[models.User],
+) -> LoginResponse:
+    credentials_error = _credentials_error()
     if not verified:
         _log_access(db, identifier, "FAILED_INVALID_PASSWORD", request, candidates)
         raise credentials_error

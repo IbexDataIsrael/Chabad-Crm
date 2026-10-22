@@ -97,7 +97,7 @@ def entity_id_from(path_params: dict) -> Optional[int]:
 def _session() -> Session:
     from app import database  # looked up per call: tests swap SessionLocal
 
-    return database.SessionLocal()
+    return database.SideSessionLocal()  # fixes107: side pool
 
 
 def enabled_org_for_user(user_id: int) -> Optional[int]:
