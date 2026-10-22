@@ -183,11 +183,13 @@ def create_user(
             username = f"{base}_{suffix}"
             suffix += 1
     else:
+        # fixes105: case-insensitive — "Zvi" and "zvi" must not coexist in
+        # one org.
         dup = (
             db.query(models.User)
             .filter(
                 models.User.organization_id == admin.organization_id,
-                models.User.username == username,
+                func.lower(models.User.username) == username.lower(),
             )
             .first()
         )
@@ -344,7 +346,7 @@ def update_user(
                 db.query(models.User.id)
                 .filter(
                     models.User.organization_id == admin.organization_id,
-                    models.User.username == username,
+                    func.lower(models.User.username) == username.lower(),
                     models.User.id != user.id,
                 )
                 .first()

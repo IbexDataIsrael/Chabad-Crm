@@ -14,6 +14,7 @@ import { PicklistSelect } from "@/components/PicklistSelect";
 import { Button } from "@/components/ui/button";
 import { InlineEdit } from "@/components/ui/InlineEdit";
 import { MultiSelectEditor } from "@/components/ui/MultiSelectEditor";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { TruncatedText } from "@/components/ui/TruncatedText";
 import { apiFetch } from "@/lib/api";
 import { isFeatureEnabled, useAuth } from "@/lib/auth";
@@ -108,9 +109,10 @@ type UnifiedRow = UserRow | MissingLoginRow;
 // fixes46: notes/areas/report_numbers are the rest of ContactShliach's real
 // columns (full_name/email/phone already had cells) — opt-in like the
 // existing optional ones, so an existing user's default view is unchanged.
-const COLUMN_KEYS = ["email", "phone", "notes", "areas", "report_numbers", "created"] as const;
+// fixes105: the login username — shown by default (was never visible).
+const COLUMN_KEYS = ["username", "email", "phone", "notes", "areas", "report_numbers", "created"] as const;
 type ColumnKey = (typeof COLUMN_KEYS)[number];
-const DEFAULT_COLUMNS: ColumnKey[] = ["email", "phone", "created"];
+const DEFAULT_COLUMNS: ColumnKey[] = ["username", "email", "phone", "created"];
 
 // fixes48 §2/§3: one grid column, whichever of the 3 kinds it is — feeds the
 // unified drag-reorder list (Customize Columns panel + the table itself),
@@ -126,7 +128,7 @@ function gridColumnSortKey(entry: GridColumn): string {
 
 // fixes49 §1: per-column min-width so short values (dates, badges) don't get
 // squeezed in the RTL grid — free-text-prone columns get the wider floor.
-const WIDE_GRID_COLUMN_KEYS = new Set<ColumnKey>(["email", "notes", "areas", "report_numbers"]);
+const WIDE_GRID_COLUMN_KEYS = new Set<ColumnKey>(["username", "email","notes", "areas", "report_numbers"]);
 function gridColumnMinWidth(entry: GridColumn): string {
   if (entry.kind === "cfield") {
     return entry.def.field_type === "text" ? "min-w-[150px]" : "min-w-[120px]";
@@ -491,7 +493,8 @@ export default function UsersPage() {
     }
     if (roleFilter.length > 0 && !roleFilter.includes(r.role)) return false;
     const q = query.trim().toLowerCase();
-    if (q && ![r.full_name, r.email, r.phone].some((v) => (v ?? "").toLowerCase().includes(q))) {
+    const username = r.kind === "user" ? r.raw.username : null;
+    if (q && ![r.full_name, username, r.email, r.phone].some((v) => (v ?? "").toLowerCase().includes(q))) {
       return false;
     }
     if (!showInactive && !r.is_active) return false;
@@ -538,6 +541,7 @@ export default function UsersPage() {
     .replace("{total}", String(sorted.length));
 
   const columnLabels: Record<ColumnKey, string> = {
+    username: t("auth.username", "שם משתמש"),
     email: t("contacts.email", "אימייל"),
     phone: t("contacts.phone", "טלפון"),
     notes: t("contact_shliach.notes", "הערות"),
@@ -619,6 +623,30 @@ export default function UsersPage() {
       onSave={(v) => saveUserField(r, { full_name: v.trim() })}
       editor={(draft, setDraft) => (
         <input className={inputClass} value={draft} onChange={(e) => setDraft(e.target.value)} />
+      )}
+    />
+  );
+
+  // fixes105: org-unique login username; the API rejects a taken one.
+  const inlineUsernameCell = (r: UserRow) => (
+    <InlineEdit<string>
+      value={r.raw.username}
+      display={
+        <span dir="ltr">
+          <TruncatedText text={r.raw.username} />
+        </span>
+      }
+      validate={(v) => (v.trim() ? null : t("users.username_required", "יש להזין שם משתמש"))}
+      onSave={(v) => saveUserField(r, { username: v.trim() })}
+      editor={(draft, setDraft) => (
+        <input
+          className={inputClass}
+          dir="ltr"
+          maxLength={50}
+          autoComplete="off"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+        />
       )}
     />
   );
@@ -794,6 +822,8 @@ export default function UsersPage() {
 
   function cell(r: UnifiedRow, k: ColumnKey) {
     switch (k) {
+      case "username":
+        return r.kind === "user" ? inlineUsernameCell(r) : "—";
       case "email":
         return r.kind === "user" ? (
           inlineEmailCell(r)
@@ -1481,6 +1511,8 @@ function UserForm({
   const { t } = useLocalization();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  // fixes105: optional — blank keeps the old default (the email).
+  const [username, setUsername] = useState("");
   const [role, setRole] = useState("staff");
   const [password, setPassword] = useState("");
   const [emailValid, setEmailValid] = useState(false);
@@ -1511,6 +1543,15 @@ function UserForm({
       );
       return;
     }
+    const typedUsername = username.trim().toLowerCase();
+    const dupUsername = typedUsername
+      ? existingUsers.find((u) => u.username.toLowerCase() === typedUsername)
+      : undefined;
+    if (dupUsername) {
+      setExisting(dupUsername);
+      setError(t("users.username_taken", "שם המשתמש כבר תפוס"));
+      return;
+    }
     if (!emailValid) {
       setError(t("msg.invalid_email", "כתובת אימייל לא תקינה"));
       return;
@@ -1526,6 +1567,7 @@ function UserForm({
         body: JSON.stringify({
           full_name: fullName,
           email: email.trim() || null,
+          username: username.trim() || null,
           role,
           password: password || null,
           is_manual: isManual,
@@ -1576,6 +1618,20 @@ function UserForm({
           </label>
         </div>
         <label className="block space-y-1">
+          <span className="block text-sm font-medium">{t("auth.username", "שם משתמש")}</span>
+          <input
+            className={inputClass}
+            dir="ltr"
+            maxLength={50}
+            autoComplete="off"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+          <span className="block text-xs text-muted-foreground">
+            {t("users.username_hint", "לא חובה — ברירת המחדל היא כתובת האימייל.")}
+          </span>
+        </label>
+        <label className="block space-y-1">
           <span className="block text-sm font-medium">{t("users.role_label", "תפקיד")}</span>
           <select
             className={inputClass}
@@ -1593,9 +1649,7 @@ function UserForm({
           <span className="block text-sm font-medium">
             {t("users.password_optional", "סיסמה (לא חובה)")}
           </span>
-          <input
-            type="password"
-            className={inputClass}
+          <PasswordInput
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="new-password"

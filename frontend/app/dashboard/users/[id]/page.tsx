@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { InlineEdit } from "@/components/ui/InlineEdit";
 import { MultiSelectEditor } from "@/components/ui/MultiSelectEditor";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useConfirm } from "@/lib/confirm";
@@ -223,6 +224,29 @@ export default function UserDetailPage() {
               />
             </dd>
           </div>
+          {/* fixes105: the login username — editable (org-unique, the API
+              rejects a taken one with "שם המשתמש כבר תפוס"). */}
+          <div className="flex flex-col">
+            <dt className="text-xs text-muted-foreground">{t("auth.username", "שם משתמש")}</dt>
+            <dd className="text-sm">
+              <InlineEdit<string>
+                value={user.username}
+                display={<span dir="ltr">{user.username}</span>}
+                validate={(v) => (v.trim() ? null : t("users.username_required", "יש להזין שם משתמש"))}
+                onSave={(v) => patchUser({ username: v.trim() })}
+                editor={(draft, setDraft) => (
+                  <input
+                    className={inputClass}
+                    dir="ltr"
+                    maxLength={50}
+                    autoComplete="off"
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                  />
+                )}
+              />
+            </dd>
+          </div>
           <div className="flex flex-col">
             <dt className="text-xs text-muted-foreground">{t("contacts.email", "אימייל")}</dt>
             <dd className="text-sm">
@@ -321,9 +345,7 @@ export default function UserDetailPage() {
             </dt>
             <dd className="text-sm space-y-1">
               <div className="flex items-center gap-2">
-                <input
-                  type="password"
-                  className={inputClass}
+                <PasswordInput
                   value={password}
                   onChange={(e) => {
                     setPassword(e.target.value);
