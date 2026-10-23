@@ -9,7 +9,7 @@ Enable sorting by date and by every field that is displayed
 
 # Closeout
 
-Status: **done locally — not committed, not pushed.** New migration `109a7c3e2d41` (adds `tasks.scheduled_at`). Already applied to local Postgres; prod needs `alembic upgrade head` on deploy.
+Status: **done, committed f46d5b7 — not pushed.** New migration `109a7c3e2d41` (adds `tasks.scheduled_at`). Already applied to local Postgres; prod needs `alembic upgrade head` on deploy.
 
 ## 1. Date & time when adding a task — [x] done
 - `tasks.scheduled_at` (nullable DateTime) added in `models.py` + migration `109a7c3e2d41_fixes109_task_scheduled_at.py`. Stored as the wall-clock time the admin typed, with no timezone shift.
