@@ -69,6 +69,8 @@ export function TaskQuickCreateForm({
   const [campaignId, setCampaignId] = useState<number | "">("");
   const [reportNumberIds, setReportNumberIds] = useState<number[]>([]);
   const [customDateValueId, setCustomDateValueId] = useState<number | "">("");
+  // fixes109: the task's date & time ("YYYY-MM-DDTHH:mm" from the input).
+  const [scheduledAt, setScheduledAt] = useState("");
   const [status, setStatus] = useState<TaskStatus>("ACTIVE");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -193,6 +195,7 @@ export function TaskQuickCreateForm({
           volunteer_user_id: selectedVolunteerId === "" ? null : selectedVolunteerId,
           custom_date_value_id: customDateValueId === "" ? null : customDateValueId,
           status: shownStatus,
+          scheduled_at: scheduledAt || null,
           skip_conflicts: skipConflicts,
           ...customValuesPayload(),
         }),
@@ -221,6 +224,7 @@ export function TaskQuickCreateForm({
           task_text: mode === "text" ? taskText.trim() : null,
           custom_date_value_id: customDateValueId === "" ? null : customDateValueId,
           status: shownStatus,
+          scheduled_at: scheduledAt || null,
           ...customValuesPayload(),
         }),
       });
@@ -373,6 +377,16 @@ export function TaskQuickCreateForm({
             </span>
           </label>
         )}
+
+        <label className="block space-y-1">
+          <span className="block text-sm font-medium">{t("task.scheduled_at", "תאריך ושעה")}</span>
+          <input
+            type="datetime-local"
+            className={inputClass}
+            value={scheduledAt}
+            onChange={(e) => setScheduledAt(e.target.value)}
+          />
+        </label>
 
         {showCustomDate && (
         <label className="block space-y-1">

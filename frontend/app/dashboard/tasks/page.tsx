@@ -37,6 +37,7 @@ import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useConfirm } from "@/lib/confirm";
 import { useFieldSettings } from "@/lib/fieldSettings";
+import { formatServerDateTime, formatWallDateTime, toDateTimeLocalInput } from "@/lib/taskDateTime";
 import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { usePicklist } from "@/lib/picklists";
@@ -76,7 +77,13 @@ const inputClass =
 const filterClass =
   "rounded-md border border-input px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
-type SortKey = "volunteer_name" | "created_at" | "report_number";
+// fixes109: every displayed column sorts — a fixed key below, or a custom
+// task field's own `pl:`/`cf:` column key (see backend _apply_task_sort).
+type SortKey = string;
+const SORT_KEY_FOR_COLUMN: Record<string, string> = {
+  volunteer: "volunteer_name",
+  report_numbers: "report_number",
+};
 
 // fixes104 §3: the grid's optional built-in columns (the task number and the
 // row actions always show). Custom task fields join as `pl:`/`cf:` keys.
@@ -88,6 +95,7 @@ const FIXED_COLUMNS = [
   "report_status",
   "report_notes",
   "custom_date",
+  "scheduled_at",
   "apartment_count",
   "created_at",
 ] as const;
@@ -269,6 +277,7 @@ export default function TasksPage() {
     report_status: t("task.report_status", "סטטוס דיווח"),
     report_notes: t("task.report_notes", "הערות הפעיל"),
     custom_date: t("task.custom_date", "תאריך מותאם"),
+    scheduled_at: t("task.scheduled_at", "תאריך ושעה"),
     apartment_count: t("task.apartment_count", "מספר דירות"),
     created_at: t("task.created_at", "תאריך יצירה"),
   };
@@ -345,10 +354,7 @@ export default function TasksPage() {
   }
 
   function headerCell(key: string): ReactNode {
-    if (key === "volunteer") return sortHeader("volunteer_name", columnLabel(key));
-    if (key === "report_numbers") return sortHeader("report_number", columnLabel(key));
-    if (key === "created_at") return sortHeader("created_at", columnLabel(key));
-    return columnLabel(key);
+    return sortHeader(SORT_KEY_FOR_COLUMN[key] ?? key, columnLabel(key));
   }
 
   async function saveField(task: Task, data: Partial<Task>) {
@@ -531,12 +537,28 @@ export default function TasksPage() {
         return <TruncatedText text={task.latest_report_notes || "—"} />;
       case "custom_date":
         return task.custom_date_value ? customDate.labelFor(task.custom_date_value) : "—";
+      case "scheduled_at":
+        return (
+          <InlineEdit<string>
+            value={toDateTimeLocalInput(task.scheduled_at)}
+            display={<span className="whitespace-nowrap tabular-nums">{formatWallDateTime(task.scheduled_at)}</span>}
+            onSave={(v) => saveField(task, { scheduled_at: v || null })}
+            editor={(draft, setDraft) => (
+              <input
+                type="datetime-local"
+                className={filterClass}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+              />
+            )}
+          />
+        );
       case "apartment_count":
         return <span className="tabular-nums">{task.apartment_count}</span>;
       case "created_at":
         return (
-          <span className="text-muted-foreground">
-            {task.created_at ? new Date(task.created_at).toLocaleDateString("he-IL") : "—"}
+          <span className="whitespace-nowrap tabular-nums text-muted-foreground">
+            {formatServerDateTime(task.created_at)}
           </span>
         );
       default:
@@ -832,7 +854,7 @@ export default function TasksPage() {
           <thead className="border-b border-border text-start text-muted-foreground">
             <tr>
               {/* fixes74 §7: the task number first (rightmost in RTL). */}
-              <th className="px-3 py-2 text-start">{t("task.number", "מס' משימה")}</th>
+              <th className="px-3 py-2 text-start">{sortHeader("id", t("task.number", "מס' משימה"))}</th>
               {activeColumns.map((key) => (
                 <th key={key} className="whitespace-nowrap px-3 py-2 text-start">
                   {headerCell(key)}

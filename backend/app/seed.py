@@ -1524,6 +1524,8 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("task", "task.status_completed", "הושלם", "Completed"),
     ("task", "task.status_paused", "מושהה", "Paused"),
     ("task", "task.custom_date", "תאריך מותאם", "Custom date"),
+    # fixes109: the task's date & time.
+    ("task", "task.scheduled_at", "תאריך ושעה", "Date & time"),
     ("task", "task.select_campaign", "בחר קמפיין", "Select a campaign"),
     ("task", "task.select_activist", "בחר פעיל", "Select an activist"),
     (
@@ -1978,8 +1980,8 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("task", "task.rn_in_task", "כבר במשימה", "Already in a task"),
     (
         "task", "task.rn_in_task_hint",
-        "מספרי דוח שכבר שייכים למשימה בקמפיין הזה מסומנים כנבחרים ואינם ניתנים לבחירה שוב.",
-        "Report numbers that already belong to a task in this campaign are shown as selected and can't be picked again.",
+        "מספרי דוח שכבר שייכים למשימה בקמפיין הזה מוצגים כלא זמינים ואינם ניתנים לבחירה.",
+        "Report numbers that already belong to a task in this campaign are disabled and can't be picked.",
     ),
     # --- fixes75 §6/§9: logs ---
     ("nav", "nav.logs", "לוגים", "Logs"),
@@ -2305,6 +2307,13 @@ LOCALIZATION_RENAMES: dict[str, tuple[set, str, set, str]] = {
     # fixes74 §5: an assigned, active task is "taken" (the stored value
     # stays ACTIVE).
     "task.status_active": ({"פעיל"}, "נלקח", {"Active"}, "Taken"),
+    # fixes109: taken report numbers are disabled (unchecked), not "selected".
+    "task.rn_in_task_hint": (
+        {"מספרי דוח שכבר שייכים למשימה בקמפיין הזה מסומנים כנבחרים ואינם ניתנים לבחירה שוב."},
+        "מספרי דוח שכבר שייכים למשימה בקמפיין הזה מוצגים כלא זמינים ואינם ניתנים לבחירה.",
+        {"Report numbers that already belong to a task in this campaign are shown as selected and can't be picked again."},
+        "Report numbers that already belong to a task in this campaign are disabled and can't be picked.",
+    ),
     "filter.all_admin_areas": (
         {"כל אזורי המנהל"}, "כל האזורים המותאמים אישית",
         {"All admin areas"}, "All custom areas",

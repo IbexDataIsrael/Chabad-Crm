@@ -168,6 +168,10 @@ entities that matter for orienting yourself:
   shliach-config (`shliach_view_config.task_email_text_he/en`), each task's
   first address or text, and a link to `/org/<slug>`. Self-registration
   (org page or task QR) sends the standard welcome email with that link.
+  fixes109: `tasks.scheduled_at` is the task's own date & time (naive
+  wall-clock as typed, set on create/bulk/edit). The tasks list sorts
+  server-side by every grid column, including `pl:`/`cf:` custom task fields
+  (`routers/tasks.py::_apply_task_sort`, blanks last, id tiebreak).
 - **ShliachReportCompletion / ShliachSystemComment / ShliachAnnouncement** —
   the activist self-service loop: activists submit the first two, admins
   author the third (see §6).

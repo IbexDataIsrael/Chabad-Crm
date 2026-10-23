@@ -578,6 +578,8 @@ export interface Task {
   volunteer_name: string;
   custom_date_value_id: number | null;
   custom_date_value: string | null;
+  /** fixes109: the task's date & time (wall-clock, as typed). */
+  scheduled_at: string | null;
   report_number_ids: number[];
   report_number_names: string[];
   /** fixes98: a text task's instructions (it has no report numbers). */

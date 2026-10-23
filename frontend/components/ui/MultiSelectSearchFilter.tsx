@@ -102,10 +102,9 @@ export function MultiSelectSearchFilter<Id extends number | string>({
   const visible = useMemo(
     () =>
       [...filtered].sort((a, b) => {
-        // fixes75 §2: locked (shown-as-selected) options float up too.
-        const aFirst = frozenSelected.has(a.id) || locked.has(a.id) ? 0 : 1;
-        const bFirst = frozenSelected.has(b.id) || locked.has(b.id) ? 0 : 1;
-        return aFirst - bFirst;
+        // fixes109: selected first, locked (disabled) options last.
+        const rank = (id: Id) => (frozenSelected.has(id) ? 0 : locked.has(id) ? 2 : 1);
+        return rank(a.id) - rank(b.id);
       }),
     [filtered, frozenSelected, locked],
   );
@@ -185,15 +184,15 @@ export function MultiSelectSearchFilter<Id extends number | string>({
   }
 
   const selectedLabel = useMemo(() => {
-    // fixes75 §2: locked options count as selected in the summary too.
-    const shown = [...(lockedIds ?? []), ...value.filter((v) => !locked.has(v))];
+    // fixes109: locked options are disabled, not selected — left out here.
+    const shown = value.filter((v) => !locked.has(v));
     if (shown.length === 0) return allLabel;
     const selectedText =
       shown.length === 1
         ? (knownLabels.get(shown[0]) ?? options.find((o) => o.id === shown[0])?.label ?? allLabel)
         : t("filter.n_selected", "{n} נבחרו").replace("{n}", String(shown.length));
     return label ? `${label}: ${selectedText}` : selectedText;
-  }, [value, lockedIds, locked, options, knownLabels, allLabel, label, t]);
+  }, [value, locked, options, knownLabels, allLabel, label, t]);
 
   return (
     <div ref={rootRef} className={`relative inline-block max-w-full ${className}`}
@@ -214,7 +213,7 @@ export function MultiSelectSearchFilter<Id extends number | string>({
         aria-controls={open ? listboxId : undefined}
         onClick={() => setOpen((v) => !v)}
         className={`flex w-full items-center justify-between gap-1 rounded-md border px-3 py-2 text-sm text-start ${
-          value.length > 0 || locked.size > 0
+          value.some((v) => !locked.has(v))
             ? "border-primary text-primary bg-primary/5"
             : "border-input text-foreground hover:bg-accent"
         } ${buttonClassName}`}
@@ -293,7 +292,8 @@ export function MultiSelectSearchFilter<Id extends number | string>({
             ) : (
               visible.map((o) => {
                 const isLocked = locked.has(o.id);
-                const checked = isLocked || value.includes(o.id);
+                // fixes109: a locked option shows unchecked + disabled.
+                const checked = !isLocked && value.includes(o.id);
                 return (
                   <li
                     key={String(o.id)}
@@ -303,7 +303,7 @@ export function MultiSelectSearchFilter<Id extends number | string>({
                   >
                     <label
                       className={`flex items-center gap-2 rounded px-2 py-1 ${
-                        isLocked ? "cursor-not-allowed text-muted-foreground" : "cursor-pointer hover:bg-accent"
+                        isLocked ? "cursor-not-allowed text-muted-foreground opacity-60" : "cursor-pointer hover:bg-accent"
                       }`}
                     >
                       <input

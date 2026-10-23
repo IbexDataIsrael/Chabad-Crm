@@ -9,8 +9,8 @@ import re
 from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import Float, case, cast, func, or_, select
+from sqlalchemy.orm import Session, aliased
 
 from app import custom_field_utils, models, picklist_utils
 from app.routers.apartments import EMPTY_FIELD_SENTINEL
@@ -240,6 +240,7 @@ def _to_out(
         volunteer_name=task.volunteer.full_name if task.volunteer else "",
         custom_date_value_id=task.custom_date_value_id,
         custom_date_value=task.custom_date_value.value if task.custom_date_value else None,
+        scheduled_at=task.scheduled_at,
         report_number_ids=[rn_id for rn_id, _ in report_numbers],
         report_number_names=[name for _, name in report_numbers],
         task_text=task.task_text,
@@ -298,6 +299,151 @@ def _validate_report_numbers(db: Session, org_id: int, ids: list[int]) -> None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "report_number_id does not exist")
 
 
+# fixes109: status sorts in its workflow order, not alphabetically.
+_STATUS_SORT_ORDER = {"AVAILABLE": 0, "ACTIVE": 1, "COMPLETED": 2, "PAUSED": 3}
+
+
+def _latest_report_sort_col(column):
+    """fixes109: `column` of the task's own latest report, as a correlated
+    subquery — the same rule as _latest_reports_by_task (linked to the task,
+    sent after it was assigned, only while it has an activist)."""
+    src = models.ShliachReportCompletion
+    return (
+        select(column)
+        .where(
+            src.task_id == models.Task.id,
+            models.Task.volunteer_user_id.isnot(None),
+            or_(models.Task.assigned_at.is_(None), src.created_at >= models.Task.assigned_at),
+        )
+        .order_by(src.created_at.desc(), src.id.desc())
+        .limit(1)
+        .correlate(models.Task)
+        .scalar_subquery()
+    )
+
+
+def _picklist_sort_col(field_key: str, column):
+    """fixes109: `column` of the task's value for picklist `field_key`."""
+    return (
+        select(func.min(column))
+        .select_from(models.PicklistLink)
+        .join(
+            models.PicklistDefinition,
+            models.PicklistDefinition.id == models.PicklistLink.picklist_definition_id,
+        )
+        .join(models.PicklistValue, models.PicklistValue.id == models.PicklistLink.picklist_value_id)
+        .where(
+            models.PicklistLink.entity_table == "tasks",
+            models.PicklistLink.entity_id == models.Task.id,
+            models.PicklistDefinition.system_name == field_key,
+        )
+        .correlate(models.Task)
+        .scalar_subquery()
+    )
+
+
+def _apply_task_sort(query, db: Session, org_id: int, sort: str, direction: str):
+    """fixes109: ORDER BY for every column the tasks grid shows — the fixed
+    columns plus `pl:<field_key>` / `cf:<field_key>` custom task fields.
+    Blank values sort last either way; Task.id breaks ties so pagination is
+    stable. An unknown key (e.g. a saved sort on a since-deleted field)
+    falls back to the creation date."""
+    cols: list = []
+    if sort == "id":
+        cols = [models.Task.id]
+    elif sort == "volunteer_name":
+        cols = [models.User.full_name]
+    elif sort == "campaign":
+        cols = [models.Campaign.name]
+    elif sort == "status":
+        cols = [case(_STATUS_SORT_ORDER, value=models.Task.status, else_=len(_STATUS_SORT_ORDER))]
+    elif sort == "report_status":
+        cols = [_latest_report_sort_col(models.ShliachReportCompletion.status)]
+    elif sort == "report_notes":
+        cols = [_latest_report_sort_col(models.ShliachReportCompletion.comments)]
+    elif sort == "custom_date":
+        cd = aliased(models.PicklistValue)
+        query = query.outerjoin(cd, cd.id == models.Task.custom_date_value_id)
+        cols = [cd.sort_order, cd.value]
+    elif sort == "apartment_count":
+        cols = [
+            select(func.count(models.Apartment.id))
+            .select_from(models.TaskReportNumber)
+            .join(
+                models.Apartment,
+                models.Apartment.report_number_id == models.TaskReportNumber.report_number_id,
+            )
+            .where(
+                models.TaskReportNumber.task_id == models.Task.id,
+                models.Apartment.is_display.is_(True),
+            )
+            .correlate(models.Task)
+            .scalar_subquery()
+        ]
+    elif sort == "scheduled_at":
+        cols = [models.Task.scheduled_at]
+    elif sort == "report_number":
+        # Lexicographic, not natural-numeric, sort — report numbers are
+        # numeric strings ("10" before "2" is a known, cosmetic limitation
+        # here; the Report Numbers page's own list does natural sort
+        # client-side because it's small/unpaginated, which a server-side
+        # paginated ORDER BY can't replicate without a dedicated collation).
+        min_rn_subq = (
+            db.query(
+                models.TaskReportNumber.task_id.label("task_id"),
+                func.min(models.ReportNumber.name).label("min_name"),
+            )
+            .join(
+                models.ReportNumber,
+                models.ReportNumber.id == models.TaskReportNumber.report_number_id,
+            )
+            .group_by(models.TaskReportNumber.task_id)
+            .subquery()
+        )
+        query = query.outerjoin(min_rn_subq, min_rn_subq.c.task_id == models.Task.id)
+        cols = [min_rn_subq.c.min_name]
+    elif sort.startswith("pl:"):
+        field_key = sort[3:]
+        cols = [
+            _picklist_sort_col(field_key, models.PicklistValue.sort_order),
+            _picklist_sort_col(field_key, models.PicklistValue.value),
+        ]
+    elif sort.startswith("cf:"):
+        definition = (
+            db.query(models.CustomFieldDefinition)
+            .filter(
+                models.CustomFieldDefinition.organization_id == org_id,
+                models.CustomFieldDefinition.entity_type == "task",
+                models.CustomFieldDefinition.field_key == sort[3:],
+                models.CustomFieldDefinition.field_type != "select",
+            )
+            .first()
+        )
+        if definition is not None:
+            cfv = models.CustomFieldValue
+            value_col = {
+                "boolean": cfv.checked,
+                "number": cast(cfv.value, Float),
+            }.get(definition.field_type, cfv.value)
+            cols = [
+                select(value_col)
+                .where(
+                    cfv.entity_table == custom_field_utils.storage_table("task"),
+                    cfv.entity_id == models.Task.id,
+                    cfv.definition_id == definition.id,
+                )
+                .limit(1)
+                .correlate(models.Task)
+                .scalar_subquery()
+            ]
+    if not cols:
+        cols = [models.Task.created_at]
+    desc = direction == "desc"
+    order = [(c.desc() if desc else c.asc()).nulls_last() for c in cols]
+    order.append(models.Task.id.desc() if desc else models.Task.id.asc())
+    return query.order_by(*order)
+
+
 @router.get("/list", response_model=TaskPageOut)
 def list_tasks(
     status_filter: Optional[list[str]] = Query(None, alias="status"),
@@ -308,7 +454,8 @@ def list_tasks(
     # fixes104 §2: "field_key:value" pairs, same format as the apartments list.
     picklist: Optional[list[str]] = Query(None),
     custom_field_filter: Optional[list[str]] = Query(None),
-    sort: Literal["volunteer_name", "created_at", "report_number"] = "created_at",
+    # fixes109: any displayed column — see _apply_task_sort.
+    sort: str = "created_at",
     dir: Literal["asc", "desc"] = "desc",
     page: int = Query(1, ge=1),
     page_size: int = Query(20),
@@ -369,32 +516,7 @@ def list_tasks(
 
     total = query.count()
 
-    if sort == "volunteer_name":
-        order_col = models.User.full_name
-    elif sort == "report_number":
-        # Lexicographic, not natural-numeric, sort — report numbers are
-        # numeric strings ("10" before "2" is a known, cosmetic limitation
-        # here; the Report Numbers page's own list does natural sort
-        # client-side because it's small/unpaginated, which a server-side
-        # paginated ORDER BY can't replicate without a dedicated collation).
-        min_rn_subq = (
-            db.query(
-                models.TaskReportNumber.task_id.label("task_id"),
-                func.min(models.ReportNumber.name).label("min_name"),
-            )
-            .join(
-                models.ReportNumber,
-                models.ReportNumber.id == models.TaskReportNumber.report_number_id,
-            )
-            .group_by(models.TaskReportNumber.task_id)
-            .subquery()
-        )
-        query = query.outerjoin(min_rn_subq, min_rn_subq.c.task_id == models.Task.id)
-        order_col = min_rn_subq.c.min_name
-    else:
-        order_col = models.Task.created_at
-
-    query = query.order_by(order_col.desc() if dir == "desc" else order_col.asc())
+    query = _apply_task_sort(query, db, org_id, sort, dir)
     rows = query.offset((page - 1) * page_size).limit(page_size).all()
 
     rn_by_task = _report_numbers_by_task(db, [t.id for t in rows])
@@ -586,6 +708,7 @@ def create_task(
         payload.volunteer_report_summary,
         payload.report_number_ids,
         task_text=task_text,
+        scheduled_at=payload.scheduled_at,
     )
     _apply_custom_values(
         db, org_id, task.id, payload.picklist_values or {}, payload.custom_field_values or {},
@@ -606,6 +729,7 @@ def _new_task(
     summary: Optional[str],
     report_number_ids: list[int],
     task_text: Optional[str] = None,
+    scheduled_at: Optional[datetime.datetime] = None,
 ) -> models.Task:
     """Add one task + its report numbers (no commit). fixes74 §2: without an
     activist a new task is AVAILABLE, never ACTIVE ("taken"); picking one at
@@ -619,6 +743,7 @@ def _new_task(
         status=task_status,
         volunteer_report_summary=summary,
         task_text=task_text,
+        scheduled_at=scheduled_at,
     )
     if volunteer_user_id is not None:
         assign(task, volunteer_user_id, "manual")
@@ -824,6 +949,7 @@ def create_bulk_tasks(
             payload.status,
             None,
             [rn_id],
+            scheduled_at=payload.scheduled_at,
         )
         _apply_custom_values(
             db, org_id, task.id, payload.picklist_values or {}, payload.custom_field_values or {},
@@ -881,6 +1007,8 @@ def update_task(
                     status.HTTP_400_BAD_REQUEST, "custom_date_value_id does not exist"
                 )
         task.custom_date_value_id = data["custom_date_value_id"]
+    if "scheduled_at" in data:  # fixes109
+        task.scheduled_at = data["scheduled_at"]
     # fixes65 §4: an admin assigning (or reassigning) the task by hand. An
     # explicit null is ignored here — unassign has its own endpoint, which
     # also clears the claim audit. fixes74 §4: recorded as a manual

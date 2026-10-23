@@ -20,6 +20,7 @@ import { useFieldSettings } from "@/lib/fieldSettings";
 import { useLocalization } from "@/lib/localization";
 import { usePicklist } from "@/lib/picklists";
 import { TaskCustomFieldEditor, useTaskCustomFields, useTaskSheetFacts } from "@/lib/taskCustomFields";
+import { formatWallDateTime, toDateTimeLocalInput } from "@/lib/taskDateTime";
 import { printTaskSheet } from "@/lib/taskPrint";
 import { useTaskSheetCatalog, useTaskSheetFields } from "@/lib/taskSheetFields";
 import { taskApartmentsHref, taskStatusLabels, taskStatusOptionsFor } from "@/lib/taskStatus";
@@ -363,6 +364,22 @@ export default function TaskDetailPage() {
             />
           </Field>
           )}
+
+          <Field label={t("task.scheduled_at", "תאריך ושעה")}>
+            <InlineEdit<string>
+              value={toDateTimeLocalInput(task.scheduled_at)}
+              display={<span className="tabular-nums">{formatWallDateTime(task.scheduled_at)}</span>}
+              onSave={(v) => patch({ scheduled_at: v || null })}
+              editor={(draft, setDraft) => (
+                <input
+                  type="datetime-local"
+                  className={inputClass}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                />
+              )}
+            />
+          </Field>
 
           <Field label={t("task.status", "סטטוס")}>
             <InlineEdit<TaskStatus>

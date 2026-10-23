@@ -645,6 +645,9 @@ class Task(Base):
     # fixes98: a "text task" — free-text instructions instead of report
     # numbers (such a task has no TaskReportNumber rows / apartments).
     task_text = Column(Text, nullable=True)
+    # fixes109: the task's date & time (set when adding it; wall-clock time
+    # as typed, no timezone — same as every other DateTime column here).
+    scheduled_at = Column(DateTime, nullable=True)
     # fixes65 §4 claim audit: when/how the task left the orphan pool —
     # 'qr' (scanned printout), 'paper' (office entered the paper sheet; locks
     # the task even with no registered performer), fixes74 §4 'manual' (an

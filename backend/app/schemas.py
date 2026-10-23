@@ -1928,6 +1928,8 @@ class TaskCreate(BaseModel):
     # fixes65 §2: None = "Assign Later" — the task enters the orphan pool.
     volunteer_user_id: Optional[int] = None
     custom_date_value_id: Optional[int] = None
+    # fixes109: the task's date & time.
+    scheduled_at: Optional[datetime] = None
     report_number_ids: list[int] = []
     status: TaskStatus = "ACTIVE"
     volunteer_report_summary: Optional[str] = None
@@ -2002,6 +2004,7 @@ class TaskBulkCreate(BaseModel):
     report_number_ids: list[int]
     volunteer_user_id: Optional[int] = None
     custom_date_value_id: Optional[int] = None
+    scheduled_at: Optional[datetime] = None  # fixes109
     status: TaskStatus = "ACTIVE"
     # False = refuse (409) when any number is already in a task of this
     # campaign; True = create the rest and skip those.
@@ -2021,6 +2024,7 @@ class TaskUpdate(BaseModel):
     # fixes65 §4: assign an orphan / reassign (unassign has its own endpoint).
     volunteer_user_id: Optional[int] = None
     custom_date_value_id: Optional[int] = None
+    scheduled_at: Optional[datetime] = None  # fixes109
     report_number_ids: Optional[list[int]] = None
     status: Optional[TaskStatus] = None
     volunteer_report_summary: Optional[str] = None
@@ -2045,6 +2049,7 @@ class TaskOut(BaseModel):
     # picklist-backed field's API shape — the frontend resolves the bilingual
     # label via usePicklist("task.custom_date").display(...).
     custom_date_value: Optional[str] = None
+    scheduled_at: Optional[datetime] = None  # fixes109
     report_number_ids: list[int] = []
     report_number_names: list[str] = []
     task_text: Optional[str] = None
