@@ -1,15 +1,20 @@
 """Organization (tenant) settings — read for any member, edit for admins."""
+import logging
+
+import requests
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app import models
 from app.core import cloudinary_assets
+from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user, require_admin
-from app.schemas import OrganizationOut, OrganizationUpdate
+from app.schemas import OrganizationOut, OrganizationUpdate, PublicImageSearchRequest
 from app.core.errors import api_error
 
 router = APIRouter(prefix="/api/organizations", tags=["organizations"])
+logger = logging.getLogger("app.organizations")
 
 MAX_GALLERY_IMAGES = 24
 
@@ -140,3 +145,92 @@ def update_my_org(
     if removed:
         background.add_task(cloudinary_assets.delete_images, removed)
     return org
+
+
+# fixes110: web image search for the public-page gallery. The admin's org is
+# read only for context (404 guard) — the query itself is free text.
+@router.post("/public-image-search")
+def public_image_search(
+    payload: PublicImageSearchRequest,
+    db: Session = Depends(get_db),
+    admin: models.User = Depends(require_admin),
+) -> dict:
+    """Search the web for images (Google Programmable Search, searchType=image)
+    that the admin can import into the org's public landing-page gallery via
+    /api/uploads/gallery-image-url. 503 when the Google keys aren't configured."""
+    org = db.get(models.Organization, admin.organization_id)
+    if not org:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Organization not found")
+    query = payload.query.strip()
+    if not query:
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "error.image_search_query_required",
+            "Image search query is required",
+        )
+    if not settings.google_search_api_key or not settings.google_search_cx:
+        raise api_error(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "error.image_search_not_configured",
+            "Image search is not configured (GOOGLE_SEARCH_API_KEY/GOOGLE_SEARCH_CX missing)",
+        )
+    try:
+        resp = requests.get(
+            "https://www.googleapis.com/customsearch/v1",
+            params={
+                "key": settings.google_search_api_key,
+                "cx": settings.google_search_cx,
+                "q": query,
+                "searchType": "image",
+                "num": payload.count,
+                "safe": "active",
+            },
+            timeout=15,
+        )
+    except requests.RequestException:
+        logger.warning("Google image search unreachable")
+        raise api_error(
+            status.HTTP_502_BAD_GATEWAY,
+            "error.image_search_upstream",
+            "Image search service returned an error: {detail}",
+            detail="unreachable",
+        )
+    if resp.status_code != 200:
+        # Safe subset of the upstream error body: the message string only,
+        # capped — never echo the raw payload back to the client.
+        detail = ""
+        try:
+            message = resp.json().get("error", {}).get("message")
+            if isinstance(message, str):
+                detail = message[:200]
+        except ValueError:
+            pass
+        raise api_error(
+            status.HTTP_502_BAD_GATEWAY,
+            "error.image_search_upstream",
+            "Image search service returned an error: {detail}",
+            detail=detail or f"HTTP {resp.status_code}",
+        )
+    try:
+        data = resp.json()
+    except ValueError:
+        data = {}
+    results = []
+    for item in data.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+        image = item.get("image") or {}
+        url = item.get("link")
+        thumbnail = image.get("thumbnailLink")
+        if not url or not thumbnail:
+            continue
+        results.append(
+            {
+                "url": url,
+                "thumbnail": thumbnail,
+                "width": image.get("width"),
+                "height": image.get("height"),
+                "title": item.get("title") or "",
+            }
+        )
+    return {"results": results}

@@ -14,17 +14,22 @@ served at /uploads/*) and the absolute local URL is returned — so branding
 keeps working without external storage.
 """
 import hashlib
+import ipaddress
 import logging
 import os
+import socket
 import time
 import uuid
+from urllib.parse import urlsplit
 
 import requests
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 
 from app import models
 from app.config import settings
+from app.core.errors import api_error
 from app.deps import require_admin
+from app.schemas import GalleryImageUrlRequest
 
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 logger = logging.getLogger("app.uploads")
@@ -257,21 +262,106 @@ async def upload_gallery_image(
     return await _upload_org_image(request, file, admin.organization_id, "gallery")
 
 
-async def _upload_org_image(
-    request: Request, file: UploadFile, org_id: int, kind: str
+@router.post("/gallery-image-url")
+def upload_gallery_image_url(
+    request: Request,
+    payload: GalleryImageUrlRequest,
+    admin: models.User = Depends(require_admin),
 ) -> dict:
-    content_type = file.content_type or ""
-    if content_type not in _IMAGE_EXTENSIONS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="File must be an image"
-        )
-    data = await file.read()
-    if len(data) > MAX_LOGO_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="Image too large (max 5MB)",
-        )
+    """fixes110: import a gallery photo from an external URL — downloaded
+    server-side (SSRF-guarded, same type/size allowlist as a file upload) and
+    pushed through the same Cloudinary/local pipeline as /gallery-image, so
+    the gallery stores our own URLs and never hotlinks the source site."""
+    data, content_type = _download_image(payload.url)
+    return _store_org_image(request, data, content_type, admin.organization_id, "gallery")
 
+
+def _is_public_host(hostname: str) -> bool:
+    """SSRF guard for _download_image: every address the hostname resolves to
+    must be a globally-routable IP — loopback/private/link-local/reserved are
+    refused, as are literal non-public IP hostnames (no DNS lookup for those).
+    A hostname that doesn't resolve at all is refused too."""
+    try:
+        ips = [ipaddress.ip_address(hostname)]
+    except ValueError:
+        try:
+            infos = socket.getaddrinfo(hostname, None)
+        except socket.gaierror:
+            return False
+        ips = [ipaddress.ip_address(info[4][0]) for info in infos]
+        if not ips:
+            return False
+    return all(ip.is_global for ip in ips)
+
+
+def _download_image(url: str) -> tuple[bytes, str]:
+    """Fetch an image by URL for /gallery-image-url. http/https only, public
+    hosts only, the _IMAGE_EXTENSIONS allowlist and the 5 MB cap from the file
+    upload path — the bytes that come back are stored exactly like an uploaded
+    file. Raises HTTPException on any rejection."""
+    parsed = urlsplit(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "error.image_url_not_allowed",
+            "Image URL is not allowed",
+        )
+    if not _is_public_host(parsed.hostname):
+        raise api_error(
+            status.HTTP_400_BAD_REQUEST,
+            "error.image_url_not_allowed",
+            "Image URL is not allowed",
+        )
+    try:
+        resp = requests.get(url, timeout=(5, 20), stream=True)
+    except requests.RequestException:
+        logger.warning("Gallery image download failed: %s", url)
+        raise api_error(
+            status.HTTP_502_BAD_GATEWAY,
+            "error.image_download_failed",
+            "Failed to download the image",
+        )
+    with resp:
+        if resp.status_code != 200:
+            logger.warning(
+                "Gallery image download returned %s: %s", resp.status_code, url
+            )
+            raise api_error(
+                status.HTTP_502_BAD_GATEWAY,
+                "error.image_download_failed",
+                "Failed to download the image",
+            )
+        content_length = resp.headers.get("Content-Length", "")
+        if content_length.isdigit() and int(content_length) > MAX_LOGO_BYTES:
+            raise HTTPException(
+                status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Image too large (max 5MB)"
+            )
+        content_type = (resp.headers.get("Content-Type") or "").split(";")[0].strip()
+        if content_type not in _IMAGE_EXTENSIONS:
+            raise api_error(
+                status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                "error.image_url_not_image",
+                "URL must point to an image",
+            )
+        chunks: list[bytes] = []
+        total = 0
+        for chunk in resp.iter_content(chunk_size=65536):
+            chunks.append(chunk)
+            total += len(chunk)
+            if total > MAX_LOGO_BYTES:
+                raise HTTPException(
+                    status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Image too large (max 5MB)"
+                )
+    return b"".join(chunks), content_type
+
+
+def _store_org_image(
+    request: Request, data: bytes, content_type: str, org_id: int, kind: str
+) -> dict:
+    """Store already-validated image bytes org-scoped: Cloudinary first (when
+    configured), the local static uploads directory as the fallback
+    (fixes25 §6). Shared by the UploadFile endpoints and the fixes110 URL
+    import, so both paths produce the same kind of URL."""
     if not settings.cloudinary_configured:
         return {
             "url": _save_announcement_image_locally(data, content_type, request, org_id, kind)
@@ -290,7 +380,7 @@ async def _upload_org_image(
                 "folder": folder,
                 "signature": signature,
             },
-            files={"file": (file.filename or "image", data, file.content_type)},
+            files={"file": (f"{kind}-image", data, content_type)},
             timeout=30,
         )
     except requests.RequestException:
@@ -310,3 +400,20 @@ async def _upload_org_image(
             "url": _save_announcement_image_locally(data, content_type, request, org_id, kind)
         }
     return {"url": resp.json()["secure_url"]}
+
+
+async def _upload_org_image(
+    request: Request, file: UploadFile, org_id: int, kind: str
+) -> dict:
+    content_type = file.content_type or ""
+    if content_type not in _IMAGE_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="File must be an image"
+        )
+    data = await file.read()
+    if len(data) > MAX_LOGO_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Image too large (max 5MB)",
+        )
+    return _store_org_image(request, data, content_type, org_id, kind)

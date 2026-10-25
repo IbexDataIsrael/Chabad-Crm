@@ -1,11 +1,12 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ExternalLink, ImagePlus, Loader2, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ExternalLink, ImagePlus, Loader2, Search, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { GalleryImageSearchDialog } from "@/components/GalleryImageSearchDialog";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { apiFetch, ApiError, uploadGalleryImage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -14,6 +15,8 @@ import { useToast } from "@/lib/toast";
 import type { OrgDetails } from "@/lib/types";
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,78}[a-z0-9])?$/;
+// Mirrors the backend's MAX_GALLERY_IMAGES (routers/organizations.py).
+const MAX_GALLERY_IMAGES = 24;
 
 /** fixes65 §1: the org's branded public page — address (slug), subtitle,
  *  photo gallery and the self-registration switch, all editable without a
@@ -32,6 +35,8 @@ export function PublicPageSettingsCard() {
   const [uploading, setUploading] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [orgName, setOrgName] = useState(""); // fixes110: default web-search query
+  const [searchOpen, setSearchOpen] = useState(false); // fixes110: image search dialog
   const fileRef = useRef<HTMLInputElement>(null);
   // Live uniqueness check of the address against every other org.
   const [slugStatus, setSlugStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
@@ -62,6 +67,7 @@ export function PublicPageSettingsCard() {
   useEffect(() => {
     apiFetch<OrgDetails>("/api/organizations/me")
       .then((o) => {
+        setOrgName(o.name ?? "");
         setSlug(o.slug ?? "");
         setSavedSlug(o.slug ?? null);
         setSubtitle(o.public_subtitle ?? "");
@@ -286,6 +292,23 @@ export function PublicPageSettingsCard() {
             {uploading > 0 ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
             {t("public_settings.add_photos", "הוספת תמונות")}
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="ms-2"
+            onClick={() => setSearchOpen(true)}
+            disabled={gallery.length >= MAX_GALLERY_IMAGES}
+          >
+            <Search className="h-4 w-4" />
+            {t("public_settings.search_photos", "חיפוש תמונות ברשת")}
+          </Button>
+          <GalleryImageSearchDialog
+            open={searchOpen}
+            onClose={() => setSearchOpen(false)}
+            defaultQuery={orgName}
+            existingUrls={gallery}
+            onImported={(urls) => setGallery((g) => [...g, ...urls])}
+          />
           <p className="text-xs text-muted-foreground">
             {t("public_settings.gallery_hint", "התמונה הראשונה היא תמונת הפתיחה. עד 24 תמונות.")}
           </p>

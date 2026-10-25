@@ -637,6 +637,17 @@ export interface PublicOrg {
 
 export type ClaimState = "available" | "claimed" | "yours" | "taken" | "invalid";
 
+/** fixes110: one candidate from the public-page gallery's web image search
+ *  (POST /api/organizations/public-image-search) — `url` is the full-size
+ *  source the backend re-imports, `thumbnail` is what the picker previews. */
+export interface PublicImageSearchResult {
+  url: string;
+  thumbnail: string;
+  width: number | null;
+  height: number | null;
+  title: string;
+}
+
 export interface ClaimInfo {
   state: ClaimState;
   organization_id: number | null;

@@ -226,6 +226,31 @@ CODED_ERRORS: dict[str, tuple[str, str]] = {
         "כתובת אימייל זו כבר משויכת לפעיל אחר בארגון: {name} (#{id})",
     ),
     "error.clone_failed": ("Clone failed: {reason}", "השכפול נכשל: {reason}"),
+    # fixes110: web image search for the public-page gallery + import-by-URL.
+    "error.image_search_not_configured": (
+        "Image search is not configured (GOOGLE_SEARCH_API_KEY/GOOGLE_SEARCH_CX missing)",
+        "חיפוש התמונות אינו מוגדר בשרת (חסרים GOOGLE_SEARCH_API_KEY / GOOGLE_SEARCH_CX)",
+    ),
+    "error.image_search_query_required": (
+        "Image search query is required",
+        "יש להזין מילות חיפוש לתמונות",
+    ),
+    "error.image_search_upstream": (
+        "Image search service returned an error: {detail}",
+        "שירות חיפוש התמונות החזיר שגיאה: {detail}",
+    ),
+    "error.image_url_not_allowed": (
+        "Image URL is not allowed",
+        "כתובת התמונה אינה מורשית",
+    ),
+    "error.image_url_not_image": (
+        "URL must point to an image",
+        "הכתובת חייבת להצביע לתמונה",
+    ),
+    "error.image_download_failed": (
+        "Failed to download the image",
+        "הורדת התמונה נכשלה",
+    ),
 }
 
 

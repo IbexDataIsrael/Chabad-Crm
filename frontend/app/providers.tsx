@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 
+import { AiHelperWidget } from "@/components/ai-helper/AiHelperWidget";
 import { ClientErrorReporter } from "@/components/ClientErrorReporter";
 import { TitleManager } from "@/components/TitleManager";
 import { AuthProvider } from "@/lib/auth";
@@ -16,6 +17,7 @@ export function Providers({ children }: { children: ReactNode }) {
       <ClientErrorReporter />
       <TitleManager />
       <LocalizationProvider>
+        <AiHelperWidget />
         <ToastProvider>
           <ConfirmProvider>
             <FieldSettingsProvider>{children}</FieldSettingsProvider>

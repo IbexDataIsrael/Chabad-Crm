@@ -19,6 +19,11 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       # Anthropic (NL query → data grid, /api/ai/query). Set in root .env.
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # Google Programmable Search — web image search for the public-page
+      # gallery (/api/organizations/public-image-search). Set in root .env;
+      # when unset the endpoint answers 503 and the UI shows a fallback.
+      - GOOGLE_SEARCH_API_KEY=${GOOGLE_SEARCH_API_KEY:-}
+      - GOOGLE_SEARCH_CX=${GOOGLE_SEARCH_CX:-}
       # fixes103: all email goes through the email-service microservice
       # running on the host at :8000. Inside this container "localhost" is the
       # container itself, so the URL points at the host instead (the root

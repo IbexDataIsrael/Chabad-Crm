@@ -5,6 +5,7 @@ const TOKEN_KEY = "crm_token";
 
 import { localizeError } from "@/lib/errorText";
 import { RequestTimeoutError, fetchWithPolicy } from "@/lib/fetchPolicy";
+import type { PublicImageSearchResult } from "@/lib/types";
 
 export class ApiError extends Error {
   status: number;
@@ -638,4 +639,29 @@ export async function uploadGalleryImage(file: File): Promise<string> {
   }
   const data = await res.json();
   return data.url as string;
+}
+
+/** fixes110: search the web for images to import into the org's public-page
+ * gallery (admin-only backend endpoint, JSON body — goes through apiFetch so
+ * errors arrive localized; 503 when the server lacks the Google search keys). */
+export async function searchPublicImages(
+  query: string,
+  count = 7,
+): Promise<PublicImageSearchResult[]> {
+  const data = await apiFetch<{ results: PublicImageSearchResult[] }>(
+    "/api/organizations/public-image-search",
+    { method: "POST", body: JSON.stringify({ query, count }) },
+  );
+  return data.results;
+}
+
+/** fixes110: import a gallery photo from an external URL — the backend
+ * downloads it (SSRF-guarded) and stores it through the same pipeline as
+ * uploadGalleryImage, returning our own URL. */
+export async function importGalleryImage(url: string): Promise<string> {
+  const data = await apiFetch<{ url: string }>("/api/uploads/gallery-image-url", {
+    method: "POST",
+    body: JSON.stringify({ url }),
+  });
+  return data.url;
 }

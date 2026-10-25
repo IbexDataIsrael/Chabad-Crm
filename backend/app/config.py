@@ -96,6 +96,13 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-5"
 
+    # Google Programmable Search (Custom Search API, searchType=image) —
+    # powers the public-page gallery's "search the web for images" feature
+    # (/api/organizations/public-image-search). When either is empty that
+    # endpoint returns 503 and the UI shows a fallback message.
+    google_search_api_key: str = ""
+    google_search_cx: str = ""
+
     # Reminder scheduler: how often (seconds) to scan for due significant-date reminders.
     reminder_scan_interval_seconds: int = 300
 

@@ -131,6 +131,31 @@ class OrganizationUpdate(BaseModel):
         return v
 
 
+# fixes110: web image search for the public-page gallery — free text, the
+# org is resolved server-side from the admin's JWT. An empty/whitespace query
+# is rejected in the router (400 error.image_search_not_configured's sibling)
+# so the count stays the only schema-level rule.
+class PublicImageSearchRequest(BaseModel):
+    query: str
+    count: int = 7
+
+    @field_validator("count")
+    @classmethod
+    def _clamp_count(cls, v: int) -> int:
+        # Google caps num at 10 anyway; clamp instead of rejecting so a stale
+        # client with a bigger default keeps working.
+        return max(1, min(10, v))
+
+
+class GalleryImageUrlRequest(BaseModel):
+    """fixes110: import a public-gallery photo from an external URL — the
+    backend downloads it (SSRF-guarded) and pushes it through the same
+    Cloudinary/local pipeline as a file upload. The URL itself is validated
+    in the router (scheme + SSRF guard)."""
+
+    url: str
+
+
 class ShliachData(BaseModel):
     notes: Optional[str] = None
     # fixes19: shluchim are associated with report numbers (the apartment
