@@ -11,13 +11,17 @@ import { FieldSettingsProvider } from "@/lib/fieldSettings";
 import { LocalizationProvider } from "@/lib/localization";
 import { ToastProvider } from "@/lib/toast";
 
+// The AI helper popup isn't connected yet — hidden unless explicitly turned on
+// (NEXT_PUBLIC_AI_HELPER_ENABLED=true, read at build time).
+const AI_HELPER_ENABLED = process.env.NEXT_PUBLIC_AI_HELPER_ENABLED === "true";
+
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <AuthProvider>
       <ClientErrorReporter />
       <TitleManager />
       <LocalizationProvider>
-        <AiHelperWidget />
+        {AI_HELPER_ENABLED && <AiHelperWidget />}
         <ToastProvider>
           <ConfirmProvider>
             <FieldSettingsProvider>{children}</FieldSettingsProvider>
