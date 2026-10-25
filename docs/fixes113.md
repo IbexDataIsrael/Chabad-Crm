@@ -18,7 +18,7 @@ Stop for review. No commit, no push.
 
 # Closeout (2026-10-25)
 
-Status: **done locally. Not committed, not pushed.** Backend only: no popup, LLM, deployment or live CRM requests.
+Status: **done, committed a4175b5. Not pushed.** Backend only: no popup, LLM, deployment or live CRM requests.
 
 ## Changed files
 - `backend/app/routers/assistant.py` (new): `POST /api/assistant/proposals`, `POST /api/assistant/proposals/{id}/confirm`
