@@ -1734,6 +1734,10 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("action", "contacts.approve", "אישור", "Approve"),
     ("msg", "msg.contact_approved", "איש הקשר אושר", "Contact approved"),
     ("msg", "msg.contact_approve_failed", "אישור איש הקשר נכשל", "Approving the contact failed"),
+    ("action", "contacts.deny", "דחייה", "Deny"),
+    ("page", "contacts.deny_confirm", "לדחות את איש הקשר? הוא יימחק ולא יתווסף לרשימת אנשי הקשר.", "Deny this contact? It will be deleted and won't be added to your contacts."),
+    ("msg", "msg.contact_denied", "איש הקשר נדחה", "Contact denied"),
+    ("msg", "msg.contact_deny_failed", "דחיית איש הקשר נכשלה", "Denying the contact failed"),
     # Global search: users (login accounts) group.
     ("search", "search.group.users", "משתמשים", "Users"),
     # apt.contact was already referenced by ApartmentDetailPage's t() call with

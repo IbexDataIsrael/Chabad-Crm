@@ -45,7 +45,7 @@ Every contact has two server-set fields:
 
 - This API **always** creates `source="instinct"`, `status="draft"`. Any `source`/`status` in the request body is ignored.
 - Contacts created in the normal UI are always `source="crm"`, `status="active"`.
-- Drafts are **not** in the regular contacts list (or the bulk-email / bulk-update sets). The contacts page shows them in a separate "Pending approval" (ממתינים לאישור) section, each with a Draft badge and an Approve button.
+- Drafts are **not** in the regular contacts list (or the bulk-email / bulk-update sets). The contacts page shows them in a separate "Pending approval" (ממתינים לאישור) section, each with a Draft badge, an Approve button, and a Deny button (`POST /api/contacts/{id}/deny`, after a confirm; it deletes the draft and is a 409 on an already-active contact).
 - Approving: `POST /api/contacts/{id}/approve` (regular CRM JWT, admin or staff) sets `status="active"`, which moves the contact into the main list. Idempotent.
 - Listing drafts: `GET /api/contacts/list?status=draft` (default `status=active`).
 

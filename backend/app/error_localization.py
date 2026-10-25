@@ -86,6 +86,7 @@ PLAIN_ERRORS: list[tuple[str, str]] = [
     ("Not your apartment", "הדירה אינה משויכת אליך"),
     ("Only an activist can submit this", "רק פעיל יכול לשלוח את זה"),
     ("Only an activist's own app syncs", "רק האפליקציה של הפעיל עצמו מסתנכרנת"),
+    ("Only contacts pending approval can be denied", "ניתן לדחות רק אנשי קשר שממתינים לאישור"),
     ("Organization is required", "יש לבחור ארגון"),
     ("Organization not found", "הארגון לא נמצא"),
     ("Page not found", "הדף לא נמצא"),

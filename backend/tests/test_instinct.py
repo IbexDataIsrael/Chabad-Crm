@@ -116,3 +116,22 @@ def test_approve_flips_draft_to_active(client, org_id, admin_headers):
     assert cid not in _list_ids(client, admin_headers, status="draft")
     # Idempotent.
     assert client.post(f"/api/contacts/{cid}/approve", headers=admin_headers).status_code == 200
+
+
+def test_deny_deletes_draft_but_never_an_active_contact(client, org_id, admin_headers):
+    cid = client.post(
+        "/api/instinct/contacts", headers=KEY, json={"first_name": "Denied", "last_name": "Doe"}
+    ).json()["id"]
+
+    r = client.post(f"/api/contacts/{cid}/deny", headers=admin_headers)
+    assert r.status_code == 204, r.text
+    assert cid not in _list_ids(client, admin_headers, status="draft")
+    assert client.get(f"/api/contacts/{cid}", headers=admin_headers).status_code == 404
+
+    # An approved (active) contact can't be denied — no back-door delete.
+    aid = client.post(
+        "/api/instinct/contacts", headers=KEY, json={"first_name": "Kept", "last_name": "Doe"}
+    ).json()["id"]
+    client.post(f"/api/contacts/{aid}/approve", headers=admin_headers)
+    assert client.post(f"/api/contacts/{aid}/deny", headers=admin_headers).status_code == 409
+    assert aid in _list_ids(client, admin_headers)

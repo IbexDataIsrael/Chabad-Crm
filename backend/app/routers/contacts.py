@@ -1342,6 +1342,25 @@ def approve_contact(
     return _build_detail(contact, db)
 
 
+@router.post("/{contact_id}/deny", status_code=status.HTTP_204_NO_CONTENT)
+def deny_contact(
+    contact_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(require_staff_or_admin),
+):
+    """Deny an Instinct draft: it never became a real contact, so it's
+    deleted outright (a kept "rejected" row would still match Instinct's
+    duplicate search). Drafts only — an active contact is a 409, so this
+    can't be used as a back-door delete."""
+    contact = _get_contact_or_404(contact_id, current_user, db)
+    if contact.status != "draft":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Only contacts pending approval can be denied"
+        )
+    _delete_contact_rows(contact, db)
+    db.commit()
+
+
 @router.get("/{contact_id}", response_model=ContactDetailOut)
 def get_contact(
     contact_id: int,
@@ -1631,6 +1650,11 @@ def delete_contact(
     current_user: models.User = Depends(get_current_user),
 ):
     contact = _get_contact_or_404(contact_id, current_user, db)
+    _delete_contact_rows(contact, db)
+    db.commit()
+
+
+def _delete_contact_rows(contact: models.Contact, db: Session) -> None:
     # fixes32: picklist_links aren't cascade-deleted at the DB level (entity_id
     # isn't a real FK) — clean up the contact's own links plus its mekurav
     # (cascade-deleted with it) and its visits (also cascade-deleted).
@@ -1645,7 +1669,6 @@ def delete_contact(
     # own delete-orphan cascade instead (they still populate visit_id).
     custom_field_utils.delete_values(db, "contacts", contact.id)
     db.delete(contact)
-    db.commit()
 
 
 # fixes25: the checklist + custom-fields sub-resources moved to visits — see
