@@ -74,4 +74,8 @@ def clear_user_references(db: Session, user: models.User, actor: models.User) ->
     db.query(models.StreetActivityEvent).filter(
         models.StreetActivityEvent.user_id == user.id
     ).delete(synchronize_session=False)
+    # fixes113: their assistant proposals (the contacts they created stay).
+    db.query(models.AssistantProposal).filter(
+        models.AssistantProposal.user_id == user.id
+    ).delete(synchronize_session=False)
     db.flush()

@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.database import get_db
-from app.routers.contacts import _check_phone_unique, _geocode_fallback
+from app.core.contact_drafts import create_draft_contact
 
 from .common import (
     active_apartment,
@@ -96,20 +96,8 @@ def create_contact(payload: InstinctContactIn, db: Session = Depends(get_db)):
     }
     if not data["name"]:
         raise unprocessable("first_name is required")
-    if data["phone"]:
-        _check_phone_unique(db, org, data["phone"])
-    _geocode_fallback(data)
 
-    contact = models.Contact(
-        **data,
-        organization_id=org,
-        contact_type="mekurav",
-        source="instinct",
-        status="draft",
-    )
-    db.add(contact)
-    db.flush()
-    db.add(models.ContactMekurav(organization_id=org, contact_id=contact.id))
+    contact = create_draft_contact(db, org, data, source="instinct")
     db.commit()
     db.refresh(contact)
 

@@ -284,6 +284,16 @@ entities that matter for orienting yourself:
   is parked in notes (`contacts.notes`, `visit_history.notes`,
   `apartments.apartment_notes`). Specs: `docs/system_api.md`,
   `docs/system_api_part2.md`.
+- **Assistant actions API** (`backend/app/routers/assistant.py`, no UI yet,
+  fixes113) — JWT-only, user + org from the token, never from the body.
+  `POST /api/assistant/proposals` validates structured contact fields and
+  either answers `needs_information` or stores a pending
+  `assistant_proposals` row (15-min TTL, bound to user + org + exact payload
+  hash) without writing a contact. `POST …/{id}/confirm` rechecks role +
+  validation, claims the proposal with a conditional UPDATE and creates the
+  draft through `core/contact_drafts.create_draft_contact` (shared with the
+  Instinct create) in one transaction; replays return the original contact.
+  `source='assistant'`, `status='draft'`, owned by the confirming user.
 
 ## 6. The activist ("shliach") experience, end to end
 

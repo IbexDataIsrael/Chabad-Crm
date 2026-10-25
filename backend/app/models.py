@@ -1679,3 +1679,34 @@ class OrgBackup(Base):
     counts = Column(Text, nullable=False, default="{}")  # JSON row-count summary
     data = Column(LargeBinary, nullable=False)  # zlib-compressed JSON snapshot
     created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
+
+
+class AssistantProposal(Base):
+    """fixes113: an assistant action waiting for the user's confirmation.
+
+    Creating one never writes the target record. It is bound to the user and
+    organization taken from the JWT, and to the exact canonical `payload`
+    (`payload_hash` covers id + action + org + user + payload). Confirming
+    flips status pending -> executed with a conditional UPDATE in the same
+    transaction that creates the record, so concurrent or retried confirms
+    produce exactly one record; a replay returns `result_contact_id`.
+    Stored in the DB (not memory) so the idempotency record survives
+    restarts and is shared by every worker."""
+
+    __tablename__ = "assistant_proposals"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    action = Column(String(40), nullable=False)  # create_contact_draft
+    payload = Column(Text, nullable=False)  # canonical JSON of the confirmed fields
+    payload_hash = Column(String(64), nullable=False)
+    status = Column(String(20), nullable=False, default="pending")  # pending | executed
+    expires_at = Column(DateTime, nullable=False)
+    # Plain id, no FK: the replay answer keeps the id even if the contact is
+    # later deleted. UNIQUE: one proposal can never own two contacts.
+    result_contact_id = Column(Integer, nullable=True, unique=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    executed_at = Column(DateTime, nullable=True)
