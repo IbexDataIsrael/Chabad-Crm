@@ -48,7 +48,7 @@ export default function CampaignHistoryPageRoute() {
   if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!allowed) {
     return (
-      <p className="text-status-darkred">
+      <p className="text-destructive">
         {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
       </p>
     );
@@ -73,7 +73,7 @@ export default function CampaignHistoryPageRoute() {
         {t("action.back", "← חזרה")}
       </Link>
 
-      <h1 className="text-2xl font-bold">{t("campaign.history", "היסטוריית שינויים")}</h1>
+      <h1 className="font-display text-4xl font-bold">{t("campaign.history", "היסטוריית שינויים")}</h1>
 
       {busy ? (
         <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>

@@ -125,8 +125,8 @@ export function Sidebar({
       <aside
         dir={dir}
         className={cn(
-          "fixed top-0 z-50 flex h-full w-64 flex-col bg-sidebar transition-transform duration-300",
-          isRtl ? "right-0 border-l border-sidebar-border" : "left-0 border-r border-sidebar-border",
+          "fixed top-0 z-50 flex h-full w-64 flex-col border-sidebar-border bg-sidebar/85 backdrop-blur-xl transition-transform duration-300",
+          isRtl ? "right-0 border-l" : "left-0 border-r",
           open
             ? "translate-x-0"
             : isRtl
@@ -146,11 +146,11 @@ export function Sidebar({
               <img
                 src={logoUrl}
                 alt=""
-                className="h-9 w-9 shrink-0 rounded-lg border border-sidebar-border bg-card object-contain"
+                className="h-9 w-9 shrink-0 rounded-lg border border-white/10 bg-card object-contain ring-1 ring-white/5"
               />
             ) : (
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-lg">
-                🏢
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-b from-primary/95 to-primary text-primary-foreground shadow-glow">
+                <Building2 className="h-5 w-5" />
               </span>
             )}
             <span className="min-w-0 flex-1 truncate text-sm font-bold leading-tight text-sidebar-foreground">
@@ -178,7 +178,7 @@ export function Sidebar({
                 {/* An empty label marks an ungrouped item (e.g. Home) that sits
                     above the labeled sections without its own heading. */}
                 {group.label && (
-                  <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
                     {group.label}
                   </p>
                 )}
@@ -194,7 +194,7 @@ export function Sidebar({
                         className={cn(
                           "flex min-h-[44px] items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
                           active
-                            ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md"
+                            ? "bg-gradient-to-b from-primary/95 to-primary text-sidebar-primary-foreground shadow-glow"
                             : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                         )}
                       >

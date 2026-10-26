@@ -83,7 +83,7 @@ export default function EditBuildingPage() {
   return (
     <div className="space-y-5 max-w-3xl">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">
+        <h1 className="font-display text-4xl">
           {t("page.edit_building_full", "עריכת בניין ודירות")} — {buildingDisplayName(building)}
         </h1>
         <Link
@@ -427,7 +427,7 @@ function BuildingApartmentsSection({ building }: { building: Building }) {
   }
 
   return (
-    <section className="bg-card border border-border rounded-xl shadow-sm p-5 space-y-2">
+    <section className="glass-card p-5 space-y-2">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-muted-foreground">{t("apartments", "דירות")}</h2>
         <Link
@@ -474,7 +474,7 @@ function BuildingApartmentsSection({ building }: { building: Building }) {
                 </Link>
                 <button
                   onClick={() => setDeleting(a)}
-                  className="text-xs text-destructive hover:underline"
+                  className="text-xs font-medium text-destructive underline underline-offset-2 hover:opacity-80"
                 >
                   {t("action.delete", "מחק")}
                 </button>

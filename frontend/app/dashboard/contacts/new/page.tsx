@@ -49,7 +49,7 @@ export default function NewContactPage() {
       >
         <ArrowRight className="h-4 w-4" /> {t("page.back_to_contacts", "חזרה לאנשי קשר")}
       </Link>
-      <h1 className="text-2xl font-bold">{t("page.new_contact", "איש קשר חדש")}</h1>
+      <h1 className="font-display text-3xl font-bold tracking-wide">{t("page.new_contact", "איש קשר חדש")}</h1>
 
       {created ? (
         <Card className="p-6 space-y-4">

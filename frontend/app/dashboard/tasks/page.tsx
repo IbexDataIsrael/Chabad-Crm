@@ -650,7 +650,7 @@ export default function TasksPage() {
   if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!isAdmin && !isCampaignManager) {
     return (
-      <p className="text-status-darkred">
+      <p className="text-destructive">
         {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
       </p>
     );
@@ -659,7 +659,7 @@ export default function TasksPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold">{t("page.tasks_title", "משימות")}</h1>
+        <h1 className="font-display text-4xl font-bold">{t("page.tasks_title", "משימות")}</h1>
         <div className="flex flex-wrap items-center gap-2">
           {activeFilterCount > 0 && (
             <Button type="button" variant="outline" onClick={clearAllFilters}>
@@ -716,7 +716,7 @@ export default function TasksPage() {
             if (e.target === e.currentTarget) setMapTaskId(null);
           }}
         >
-          <div role="dialog" aria-modal="true" className="w-full max-w-4xl space-y-3 rounded-xl bg-card p-4 shadow-xl">
+          <div role="dialog" aria-modal="true" className="glass-card w-full max-w-4xl space-y-3 p-4">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-lg font-bold">
                 {t("task.map_title", "מפת משימה #{id}").replace("{id}", String(mapTaskId))}
@@ -737,7 +737,7 @@ export default function TasksPage() {
 
       {/* fixes104 §3: same column chooser as the contacts grid. */}
       {columnsOpen && (
-        <div className="space-y-2 rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="glass-card space-y-2 p-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">{t("columns.title", "עמודות מוצגות")}</h3>
             <button type="button" onClick={resetColumns} className="text-xs text-primary hover:underline">
@@ -849,7 +849,7 @@ export default function TasksPage() {
         </div>
       )}
 
-      <Card className="overflow-x-auto shadow-sm">
+      <Card className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="border-b border-border text-start text-muted-foreground">
             <tr>
@@ -956,7 +956,7 @@ export default function TasksPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="border-status-darkred/40 text-status-darkred hover:bg-status-darkred/10"
+                        className="border-destructive/40 text-destructive hover:bg-destructive/10"
                         aria-label={t("action.delete", "מחק")}
                         onClick={() => remove(task)}
                       >

@@ -52,7 +52,7 @@ export function EmailInput({
         }`}
       />
       {invalid && (
-        <span className="block text-xs text-status-darkred">
+        <span className="block text-xs text-destructive">
           {t("validation.email_hint", EMAIL_HINT)}
         </span>
       )}

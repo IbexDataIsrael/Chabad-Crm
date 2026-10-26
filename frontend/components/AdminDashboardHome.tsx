@@ -74,7 +74,7 @@ function StatTile({
       <div className="flex items-start justify-between">
         <div className="space-y-1.5">
           <p className="text-sm font-medium text-muted-foreground">{label}</p>
-          <p className="text-3xl font-bold text-foreground">{formatCompact(value)}</p>
+          <p className="font-display text-4xl font-bold tracking-wide text-foreground">{formatCompact(value)}</p>
         </div>
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
           <Icon className="h-5 w-5" />
@@ -173,7 +173,7 @@ export function AdminDashboardHome() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{t("dashboard.title", "לוח בקרה")}</h1>
+          <h1 className="font-display text-3xl font-bold tracking-wide text-foreground">{t("dashboard.title", "לוח בקרה")}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {t("dashboard.subtitle", "סקירה כללית של הפעילות במערכת")}
           </p>

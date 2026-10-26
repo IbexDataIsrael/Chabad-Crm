@@ -21,7 +21,7 @@ export default function DonationsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold">{t("nav.donations", "תרומות")}</h1>
+        <h1 className="font-display text-3xl font-bold tracking-wide">{t("nav.donations", "תרומות")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {t("page.donations_intro", "היסטורית תרומות. ניתן לשייך תרומה לאיש קשר או להשאיר ללא שיוך.")}
         </p>

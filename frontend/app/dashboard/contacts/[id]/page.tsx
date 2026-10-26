@@ -277,7 +277,7 @@ export default function ContactDetailPage() {
   // gap fix as the Contacts list page.
   if (isCampaignManager) {
     return (
-      <p className="text-status-darkred">
+      <p className="text-destructive">
         {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
       </p>
     );
@@ -314,7 +314,7 @@ export default function ContactDetailPage() {
             <Button
               variant="outline"
               size="sm"
-              className="border-status-darkred/30 text-status-darkred hover:bg-status-darkred/10"
+              className="border-destructive/30 text-destructive hover:bg-destructive/10"
               onClick={remove}
             >
               <Trash2 className="h-4 w-4" /> {t("action.delete", "מחק")}
@@ -374,15 +374,15 @@ export default function ContactDetailPage() {
       {/* fixes26 §4: a shliach whose login was deleted or disabled gets a
           prominent notice + one-click recovery (admins only). */}
       {loginSuspended && (
-        <div className="flex flex-wrap items-center gap-3 rounded-md border border-status-darkred/40 bg-status-darkred/10 px-4 py-3">
-          <span className="text-sm font-medium text-status-darkred">
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3">
+          <span className="text-sm font-medium text-destructive">
             {t("users.login_suspended", "הכניסה למערכת הושעתה")}
           </span>
           {isAdmin && contact.email && (
             <Button
               type="button"
               size="sm"
-              className="bg-status-darkred hover:bg-status-darkred/90"
+              className="bg-status-darkred hover:bg-destructive/90"
               onClick={recreateLogin}
               disabled={recreating}
             >
@@ -396,7 +396,7 @@ export default function ContactDetailPage() {
       )}
 
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-bold">{contactFullName(contact)}</h1>
+        <h1 className="font-display text-3xl font-bold tracking-wide">{contactFullName(contact)}</h1>
         {/* fixes17 §2.1: one-click call / WhatsApp / mail from the profile.
             fixes38 §3.1: each icon now has its own Manage Fields toggle. */}
         <span className="flex items-center gap-2">

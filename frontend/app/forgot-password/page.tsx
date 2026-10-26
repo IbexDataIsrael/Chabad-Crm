@@ -47,7 +47,7 @@ export default function ForgotPasswordPage() {
     <main className="min-h-screen flex items-center justify-center p-6">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-sm bg-card rounded-xl shadow-md p-8 space-y-5"
+        className="glass-card w-full max-w-sm space-y-5 p-8"
       >
         <div className="flex justify-end">
           <LanguageToggle />

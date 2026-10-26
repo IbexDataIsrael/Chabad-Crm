@@ -82,7 +82,7 @@ export default function CampaignsPage() {
   if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!isAdmin && !isCampaignManager) {
     return (
-      <p className="text-status-darkred">
+      <p className="text-destructive">
         {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
       </p>
     );
@@ -91,7 +91,7 @@ export default function CampaignsPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t("page.campaigns_title", "קמפיינים")}</h1>
+        <h1 className="font-display text-4xl font-bold">{t("page.campaigns_title", "קמפיינים")}</h1>
         {!adding && (
           <Button onClick={() => setAdding(true)}>
             <Plus className="h-4 w-4" /> {t("page.add_campaign", "קמפיין חדש")}
@@ -117,7 +117,7 @@ export default function CampaignsPage() {
         </form>
       )}
 
-      <Card className="overflow-x-auto shadow-sm">
+      <Card className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="border-b border-border text-start text-muted-foreground">
             <tr>
@@ -174,7 +174,7 @@ export default function CampaignsPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="border-status-darkred/40 text-status-darkred hover:bg-status-darkred/10"
+                        className="border-destructive/40 text-destructive hover:bg-destructive/10"
                         aria-label={t("action.delete", "מחק")}
                         onClick={() => remove(c)}
                       >

@@ -21,7 +21,7 @@
   --gray: #a0a7b3;
   margin: -24px -16px;
   min-height: calc(100dvh - 64px);
-  background: #e5eee8;
+  background: #0a0e18;
   font-family: RouteHebrew, Arial, sans-serif;
   color: #fff;
 }
@@ -456,20 +456,20 @@
 
 /* The door sheet's scope: street2's exact color variables + dark ink, in the
    app's normal font (the sheet is street2's, spec §4b). Same values as
-   street.module.css .pageBg. */
+   street.module.css .pageBg (dark adaptation). */
 .sheetScope {
-  --green-900: #123d22;
-  --green-800: #14532d;
-  --green-700: #1b6b3a;
-  --green-600: #22863f;
-  --green-500: #27a04c;
-  --green-400: #3fbd62;
-  --green-100: #dcf3e3;
-  --green-50: #effaf2;
-  --ink: #17251c;
-  --ink-soft: #5c6f62;
-  --line: #e2eee6;
-  --danger: #c0392b;
-  --amber: #e8a013;
+  --green-900: #e3f5ea;
+  --green-800: #5fce8c;
+  --green-700: #46c377;
+  --green-600: #2aa854;
+  --green-500: #34c163;
+  --green-400: #4ade80;
+  --green-100: #1a3a29;
+  --green-50: #10231a;
+  --ink: #e8f3ec;
+  --ink-soft: #9fb8a9;
+  --line: #28483a;
+  --danger: #e05252;
+  --amber: #f0b429;
   color: var(--ink);
 }

@@ -183,11 +183,11 @@ export function PublicPageSettingsCard() {
             />
           </div>
           {!slugFormatOk ? (
-            <p className="text-xs text-status-darkred">
+            <p className="text-xs text-destructive">
               {t("public_settings.slug_invalid", "כתובת הדף יכולה להכיל רק אותיות באנגלית, ספרות ומקפים.")}
             </p>
           ) : slugStatus === "taken" ? (
-            <p className="text-xs text-status-darkred">
+            <p className="text-xs text-destructive">
               {t("public_settings.slug_taken", "כתובת זו כבר בשימוש על ידי ארגון אחר. יש לבחור כתובת אחרת.")}
             </p>
           ) : slugStatus === "available" ? (
@@ -252,7 +252,7 @@ export function PublicPageSettingsCard() {
                         type="button"
                         disabled={i === 0}
                         onClick={() => move(i, -1)}
-                        className="rounded bg-white/90 p-1 text-foreground shadow disabled:opacity-30"
+                        className="rounded bg-background/80 p-1 text-foreground shadow backdrop-blur disabled:opacity-30"
                         aria-label={t("action.move_up", "העלה")}
                       >
                         <ArrowUp className="h-3.5 w-3.5" />
@@ -261,7 +261,7 @@ export function PublicPageSettingsCard() {
                         type="button"
                         disabled={i === gallery.length - 1}
                         onClick={() => move(i, 1)}
-                        className="rounded bg-white/90 p-1 text-foreground shadow disabled:opacity-30"
+                        className="rounded bg-background/80 p-1 text-foreground shadow backdrop-blur disabled:opacity-30"
                         aria-label={t("action.move_down", "הורד")}
                       >
                         <ArrowDown className="h-3.5 w-3.5" />
@@ -270,7 +270,7 @@ export function PublicPageSettingsCard() {
                     <button
                       type="button"
                       onClick={() => setGallery((g) => g.filter((_, j) => j !== i))}
-                      className="rounded bg-white/90 p-1 text-status-darkred shadow"
+                      className="rounded bg-background/80 p-1 text-destructive shadow backdrop-blur"
                       aria-label={t("action.delete", "מחק")}
                     >
                       <Trash2 className="h-3.5 w-3.5" />

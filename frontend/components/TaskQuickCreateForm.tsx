@@ -240,7 +240,7 @@ export function TaskQuickCreateForm({
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
       <form
         onSubmit={save}
-        className="w-full max-w-md bg-card rounded-xl shadow-xl p-5 space-y-4 max-h-[90vh] overflow-y-auto"
+        className="glass-card w-full max-w-md p-5 space-y-4 max-h-[90vh] overflow-y-auto"
       >
         <div>
           <h2 className="text-lg font-bold">{t("page.add_task", "משימה חדשה")}</h2>
@@ -440,7 +440,7 @@ export function TaskQuickCreateForm({
           </select>
         </label>
 
-        {error && <p className="text-sm text-status-darkred">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
         <div className="flex items-center gap-2">
           <Button type="submit" disabled={busy}>

@@ -174,10 +174,10 @@ export default function BuildingCelebration({
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: "linear-gradient(160deg, #fffdf5 0%, #fff3d6 100%)",
+          background: "linear-gradient(160deg, rgba(34, 38, 54, 0.96) 0%, rgba(22, 25, 38, 0.98) 100%)",
           border: "2px solid #FFD700",
           borderRadius: "20px",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.35)",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.5), 0 0 40px -10px rgba(255,215,0,0.25)",
           maxWidth: "420px",
           width: "100%",
           padding: "28px 24px",
@@ -206,12 +206,12 @@ export default function BuildingCelebration({
             margin: "0 0 4px 0",
             fontSize: "26px",
             fontWeight: 800,
-            color: "#5b3d00",
+            color: "#ffd75e",
           }}
         >
           {t("street.celebration_title", "כל הכבוד! 🎉")}
         </h2>
-        <p style={{ margin: "0 0 18px 0", fontSize: "18px", color: "#7a5a10" }}>
+        <p style={{ margin: "0 0 18px 0", fontSize: "18px", color: "#d8cfae" }}>
           {milestoneCount != null
             ? t("street.celebration_milestone", "סיימת עוד {n} דירות!").replace("{n}", String(milestoneCount))
             : buildingLabel
@@ -224,12 +224,12 @@ export default function BuildingCelebration({
             style={{
               margin: "0 0 20px 0",
               padding: "14px 16px",
-              background: "rgba(255, 215, 0, 0.12)",
+              background: "rgba(255, 215, 0, 0.08)",
               borderRadius: "12px",
-              border: "1px solid rgba(255, 215, 0, 0.5)",
+              border: "1px solid rgba(255, 215, 0, 0.4)",
               fontSize: "17px",
               fontWeight: 600,
-              color: "#3d2e05",
+              color: "#efe8d0",
               whiteSpace: "pre-wrap",
             }}
           >
@@ -242,25 +242,25 @@ export default function BuildingCelebration({
             style={{
               margin: "0 0 20px 0",
               padding: "14px 16px",
-              background: "rgba(255, 215, 0, 0.12)",
+              background: "rgba(255, 215, 0, 0.08)",
               borderRadius: "12px",
-              border: "1px solid rgba(255, 215, 0, 0.5)",
+              border: "1px solid rgba(255, 215, 0, 0.4)",
             }}
           >
             <p
               lang="he"
-              style={{ margin: "0 0 8px 0", fontSize: "17px", fontWeight: 600, color: "#3d2e05" }}
+              style={{ margin: "0 0 8px 0", fontSize: "17px", fontWeight: 600, color: "#efe8d0" }}
             >
               {quote.he}
             </p>
             <p
               lang="en"
               dir="ltr"
-              style={{ margin: "0 0 8px 0", fontSize: "13px", color: "#6b5a22", fontStyle: "italic" }}
+              style={{ margin: "0 0 8px 0", fontSize: "13px", color: "#c2b88a", fontStyle: "italic" }}
             >
               {quote.en}
             </p>
-            <footer style={{ fontSize: "11px", color: "#9a7b2d" }}>{quote.ref}</footer>
+            <footer style={{ fontSize: "11px", color: "#a4935a" }}>{quote.ref}</footer>
           </blockquote>
         )}
 

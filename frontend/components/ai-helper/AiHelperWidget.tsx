@@ -39,7 +39,7 @@ export function AiHelperWidget() {
         aria-expanded={open}
         className={cn(
           "fixed bottom-4 end-4 z-50 flex h-12 w-12 items-center justify-center rounded-full",
-          "bg-primary text-primary-foreground shadow-lg transition-colors hover:bg-primary/90",
+          "bg-gradient-to-b from-primary/95 to-primary text-primary-foreground shadow-glow transition-all hover:to-primary/85",
         )}
       >
         <MessageCircle className="h-6 w-6" />

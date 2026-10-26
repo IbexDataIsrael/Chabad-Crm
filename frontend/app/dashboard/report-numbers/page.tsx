@@ -182,7 +182,7 @@ export default function ReportNumbersPage() {
   if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!isAdmin) {
     return (
-      <p className="text-status-darkred">
+      <p className="text-destructive">
         {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
       </p>
     );
@@ -311,7 +311,7 @@ export default function ReportNumbersPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t("page.report_numbers", "מספרי דוח")}</h1>
+        <h1 className="font-display text-4xl font-bold">{t("page.report_numbers", "מספרי דוח")}</h1>
         {!adding && !editing && (
           <Button size="sm" onClick={() => setAdding(true)}>
             <Plus className="h-4 w-4" /> {t("report.add", "מספר דוח חדש")}
@@ -394,7 +394,7 @@ export default function ReportNumbersPage() {
           visibility (click) + reorder (drag, or the ▲/▼ fallback) in one
           panel instead of a plain toggle-only list. */}
       {fieldsOpen && (
-        <div className="bg-card rounded-xl shadow-sm p-4 space-y-2">
+        <div className="glass-card p-4 space-y-2">
           <p className="text-xs text-muted-foreground">
             {t("columns.reorder_hint", "גרור עמודה פעילה כדי לשנות את סדר ההצגה.")}
           </p>
@@ -446,7 +446,7 @@ export default function ReportNumbersPage() {
         </div>
       )}
 
-      <div className="bg-card rounded-xl shadow-sm overflow-x-auto">
+      <div className="glass-card overflow-x-auto">
         {busy ? (
           <p className="px-4 py-6 text-center text-muted-foreground">{t("action.loading", "טוען…")}</p>
         ) : rows.length === 0 ? (
@@ -455,7 +455,7 @@ export default function ReportNumbersPage() {
           </p>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-background text-muted-foreground">
+            <thead className="bg-white/5 text-muted-foreground">
               <tr>
                 <SortHeader column="name" label={t("report_number.name", "שם")} />
                 {orderedActiveFields.map((f) => (
@@ -605,7 +605,7 @@ function ReportNumberForm({
   }
 
   return (
-    <form onSubmit={save} className="bg-card rounded-xl shadow-sm p-4 space-y-3">
+    <form onSubmit={save} className="glass-card p-4 space-y-3">
       <h3 className="font-medium">
         {item ? t("action.edit", "ערוך") : t("report.add", "מספר דוח חדש")}
       </h3>

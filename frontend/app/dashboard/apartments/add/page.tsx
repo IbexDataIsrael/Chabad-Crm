@@ -35,12 +35,12 @@ function AddApartmentInner() {
   return (
     <div className="space-y-5 max-w-3xl">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t("apt.new_apartment_title", "דירה חדשה")}</h1>
+        <h1 className="font-display text-4xl">{t("apt.new_apartment_title", "דירה חדשה")}</h1>
         <Link href={returnTo} className="text-sm text-primary hover:underline">
           {t("action.cancel", "ביטול")}
         </Link>
       </div>
-      <div className="bg-card border border-border rounded-xl shadow-sm p-4">
+      <div className="glass-card p-4">
         <ApartmentEditor
           initialBuildingId={initialBuildingId}
           onClose={() => router.push(returnTo)}

@@ -33,7 +33,7 @@ export default function AddVisitPage() {
   return (
     <div className="space-y-5 max-w-3xl">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t("page.add_visit", "ביקור חדש")}</h1>
+        <h1 className="font-display text-3xl font-bold tracking-wide">{t("page.add_visit", "ביקור חדש")}</h1>
         <Link href="/dashboard/visits" className="text-sm text-primary hover:underline">
           {t("page.back_to_visits", "← חזרה לביקורים")}
         </Link>

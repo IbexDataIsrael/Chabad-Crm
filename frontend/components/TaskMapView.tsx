@@ -46,7 +46,7 @@ export function TaskMapView({
   }, [data]);
 
   if (failed) {
-    return <p className="text-sm text-status-darkred">{t("map.load_failed", "טעינת המפה נכשלה.")}</p>;
+    return <p className="text-sm text-destructive">{t("map.load_failed", "טעינת המפה נכשלה.")}</p>;
   }
   if (!data) return <p className="text-sm text-muted-foreground">{t("action.loading", "טוען…")}</p>;
 

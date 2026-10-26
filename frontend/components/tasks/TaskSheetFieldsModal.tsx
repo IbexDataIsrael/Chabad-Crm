@@ -141,7 +141,7 @@ export function TaskSheetFieldsModal({ onClose }: { onClose: () => void }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="task-sheet-fields-title"
-        className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-card shadow-xl"
+        className="glass-card flex max-h-[calc(100dvh-1.5rem)] w-full max-w-lg flex-col overflow-hidden"
       >
         <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
           <h2 id="task-sheet-fields-title" className="text-lg font-bold">

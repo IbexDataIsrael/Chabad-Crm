@@ -185,7 +185,7 @@ export default function UserDetailPage() {
           <Button
             variant="outline"
             size="sm"
-            className="border-status-darkred/30 text-status-darkred hover:bg-status-darkred/10"
+            className="border-destructive/30 text-destructive hover:bg-destructive/10"
             onClick={remove}
           >
             <Trash2 className="h-4 w-4" /> {t("action.delete", "מחק")}
@@ -194,7 +194,7 @@ export default function UserDetailPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-bold">{user.full_name}</h1>
+        <h1 className="font-display text-3xl font-bold tracking-wide">{user.full_name}</h1>
         <Badge variant="secondary">{roleLabel}</Badge>
         {isSelf && (
           <span className="text-xs text-muted-foreground">({t("users.you", "אני")})</span>
@@ -202,7 +202,7 @@ export default function UserDetailPage() {
       </div>
 
       {!user.is_active && (
-        <div className="rounded-md border border-status-darkred/40 bg-status-darkred/10 px-4 py-3 text-sm font-medium text-status-darkred">
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
           {t("users.login_suspended", "הכניסה למערכת הושעתה")}
         </div>
       )}
@@ -364,7 +364,7 @@ export default function UserDetailPage() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">{t("validation.password_hint", PASSWORD_HINT)}</p>
-              {passwordError && <p className="text-xs text-status-darkred">{passwordError}</p>}
+              {passwordError && <p className="text-xs text-destructive">{passwordError}</p>}
             </dd>
           </div>
         </dl>

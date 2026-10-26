@@ -5,30 +5,34 @@
  * attempt at this page came out visually broken. */
 
 .pageBg {
-  --green-900: #123d22;
-  --green-800: #14532d;
-  --green-700: #1b6b3a;
-  --green-600: #22863f;
-  --green-500: #27a04c;
-  --green-400: #3fbd62;
-  --green-100: #dcf3e3;
-  --green-50: #effaf2;
-  --ink: #17251c;
-  --ink-soft: #5c6f62;
-  --line: #e2eee6;
-  --danger: #c0392b;
-  --amber: #e8a013;
+  /* Dark adaptation: the same green road-world, re-keyed for the app's deep
+     navy-charcoal theme. The --green scale is inverted in lightness — the
+     -900/-800 steps are now near-white heading ink, -50/-100 are dark raised
+     surfaces — so every existing var() consumer flips correctly. */
+  --green-900: #e3f5ea;
+  --green-800: #5fce8c;
+  --green-700: #46c377;
+  --green-600: #2aa854;
+  --green-500: #34c163;
+  --green-400: #4ade80;
+  --green-100: #1a3a29;
+  --green-50: #10231a;
+  --ink: #e8f3ec;
+  --ink-soft: #9fb8a9;
+  --line: #28483a;
+  --danger: #e05252;
+  --amber: #f0b429;
   border-radius: 24px;
   padding: 18px 14px 40px;
   background:
-    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.07) 0 10px, transparent 11px),
-    radial-gradient(circle at 78% 8%, rgba(255, 255, 255, 0.06) 0 7px, transparent 8px),
-    radial-gradient(circle at 62% 30%, rgba(255, 255, 255, 0.05) 0 12px, transparent 13px),
-    radial-gradient(circle at 30% 55%, rgba(255, 255, 255, 0.05) 0 8px, transparent 9px),
-    radial-gradient(circle at 88% 48%, rgba(255, 255, 255, 0.06) 0 9px, transparent 10px),
-    radial-gradient(circle at 8% 78%, rgba(255, 255, 255, 0.05) 0 11px, transparent 12px),
-    radial-gradient(circle at 70% 85%, rgba(255, 255, 255, 0.06) 0 7px, transparent 8px),
-    linear-gradient(180deg, #0f3820 0%, #123d22 55%, #0d2f1b 100%);
+    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.05) 0 10px, transparent 11px),
+    radial-gradient(circle at 78% 8%, rgba(255, 255, 255, 0.04) 0 7px, transparent 8px),
+    radial-gradient(circle at 62% 30%, rgba(255, 255, 255, 0.04) 0 12px, transparent 13px),
+    radial-gradient(circle at 30% 55%, rgba(255, 255, 255, 0.04) 0 8px, transparent 9px),
+    radial-gradient(circle at 88% 48%, rgba(255, 255, 255, 0.04) 0 9px, transparent 10px),
+    radial-gradient(circle at 8% 78%, rgba(255, 255, 255, 0.04) 0 11px, transparent 12px),
+    radial-gradient(circle at 70% 85%, rgba(255, 255, 255, 0.05) 0 7px, transparent 8px),
+    linear-gradient(180deg, #0b1a12 0%, #0e2418 55%, #0a1710 100%);
   color: var(--ink);
   min-height: calc(100vh - 140px);
 }
@@ -52,7 +56,8 @@
 
 /* ---------- states ---------- */
 .state {
-  background: #fff;
+  background: #132a1e;
+  border: 1px solid var(--line);
   border-radius: 22px;
   padding: 40px 22px;
   text-align: center;
@@ -81,7 +86,7 @@
   height: 34px;
   margin: 0 auto 12px;
   border-radius: 50%;
-  border: 4px solid var(--green-100);
+  border: 4px solid var(--line);
   border-top-color: var(--green-600);
   animation: spin 0.9s linear infinite;
 }
@@ -93,7 +98,8 @@
 
 /* ---------- street ---------- */
 .building {
-  background: #fff;
+  background: #132a1e;
+  border: 1px solid var(--line);
   border-radius: 22px;
   margin-bottom: 18px;
   overflow: hidden;
@@ -104,7 +110,7 @@
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
-  background: linear-gradient(180deg, #eefaf1, #e2f5e8);
+  background: linear-gradient(180deg, #1a3826, #142e1f);
   border-bottom: 1px solid var(--line);
 }
 .bBadge {
@@ -172,14 +178,14 @@
 }
 .door {
   border: 2px solid var(--green-700);
-  background: linear-gradient(180deg, #f4fbf6, #e6f5ea);
+  background: linear-gradient(180deg, #1a3527, #142a1e);
   border-radius: 48px 48px 14px 14px;
   padding: 16px 6px 10px;
   cursor: pointer;
   font-family: inherit;
   text-align: center;
   position: relative;
-  box-shadow: 0 3px 0 rgba(20, 83, 45, 0.25);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
   transition: transform 0.08s;
 }
 .door:active {
@@ -219,14 +225,16 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(6, 26, 15, 0.55);
+  background: rgba(3, 8, 6, 0.7);
   z-index: 40;
   display: flex;
   align-items: flex-end;
   justify-content: center;
 }
 .sheet {
-  background: #fff;
+  background: #101f16;
+  border: 1px solid var(--line);
+  border-bottom: none;
   width: 100%;
   max-width: 560px;
   max-height: 92vh;
@@ -250,7 +258,7 @@
   width: 46px;
   height: 5px;
   border-radius: 99px;
-  background: #cfded4;
+  background: #33523f;
   margin: 4px auto 12px;
 }
 .sHead {
@@ -259,7 +267,7 @@
   gap: 12px;
   padding: 12px 14px;
   border-radius: 18px;
-  background: linear-gradient(180deg, #eefaf1, #e2f5e8);
+  background: linear-gradient(180deg, #1a3826, #142e1f);
   border: 1px solid var(--line);
   margin-bottom: 6px;
 }
@@ -297,11 +305,11 @@
   flex: 1;
   min-width: 0;
   font-size: 14px;
-  color: #333;
+  color: #c9dcd0;
   word-break: break-word;
 }
 .valEmpty {
-  color: #b6c6bb;
+  color: #6f8a79;
 }
 .act {
   flex: none;
@@ -322,8 +330,8 @@
   fill: currentColor;
 }
 .lock {
-  color: #a9bcb0;
-  background: #f4f8f5;
+  color: #6f8a79;
+  background: var(--green-50);
   cursor: default;
 }
 .rowLink {
@@ -337,8 +345,8 @@
   gap: 7px;
 }
 .chip {
-  border: 1.5px solid #cfe3d4;
-  background: #fff;
+  border: 1.5px solid var(--line);
+  background: #132a1e;
   color: var(--ink-soft);
   border-radius: 999px;
   padding: 6px 14px;
@@ -370,7 +378,8 @@
   font-size: 15px;
   font-family: inherit;
   outline: none;
-  background: #fbfdfc;
+  background: #0f1d15;
+  color: var(--ink);
 }
 .editbox textarea {
   min-height: 74px;
@@ -400,9 +409,9 @@
    disabled next to the green Save — outlined so it's clearly a button. */
 .cancelBtn {
   flex: 1;
-  background: #fff;
+  background: var(--green-50);
   color: var(--ink);
-  border: 1.5px solid #b9cbbf;
+  border: 1.5px solid var(--line);
   border-radius: 10px;
   padding: 9px;
   font-weight: 700;
@@ -420,7 +429,7 @@
   white-space: pre-wrap;
 }
 .notesCard {
-  background: #f4faf5;
+  background: #14291d;
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 12px 14px;
@@ -428,7 +437,7 @@
 }
 .section {
   margin-top: 18px;
-  background: #f4faf5;
+  background: #14291d;
   border: 1px solid var(--line);
   border-radius: 18px;
   padding: 14px 16px;
@@ -477,7 +486,7 @@
   font-weight: 800;
   font-family: inherit;
   cursor: pointer;
-  background: #eef3ef;
+  background: var(--green-100);
   color: var(--ink-soft);
   margin-top: 14px;
 }

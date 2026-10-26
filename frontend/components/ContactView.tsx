@@ -56,7 +56,10 @@ const inputClass =
 // hover, which points at some cascade/specificity interaction with another
 // class on the same element; an inline style can't lose that fight.
 const dtClass = "inline-block w-fit rounded px-1.5 py-0.5 text-xs font-medium";
-const dtStyle: CSSProperties = { backgroundColor: "#f4f4f5", color: "#71717a" };
+const dtStyle: CSSProperties = {
+  backgroundColor: "hsl(var(--muted))",
+  color: "hsl(var(--muted-foreground))",
+};
 
 /** A one-field partial for PATCH /api/contacts/{id} (fixes26 §2). */
 export type ContactPatch = Record<string, unknown>;

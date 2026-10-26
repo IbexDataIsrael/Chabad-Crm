@@ -84,7 +84,7 @@ export default function AdminAreasPage() {
   return (
     <div className="space-y-5 max-w-3xl">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t("page.admin_areas_title", "אזורי מנהל")}</h1>
+        <h1 className="font-display text-4xl">{t("page.admin_areas_title", "אזורי מנהל")}</h1>
         {isAdmin && !adding && !editing && (
           <Button onClick={() => setAdding(true)}>
             <Plus className="h-4 w-4" /> {t("page.add_admin_area", "אזור מנהל חדש")}
@@ -195,7 +195,7 @@ export default function AdminAreasPage() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="border-status-darkred/40 text-status-darkred hover:bg-status-darkred/10"
+                    className="border-destructive/40 text-destructive hover:bg-destructive/10"
                     onClick={() => remove(aa)}
                   >
                     <Trash2 className="h-3.5 w-3.5" /> {t("action.delete", "מחק")}
@@ -270,7 +270,7 @@ function AdminAreaForm({
   }
 
   return (
-    <form onSubmit={save} className="bg-card border border-border rounded-xl shadow-sm p-4 space-y-3">
+    <form onSubmit={save} className="glass-card p-4 space-y-3">
       <h3 className="font-medium">
         {item
           ? t("page.edit_admin_area", "עריכת אזור מנהל")
@@ -297,7 +297,7 @@ function AdminAreaForm({
           />
         </label>
       </div>
-      {error && <p className="text-sm text-status-darkred">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex items-center gap-2">
         <Button type="submit" disabled={busy}>
           {busy ? t("action.saving", "שומר…") : t("action.save", "שמור")}

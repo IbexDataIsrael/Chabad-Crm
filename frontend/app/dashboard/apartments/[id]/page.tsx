@@ -341,8 +341,8 @@ export default function ApartmentDetailPage() {
         />
       )}
 
-      <div className="bg-card border border-border rounded-xl shadow-sm p-5 space-y-3">
-          <h1 className="text-2xl font-bold">{apartmentTitle(apt)}</h1>
+      <div className="glass-card p-5 space-y-3">
+          <h1 className="font-display text-4xl">{apartmentTitle(apt)}</h1>
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <div>
               <dt className="text-muted-foreground">{t("apartments.building_id", "בניין")}</dt>
@@ -622,7 +622,7 @@ export default function ApartmentDetailPage() {
       {/* fixes19 §3: admin edit history — pick a previous version to view a
           read-only snapshot (Wikipedia-revisions style). */}
       {isAdmin && (
-        <section className="bg-card border border-border rounded-xl shadow-sm p-5 space-y-3">
+        <section className="glass-card p-5 space-y-3">
           <h2 className="text-sm font-semibold text-muted-foreground">
             {t("apt.history", "היסטוריית שינויים")}
           </h2>
@@ -699,7 +699,7 @@ export default function ApartmentDetailPage() {
       )}
 
       {/* Linked contact (mekurav) — name links to their contact page. */}
-      <section className="bg-card border border-border rounded-xl shadow-sm p-5 space-y-2">
+      <section className="glass-card p-5 space-y-2">
         <h2 className="text-sm font-semibold text-muted-foreground">{t("apt.contact", "איש קשר")}</h2>
         {linked ? (
           <Link

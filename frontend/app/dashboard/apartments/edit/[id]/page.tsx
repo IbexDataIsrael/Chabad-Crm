@@ -66,14 +66,14 @@ function EditApartmentInner() {
   return (
     <div className="space-y-5 max-w-3xl">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">
+        <h1 className="font-display text-4xl">
           {t("apt.edit_apartment", "עריכת דירה")} — {apartmentTitle(apt)}
         </h1>
         <Link href={returnTo} className="text-sm text-primary hover:underline">
           {t("action.cancel", "ביטול")}
         </Link>
       </div>
-      <div className="bg-card border border-border rounded-xl shadow-sm p-4">
+      <div className="glass-card p-4">
         <ApartmentEditor
           apt={apt}
           onClose={() => router.push(returnTo)}

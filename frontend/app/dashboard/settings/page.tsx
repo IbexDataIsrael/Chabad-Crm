@@ -135,7 +135,7 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-5 max-w-lg">
-      <h1 className="text-2xl font-bold">{t("nav.settings", "הגדרות")}</h1>
+      <h1 className="font-display text-3xl font-bold">{t("nav.settings", "הגדרות")}</h1>
 
       {isAdmin && <TabBar tabs={tabs} value={current} onChange={setTab} />}
 

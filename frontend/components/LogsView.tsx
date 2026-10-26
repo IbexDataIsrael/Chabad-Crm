@@ -93,7 +93,7 @@ export function LogsView({ platform = false }: { platform?: boolean }) {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">{t("logs.title", "לוגים")}</h1>
+      <h1 className="font-display text-3xl font-bold">{t("logs.title", "לוגים")}</h1>
       {platform && (
         <p className="text-sm text-muted-foreground">
           {t(
@@ -274,7 +274,7 @@ function AccessLog({ platform, orgId }: { platform: boolean; orgId: string }) {
                         r.status === "SUCCESS"
                           ? "bg-status-green/15 text-status-green"
                           : r.status.startsWith("FAILED")
-                            ? "bg-status-darkred/10 text-status-darkred"
+                            ? "bg-destructive/10 text-destructive"
                             : "bg-muted text-foreground"
                       }`}
                     >
@@ -327,7 +327,7 @@ function ErrorLog({ platform, orgId }: { platform: boolean; orgId: string }) {
                     {orgLabel(r.organization_id, r.organization_name)}
                   </span>
                 )}
-                <span className="font-medium text-status-darkred" dir="ltr">{r.error_type}</span>
+                <span className="font-medium text-destructive" dir="ltr">{r.error_type}</span>
                 <span dir="ltr" className="text-muted-foreground">
                   {r.method} {r.path}
                 </span>
@@ -438,7 +438,7 @@ function ErrorEmailsCard() {
                     type="button"
                     disabled={busy}
                     aria-label={t("action.remove", "הסר")}
-                    className="min-h-[32px] min-w-[32px] text-muted-foreground hover:text-status-darkred"
+                    className="min-h-[32px] min-w-[32px] text-muted-foreground hover:text-destructive"
                     onClick={() => save(emails.filter((x) => x !== e))}
                   >
                     ✕

@@ -103,25 +103,25 @@ export function ClaimTaskPageClient() {
   }, [token, user, loading, runClaim, settle]);
 
   const summary = info && info.state !== "invalid" && (
-    <div className="rounded-2xl bg-[#0E3B4A] px-5 py-5 text-[#EEF6F8]">
+    <div className="glass-card px-5 py-5">
       <div className="flex items-center gap-3">
         {info.organization_logo_url && (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={info.organization_logo_url} alt="" className="h-10 w-10 rounded-lg bg-white/90 object-contain p-1" />
         )}
-        <p className="text-sm text-[#EEF6F8]/75">{info.organization_name}</p>
+        <p className="text-sm text-muted-foreground">{info.organization_name}</p>
       </div>
-      <h1 className="mt-3 font-[family-name:var(--font-frank-ruhl)] text-3xl font-bold leading-tight text-white">
+      <h1 className="mt-3 font-[family-name:var(--font-frank-ruhl)] text-3xl font-bold leading-tight text-foreground">
         {info.campaign_name || t("claim.task", "משימה")}
       </h1>
       <WaveRule className="mt-2 h-3 w-24" />
       <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
         <div>
-          <dt className="text-[#EEF6F8]/60">{t("task.report_numbers", "מספרי דוח")}</dt>
+          <dt className="text-muted-foreground">{t("task.report_numbers", "מספרי דוח")}</dt>
           <dd className="mt-0.5 font-medium">{info.report_number_names.join(", ") || "—"}</dd>
         </div>
         <div>
-          <dt className="text-[#EEF6F8]/60">{t("claim.apartments", "דירות במשימה")}</dt>
+          <dt className="text-muted-foreground">{t("claim.apartments", "דירות במשימה")}</dt>
           <dd className="mt-0.5 font-medium">{info.apartment_count}</dd>
         </div>
       </dl>
@@ -131,7 +131,7 @@ export function ClaimTaskPageClient() {
   let body: ReactNode;
   if (!info || loading || (outcome === null && user && info.state === "available")) {
     body = (
-      <div className="flex justify-center py-10 text-[#0E3B4A]" aria-busy="true">
+      <div className="flex justify-center py-10 text-primary" aria-busy="true">
         <Loader2 className="h-6 w-6 animate-spin" />
       </div>
     );
@@ -148,7 +148,7 @@ export function ClaimTaskPageClient() {
         </p>
         <Link
           href="/dashboard"
-          className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-[#D99A2B] px-4 py-3 font-semibold text-[#13232B] hover:bg-[#C98A1D]"
+          className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-gradient-to-b from-primary/95 to-primary px-4 py-3 font-semibold text-primary-foreground shadow-glow transition-all hover:from-primary hover:to-primary/85"
         >
           {t("claim.open_my_tasks", "למשימות שלי")}
         </Link>
@@ -157,11 +157,11 @@ export function ClaimTaskPageClient() {
   } else if (outcome === null && info.state === "taken" && info.has_activist && !user) {
     // fixes66 §2: signed out on an assigned task — the activist's way in.
     body = (
-      <section className="rounded-2xl bg-white p-5 shadow-[0_12px_40px_-12px_rgba(14,59,74,0.35)]">
-        <h2 className="text-lg font-semibold text-[#0E3B4A]">
+      <section className="glass-card p-5">
+        <h2 className="text-lg font-semibold text-foreground">
           {t("claim.assigned_signin_title", "המשימה משויכת לפעיל — התחברו כדי לפתוח אותה")}
         </h2>
-        <p className="mt-1 text-sm text-[#13232B]/70">
+        <p className="mt-1 text-sm text-muted-foreground">
           {t(
             "claim.assigned_signin_hint",
             "זו המשימה שלכם? התחברו עם החשבון שלכם ותגיעו ישר לדירות של המשימה.",
@@ -206,8 +206,8 @@ export function ClaimTaskPageClient() {
   } else {
     // Signed out, task available.
     body = (
-      <section className="rounded-2xl bg-white p-5 shadow-[0_12px_40px_-12px_rgba(14,59,74,0.35)]">
-        <h2 className="text-lg font-semibold text-[#0E3B4A]">
+      <section className="glass-card p-5">
+        <h2 className="text-lg font-semibold text-foreground">
           {mode === "register"
             ? t("claim.register_title", "נרשמים ומקבלים את המשימה")
             : t("claim.signin_title", "מתחברים ומקבלים את המשימה")}
@@ -226,7 +226,7 @@ export function ClaimTaskPageClient() {
         <button
           type="button"
           onClick={() => setMode(mode === "register" ? "signin" : "register")}
-          className="mt-5 w-full text-center text-sm font-medium text-[#1692C0] underline-offset-4 hover:underline"
+          className="mt-5 w-full text-center text-sm font-medium text-primary underline-offset-4 hover:underline"
         >
           {mode === "register"
             ? t("claim.have_account", "כבר יש לך חשבון? התחברות")
@@ -237,7 +237,7 @@ export function ClaimTaskPageClient() {
   }
 
   return (
-    <main className="min-h-screen bg-[#EEF6F8] px-4 py-8 text-[#13232B]">
+    <main className="min-h-screen px-4 py-8">
       <div className="mx-auto max-w-md space-y-4">
         {summary}
         {body}
@@ -258,11 +258,9 @@ function Notice({
   return (
     <div
       role="status"
-      className={`flex gap-3 rounded-2xl bg-white p-5 shadow-sm ${
-        tone === "good" ? "text-[#0E3B4A]" : "text-[#13232B]"
-      }`}
+      className="glass-card flex gap-3 p-5"
     >
-      <span className={tone === "good" ? "text-[#1faa00]" : "text-[#8b0000]"}>{icon}</span>
+      <span className={tone === "good" ? "text-success" : "text-destructive"}>{icon}</span>
       <div className="flex-1">{children}</div>
     </div>
   );

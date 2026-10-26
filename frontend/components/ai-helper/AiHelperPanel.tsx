@@ -139,11 +139,11 @@ export function AiHelperPanel({ onClose }: { onClose: () => void }) {
   return (
     <div
       dir={dir}
-      className="fixed bottom-20 end-4 z-50 flex h-[500px] max-h-[calc(100dvh-6rem)] w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-xl"
+      className="fixed bottom-20 end-4 z-50 flex h-[500px] max-h-[calc(100dvh-6rem)] w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-white/10 bg-popover/85 text-popover-foreground shadow-2xl shadow-black/50 backdrop-blur-xl"
       role="dialog"
       aria-label={t("ai_helper.title", "העוזר החכם")}
     >
-      <div className="flex items-center justify-between border-b border-border bg-primary px-4 py-3 text-primary-foreground">
+      <div className="flex items-center justify-between border-b border-white/10 bg-gradient-to-b from-primary/95 to-primary px-4 py-3 text-primary-foreground shadow-glow">
         <h2 className="text-sm font-semibold">{t("ai_helper.title", "העוזר החכם")}</h2>
         <button
           onClick={onClose}
@@ -169,7 +169,7 @@ export function AiHelperPanel({ onClose }: { onClose: () => void }) {
             </div>
           ) : (
             <div key={m.id} className="flex justify-start">
-              <div className="max-w-[85%] rounded-lg rounded-bl-none bg-muted px-3 py-2">
+              <div className="max-w-[85%] rounded-xl rounded-bl-none border border-white/10 bg-white/5 px-3 py-2">
                 <AssistantBody message={m} />
               </div>
             </div>
@@ -178,7 +178,7 @@ export function AiHelperPanel({ onClose }: { onClose: () => void }) {
       </div>
 
       {process.env.NODE_ENV === "development" && (
-        <p className="border-t border-border px-4 py-1.5 text-[11px] text-muted-foreground">
+        <p className="border-t border-white/10 px-4 py-1.5 text-[11px] text-muted-foreground">
           {t("ai_helper.dev_hint", "מוק בפיתוח — נסו:")} {DEV_HINTS.join(", ")}
         </p>
       )}
@@ -188,7 +188,7 @@ export function AiHelperPanel({ onClose }: { onClose: () => void }) {
           e.preventDefault();
           void send();
         }}
-        className="flex gap-2 border-t border-border p-3"
+        className="flex gap-2 border-t border-white/10 p-3"
       >
         <Input
           value={draft}

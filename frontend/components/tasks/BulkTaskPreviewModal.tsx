@@ -44,7 +44,7 @@ export function BulkTaskPreviewModal({
       <div
         role="alertdialog"
         aria-modal="true"
-        className="w-full max-w-md space-y-4 rounded-xl bg-card p-5 shadow-xl max-h-[90vh] overflow-y-auto"
+        className="glass-card w-full max-w-md space-y-4 p-5 max-h-[90vh] overflow-y-auto"
       >
         <h2 className="text-lg font-bold">
           {hasConflicts
@@ -59,7 +59,7 @@ export function BulkTaskPreviewModal({
         />
         <NumberList
           title={t("task.bulk_conflicts", "כבר שייכים למשימה בקמפיין הזה")}
-          tone="text-status-darkred"
+          tone="text-destructive"
           items={conflicts.map((n) => `${n.name} (#${n.task_ids.join(", #")})`)}
         />
         <NumberList
@@ -69,7 +69,7 @@ export function BulkTaskPreviewModal({
         />
 
         {eligible.length === 0 ? (
-          <p className="text-sm text-status-darkred">
+          <p className="text-sm text-destructive">
             {t("task.bulk_nothing_to_create", "אין מספרים פנויים — לא תיווצר אף משימה.")}
           </p>
         ) : (

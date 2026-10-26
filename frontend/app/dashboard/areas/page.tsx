@@ -124,7 +124,7 @@ export default function AreasPage() {
   // link, which is already gone — see dashboard/layout.tsx).
   if (!isFeatureEnabled(user?.organization, "area_display_enabled")) {
     return (
-      <p className="text-status-darkred">
+      <p className="text-destructive">
         {t("page.module_disabled", "התכונה הזו כבויה עבור הארגון שלך.")}
       </p>
     );
@@ -187,7 +187,7 @@ export default function AreasPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t("areas", "אזורים")}</h1>
+        <h1 className="font-display text-4xl">{t("areas", "אזורים")}</h1>
         {isAdmin && (
           <div className="flex items-center gap-2">
             <Button
@@ -252,7 +252,7 @@ export default function AreasPage() {
       )}
 
       {fieldsOpen && (
-        <div className="bg-card border border-border rounded-xl shadow-sm p-4 flex flex-wrap gap-2">
+        <div className="glass-card p-4 flex flex-wrap gap-2">
           {OPTIONAL_COLUMNS.map((f) => {
             const active = fields.includes(f);
             return (
@@ -276,7 +276,7 @@ export default function AreasPage() {
 
       {/* All the org's zone polygons on one map (fixes7 §7A) — filtered. */}
       {filtered.some((a) => a.area_polygon) && (
-        <div className="bg-card border border-border rounded-xl shadow-sm p-2 space-y-1">
+        <div className="glass-card p-2 space-y-1">
           <h2 className="px-2 pt-1 text-sm font-semibold text-muted-foreground flex items-center gap-1.5">
             <MapPin className="h-4 w-4" /> {t("areas.map_all", "מפת האזורים")}
           </h2>
@@ -284,7 +284,7 @@ export default function AreasPage() {
         </div>
       )}
 
-      <div className="bg-card border border-border rounded-xl shadow-sm overflow-x-auto">
+      <div className="glass-card overflow-x-auto">
         {rows.length === 0 ? (
           <p className="px-4 py-6 text-center text-muted-foreground">
             {t("page.no_areas", "אין אזורים עדיין.")}
@@ -513,7 +513,7 @@ function AreaRow({
             plain yes/no — the generic useConfirm modal only has two. */}
         {cascadeChoiceOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-sm bg-card border border-border rounded-xl shadow-xl p-5 space-y-4">
+            <div className="w-full max-w-sm glass-card p-5 space-y-4">
               <h2 className="text-lg font-bold">{t("confirm.title", "אישור פעולה")}</h2>
               <p className="text-sm text-foreground">
                 {t(

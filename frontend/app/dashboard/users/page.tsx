@@ -968,7 +968,7 @@ export default function UsersPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold">{t("users.title", "ניהול משתמשים")}</h1>
+          <h1 className="font-display text-3xl font-bold tracking-wide">{t("users.title", "ניהול משתמשים")}</h1>
           <p className="text-sm text-muted-foreground">
             {t(
               "users.intro",
@@ -987,7 +987,7 @@ export default function UsersPage() {
           <Button
             type="button"
             variant="outline"
-            className="border-status-darkred text-status-darkred hover:bg-status-darkred/10"
+            className="border-status-darkred text-destructive hover:bg-destructive/10"
             onClick={clearAssignments}
           >
             {t("users.clear_assignments", "ניקוי שיבוצים")}
@@ -1332,7 +1332,7 @@ export default function UsersPage() {
                     )}
                     {r.role === "shliach" && r.login_status !== "active" && (
                       <span className="ms-2 inline-flex items-center gap-2">
-                        <span className="rounded bg-status-darkred/10 border border-status-darkred/40 text-status-darkred text-xs px-2 py-0.5">
+                        <span className="rounded bg-destructive/10 border border-destructive/40 text-destructive text-xs px-2 py-0.5">
                           {r.login_status === "missing"
                             ? t("users.login_missing", "אין כניסה למערכת")
                             : t("users.login_suspended", "הכניסה למערכת הושעתה")}
@@ -1442,7 +1442,7 @@ export default function UsersPage() {
                     {r.kind === "user" && me?.id !== r.id && (
                       <button
                         onClick={() => remove(r)}
-                        className="text-sm text-status-darkred hover:underline"
+                        className="text-sm font-medium text-destructive underline underline-offset-2 hover:opacity-80"
                       >
                         {t("action.delete", "מחק")}
                       </button>
@@ -1666,7 +1666,7 @@ function UserForm({
         </label>
       </div>
       {error && (
-        <p className="text-sm text-status-darkred">
+        <p className="text-sm text-destructive">
           {error}{" "}
           {existing && (
             <Link href={`/dashboard/users/${existing.id}`} className="text-primary underline">

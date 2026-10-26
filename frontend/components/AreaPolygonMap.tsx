@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { useLocalization } from "@/lib/localization";
 import { loadGoogleMaps, mapsKey, useMapsLang } from "@/lib/maps";
 
+import { DARK_MAP_STYLES } from "./AreasMap";
+
 // Sheepshead Bay, Brooklyn — sensible default center when an area has no polygon yet.
 const DEFAULT_CENTER = { lat: 40.5862, lng: -73.9442 };
 
@@ -98,6 +100,7 @@ export function AreaPolygonMap({
           streetViewControl: false,
           // Hint that clicking is the interaction; cursor stays a crosshair while drawing.
           clickableIcons: false,
+          styles: DARK_MAP_STYLES,
         });
         mapRef.current = map;
         // Tiles can take a beat; flip status once the map has painted its first idle.
@@ -334,7 +337,7 @@ export function AreaPolygonMap({
               <button
                 type="button"
                 onClick={clear}
-                className="text-destructive hover:underline"
+                className="font-medium text-destructive underline underline-offset-2 hover:opacity-80"
               >
                 {t("action.cancel", "ביטול")}
               </button>
@@ -354,7 +357,7 @@ export function AreaPolygonMap({
                 <button
                   type="button"
                   onClick={clear}
-                  className="text-destructive hover:underline"
+                  className="font-medium text-destructive underline underline-offset-2 hover:opacity-80"
                 >
                   {t("apm.clear_boundary", "נקה תחום")}
                 </button>

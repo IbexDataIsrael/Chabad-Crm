@@ -1,14 +1,21 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
-import { Heebo } from "next/font/google";
+import { Karantina, Rubik } from "next/font/google";
 
 import { Footer } from "@/components/Footer";
 import { Providers } from "./providers";
 
-const heebo = Heebo({
+const rubik = Rubik({
   subsets: ["hebrew", "latin"],
-  weight: ["300", "400", "500", "600", "700", "800"],
-  variable: "--font-heebo",
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-rubik",
+  display: "swap",
+});
+
+const karantina = Karantina({
+  subsets: ["hebrew", "latin"],
+  weight: ["300", "400", "700"],
+  variable: "--font-karantina",
   display: "swap",
 });
 
@@ -32,15 +39,13 @@ export const metadata: Metadata = {
   manifest: "/site.webmanifest",
 };
 
-// The design system (tailwind.config.js tokens, status colors) is light-only —
-// no dark variant exists. Without this, Android Chrome's "force dark for web
-// content" auto-inverts the page on phones in system dark mode, which mangles
-// `backdrop-blur` / fixed-position layers (e.g. the sticky header, the mobile
-// nav drawer) into solid dark boxes. Desktop Chrome and headless/emulated
-// Chromium don't apply that renderer feature, so this only shows on real
-// Android devices — reported as the activist page looking broken.
+// The design system (tailwind.config.js tokens, status colors) is dark-only
+// (redesign branch) — `color-scheme: dark` makes Android Chrome render native
+// controls/scrollbars dark, matching the theme. (Previously "light" to stop
+// Android's force-dark from mangling the OLD light theme's fixed/blur layers;
+// with a real dark theme that renderer behavior is desirable.)
 export const viewport: Viewport = {
-  colorScheme: "light",
+  colorScheme: "dark",
 };
 
 export default function RootLayout({
@@ -50,7 +55,7 @@ export default function RootLayout({
 }) {
   // Native RTL layout: Hebrew is the primary UI language.
   return (
-    <html lang="he" dir="rtl" className={`${heebo.variable} overflow-x-hidden`}>
+    <html lang="he" dir="rtl" className={`${rubik.variable} ${karantina.variable} overflow-x-hidden`}>
       {/* overflow-x-hidden on BOTH html and body: the mobile Sidebar drawer
           (components/layout/Sidebar.tsx) stays permanently mounted and is
           hidden via `translate-x-full` rather than unmounted/display:none. In

@@ -13,6 +13,34 @@ const DEFAULT_CENTER = { lat: 40.5862, lng: -73.9442 };
 // A small qualitative palette so adjacent zones are tellable apart.
 export const ZONE_COLORS = ["#d6249f", "#1faa00", "#ff7a00", "#2563eb", "#8b0000", "#f2c200"];
 
+// Standard Google Maps "dark" style — the classic dark JSON (dark roads/water/
+// landscape, labels kept readable) so embedded maps match the app's dark
+// glassy theme instead of rendering the default light tiles.
+export const DARK_MAP_STYLES: object[] = [
+  { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
+  { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#263c3f" }] },
+  { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#6b9a76" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
+  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
+  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9ca5b3" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#746855" }] },
+  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#1f2835" }] },
+  { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#f3d19c" }] },
+  { featureType: "transit", elementType: "geometry", stylers: [{ color: "#2f3948" }] },
+  { featureType: "transit.station", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#515c6d" }] },
+  { featureType: "water", elementType: "labels.text.stroke", stylers: [{ color: "#17263c" }] },
+];
+
+// Dark chrome for InfoWindow content (the container itself is always white, so
+// the content div carries the dark background and bleeds over the padding).
+const INFO_WINDOW_STYLE = "font-size:13px;line-height:1.4;background:#1c2130;color:#e6eaf2;padding:12px 16px;margin:-12px -14px;border-radius:8px";
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /** Parse a GeoJSON Polygon string into a {lat,lng}[] ring (drops the closing point). */
@@ -67,6 +95,7 @@ export function AreasMap({ areas }: { areas: Area[] }) {
           streetViewControl: false,
           clickableIcons: false,
           gestureHandling: "cooperative",
+          styles: DARK_MAP_STYLES,
         });
         const info = new g.maps.InfoWindow();
         const bounds = new g.maps.LatLngBounds();
@@ -83,9 +112,9 @@ export function AreasMap({ areas }: { areas: Area[] }) {
           z.path!.forEach((p) => bounds.extend(p));
           polygon.addListener("click", (e: any) => {
             info.setContent(
-              `<div style="font-size:13px;line-height:1.4">` +
+              `<div style="${INFO_WINDOW_STYLE}">` +
                 `<strong>${z.area.area_name.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)}</strong>` +
-                `<br/><a href="/dashboard/areas/${z.area.id}" style="color:#d6249f;text-decoration:none">` +
+                `<br/><a href="/dashboard/areas/${z.area.id}" style="color:#ff8ad2;text-decoration:none">` +
                 `${t("areas.view_area", "הצג אזור »")}</a>` +
                 `</div>`,
             );

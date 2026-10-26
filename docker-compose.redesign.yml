@@ -1,0 +1,35 @@
+# Redesign preview — frontend only, on http://localhost:3002.
+#
+# Serves THIS worktree (the `redesign` branch) so it can be compared
+# side-by-side with the original CRM, which keeps :3001 for itself in
+# C:\projects\sheepsidebay_crm. Talks to the ORIGINAL repo's backend at
+# :8001 (browser-side URL) — start it from C:\projects\sheepsidebay_crm
+# with `docker compose up -d backend`.
+#
+#   docker compose -f docker-compose.redesign.yml up -d
+#   docker compose -f docker-compose.redesign.yml logs -f   # wait for "Ready"
+#   docker compose -f docker-compose.redesign.yml down      # stop
+#
+# Same env vars as docker-compose.yml's frontend service; secrets come from
+# the root .env, exactly like the main stack. Never `next build` in
+# ./frontend on the host while this is running (per KIMI_NOTES.md).
+services:
+  frontend:
+    image: sheepsidebay_crm-frontend
+    container_name: minicrm-redesign-frontend
+    ports:
+      - "3002:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8001
+      # No `backend` service on this compose project's network — lib/serverApi.ts
+      # falls back to NEXT_PUBLIC_API_URL (host-reachable) for server-side calls.
+      - INTERNAL_API_URL=http://localhost:8001
+      - NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-}
+      - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME:-}
+      # Polling for HMR across the Windows->Linux bind mount (same as main stack).
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules

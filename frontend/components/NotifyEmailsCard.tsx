@@ -127,7 +127,7 @@ export function NotifyEmailsCard({
                   <button
                     type="button"
                     onClick={() => remove(e)}
-                    className="rounded-full p-0.5 text-muted-foreground hover:bg-status-darkred/10 hover:text-status-darkred"
+                    className="rounded-full p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                     aria-label={t("action.delete", "מחק")}
                   >
                     <X className="h-3.5 w-3.5" />
@@ -162,7 +162,7 @@ export function NotifyEmailsCard({
                 }}
                 placeholder="name@example.com"
               />
-              {draftError && <p className="text-xs text-status-darkred">{draftError}</p>}
+              {draftError && <p className="text-xs text-destructive">{draftError}</p>}
             </div>
             <Button type="submit" variant="outline">
               <Plus className="h-4 w-4" /> {t("action.add", "הוסף")}

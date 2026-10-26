@@ -21,7 +21,7 @@ const badgeVariants = cva(
         "status-magenta": "border-transparent bg-status-magenta text-white shadow hover:bg-status-magenta/80",
         "status-green": "border-transparent bg-status-green text-white shadow hover:bg-status-green/80",
         "status-yellow": "border-transparent bg-status-yellow text-black shadow hover:bg-status-yellow/80",
-        "status-darkred": "border-transparent bg-status-darkred text-white shadow hover:bg-status-darkred/80",
+        "status-darkred": "border-transparent bg-status-darkred text-white shadow hover:bg-destructive/80",
         "status-orange": "border-transparent bg-status-orange text-white shadow hover:bg-status-orange/80",
       },
     },

@@ -74,7 +74,7 @@ export default function CustomFieldsPage() {
   if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!isAdmin) {
     return (
-      <p className="text-status-darkred">
+      <p className="text-destructive">
         {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
       </p>
     );
@@ -115,7 +115,7 @@ export default function CustomFieldsPage() {
   return (
     <div className="space-y-5 max-w-3xl">
       <div>
-        <h1 className="text-2xl font-bold">{t("cf.title", "שדות מותאמים אישית")}</h1>
+        <h1 className="font-display text-3xl font-bold">{t("cf.title", "שדות מותאמים אישית")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {t(
             "cf.intro",
@@ -313,14 +313,14 @@ function DefRow({
       <div className="flex items-center gap-1 ms-auto">
         <button
           onClick={save}
-          className="rounded-md bg-foreground text-white px-3 py-1 text-xs hover:opacity-90"
+          className="rounded-md bg-foreground text-background px-3 py-1 text-xs hover:opacity-90"
         >
           {t("action.save", "שמור")}
         </button>
         {def.is_active ? (
           <button
             onClick={deactivate}
-            className="rounded-md border border-status-darkred/40 text-status-darkred px-2 py-1 text-xs hover:bg-status-darkred/10"
+            className="rounded-md border border-destructive/40 text-destructive px-2 py-1 text-xs hover:bg-destructive/10"
           >
             {t("action.delete", "מחק")}
           </button>
@@ -334,7 +334,7 @@ function DefRow({
             </button>
             <button
               onClick={hardDelete}
-              className="text-xs text-status-darkred hover:underline"
+              className="text-xs font-medium text-destructive underline underline-offset-2 hover:opacity-80"
             >
               {t("cf.hard_delete", "מחק לצמיתות")}
             </button>
@@ -489,7 +489,7 @@ function AddDef({
                 <button
                   type="button"
                   onClick={() => setOptions((prev) => prev.filter((_, j) => j !== i))}
-                  className="text-xs text-status-darkred hover:underline"
+                  className="text-xs font-medium text-destructive underline underline-offset-2 hover:opacity-80"
                 >
                   ✕
                 </button>
@@ -506,7 +506,7 @@ function AddDef({
         </div>
       )}
 
-      {error && <p className="text-sm text-status-darkred">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
     </form>
   );
 }

@@ -1166,7 +1166,7 @@ export default function ApartmentsPage() {
   // Area -> Building) — defense in depth alongside the now-gone nav link.
   if (!isFeatureEnabled(user?.organization, "apartment_display_enabled")) {
     return (
-      <p className="text-status-darkred">
+      <p className="text-destructive">
         {t("page.module_disabled", "התכונה הזו כבויה עבור הארגון שלך.")}
       </p>
     );
@@ -1175,7 +1175,7 @@ export default function ApartmentsPage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold">{t("apartments", "דירות")}</h1>
+        <h1 className="font-display text-4xl">{t("apartments", "דירות")}</h1>
         {/* fixes52 §2.1: flex-wrap (was missing) + py-2 (was py-1.5) so this
             row folds instead of overflowing on mobile and matches the
             Contacts page's header button heights exactly. */}
@@ -1242,7 +1242,7 @@ export default function ApartmentsPage() {
           itself persisted, so a lock flipped on after an activist already had
           the panel open must still hide it, not just the toggle button. */}
       {fieldsOpen && !customizeFieldsLocked && (
-        <div className="bg-card border border-border rounded-xl shadow-sm p-4 space-y-2">
+        <div className="glass-card p-4 space-y-2">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">{t("columns.title", "עמודות מוצגות")}</h3>
             <button
@@ -1657,7 +1657,7 @@ export default function ApartmentsPage() {
           engage; an `overflow-x-auto`-only div never scrolls vertically
           itself, so a sticky child inside it just scrolls away with the page
           instead of sticking. */}
-      <div className="bg-card border border-border rounded-xl shadow-sm overflow-x-auto overflow-y-auto max-h-[75vh]">
+      <div className="glass-card overflow-x-auto overflow-y-auto max-h-[75vh]">
         <table className="w-full text-sm">
           <thead className="bg-background text-muted-foreground text-right">
             <tr>
@@ -1708,7 +1708,7 @@ export default function ApartmentsPage() {
               </tr>
             ) : loadError ? (
               <tr>
-                <td colSpan={colCount} className="px-4 py-6 text-center text-status-darkred">
+                <td colSpan={colCount} className="px-4 py-6 text-center text-destructive">
                   <p>{t("apt.load_failed", "טעינת הדירות נכשלה. נסה שוב.")}</p>
                   <Button
                     variant="outline"
@@ -2062,7 +2062,7 @@ function BatchModal({
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg bg-card rounded-xl shadow-xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div className="w-full max-w-lg glass-card p-5 space-y-4 max-h-[90vh] overflow-y-auto">
         <div>
           <h2 className="text-lg font-bold">{t("batch.title", "יצירת דירות מרובות")}</h2>
           <p className="text-sm text-muted-foreground">
@@ -2141,7 +2141,7 @@ function BatchModal({
                   <button
                     type="button"
                     onClick={() => setLabels((prev) => prev.filter((x) => x !== l))}
-                    className="text-primary/70 hover:text-status-darkred"
+                    className="text-primary/70 hover:text-destructive"
                     aria-label={t("action.remove", "הסר")}
                   >
                     ✕
@@ -2174,7 +2174,7 @@ function BatchModal({
           </div>
         </div>
 
-        {error && <p className="text-sm text-status-darkred">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <div className="flex items-center gap-2 pt-1">
           <button
             type="button"
@@ -2458,7 +2458,7 @@ function BulkEditModal({
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg bg-card rounded-xl shadow-xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div className="w-full max-w-lg glass-card p-5 space-y-4 max-h-[90vh] overflow-y-auto">
         <div>
           <h2 className="text-lg font-bold">
             {t("bulkedit.title", "עריכה מרובה של דירות")}
@@ -2491,7 +2491,7 @@ function BulkEditModal({
           />
         ))}
 
-        {error && <p className="text-sm text-status-darkred">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <div className="flex items-center gap-2 pt-1">
           <button
             type="button"

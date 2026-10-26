@@ -82,7 +82,7 @@ export default function FieldsPage() {
   if (authLoading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!isAdmin) {
     return (
-      <p className="text-status-darkred">
+      <p className="text-destructive">
         {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
       </p>
     );
@@ -126,7 +126,7 @@ export default function FieldsPage() {
   return (
     <div className="space-y-5 max-w-3xl">
       <div>
-        <h1 className="text-2xl font-bold">{t("page.fields_title", "ניהול שדות")}</h1>
+        <h1 className="font-display text-3xl font-bold">{t("page.fields_title", "ניהול שדות")}</h1>
         <p className="text-sm text-muted-foreground">
           {t(
             "page.fields_intro",
@@ -255,7 +255,7 @@ function FieldRow({
               aria-label={t("fields.order_header", "סדר תצוגה")}
               className={`w-14 rounded-md border px-1.5 py-0.5 text-xs text-center ${
                 duplicate
-                  ? "border-status-darkred text-status-darkred bg-status-darkred/10"
+                  ? "border-status-darkred text-destructive bg-destructive/10"
                   : "border-input"
               }`}
               placeholder="—"
@@ -282,7 +282,7 @@ function FieldRow({
             )}
           </div>
           {duplicate && (
-            <span className="text-[10px] text-status-darkred whitespace-nowrap">
+            <span className="text-[10px] text-destructive whitespace-nowrap">
               {t("fields.order_dup", "כפול")}
             </span>
           )}

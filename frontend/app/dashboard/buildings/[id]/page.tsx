@@ -128,8 +128,8 @@ export default function BuildingDetailPage() {
         )}
       </div>
 
-      <div className="bg-card border border-border rounded-xl shadow-sm p-5 space-y-3">
-        <h1 className="text-2xl font-bold">{display}</h1>
+      <div className="glass-card p-5 space-y-3">
+        <h1 className="font-display text-4xl">{display}</h1>
         {/* fixes30 §3: name / address / area edit in place for admins (the
             backend PUT is admin-only); everyone else sees the plain values.
             Floors, coordinates and the map stay on the edit page. */}
@@ -256,7 +256,7 @@ export default function BuildingDetailPage() {
       </div>
 
       {/* Apartments in this building — each title links to its detail page. */}
-      <section className="bg-card border border-border rounded-xl shadow-sm p-5 space-y-2">
+      <section className="glass-card p-5 space-y-2">
         <h2 className="text-sm font-semibold text-muted-foreground">{t("apartments", "דירות")}</h2>
         {apartments.length === 0 ? (
           <p className="text-sm text-muted-foreground">

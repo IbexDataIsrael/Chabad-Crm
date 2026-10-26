@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { loadGoogleMaps, mapsKey, useMapsLang } from "@/lib/maps";
 import { useLocalization } from "@/lib/localization";
 
+import { DARK_MAP_STYLES } from "./AreasMap";
+
 // Sheepshead Bay, Brooklyn — fallback when no point is set yet.
 const DEFAULT_CENTER = { lat: 40.5862, lng: -73.9442 };
 
@@ -77,6 +79,7 @@ export function MapPointPicker({
           mapTypeControl: false,
           streetViewControl: false,
           clickableIcons: false,
+          styles: DARK_MAP_STYLES,
         });
         mapRef.current = map;
 

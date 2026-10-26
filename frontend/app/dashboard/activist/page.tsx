@@ -135,7 +135,7 @@ export default function ActivistLandingPage() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-2xl font-bold">
+        <h1 className="font-display text-3xl font-bold tracking-wide">
           {t("activist_home.title", "ברוך הבא")}
           {user?.display_name ? `, ${user.display_name}` : ""}
         </h1>
@@ -213,7 +213,7 @@ export default function ActivistLandingPage() {
           </Link>
         )}
         {apartmentsError ? (
-          <Card className="border-2 border-status-darkred/70 p-5">
+          <Card className="border-2 border-destructive/70 p-5">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground">
                 <Home className="h-5 w-5" />
@@ -222,7 +222,7 @@ export default function ActivistLandingPage() {
                 {t("activist_home.my_apartments", "הדירות שלי")}
               </div>
             </div>
-            <p className="mt-2 text-sm text-status-darkred">
+            <p className="mt-2 text-sm text-destructive">
               {t("apt.load_failed", "טעינת הדירות נכשלה. נסה שוב.")}
             </p>
             <Button

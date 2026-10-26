@@ -24,8 +24,8 @@ export function TabBar<T extends string>({
             onClick={() => onChange(tab.id)}
             className={`min-h-[36px] rounded-full border px-3 text-sm transition-colors ${
               active
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-card hover:bg-muted"
+                ? "border-primary bg-gradient-to-b from-primary/95 to-primary text-primary-foreground shadow-glow"
+                : "border-white/10 bg-white/5 hover:bg-white/10"
             }`}
           >
             {tab.label}

@@ -67,16 +67,16 @@ export function PhotoGallery({
   if (count === 0) {
     return (
       <div
-        className={`relative overflow-hidden bg-[#0E3B4A] ${className} ${frameClassName}`}
+        className={`relative overflow-hidden bg-card ${className} ${frameClassName}`}
         aria-hidden="true"
       >
-        <svg className="absolute inset-0 h-full w-full opacity-[0.18]" preserveAspectRatio="none">
+        <svg className="absolute inset-0 h-full w-full text-primary/25" preserveAspectRatio="none">
           <defs>
             <pattern id="bay-waves" width="120" height="28" patternUnits="userSpaceOnUse">
               <path
                 d="M0 14 C 20 4, 40 4, 60 14 S 100 24, 120 14"
                 fill="none"
-                stroke="#EEF6F8"
+                stroke="currentColor"
                 strokeWidth="1.4"
               />
             </pattern>
@@ -90,13 +90,13 @@ export function PhotoGallery({
   const PrevIcon = rtl ? ChevronRight : ChevronLeft;
   const NextIcon = rtl ? ChevronLeft : ChevronRight;
   const navButton =
-    "flex h-11 w-11 items-center justify-center rounded-full bg-white/85 text-[#0E3B4A] shadow-md " +
-    "backdrop-blur transition hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white";
+    "flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white shadow-md " +
+    "backdrop-blur transition hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white";
 
   return (
     <div className={`relative ${className}`}>
       <div
-        className={`relative w-full touch-pan-y select-none overflow-hidden bg-[#0E3B4A] ${frameClassName}`}
+        className={`relative w-full touch-pan-y select-none overflow-hidden bg-card ${frameClassName}`}
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
         role="region"
@@ -150,7 +150,7 @@ export function PhotoGallery({
               aria-selected={i === index}
               aria-label={String(i + 1)}
               onClick={() => setIndex(i)}
-              className={`h-14 w-20 shrink-0 overflow-hidden rounded-md ring-offset-2 ring-offset-[#EEF6F8] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1692C0] ${
+              className={`h-14 w-20 shrink-0 overflow-hidden rounded-md ring-offset-2 ring-offset-card transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                 i === index ? "ring-2 ring-[#D99A2B]" : "opacity-60 hover:opacity-100"
               }`}
             >

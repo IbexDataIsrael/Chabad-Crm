@@ -103,7 +103,7 @@ export default function SignupPage() {
   if (done) {
     return (
       <main className="min-h-screen flex items-center justify-center p-6">
-        <div className="w-full max-w-sm bg-card rounded-xl shadow-md p-8 space-y-4 text-center">
+        <div className="glass-card w-full max-w-sm space-y-4 p-8 text-center">
           <div className="text-4xl">📨</div>
           <h1 className="text-2xl font-bold">{t("signup.received_title", "בקשתך התקבלה")}</h1>
           <p className="text-sm text-muted-foreground">
@@ -126,7 +126,7 @@ export default function SignupPage() {
   if (!method) {
     return (
       <main className="min-h-screen flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-card rounded-xl shadow-md p-8 space-y-5">
+        <div className="glass-card w-full max-w-md space-y-5 p-8">
           <div className="text-center">
             <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <Building2 className="h-6 w-6" />
@@ -138,9 +138,9 @@ export default function SignupPage() {
             {t("signup.with_password", "הרשמה עם אימייל וסיסמה")}
           </Button>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="h-px flex-1 bg-border" />
+            <span className="h-px flex-1 bg-white/10" />
             {t("common.or", "או")}
-            <span className="h-px flex-1 bg-border" />
+            <span className="h-px flex-1 bg-white/10" />
           </div>
           <GoogleSignInButton
             onCredential={(cred) => {
@@ -167,7 +167,7 @@ export default function SignupPage() {
   if (method === "google") {
     return (
       <main className="min-h-screen flex items-center justify-center p-6">
-        <form onSubmit={onGoogleFinish} className="w-full max-w-md bg-card rounded-xl shadow-md p-8 space-y-4">
+        <form onSubmit={onGoogleFinish} className="glass-card w-full max-w-md space-y-4 p-8">
           <div className="text-center">
             <h1 className="text-2xl font-bold">{t("signup.almost_done", "כמעט סיימנו")}</h1>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -202,7 +202,7 @@ export default function SignupPage() {
   // --- Email + password path ---------------------------------------------
   return (
     <main className="min-h-screen flex items-center justify-center p-6">
-      <form onSubmit={onSubmit} className="w-full max-w-md bg-card rounded-xl shadow-md p-8 space-y-4">
+      <form onSubmit={onSubmit} className="glass-card w-full max-w-md space-y-4 p-8">
         <div className="text-center">
           <h1 className="text-2xl font-bold">{t("signup.title", "פתיחת חשבון ארגון")}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{t("signup.subtitle", "צור ארגון חדש ב-CRM")}</p>

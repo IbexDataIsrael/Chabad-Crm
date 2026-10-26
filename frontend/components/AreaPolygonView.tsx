@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { loadGoogleMaps, mapsKey, useMapsLang } from "@/lib/maps";
 import { useLocalization } from "@/lib/localization";
 
+import { DARK_MAP_STYLES } from "./AreasMap";
+
 // Sheepshead Bay fallback when an area has no polygon to fit to.
 const DEFAULT_CENTER = { lat: 40.5862, lng: -73.9442 };
 
@@ -50,6 +52,7 @@ export function AreaPolygonView({ polygon }: { polygon: string | null }) {
           streetViewControl: false,
           clickableIcons: false,
           gestureHandling: "cooperative",
+          styles: DARK_MAP_STYLES,
         });
         const polygonObj = new g.maps.Polygon({
           paths: path,

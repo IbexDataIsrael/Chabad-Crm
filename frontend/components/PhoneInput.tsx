@@ -52,7 +52,7 @@ export function PhoneInput({
             : "border-input focus:border-primary focus:ring-primary"
         }`}
       />
-      <span className={`block text-xs ${invalid ? "text-status-darkred" : "text-muted-foreground"}`}>
+      <span className={`block text-xs ${invalid ? "text-destructive" : "text-muted-foreground"}`}>
         {t("validation.phone_hint", PHONE_HINT)}
       </span>
     </div>

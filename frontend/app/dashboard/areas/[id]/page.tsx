@@ -139,9 +139,9 @@ export default function AreaDetailPage() {
       </div>
 
       {/* Area data — renders regardless of whether Google Maps works. */}
-      <div className="bg-card border border-border rounded-xl shadow-sm p-5 space-y-3">
+      <div className="glass-card p-5 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-bold">{area.area_name}</h1>
+          <h1 className="font-display text-4xl">{area.area_name}</h1>
           {area.area_polygon ? (
             <Badge variant="success">{t("page.area_has_boundary", "תחום מוגדר")}</Badge>
           ) : (
@@ -165,7 +165,7 @@ export default function AreaDetailPage() {
       </div>
 
       {/* Buildings in this area. */}
-      <section className="bg-card border border-border rounded-xl shadow-sm p-5 space-y-2">
+      <section className="glass-card p-5 space-y-2">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-muted-foreground">{t("buildings", "בניינים")}</h2>
           {isAdmin && (
@@ -266,7 +266,7 @@ export default function AreaDetailPage() {
       </section>
 
       {/* Active members (שלוחים/פעילים) covering this area. */}
-      <section className="bg-card border border-border rounded-xl shadow-sm p-5 space-y-2">
+      <section className="glass-card p-5 space-y-2">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-muted-foreground">{t("page.shluchim", "פעילים")}</h2>
           {isAdmin && (
@@ -318,7 +318,7 @@ export default function AreaDetailPage() {
       </section>
 
       {/* The map is last and optional — area data above is fully usable without it. */}
-      <section className="bg-card border border-border rounded-xl shadow-sm p-5 space-y-2">
+      <section className="glass-card p-5 space-y-2">
         <h2 className="text-sm font-semibold text-muted-foreground">{t("areas.area_polygon", "תחום פוליגון")}</h2>
         <AreaPolygonView polygon={area.area_polygon} />
       </section>

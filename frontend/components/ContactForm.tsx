@@ -647,7 +647,7 @@ export function ContactForm({
       {extra && <div className="sm:col-span-2">{extra}</div>}
 
       {error && (
-        <p className="sm:col-span-2 text-sm text-status-darkred bg-status-darkred/10 rounded-md px-3 py-2">
+        <p className="sm:col-span-2 text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">
           {error}
         </p>
       )}

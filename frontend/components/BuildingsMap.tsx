@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { loadGoogleMaps, mapsKey, useMapsLang } from "@/lib/maps";
 import { useLocalization } from "@/lib/localization";
 import { buildingDisplayName, type Area, type Building } from "@/lib/types";
-import { geoJSONToPath, ZONE_COLORS } from "./AreasMap";
+import { geoJSONToPath, DARK_MAP_STYLES, ZONE_COLORS } from "./AreasMap";
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) =>
@@ -112,6 +112,7 @@ export function BuildingsMap({
         const map = new g.maps.Map(ref.current, {
           disableDefaultUI: true,
           zoomControl: true,
+          styles: DARK_MAP_STYLES,
         });
         const bounds = new g.maps.LatLngBounds();
         const info = new g.maps.InfoWindow();
@@ -138,18 +139,20 @@ export function BuildingsMap({
             title: label ? `${display} · ${label}` : display,
             icon: markerIcon(!!b.is_town_house, g),
             label: label
-              ? { text: label, color: "#0b3d2e", fontSize: "12px", fontWeight: "700" }
+              ? // Light text — the label renders directly on the (now dark) map
+                // tiles; the old dark-green was unreadable on them.
+                { text: label, color: "#f3f6fb", fontSize: "12px", fontWeight: "700" }
               : undefined,
           });
           marker.addListener("click", () => {
             const extra = infoExtra?.(b);
             info.setContent(
-              `<div style="font-size:13px;line-height:1.4">` +
+              `<div style="font-size:13px;line-height:1.4;background:#1c2130;color:#e6eaf2;padding:12px 16px;margin:-12px -14px;border-radius:8px">` +
                 `<strong>${escapeHtml(display)}</strong>` +
                 (b.building_address ? `<br/>${escapeHtml(b.building_address)}` : "") +
                 (extra ? `<br/>${escapeHtml(extra)}` : "") +
                 (showBuildingLink
-                  ? `<br/><a href="/dashboard/buildings/${b.id}" style="color:#d6249f;text-decoration:none">` +
+                  ? `<br/><a href="/dashboard/buildings/${b.id}" style="color:#ff8ad2;text-decoration:none">` +
                     `${escapeHtml(t("buildings.view", "הצג בניין »"))}</a>`
                   : "") +
                 `</div>`,

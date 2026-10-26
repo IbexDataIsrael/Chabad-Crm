@@ -36,7 +36,7 @@ export function GoogleSignInButton({
           },
         });
         id.renderButton(ref.current, {
-          theme: "outline",
+          theme: "filled_black",
           size: "large",
           width: 320,
           text: "signin_with",

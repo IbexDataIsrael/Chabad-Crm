@@ -31,7 +31,10 @@ const inputClass =
 // comment) — a production report showed the Tailwind bg-muted/
 // text-muted-foreground classes only taking effect on hover.
 const dtClass = "inline-block w-fit rounded px-1.5 py-0.5 text-xs font-medium";
-const dtStyle: CSSProperties = { backgroundColor: "#f4f4f5", color: "#71717a" };
+const dtStyle: CSSProperties = {
+  backgroundColor: "hsl(var(--muted))",
+  color: "hsl(var(--muted-foreground))",
+};
 
 /**
  * A visit's full detail card (fixes26 §2). `readOnly` renders every field as

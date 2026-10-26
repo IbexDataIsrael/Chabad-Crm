@@ -61,7 +61,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             key={t.id}
             role="status"
             onClick={() => remove(t.id)}
-            className={`pointer-events-auto cursor-pointer rounded-lg px-4 py-2 text-sm font-medium text-white shadow-lg transition ${
+            className={`pointer-events-auto cursor-pointer rounded-xl border border-white/15 px-4 py-2 text-sm font-medium text-white shadow-lg backdrop-blur-md transition ${
               t.kind === "success" ? "bg-status-green" : "bg-status-darkred"
             }`}
           >

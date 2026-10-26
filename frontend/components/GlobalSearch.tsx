@@ -130,11 +130,11 @@ export function GlobalSearch() {
         }}
         onFocus={() => setOpen(true)}
         placeholder={t("search.placeholder", "חיפוש כללי: אזור, בניין, דירה, איש קשר…")}
-        className="w-full rounded-md border border-input bg-background py-1.5 ps-8 pe-3 text-sm focus:border-primary focus:bg-card focus:outline-none"
+        className="w-full rounded-full border border-white/10 bg-white/5 py-1.5 ps-8 pe-3 text-sm placeholder:text-muted-foreground focus:border-primary/60 focus:bg-white/10 focus:outline-none focus:ring-2 focus:ring-ring/40"
       />
 
       {showDropdown && (
-        <div className="absolute top-full start-0 z-50 mt-1 max-h-96 w-full min-w-64 overflow-y-auto rounded-xl border border-border bg-card p-1 shadow-lg">
+        <div className="absolute top-full start-0 z-50 mt-1 max-h-96 w-full min-w-64 overflow-y-auto rounded-xl border border-white/10 bg-popover/90 p-1 shadow-xl shadow-black/40 backdrop-blur-xl">
           {loading && (
             <div className="px-3 py-2 text-sm text-muted-foreground">
               {t("search.searching", "מחפש…")}

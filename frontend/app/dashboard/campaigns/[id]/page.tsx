@@ -119,7 +119,7 @@ export default function CampaignDetailPage() {
   if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!allowed) {
     return (
-      <p className="text-status-darkred">
+      <p className="text-destructive">
         {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
       </p>
     );
@@ -130,7 +130,7 @@ export default function CampaignDetailPage() {
         <Link href="/dashboard/campaigns" className="text-sm text-primary hover:underline">
           {t("action.back", "← חזרה")}
         </Link>
-        <p className="text-status-darkred">{t("campaign.not_found", "הקמפיין לא נמצא.")}</p>
+        <p className="text-destructive">{t("campaign.not_found", "הקמפיין לא נמצא.")}</p>
       </div>
     );
   }
@@ -145,7 +145,7 @@ export default function CampaignDetailPage() {
       </Link>
 
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">
+        <h1 className="font-display text-4xl font-bold">
           <InlineEdit<string>
             value={campaign.name}
             display={<span>{campaign.name}</span>}
@@ -159,7 +159,7 @@ export default function CampaignDetailPage() {
         <Button
           size="sm"
           variant="outline"
-          className="border-status-darkred/40 text-status-darkred hover:bg-status-darkred/10"
+          className="border-destructive/40 text-destructive hover:bg-destructive/10"
           onClick={remove}
         >
           <Trash2 className="h-3.5 w-3.5" /> {t("action.delete", "מחק")}
@@ -271,7 +271,7 @@ export default function CampaignDetailPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="border-status-darkred/40 text-status-darkred hover:bg-status-darkred/10"
+                  className="border-destructive/40 text-destructive hover:bg-destructive/10"
                   onClick={() => undoCompletion(c.building_id)}
                 >
                   {t("action.delete", "מחק")}

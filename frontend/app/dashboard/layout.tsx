@@ -277,12 +277,12 @@ function DashboardChrome({ children }: { children: ReactNode }) {
               : "lg:ml-64"
         }`}
       >
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-border bg-background/80 px-4 py-3 backdrop-blur-lg md:px-6">
+        <header className="glass-header sticky top-0 z-30 flex items-center justify-between gap-3 px-4 py-3 md:px-6">
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
               size="icon"
-              className="min-h-[44px] min-w-[44px] lg:hidden"
+              className="min-h-[44px] min-w-[44px] text-muted-foreground lg:hidden"
               onClick={() => setSidebarOpen(true)}
             >
               <Menu className="h-5 w-5" />
@@ -319,7 +319,7 @@ function DashboardChrome({ children }: { children: ReactNode }) {
               {/* fixes14 §2: the name comes from the linked contacts row. */}
               {user?.display_name || user?.full_name}
               {isAdmin && (
-                <span className="ms-2 rounded bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                <span className="ms-2 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                   {t("common.admin", "מנהל")}
                 </span>
               )}

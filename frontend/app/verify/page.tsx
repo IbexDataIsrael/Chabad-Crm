@@ -41,7 +41,7 @@ function VerifyInner() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-sm bg-card rounded-xl shadow-md p-8 space-y-4 text-center">
+      <div className="glass-card w-full max-w-sm space-y-4 p-8 text-center">
         <div
           className={`mx-auto flex h-12 w-12 items-center justify-center rounded-xl ${
             state === "success"

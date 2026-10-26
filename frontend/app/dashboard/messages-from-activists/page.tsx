@@ -48,7 +48,7 @@ export default function MessagesFromActivistsPage() {
   if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!isAdmin) {
     return (
-      <p className="text-status-darkred">
+      <p className="text-destructive">
         {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
       </p>
     );
@@ -82,7 +82,7 @@ export default function MessagesFromActivistsPage() {
   return (
     <div className="space-y-8 max-w-4xl">
       <div>
-        <h1 className="text-2xl font-bold">
+        <h1 className="font-display text-4xl font-bold">
           {t("nav.messages_from_activists", "הודעות מהפעילים")}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -109,7 +109,7 @@ export default function MessagesFromActivistsPage() {
         <h2 className="font-semibold">
           {t("shliach_msg.report_completed_btn", "דיווח על השלמת הדוח")}
         </h2>
-        <div className="bg-card rounded-xl shadow-sm divide-y divide-border">
+        <div className="glass-card divide-y divide-border">
           {busy ? (
             <p className="px-4 py-6 text-center text-muted-foreground">{t("action.loading", "טוען…")}</p>
           ) : filteredCompletions.length === 0 ? (
@@ -156,7 +156,7 @@ export default function MessagesFromActivistsPage() {
         <h2 className="font-semibold">
           {t("shliach_msg.system_comment_btn", "הערות על המערכת")}
         </h2>
-        <div className="bg-card rounded-xl shadow-sm divide-y divide-border">
+        <div className="glass-card divide-y divide-border">
           {busy ? (
             <p className="px-4 py-6 text-center text-muted-foreground">{t("action.loading", "טוען…")}</p>
           ) : filteredComments.length === 0 ? (

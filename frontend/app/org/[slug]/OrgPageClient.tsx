@@ -57,13 +57,13 @@ export function OrgPageClient() {
 
   if (missing) {
     return (
-      <main className="flex min-h-[70vh] items-center justify-center bg-[#EEF6F8] px-4">
-        <div className="max-w-sm text-center">
-          <WaveRule className="mx-auto mb-4 h-4 w-28" color="#1692C0" />
-          <p className="text-lg font-medium text-[#13232B]">
+      <main className="flex min-h-[70vh] items-center justify-center px-4">
+        <div className="glass-card max-w-sm space-y-3 p-8 text-center">
+          <WaveRule className="mx-auto h-4 w-28" color="hsl(var(--primary))" />
+          <p className="text-lg font-medium text-foreground">
             {t("public.org_not_found", "לא מצאנו דף ארגון בכתובת הזו.")}
           </p>
-          <Link href="/" className="mt-3 inline-block text-sm text-[#1692C0] underline-offset-4 hover:underline">
+          <Link href="/" className="inline-block text-sm text-primary underline-offset-4 hover:underline">
             {t("public.go_to_login", "למסך ההתחברות")}
           </Link>
         </div>
@@ -72,25 +72,25 @@ export function OrgPageClient() {
   }
 
   if (!org) {
-    return <main className="min-h-[70vh] bg-[#EEF6F8]" aria-busy="true" />;
+    return <main className="min-h-[70vh]" aria-busy="true" />;
   }
 
   const signedInHere = !authLoading && user && user.organization_id === org.id;
   const canJoin = org.self_registration_enabled;
 
   const tabClass = (active: boolean) =>
-    `flex-1 rounded-md px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1692C0] ${
-      active ? "bg-white text-[#0E3B4A] shadow-sm" : "text-[#13232B]/60 hover:text-[#13232B]"
+    `flex-1 rounded-md px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${
+      active ? "bg-white/10 text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
     }`;
 
   const panel = (
     <section
       aria-label={t("public.access_panel", "הצטרפות והתחברות")}
-      className="rounded-2xl bg-white p-5 shadow-[0_12px_40px_-12px_rgba(14,59,74,0.35)] sm:p-7"
+      className="glass-card p-5 sm:p-7"
     >
       {signedInHere ? (
         <div className="space-y-4 text-center">
-          <p className="text-[15px] text-[#13232B]">
+          <p className="text-[15px] text-foreground">
             {t("public.signed_in_as", "את/ה מחובר/ת כ־{name}.").replace(
               "{name}",
               user.display_name || user.full_name,
@@ -99,7 +99,7 @@ export function OrgPageClient() {
           <button
             type="button"
             onClick={() => router.push("/dashboard")}
-            className="w-full rounded-lg bg-[#D99A2B] px-4 py-3 font-semibold text-[#13232B] hover:bg-[#C98A1D]"
+            className="w-full rounded-lg bg-gradient-to-b from-primary/95 to-primary px-4 py-3 font-semibold text-primary-foreground shadow-glow transition-all hover:from-primary hover:to-primary/85"
           >
             {t("public.open_system", "כניסה למערכת")}
           </button>
@@ -107,7 +107,7 @@ export function OrgPageClient() {
       ) : (
         <>
           {canJoin && (
-            <div className="mb-6 flex gap-1 rounded-lg bg-[#EEF6F8] p-1" role="tablist">
+            <div className="mb-6 flex gap-1 rounded-lg border border-white/10 bg-white/5 p-1" role="tablist">
               <button type="button" role="tab" aria-selected={mode === "join"} className={tabClass(mode === "join")} onClick={() => setMode("join")}>
                 {t("public.tab_join", "הצטרפות כפעיל")}
               </button>
@@ -118,7 +118,7 @@ export function OrgPageClient() {
           )}
           {mode === "join" && canJoin ? (
             <>
-              <p className="mb-5 text-[15px] leading-relaxed text-[#13232B]/75">
+              <p className="mb-5 text-[15px] leading-relaxed text-muted-foreground">
                 {t(
                   "public.join_intro",
                   "ממלאים את הפרטים ומתחילים מיד — בלי המתנה לאישור. המשימות שתקבלו יופיעו באזור האישי שלכם.",
@@ -140,7 +140,7 @@ export function OrgPageClient() {
   );
 
   return (
-    <main className="min-h-screen bg-[#EEF6F8] text-[#13232B]">
+    <main className="min-h-screen">
       {/* Mobile: the gallery is the hero, the name sits on it, the panel
           rides up over its bottom edge. Desktop: name + panel on the
           reading-start side, the gallery large beside them. */}
@@ -154,12 +154,12 @@ export function OrgPageClient() {
           />
           {/* Name + subtitle over the photo; pointer-events off so swipes and
               the gallery's own buttons still reach the photo underneath. */}
-          <div className="pointer-events-none absolute inset-x-0 top-0 flex h-[58vh] min-h-[340px] flex-col justify-end bg-gradient-to-t from-[#0E3B4A] via-[#0E3B4A]/35 to-transparent px-5 pb-14">
+          <div className="pointer-events-none absolute inset-x-0 top-0 flex h-[58vh] min-h-[340px] flex-col justify-end bg-gradient-to-t from-background via-background/45 to-transparent px-5 pb-14">
             {org.logo_url && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={org.logo_url} alt="" className="absolute start-4 top-4 h-11 w-11 rounded-lg bg-white/90 object-contain p-1" />
             )}
-            <h1 className="font-[family-name:var(--font-frank-ruhl)] text-[2.6rem] font-black leading-[1.05] text-white">
+            <h1 className="font-display text-[2.6rem] font-bold leading-[1.05] text-white">
               {orgTitle}
             </h1>
             <WaveRule className="mt-3 h-3.5 w-32" />
@@ -187,12 +187,12 @@ export function OrgPageClient() {
             )}
             <LanguageToggle />
           </div>
-          <h1 className="font-[family-name:var(--font-frank-ruhl)] text-6xl font-black leading-[1.02] text-[#0E3B4A]">
+          <h1 className="font-display text-6xl font-bold leading-[1.02] text-foreground">
             {orgTitle}
           </h1>
           <WaveRule className="mt-5 h-4 w-44" />
           {orgSubtitle && (
-            <p className="mt-6 max-w-[34ch] text-lg leading-relaxed text-[#13232B]/75">{orgSubtitle}</p>
+            <p className="mt-6 max-w-[34ch] text-lg leading-relaxed text-muted-foreground">{orgSubtitle}</p>
           )}
           <div className="mt-10">{panel}</div>
         </div>
@@ -200,16 +200,16 @@ export function OrgPageClient() {
           <PhotoGallery
             images={org.gallery}
             orgName={orgTitle}
-            frameClassName="aspect-[4/5] rounded-3xl shadow-[0_30px_60px_-30px_rgba(14,59,74,0.55)]"
+            frameClassName="aspect-[4/5] rounded-3xl border border-white/10 shadow-[0_30px_60px_-30px_rgba(0,0,0,0.7)]"
           />
         </div>
       </div>
 
       {org.public_footer_html && (
         <section aria-label={t("public.footer_section", "מידע נוסף")} className="mx-auto max-w-6xl px-4 pb-14 sm:px-8">
-          <div className="rounded-2xl bg-white p-6 shadow-[0_12px_40px_-12px_rgba(14,59,74,0.15)] sm:p-8">
+          <div className="glass-card p-6 sm:p-8">
             <div
-              className="prose max-w-none text-[#13232B] leading-relaxed [&_img]:max-w-full [&_img]:rounded-lg"
+              className="prose max-w-none leading-relaxed text-foreground/90 [&_img]:max-w-full [&_img]:rounded-lg"
               dangerouslySetInnerHTML={{ __html: org.public_footer_html }}
             />
           </div>

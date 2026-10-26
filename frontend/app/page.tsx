@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogIn, Loader2 } from "lucide-react";
+import { LogIn, Loader2, Building2 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { ApiError, resendVerification } from "@/lib/api";
@@ -129,10 +129,10 @@ export default function LoginPage() {
 
   if (orgOptions) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-6">
-        <div className="w-full max-w-sm bg-card rounded-xl shadow-md p-8 space-y-5">
+      <main className="flex min-h-screen items-center justify-center p-6">
+        <div className="glass-card w-full max-w-sm space-y-5 p-8">
           <div className="text-center">
-            <h1 className="text-2xl font-bold">
+            <h1 className="font-display text-4xl font-bold tracking-wide">
               {t("auth.select_org_title", "בחירת ארגון")}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -149,18 +149,18 @@ export default function LoginPage() {
                   type="button"
                   disabled={busy}
                   onClick={() => onSelectOrg(org.id)}
-                  className="w-full flex items-center gap-3 rounded-xl border border-border px-4 py-3 text-start transition-colors hover:border-primary/30 hover:bg-primary/5 disabled:opacity-50"
+                  className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-start transition-colors hover:border-primary/40 hover:bg-primary/10 disabled:opacity-50"
                 >
                   {org.logo_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={org.logo_url}
                       alt=""
-                      className="h-8 w-8 rounded-md object-contain border border-border bg-card"
+                      className="h-8 w-8 rounded-md border border-white/10 bg-card object-contain"
                     />
                   ) : (
-                    <span className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background">
-                      🏢
+                    <span className="flex h-8 w-8 items-center justify-center rounded-md border border-white/10 bg-white/5">
+                      <Building2 className="h-4 w-4 text-muted-foreground" />
                     </span>
                   )}
                   <span className="font-medium">{org.name}</span>
@@ -169,7 +169,7 @@ export default function LoginPage() {
             ))}
           </ul>
           {error && (
-            <p className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">
+            <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
             </p>
           )}
@@ -191,106 +191,143 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6">
-      <form
-        onSubmit={onSubmit}
-        className="w-full max-w-sm bg-card rounded-xl shadow-md p-8 space-y-5"
-      >
-        <div className="flex justify-end">
-          <LanguageToggle />
+    <main className="flex min-h-screen">
+      {/* Brand panel — desktop only. Decorative SVG rings + display type;
+          the page content reads fine without it on mobile. */}
+      <div className="relative hidden flex-1 items-center justify-center overflow-hidden lg:flex">
+        {/* Decorative concentric rings, fading toward the edges. */}
+        <svg
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 m-auto h-[46rem] w-[46rem] opacity-60"
+          viewBox="0 0 800 800"
+          fill="none"
+        >
+          <defs>
+            <radialGradient id="login-rings" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.22" />
+              <stop offset="55%" stopColor="hsl(var(--primary))" stopOpacity="0.05" />
+              <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <circle cx="400" cy="400" r="380" stroke="hsl(var(--border))" strokeWidth="1.5" />
+          <circle cx="400" cy="400" r="300" stroke="hsl(var(--border))" strokeWidth="1" strokeDasharray="3 9" />
+          <circle cx="400" cy="400" r="220" stroke="hsl(var(--muted-foreground))" strokeOpacity="0.5" strokeWidth="1" />
+          <circle cx="400" cy="400" r="140" stroke="hsl(var(--primary))" strokeOpacity="0.45" strokeWidth="1" strokeDasharray="2 6" />
+          <circle cx="400" cy="400" r="380" fill="url(#login-rings)" />
+        </svg>
+        <div className="relative max-w-md px-10 text-center">
+          <span className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-b from-primary/95 to-primary shadow-glow">
+            <Building2 className="h-8 w-8 text-primary-foreground" />
+          </span>
+          <h1 className="font-display text-7xl font-bold leading-none tracking-wide text-foreground">
+            {t("auth.app_title", "נקודות יהודיות")}
+          </h1>
+          <p className="mt-4 text-lg text-muted-foreground">{t("auth.login_subtitle")}</p>
+          <div className="mx-auto mt-8 h-px w-40 bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
         </div>
-        <div className="text-center">
-          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <LogIn className="h-6 w-6" />
+      </div>
+
+      <div className="flex flex-1 items-center justify-center p-6">
+        <form
+          onSubmit={onSubmit}
+          className="glass-card w-full max-w-sm space-y-5 p-8"
+        >
+          <div className="flex justify-end">
+            <LanguageToggle />
           </div>
-          <h1 className="text-2xl font-bold">{t("auth.app_title", "נקודות יהודיות")}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{t("auth.login_subtitle")}</p>
-        </div>
+          <div className="text-center lg:hidden">
+            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <LogIn className="h-6 w-6" />
+            </div>
+            <h1 className="text-2xl font-bold">{t("auth.app_title", "נקודות יהודיות")}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{t("auth.login_subtitle")}</p>
+          </div>
 
-        <div className="space-y-1">
-          <Label htmlFor="username">{t("auth.username")}</Label>
-          <Input
-            id="username"
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            autoComplete="username"
-            required
-            className="h-11"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <Label htmlFor="password">{t("auth.password")}</Label>
-          <PasswordInput
-            id="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-            required
-            className="h-11"
-          />
-        </div>
-
-        {error && (
-          <p className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">
-            {error}
-          </p>
-        )}
-
-        {/* fixes75 §7 */}
-        <p className="text-end text-sm">
-          <Link href="/forgot-password" className="text-primary hover:underline">
-            {t("auth.forgot_password", "שכחת סיסמה?")}
-          </Link>
-        </p>
-
-        {unverified && (
-          <div className="space-y-2">
+          <div className="space-y-1">
+            <Label htmlFor="username">{t("auth.username")}</Label>
             <Input
-              type="email"
-              dir="ltr"
-              placeholder={t("auth.your_email")}
-              value={resendEmail}
-              onChange={(e) => setResendEmail(e.target.value)}
+              id="username"
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoComplete="username"
+              required
+              className="h-11"
             />
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full border-primary text-primary hover:bg-primary/5"
-              onClick={() => resendEmail && resendVerification(resendEmail)}
-            >
-              {t("auth.resend_verification")}
-            </Button>
           </div>
-        )}
 
-        <Button type="submit" disabled={busy} className="w-full h-11 font-medium">
-          {busy ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {t("auth.logging_in")}
-            </>
-          ) : (
-            t("auth.login")
+          <div className="space-y-1">
+            <Label htmlFor="password">{t("auth.password")}</Label>
+            <PasswordInput
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+              className="h-11"
+            />
+          </div>
+
+          {error && (
+            <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {error}
+            </p>
           )}
-        </Button>
 
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="h-px flex-1 bg-border" />
-          {t("common.or", "או")}
-          <span className="h-px flex-1 bg-border" />
-        </div>
+          {/* fixes75 §7 */}
+          <p className="text-end text-sm">
+            <Link href="/forgot-password" className="text-primary hover:underline">
+              {t("auth.forgot_password", "שכחת סיסמה?")}
+            </Link>
+          </p>
 
-        <GoogleSignInButton onCredential={onGoogleCredential} onError={setError} />
+          {unverified && (
+            <div className="space-y-2">
+              <Input
+                type="email"
+                dir="ltr"
+                placeholder={t("auth.your_email")}
+                value={resendEmail}
+                onChange={(e) => setResendEmail(e.target.value)}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full border-primary/50 text-primary hover:bg-primary/10"
+                onClick={() => resendEmail && resendVerification(resendEmail)}
+              >
+                {t("auth.resend_verification")}
+              </Button>
+            </div>
+          )}
 
-        <p className="text-center text-sm text-muted-foreground">
-          {t("auth.no_account")}{" "}
-          <Link href="/signup" className="text-primary hover:underline">
-            {t("auth.open_org_account")}
-          </Link>
-        </p>
-      </form>
+          <Button type="submit" disabled={busy} className="h-11 w-full font-medium">
+            {busy ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {t("auth.logging_in")}
+              </>
+            ) : (
+              t("auth.login")
+            )}
+          </Button>
+
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-white/10" />
+            {t("common.or", "או")}
+            <span className="h-px flex-1 bg-white/10" />
+          </div>
+
+          <GoogleSignInButton onCredential={onGoogleCredential} onError={setError} />
+
+          <p className="text-center text-sm text-muted-foreground">
+            {t("auth.no_account")}{" "}
+            <Link href="/signup" className="text-primary hover:underline">
+              {t("auth.open_org_account")}
+            </Link>
+          </p>
+        </form>
+      </div>
     </main>
   );
 }

@@ -845,7 +845,7 @@ function CreateReportsInner() {
           confirmation instead of relying on an invisible background
           autosave, or on remembering to click Generate PDF first. */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold">{t("reports.create_reports", "יצירת דוחות")}</h1>
+        <h1 className="font-display text-4xl font-bold">{t("reports.create_reports", "יצירת דוחות")}</h1>
         <Button type="button" size="sm" onClick={saveReportPage} disabled={savingReport}>
           {savingReport ? t("action.saving", "שומר…") : t("action.save", "שמור")}
         </Button>
@@ -854,7 +854,7 @@ function CreateReportsInner() {
       {/* fixes38 §4.1: report description moved here from the global Settings
           page — admin-only edit, same org-wide report_notes field. */}
       {isAdmin && (
-        <div className="bg-card rounded-xl shadow-sm p-5 space-y-2">
+        <div className="glass-card p-5 space-y-2">
           <span className="block text-sm font-medium">
             {t("settings.report_notes", "הערות לדוח")}
           </span>
@@ -881,9 +881,9 @@ function CreateReportsInner() {
           SortableJS + ▲/▼ fallback), over the same expanded column set. */}
       {/* fixes42 §2: Row 2 — this card is mostly explanatory/helper text
           (reorder hint, width total, over-100% validation) wrapped around
-          the controls, so it gets a light grey background to visually set
-          it apart from the other cards on the page. */}
-      <div className="bg-muted rounded-xl shadow-sm p-5 space-y-3">
+          the controls, so it gets a muted background to visually set it
+          apart from the other cards on the page. */}
+      <div className="rounded-xl bg-muted p-5 space-y-3">
         <h2 className="text-sm font-semibold">
           {t("reports.column_config_title", "עמודות הדוח")}
         </h2>
@@ -988,12 +988,12 @@ function CreateReportsInner() {
             </tbody>
           </table>
         </div>
-        <p className={`text-sm ${widthOverLimit ? "text-status-darkred font-medium" : "text-muted-foreground"}`}>
+        <p className={`text-sm ${widthOverLimit ? "text-destructive font-medium" : "text-muted-foreground"}`}>
           {t("reports.column_width_total", "סך הכל: {n}%").replace("{n}", String(totalReportWidth))}
         </p>
         {/* fixes38 §4.3: bilingual validation message via the usual t() mechanism. */}
         {widthOverLimit && (
-          <p className="text-sm text-status-darkred">
+          <p className="text-sm text-destructive">
             {t(
               "validation.report_width_over_100",
               "סך הרוחב של העמודות אינו יכול להיות יותר ממאה אחוז",
@@ -1002,7 +1002,7 @@ function CreateReportsInner() {
         )}
       </div>
 
-      <div className="bg-card rounded-xl shadow-sm p-5 space-y-4">
+      <div className="glass-card p-5 space-y-4">
         {/* fixes33 §3.2: opened from the Apartments page's filtered list — the
             filters themselves drove navigation here, so there's nothing to
             pick; the reports/apartments radio picker doesn't apply. */}
@@ -1097,7 +1097,7 @@ function CreateReportsInner() {
         )}
 
         {noData && (
-          <p className="text-sm text-status-darkred">
+          <p className="text-sm text-destructive">
             {t("reports.no_data", "לא נמצאו נתונים עבור הדוחות שנבחרו")}
           </p>
         )}

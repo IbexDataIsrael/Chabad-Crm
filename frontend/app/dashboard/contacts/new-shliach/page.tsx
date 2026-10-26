@@ -41,7 +41,7 @@ export default function NewShliachPage() {
   if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!isAdmin) {
     return (
-      <p className="text-status-darkred">
+      <p className="text-destructive">
         {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
       </p>
     );
@@ -51,7 +51,7 @@ export default function NewShliachPage() {
   // also rejects contact_type=shliach creation — routers/contacts.py).
   if (!isFeatureEnabled(user?.organization, "activist_system_enabled")) {
     return (
-      <p className="text-status-darkred">
+      <p className="text-destructive">
         {t("page.module_disabled", "התכונה הזו כבויה עבור הארגון שלך.")}
       </p>
     );
@@ -65,7 +65,7 @@ export default function NewShliachPage() {
       >
         <ArrowRight className="h-4 w-4" /> {t("page.back_to_shluchim", "חזרה לפעילים")}
       </Link>
-      <h1 className="text-2xl font-bold">{t("page.add_shliach", "הוסף פעיל")}</h1>
+      <h1 className="font-display text-3xl font-bold tracking-wide">{t("page.add_shliach", "הוסף פעיל")}</h1>
       <p className="text-sm text-muted-foreground">
         {t(
           "page.shliach_intro",
@@ -74,7 +74,7 @@ export default function NewShliachPage() {
       </p>
       {areas !== null && areas.length === 0 ? (
         <Card className="p-6 space-y-3">
-          <p className="text-status-darkred text-sm">
+          <p className="text-destructive text-sm">
             {t("error.no_areas_for_shliach", "נא להוסיף לפחות אזור אחד למערכת")}
           </p>
           <Button asChild>

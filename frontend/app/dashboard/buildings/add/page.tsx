@@ -142,7 +142,7 @@ function AddBuildingInner() {
   return (
     <div className="space-y-5 max-w-3xl">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t("page.new_building", "בניין חדש")}</h1>
+        <h1 className="font-display text-4xl">{t("page.new_building", "בניין חדש")}</h1>
         <Link href="/dashboard/buildings" className="flex items-center gap-1 text-sm text-primary hover:underline">
           {t("page.back_to_buildings", "חזרה לבניינים")} <ArrowRight className="h-4 w-4" />
         </Link>

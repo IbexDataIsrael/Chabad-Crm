@@ -78,7 +78,7 @@ export default function EditAreaPage() {
   return (
     <div className="space-y-5 max-w-3xl">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t("page.edit_area", "עריכת אזור")}</h1>
+        <h1 className="font-display text-4xl">{t("page.edit_area", "עריכת אזור")}</h1>
         <Link
           href="/dashboard/areas"
           className="flex items-center gap-1 text-sm text-primary hover:underline"

@@ -19,20 +19,20 @@ import type { PublicRegisterResponse } from "@/lib/types";
  *  dashboard's card styling. */
 
 export const publicInputClass =
-  "block w-full rounded-lg border border-[#0E3B4A]/20 bg-white px-3.5 py-2.5 text-[15px] text-[#13232B] " +
-  "placeholder:text-[#13232B]/35 focus:border-[#1692C0] focus:outline-none focus:ring-2 focus:ring-[#1692C0]/25";
+  "block w-full rounded-lg border border-input bg-white/5 px-3.5 py-2.5 text-[15px] text-foreground " +
+  "placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25";
 
 const primaryButtonClass =
-  "inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#D99A2B] px-4 py-3 text-[15px] font-semibold " +
-  "text-[#13232B] transition-colors hover:bg-[#C98A1D] focus-visible:outline focus-visible:outline-2 " +
-  "focus-visible:outline-offset-2 focus-visible:outline-[#0E3B4A] disabled:opacity-60";
+  "inline-flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-b from-primary/95 to-primary px-4 py-3 text-[15px] font-semibold " +
+  "text-primary-foreground shadow-glow transition-all hover:from-primary hover:to-primary/85 focus-visible:outline " +
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60";
 
 function PublicField({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <label className="block space-y-1.5">
-      <span className="block text-sm font-medium text-[#13232B]">{label}</span>
+      <span className="block text-sm font-medium text-foreground">{label}</span>
       {children}
-      {hint && <span className="block text-xs text-[#13232B]/55">{hint}</span>}
+      {hint && <span className="block text-xs text-muted-foreground">{hint}</span>}
     </label>
   );
 }
@@ -44,7 +44,7 @@ function strongPassword(pw: string): boolean {
 function FormError({ message }: { message: string }) {
   if (!message) return null;
   return (
-    <p role="alert" className="rounded-lg bg-[#8b0000]/[0.07] px-3 py-2 text-sm text-[#8b0000]">
+    <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
       {message}
     </p>
   );
@@ -53,10 +53,10 @@ function FormError({ message }: { message: string }) {
 function Divider() {
   const { t } = useLocalization();
   return (
-    <div className="flex items-center gap-3 text-xs text-[#13232B]/50">
-      <span className="h-px flex-1 bg-[#0E3B4A]/15" />
+    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+      <span className="h-px flex-1 bg-white/10" />
       {t("common.or", "או")}
-      <span className="h-px flex-1 bg-[#0E3B4A]/15" />
+      <span className="h-px flex-1 bg-white/10" />
     </div>
   );
 }

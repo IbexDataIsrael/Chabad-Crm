@@ -144,7 +144,7 @@ function ContactsPageContent() {
   const { isShliach, isCampaignManager } = useAuth();
   if (isShliach || isCampaignManager) {
     return (
-      <p className="text-status-darkred">
+      <p className="text-destructive">
         {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
       </p>
     );
@@ -1063,7 +1063,7 @@ function AuthorizedContactsPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold">{t("contacts", "אנשי קשר")}</h1>
+        <h1 className="font-display text-3xl font-bold tracking-wide">{t("contacts", "אנשי קשר")}</h1>
         {/* fixes44 §2: flex-wrap so the button row folds onto extra lines on
             narrow viewports instead of overflowing horizontally. */}
         <div className="flex flex-wrap items-center gap-2">
@@ -1993,13 +1993,13 @@ function ContactBulkEditModal({
           </select>
         </div>
 
-        {error && <p className="text-sm text-status-darkred">{error}</p>}
+        {error && <p className="text-sm text-destructive">{error}</p>}
         <div className="flex items-center gap-2 pt-1">
           <button
             type="button"
             onClick={apply}
             disabled={busy || total === 0}
-            className="rounded-md bg-primary text-white px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
+            className="rounded-md bg-primary text-primary-foreground px-5 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
             {busy
               ? t("action.saving", "שומר…")

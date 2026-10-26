@@ -173,7 +173,7 @@ export function BackupRestoreCard() {
       {restoring && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md bg-card rounded-xl shadow-xl p-5 space-y-4">
-            <h3 className="text-lg font-bold text-status-darkred">
+            <h3 className="text-lg font-bold text-destructive">
               {t("backup.restore_title", "שחזור נתונים")}
             </h3>
             <p className="text-sm font-medium" dir="ltr">
@@ -191,7 +191,7 @@ export function BackupRestoreCard() {
               <Button
                 type="button"
                 onClick={() => restore(restoring)}
-                className="bg-status-darkred hover:bg-status-darkred/90"
+                className="bg-status-darkred hover:bg-destructive/90"
               >
                 {t("backup.restore", "שחזר")}
               </Button>

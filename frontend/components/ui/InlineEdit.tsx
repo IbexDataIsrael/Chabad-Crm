@@ -147,7 +147,7 @@ export function InlineEdit<T>({
     >
       {editor(draft, setDraft, (v) => void commit(v))}
       {problem && (
-        <span className="block text-xs text-status-darkred">{problem}</span>
+        <span className="block text-xs text-destructive">{problem}</span>
       )}
     </div>
   );

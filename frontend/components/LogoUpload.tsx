@@ -84,13 +84,13 @@ export function LogoUpload({
           <button
             type="button"
             onClick={() => onChange(null)}
-            className="inline-flex items-center gap-1 text-xs text-status-darkred hover:underline"
+            className="inline-flex items-center gap-1 text-xs font-medium text-destructive underline underline-offset-2 hover:opacity-80"
           >
             <X className="h-3.5 w-3.5" /> {t("action.clear", "הסר")}
           </button>
         )}
       </div>
-      {error && <p className="text-xs text-status-darkred">{error}</p>}
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }

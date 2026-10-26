@@ -191,7 +191,7 @@ export default function CloneOrgPage() {
         <ArrowRight className="h-4 w-4" /> {t("admin.back_to_orgs", "חזרה לארגונים")}
       </Link>
       <div>
-        <h1 className="text-2xl font-bold">{t("admin.clone_org_title", "שכפול ארגון")}</h1>
+        <h1 className="font-display text-3xl font-bold">{t("admin.clone_org_title", "שכפול ארגון")}</h1>
         <p className="mt-1 text-sm">
           {t("admin.clone_org_source", "ארגון מקור:")}{" "}
           <span className="font-semibold">{org.name}</span>{" "}
@@ -320,7 +320,7 @@ export default function CloneOrgPage() {
         <div className="space-y-4">
           <Card className="p-4 space-y-3">
             {plan.activists.length === 0 ? (
-              <p className="text-sm font-medium text-status-darkred">
+              <p className="text-sm font-medium text-destructive">
                 {t("admin.clone_demo_none", "אין בארגון המקור פעילים עם משימות — אין מה לשכפל במצב הדגמה.")}
               </p>
             ) : (
@@ -437,7 +437,7 @@ export default function CloneOrgPage() {
 
 function ErrorBox({ text }: { text: string }) {
   return (
-    <p role="alert" className="rounded-md bg-status-darkred/10 p-3 text-sm text-status-darkred" dir="auto">
+    <p role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-destructive" dir="auto">
       {text}
     </p>
   );

@@ -345,7 +345,7 @@ export function SystemAdmin({ section }: { section: AdminSection }) {
   if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!isSuperadmin) {
     return (
-      <p className="text-status-darkred">
+      <p className="text-destructive">
         {t("admin.superadmin_only", "עמוד זה מיועד למנהל המערכת בלבד.")}
       </p>
     );
@@ -362,7 +362,7 @@ export function SystemAdmin({ section }: { section: AdminSection }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold">{sectionTitle}</h1>
+          <h1 className="font-display text-3xl font-bold">{sectionTitle}</h1>
           {section === "orgs" && (
             <p className="text-sm text-muted-foreground">
               {t("admin.subtitle", "כל הארגונים והמשתמשים במערכת.")}
@@ -466,7 +466,7 @@ export function SystemAdmin({ section }: { section: AdminSection }) {
                         <button
                           disabled={busy}
                           onClick={() => setUserToDelete({ user: u, orgId: null })}
-                          className="text-status-darkred hover:underline disabled:opacity-50"
+                          className="font-medium text-destructive underline underline-offset-2 hover:opacity-80 disabled:opacity-50"
                         >
                           {t("action.delete", "מחק")}
                         </button>
@@ -566,7 +566,7 @@ export function SystemAdmin({ section }: { section: AdminSection }) {
                       <button
                         disabled={busy}
                         onClick={() => onRejectOrg(org)}
-                        className="rounded-md border border-status-darkred/30 text-status-darkred px-3 py-1 hover:bg-status-darkred/10 disabled:opacity-50"
+                        className="rounded-md border border-destructive/30 text-destructive px-3 py-1 hover:bg-destructive/10 disabled:opacity-50"
                       >
                         {t("admin.reject", "דחה")}
                       </button>
@@ -620,7 +620,7 @@ export function SystemAdmin({ section }: { section: AdminSection }) {
                         onClick={() =>
                           org.is_system ? setBlocked({ org, action: "delete" }) : setOrgToDelete(org)
                         }
-                        className="rounded-md border border-status-darkred/30 text-status-darkred px-3 py-1 hover:bg-status-darkred/10 disabled:opacity-50"
+                        className="rounded-md border border-destructive/30 text-destructive px-3 py-1 hover:bg-destructive/10 disabled:opacity-50"
                       >
                         {t("action.delete", "מחק")}
                       </button>
@@ -652,7 +652,7 @@ export function SystemAdmin({ section }: { section: AdminSection }) {
                                 </span>
                               )}
                               {!u.is_active && (
-                                <span className="ms-2 rounded bg-status-darkred/10 text-status-darkred px-1.5 py-0.5 text-xs">
+                                <span className="ms-2 rounded bg-destructive/10 text-destructive px-1.5 py-0.5 text-xs">
                                   {t("admin.disabled", "מושבת")}
                                 </span>
                               )}
@@ -709,7 +709,7 @@ export function SystemAdmin({ section }: { section: AdminSection }) {
                               <button
                                 disabled={busy}
                                 onClick={() => setUserToDelete({ user: u, orgId: org.id })}
-                                className="text-status-darkred hover:underline disabled:opacity-50"
+                                className="font-medium text-destructive underline underline-offset-2 hover:opacity-80 disabled:opacity-50"
                               >
                                 {t("action.delete", "מחק")}
                               </button>
@@ -914,7 +914,7 @@ function DeleteUserModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md bg-card rounded-xl shadow-xl p-5 space-y-4">
-        <h2 className="text-lg font-bold text-status-darkred">
+        <h2 className="text-lg font-bold text-destructive">
           {t("admin.delete_user_title", "מחיקת משתמש")}
         </h2>
         <p className="text-sm font-medium" dir="ltr">
@@ -949,7 +949,7 @@ function DeleteUserModal({
 
         <p className="text-sm font-semibold">{t("admin.confirm_sure", "בטוח ?")}</p>
         <div className="flex items-center gap-2 pt-1">
-          <Button type="button" className="bg-status-darkred hover:bg-status-darkred/90" onClick={onConfirm}>
+          <Button type="button" className="bg-status-darkred hover:bg-destructive/90" onClick={onConfirm}>
             {t("action.delete", "מחק")}
           </Button>
           <Button type="button" variant="outline" onClick={onCancel}>
@@ -998,7 +998,7 @@ function OrgActionBlockedModal({
         className="w-full max-w-md bg-card rounded-xl shadow-xl p-5 space-y-3"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-bold text-status-darkred">{title}</h2>
+        <h2 className="text-lg font-bold text-destructive">{title}</h2>
         <p className="text-sm font-medium">
           {org.name}{" "}
           <span className="text-muted-foreground" dir="ltr" style={{ unicodeBidi: "isolate" }}>
@@ -1069,7 +1069,7 @@ function DeleteOrgModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md bg-card rounded-xl shadow-xl p-5 space-y-4">
-        <h2 className="text-lg font-bold text-status-darkred">
+        <h2 className="text-lg font-bold text-destructive">
           {t("admin.delete_org_title", "מחיקת ארגון")}
         </h2>
         <p className="text-sm text-foreground">
@@ -1097,7 +1097,7 @@ function DeleteOrgModal({
           <Button
             type="button"
             disabled={!armed}
-            className="bg-status-darkred hover:bg-status-darkred/90"
+            className="bg-status-darkred hover:bg-destructive/90"
             onClick={onConfirm}
           >
             {t("admin.delete_org_confirm", "מחק לצמיתות")}
@@ -1159,7 +1159,7 @@ function OrgFeatureToggles({
                   {row.label}
                 </label>
                 {overridden && (
-                  <p className="text-xs text-status-darkred ms-6">
+                  <p className="text-xs text-destructive ms-6">
                     {t("admin.feature_overridden", "כבוי בפועל — תכונת אב כבויה")}
                   </p>
                 )}

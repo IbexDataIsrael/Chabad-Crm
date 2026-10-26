@@ -128,7 +128,7 @@ export default function BuildingsPage() {
   // Area) — defense in depth alongside the now-gone nav link.
   if (!isFeatureEnabled(user?.organization, "building_display_enabled")) {
     return (
-      <p className="text-status-darkred">
+      <p className="text-destructive">
         {t("page.module_disabled", "התכונה הזו כבויה עבור הארגון שלך.")}
       </p>
     );
@@ -140,7 +140,7 @@ export default function BuildingsPage() {
   return (
     <div className="space-y-5 max-w-4xl">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t("buildings", "בניינים")}</h1>
+        <h1 className="font-display text-4xl">{t("buildings", "בניינים")}</h1>
         {isAdmin && areas.length > 0 && (
           <Button asChild>
             <Link href="/dashboard/buildings/add">
@@ -150,7 +150,7 @@ export default function BuildingsPage() {
         )}
       </div>
       {areas.length === 0 ? (
-        <p className="text-sm text-status-darkred">
+        <p className="text-sm text-destructive">
           {t("page.need_area_first", "יש להגדיר אזור אחד לפחות לפני הוספת בניין.")}{" "}
           <Link href="/dashboard/areas/add" className="font-medium underline hover:text-primary">
             {t("page.add_area", "אזור חדש")}
@@ -220,13 +220,13 @@ export default function BuildingsPage() {
       )}
 
       {buildings.length > 0 && (
-        <div className="bg-card border border-border rounded-xl shadow-sm p-2">
+        <div className="glass-card p-2">
           {/* fixes11 §2.5: geo-fence polygons overlay the building markers. */}
           <BuildingsMap buildings={buildings} areas={areas} />
         </div>
       )}
 
-      <div className="bg-card border border-border rounded-xl shadow-sm divide-y divide-border">
+      <div className="glass-card divide-y divide-border">
         {buildings.map((b) => (
           <BuildingRow
             key={b.id}
@@ -454,7 +454,7 @@ function BuildingApartments({ building, isAdmin }: { building: Building; isAdmin
                 {isAdmin && (
                   <button
                     onClick={() => setDeleting(a)}
-                    className="text-xs text-status-darkred hover:underline"
+                    className="text-xs font-medium text-destructive underline underline-offset-2 hover:opacity-80"
                   >
                     {t("action.delete", "מחק")}
                   </button>

@@ -93,7 +93,7 @@ export default function LocalizationPage() {
   }
   if (!isAdmin) {
     return (
-      <p className="text-status-darkred">
+      <p className="text-destructive">
         {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
       </p>
     );
@@ -102,7 +102,7 @@ export default function LocalizationPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold">{t("page.localization_title", "תרגומים")}</h1>
+        <h1 className="font-display text-3xl font-bold">{t("page.localization_title", "תרגומים")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {t("page.localization_intro", "ערוך את טקסטי הממשק בעברית ובאנגלית.")}
         </p>

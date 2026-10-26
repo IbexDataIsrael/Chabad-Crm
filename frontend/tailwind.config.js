@@ -8,12 +8,17 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        heebo: ["var(--font-heebo)"],
+        sans: ["var(--font-sans)"],
+        display: ["var(--font-display)"],
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      boxShadow: {
+        // Soft brand glow used on primary buttons / active nav (redesign).
+        glow: "0 0 24px -6px hsl(var(--primary) / 0.5)",
       },
       colors: {
         // Core status indicators matching the source spreadsheet markers

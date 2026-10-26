@@ -4,7 +4,7 @@
    can be removed without losing the separation. Not interactive, not sticky. */
 
 .floor + .floor {
-  border-block-start: 2px solid #cfe3d5;
+  border-block-start: 2px solid var(--line);
 }
 
 .floorLabel {
@@ -13,7 +13,7 @@
   text-align: start;
   font-size: 13px;
   font-weight: 700;
-  color: #4d6b57;
+  color: #9db8a6;
   overflow-wrap: anywhere;
 }
 

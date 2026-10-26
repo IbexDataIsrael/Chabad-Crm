@@ -16,7 +16,7 @@ export default function VisitSummaryPage() {
   // forbidden to Campaign Manager.
   if (isCampaignManager) {
     return (
-      <p className="text-status-darkred">
+      <p className="text-destructive">
         {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
       </p>
     );
@@ -24,7 +24,7 @@ export default function VisitSummaryPage() {
 
   return (
     <div className="space-y-4 max-w-4xl">
-      <h1 className="text-2xl font-bold">{t("nav.visit_summary", "סיכום ביקורים")}</h1>
+      <h1 className="font-display text-3xl font-bold tracking-wide">{t("nav.visit_summary", "סיכום ביקורים")}</h1>
       <Card className="p-5">
         <VisitSummary />
       </Card>

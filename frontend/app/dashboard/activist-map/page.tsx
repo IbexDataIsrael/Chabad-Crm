@@ -13,7 +13,7 @@ export default function ActivistMapPage() {
   if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   return (
     <div className="space-y-3">
-      <h1 className="text-2xl font-bold">{t("map.activist_title", "מפת הבניינים שלי")}</h1>
+      <h1 className="font-display text-4xl">{t("map.activist_title", "מפת הבניינים שלי")}</h1>
       <TaskMapView heightClass="h-[70vh]" />
     </div>
   );

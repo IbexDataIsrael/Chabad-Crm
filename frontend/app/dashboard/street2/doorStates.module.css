@@ -5,16 +5,16 @@
    icon cue, never color alone. */
 
 .knock {
-  border-color: #d98a00;
-  background: linear-gradient(180deg, #fff8e3, #ffe9b0);
+  border-color: #f0a81e;
+  background: linear-gradient(180deg, #43320d, #33260a);
   box-shadow: 0 3px 0 rgba(176, 106, 0, 0.35);
 }
 .knock > span:first-child {
-  background: #d98a00;
+  background: #f0a81e;
 }
 
 .visited {
-  border-color: #0f4a26;
+  border-color: #2fa855;
   background: linear-gradient(180deg, #2fa855, #1b6b3a);
   box-shadow: 0 3px 0 rgba(10, 50, 25, 0.45);
 }
@@ -27,16 +27,16 @@
 
 .idle {
   border-style: dashed;
-  border-color: #b7c7bc;
-  background: #f5f7f6;
+  border-color: #5c7266;
+  background: #182a20;
   box-shadow: none;
   opacity: 0.72;
 }
 .idle > div {
-  color: #6b7d71;
+  color: #8aa393;
 }
 .idle > span:first-child {
-  background: #b7c7bc;
+  background: #5c7266;
 }
 
 /* "לדפוק" tag sitting on the door's top edge */
@@ -45,7 +45,7 @@
   top: -9px;
   left: 50%;
   transform: translateX(-50%);
-  background: #d98a00;
+  background: #e8a013;
   color: #fff;
   font-size: 10px;
   font-weight: 800;
@@ -64,9 +64,9 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #fff;
-  color: #1b6b3a;
-  border: 2px solid #1b6b3a;
+  background: #122b1d;
+  color: #4ade80;
+  border: 2px solid #2fa855;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -95,28 +95,28 @@
   flex: none;
 }
 .swatchKnock {
-  border-color: #d98a00;
-  background: #ffe9b0;
+  border-color: #f0a81e;
+  background: #43320d;
 }
 .swatchVisited {
-  border-color: #0f4a26;
+  border-color: #2fa855;
   background: #27a04c;
 }
 .swatchIdle {
   border-style: dashed;
-  border-color: #b7c7bc;
-  background: #f5f7f6;
+  border-color: #5c7266;
+  background: #182a20;
 }
 
 /* fixes72 street2 §2: "Save" with no option picked — notice + choices. */
 .emptyWarn {
   margin-top: 9px;
-  background: #fff8e6;
-  border: 1px solid #f1d38a;
+  background: #3a2c0e;
+  border: 1px solid #6b5518;
   border-radius: 10px;
   padding: 9px 11px;
   font-size: 13px;
-  color: #6b4e00;
+  color: #f5d78a;
 }
 .emptyWarnActions {
   display: flex;
@@ -125,9 +125,9 @@
 }
 .clearBtn {
   flex: 1;
-  background: #fff;
+  background: transparent;
   color: var(--danger);
-  border: 1.5px solid #e6b3ad;
+  border: 1.5px solid #7a3630;
   border-radius: 10px;
   padding: 8px;
   font-weight: 700;
@@ -144,21 +144,21 @@
 }
 .editableRow:active,
 .editableRow:focus-visible {
-  background: #f1f8f3;
+  background: #1a3325;
   outline: none;
 }
 .savingHint {
   margin-top: 6px;
   font-size: 12px;
-  color: #6b8a75;
+  color: #7fa88d;
 }
 .clearChip {
-  border: 1px dashed #c9b3b3;
+  border: 1px dashed #7a3630;
   border-radius: 999px;
   padding: 6px 12px;
   font-size: 13px;
-  color: #8b0000;
-  background: #fff;
+  color: #ff8080;
+  background: transparent;
   cursor: pointer;
 }
 
@@ -174,8 +174,8 @@
   gap: 8px;
   margin: 0 -18px 8px;
   padding: 6px 12px;
-  background: #fff;
-  border-bottom: 1px solid #e4efe7;
+  background: #101f16;
+  border-bottom: 1px solid var(--line);
 }
 .navPair {
   display: flex;
@@ -186,7 +186,7 @@
   min-width: 52px;
   text-align: center;
   font-size: 13px;
-  color: #6b8a75;
+  color: #7fa88d;
   font-variant-numeric: tabular-nums;
 }
 .navBtn,
@@ -196,10 +196,10 @@
   justify-content: center;
   width: 44px;
   height: 44px;
-  border: 1px solid #d6e6db;
+  border: 1px solid var(--line);
   border-radius: 12px;
-  background: #f4faf6;
-  color: #1f3d2b;
+  background: #1a3325;
+  color: #d7ecdd;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
@@ -208,7 +208,7 @@
   cursor: default;
 }
 .closeX {
-  background: #eef3ef;
+  background: #14291d;
 }
 
 /* fixes98: per-building floor order toggle, in a row under the building
@@ -224,10 +224,10 @@
   gap: 4px;
   min-height: 40px;
   padding: 0 10px;
-  border: 1px solid #cfe5d6;
+  border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fff;
-  color: #1f3d2b;
+  background: #132a1e;
+  color: #d7ecdd;
   font-size: 12px;
   font-weight: 700;
   font-family: inherit;
@@ -235,6 +235,6 @@
   cursor: pointer;
 }
 .sortBtn[aria-pressed="true"] {
-  background: #dff3e5;
-  border-color: #8cc9a0;
+  background: #1f4a30;
+  border-color: #3f8f5f;
 }

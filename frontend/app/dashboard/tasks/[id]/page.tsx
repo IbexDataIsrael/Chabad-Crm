@@ -143,7 +143,7 @@ export default function TaskDetailPage() {
   if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!allowed) {
     return (
-      <p className="text-status-darkred">
+      <p className="text-destructive">
         {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
       </p>
     );
@@ -152,7 +152,7 @@ export default function TaskDetailPage() {
     return (
       <div className="space-y-3">
         <BackLink label={t("page.back_to_tasks", "← חזרה למשימות")} />
-        <p className="text-status-darkred">{t("task.not_found", "המשימה לא נמצאה.")}</p>
+        <p className="text-destructive">{t("task.not_found", "המשימה לא נמצאה.")}</p>
       </div>
     );
   }
@@ -229,7 +229,7 @@ export default function TaskDetailPage() {
           <Button
             size="sm"
             variant="outline"
-            className="border-status-darkred/30 text-status-darkred hover:bg-status-darkred/10"
+            className="border-destructive/30 text-destructive hover:bg-destructive/10"
             onClick={remove}
           >
             <Trash2 className="h-4 w-4" /> {t("action.delete", "מחק")}
@@ -238,13 +238,13 @@ export default function TaskDetailPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-bold">
+        <h1 className="font-display text-4xl font-bold">
           {t("task.title", "משימה")} #{task.id} — {task.campaign_name}
         </h1>
         <Badge variant="secondary">{statusLabel[task.status]}</Badge>
       </div>
 
-      <section className="bg-card border border-border rounded-xl shadow-sm p-6 space-y-4">
+      <section className="glass-card p-6 space-y-4">
         <h2 className="font-semibold">{t("page.task_details", "פרטי משימה")}</h2>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
           <Field label={t("task.volunteer", "פעיל")}>
@@ -439,7 +439,7 @@ export default function TaskDetailPage() {
         </dl>
       </section>
 
-      <section className="bg-card border border-border rounded-xl shadow-sm p-6 space-y-4">
+      <section className="glass-card p-6 space-y-4">
         <h2 className="font-semibold">{t("page.task_activity", "דיווח ושיוך")}</h2>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
           <Field label={t("task.report_status", "סטטוס דיווח")}>

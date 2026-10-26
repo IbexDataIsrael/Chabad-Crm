@@ -83,7 +83,7 @@ export default function PicklistsPage() {
   if (loading || !loaded) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!isAdmin) {
     return (
-      <p className="text-status-darkred">
+      <p className="text-destructive">
         {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
       </p>
     );
@@ -192,7 +192,7 @@ export default function PicklistsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">{t("pl.editor_title", "עריכת תיבת בחירה")}</h1>
+        <h1 className="font-display text-3xl font-bold">{t("pl.editor_title", "עריכת תיבת בחירה")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {t("pl.editor_intro", "ערוך תוויות בעברית ובאנגלית, סדר, צבע, והוסף רשימות חדשות.")}
         </p>
@@ -359,7 +359,7 @@ function DefinitionEditor({
       </label>
       <button
         onClick={save}
-        className="rounded-md bg-foreground text-white px-3 py-1.5 text-xs hover:opacity-90"
+        className="rounded-md bg-foreground text-background px-3 py-1.5 text-xs hover:opacity-90"
       >
         {t("action.save", "שמור")}
       </button>
@@ -368,7 +368,7 @@ function DefinitionEditor({
       ) : (
         <button
           onClick={remove}
-          className="text-xs text-status-darkred hover:underline ms-auto"
+          className="text-xs font-medium text-destructive underline underline-offset-2 hover:opacity-80 ms-auto"
         >
           {t("pl.delete_list", "מחק רשימה")}
         </button>
@@ -465,7 +465,7 @@ function AddPicklist({
           {t("action.add", "הוסף")}
         </button>
       </div>
-      {error && <p className="text-sm text-status-darkred">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
     </form>
   );
 }
@@ -640,14 +640,14 @@ function OptionRow({
         <button
           onClick={save}
           disabled={saving}
-          className="rounded-md bg-foreground text-white px-3 py-1 text-xs hover:opacity-90 disabled:opacity-50"
+          className="rounded-md bg-foreground text-background px-3 py-1 text-xs hover:opacity-90 disabled:opacity-50"
         >
           {t("action.save", "שמור")}
         </button>
         {option.is_active ? (
           <button
             onClick={deactivate}
-            className="rounded-md border border-status-darkred/40 text-status-darkred px-2 py-1 text-xs hover:bg-status-darkred/10"
+            className="rounded-md border border-destructive/40 text-destructive px-2 py-1 text-xs hover:bg-destructive/10"
             title={t("pl.deactivate_title", "הסר מהרשימה (השבתה)")}
           >
             {t("action.delete", "מחק")}
@@ -662,7 +662,7 @@ function OptionRow({
             </button>
             <button
               onClick={hardDelete}
-              className="text-xs text-status-darkred hover:underline"
+              className="text-xs font-medium text-destructive underline underline-offset-2 hover:opacity-80"
             >
               {t("cf.hard_delete", "מחק לצמיתות")}
             </button>
@@ -846,7 +846,7 @@ function AddOption({
           {t("action.add", "הוסף")}
         </button>
       </div>
-      {error && <p className="text-sm text-status-darkred">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
     </form>
   );
 }
@@ -953,14 +953,14 @@ function CustomFieldRow({
       <div className="flex items-center gap-1 ms-auto">
         <button
           onClick={save}
-          className="rounded-md bg-foreground text-white px-3 py-1 text-xs hover:opacity-90"
+          className="rounded-md bg-foreground text-background px-3 py-1 text-xs hover:opacity-90"
         >
           {t("action.save", "שמור")}
         </button>
         {def.is_active ? (
           <button
             onClick={deactivate}
-            className="rounded-md border border-status-darkred/40 text-status-darkred px-2 py-1 text-xs hover:bg-status-darkred/10"
+            className="rounded-md border border-destructive/40 text-destructive px-2 py-1 text-xs hover:bg-destructive/10"
           >
             {t("action.delete", "מחק")}
           </button>
@@ -974,7 +974,7 @@ function CustomFieldRow({
             </button>
             <button
               onClick={hardDelete}
-              className="text-xs text-status-darkred hover:underline"
+              className="text-xs font-medium text-destructive underline underline-offset-2 hover:opacity-80"
             >
               {t("cf.hard_delete", "מחק לצמיתות")}
             </button>

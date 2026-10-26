@@ -72,7 +72,7 @@ export default function VisitsPage() {
   if (loading) return <p className="text-muted-foreground">{t("action.loading", "טוען…")}</p>;
   if (!isAdmin) {
     return (
-      <p className="text-status-darkred">
+      <p className="text-destructive">
         {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
       </p>
     );
@@ -81,7 +81,7 @@ export default function VisitsPage() {
   return (
     <div className="space-y-5 max-w-4xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">{t("page.visits", "ביקורים")}</h1>
+        <h1 className="font-display text-3xl font-bold tracking-wide">{t("page.visits", "ביקורים")}</h1>
         <div className="flex items-center gap-2">
           {/* fixes29 §1: show/hide the search/paging filter row below. */}
           <Button type="button" variant="outline" size="sm" onClick={() => setFiltersOpen((v) => !v)}>

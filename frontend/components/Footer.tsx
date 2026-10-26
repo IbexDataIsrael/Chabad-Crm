@@ -6,8 +6,8 @@
  */
 export function Footer() {
   return (
-    <footer className="border-t border-border bg-card">
-      <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col items-center gap-1.5 text-sm text-muted-foreground">
+    <footer className="border-t border-white/5 bg-transparent">
+      <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col items-center gap-1.5 text-sm text-muted-foreground/70">
         <p lang="he" dir="rtl" className="text-center font-medium text-foreground/80">
           לעילוי נשמת הרה&quot;ג ר&apos; אברהם יצחק שלוסברג זצ&quot;ל
         </p>

@@ -56,7 +56,7 @@ export default function AiQueryPage() {
   return (
     <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-5xl flex-col">
       <div className="mb-4">
-        <h1 className="text-2xl font-bold">{t("ai_query.title", "שאילתת AI")}</h1>
+        <h1 className="font-display text-4xl font-bold">{t("ai_query.title", "שאילתת AI")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {t(
             "ai_query.intro",
@@ -65,7 +65,7 @@ export default function AiQueryPage() {
         </p>
       </div>
 
-      <div className="flex-1 overflow-y-auto rounded-lg border border-border bg-card p-4">
+      <div className="glass-card flex-1 overflow-y-auto p-4">
         {!result && !loading && (
           <p className="py-10 text-center text-sm text-muted-foreground">
             {t("ai_query.empty", "עדיין אין תוצאות. כתבו בקשה כדי להתחיל.")}
@@ -84,7 +84,7 @@ export default function AiQueryPage() {
             </p>
             <div className="overflow-x-auto rounded-xl border border-border">
               <table className="w-full text-sm">
-                <thead className="bg-background text-right text-muted-foreground">
+                <thead className="bg-white/5 text-right text-muted-foreground">
                   <tr>
                     {result.columns.map((col) => (
                       <th key={col.key} className="w-px whitespace-nowrap px-3 py-1.5 font-medium">
@@ -105,7 +105,7 @@ export default function AiQueryPage() {
                     </tr>
                   ) : (
                     result.rows.map((row, i) => (
-                      <tr key={i} className={i % 2 === 1 ? "bg-background/50" : undefined}>
+                      <tr key={i} className={i % 2 === 1 ? "bg-white/5" : undefined}>
                         {result.columns.map((col) => (
                           <td key={col.key} className="whitespace-nowrap px-3 py-1.5">
                             {row[col.key] === null || row[col.key] === undefined
