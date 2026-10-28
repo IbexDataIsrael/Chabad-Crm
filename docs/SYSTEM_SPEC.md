@@ -294,6 +294,20 @@ entities that matter for orienting yourself:
   draft through `core/contact_drafts.create_draft_contact` (shared with the
   Instinct create) in one transaction; replays return the original contact.
   `source='assistant'`, `status='draft'`, owned by the confirming user.
+- **Assistant apartment edit** (`backend/app/routers/assistant_apartments.py`,
+  fixes114, used by the separate chat project) — JWT-only, same visibility as
+  the dashboard apartments list (active versions, no drafts, a shliach only
+  their assigned apartments). `GET /api/assistant/apartments/fields` lists
+  the fields the user may edit with the org's active options — filtered by
+  the activist edit locks in `shliach_view_config` (`disable_edit`,
+  `apartment_edit_locked_fields`), which this API also enforces on write.
+  `GET …/search?q=` (address / apartment number / resident, cap 20 +
+  `truncated`), `GET …/by-lineage/{lineage_id}` (current version of a
+  lineage), `POST …/{id}/update` `{field, value}` — this phase only
+  `jewish_status` (single) and `language` (multi). The update claims the
+  version with a conditional UPDATE (`id` AND `is_display`; a lost race is
+  409), then writes through `_apply_versioned_update` (editor stamp,
+  to_knock sync); the same value again is `unchanged` with no new version.
 
 ## 6. The activist ("shliach") experience, end to end
 

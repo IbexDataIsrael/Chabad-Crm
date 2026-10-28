@@ -31,3 +31,43 @@ Considered and rejected: the CRM's Instinct API (/api/instinct/apartments/*). It
 4.	Concurrency and idempotency (proposed server work; build it before the chat flow ships): the update claims the current version with a conditional write (match on id AND is_display=true), the same claim pattern the contact confirm uses, so two concurrent updates cannot both retire the same row; the loser gets 404 or 409 and the caller re-resolves. No-change rule: if the sent value equals the current value, do not create a new version; return the current state with an "unchanged" marker (the existing Instinct PATCH already treats a no-change update this way; reuse that behavior). This covers a sequential duplicate (same user, same lineage, same value sent twice in a row). It is not a race guarantee: races are handled by the conditional claim plus the client in-flight disable in section 5, not by the no-change rule. Optional later: an operation-status or idempotency-key route would let the chat resolve a timed-out update definitively; no such route exists today, so the timeout rule in section 5 keeps the edit blocked instead.
 5.	Options: reuse GET /api/picklists/{field_key} (any authenticated org user may read) for apartment.Jewish_status and apartment.language. If its response shape does not fit the chat, add a thin assistant options route that reuses the same read with the same rule. The chat must show real server options, never hardcoded lists.
 
+
+---
+
+## Closeout (25 October 2026) - built locally, NOT committed, NOT pushed, waiting for review
+
+Nothing ran against the live CRM and no AI provider was called (this flow uses no model at all).
+
+**Spec gap:** the file ends at section 4.5. Sections 4.4 and 6 refer to a "section 5" (client in-flight disable + timeout rule) that is not in the file. I built those two rules as section 4.4 describes them; details under "Chat side" below. Please check that they match what you meant.
+
+### Section 2 - contracts checked against the local code
+- [x] PUT /api/apartments/{id}: get_current_user, shliach 403 when not assigned, picklist validation, `_apply_versioned_update` (new id, editor stamp, to_knock sync): confirmed as written.
+- [x] GET /api/apartments visibility (active versions, status="active", shliach scope): confirmed.
+- [x] Instinct search matching (address / apartment_name / resident, 20): confirmed; matching reused, auth not.
+- [x] jewish_status = `apartment.Jewish_status` single, language = `apartment.language` multi: confirmed.
+- [x] GET /api/picklists/{field_key}: any org user may read: confirmed.
+- [x] Lineage = root_id or own id: confirmed.
+- Found, not in the spec: the activist edit locks the admin sets on the shliach-config page (`shliach_view_config.disable_edit`, `apartment_edit_locked_fields`) are enforced only by the dashboard UI; the dashboard PUT does not check them. The new assistant endpoints DO enforce them (list and write). The dashboard PUT gap is left as it was.
+
+### Section 4 - CRM changes (`backend/app/routers/assistant_apartments.py`, registered in main.py)
+- [x] 4.1 `GET /api/assistant/apartments/search?q=`: dashboard visibility, same matching, cap 20, plus `truncated: true` when there were more. Each result: apartment_id, lineage_id, building_address, apartment_name, floor, resident_name, jewish_status, language.
+- [x] 4.2 `POST /api/assistant/apartments/{id}/update` `{field, value}`: only jewish_status (string) / language (list); anything else is a 422 `{status: invalid, invalid_fields: [{field, code[, value]}]}` (codes: field_not_supported, expected_text, expected_list, value_not_allowed, no_options). Shliach not assigned is a 403, as on the dashboard. Extra body keys (e.g. organization_id) are a 422. Response: status, apartment_id (new), previous_apartment_id, lineage_id, apartment (read back from the DB after commit).
+- [x] 4.3 `GET /api/assistant/apartments/by-lineage/{lineage_id}`: same visibility; 404 for missing and not-visible alike.
+- [x] 4.4 Conditional claim (`UPDATE ... WHERE id AND is_display`) before the versioned write; loser = 409. Same value again = `status: unchanged`, no new version. A retired id sent directly = 409.
+- [x] 4.5 Options: added `GET /api/assistant/apartments/fields` (the "thin assistant options route"). It returns the fields this user may edit (admin locks applied), each with the org's active options and the org's Hebrew/English field labels. That is how step 4 ("not a fixed list") is met. A field whose picklist has no active options is not offered, and writing it is a 422 `no_options`.
+- 2 new error texts in `error_localization.py` (409 "changed meanwhile", 403 "field locked for activists").
+
+### Chat side (C:\projects\crm-assitant)
+- [x] Steps 1-6 as listed: menu "Edit an apartment / עריכת דירה" -> address -> CRM search (pick from a list when several) -> full address + id + current values -> CRM field list -> CRM options -> update -> the reply shows the CRM's read-back state.
+- [x] In-flight: the page disables the input and every button while a turn is pending, and disables older steps' buttons. The server never resends an update by itself.
+- [x] 409 / 404 -> re-read by lineage, show the current state, ask for the value again (no resend). Gone lineage -> "no longer available".
+- [x] Lost answer (timeout, dropped connection, 5xx, unreadable 2xx) -> the edit stays BLOCKED. "yes" re-reads the lineage. If the CRM shows the sent value it says "saved". Otherwise it says "probably not saved, can't be sure" and stays blocked. "no" stops.
+- [x] Real options only: from the CRM's /fields, reloaded after a 403 or 422.
+- Not done: text fields ("only if the field is text user writes the new value"). This phase's CRM endpoint allows only the two picklist fields, so the chat has no text step yet.
+
+### Evidence
+- CRM: `tests/test_fixes114.py` 19 passed (SQLite) + `test_error_localization.py`. `tests/test_fixes114_postgres.py` 1 passed on real Postgres: 6 concurrent edits -> exactly one 200 + five 409s, one active row in the lineage. Throwaway DB `crm_fixes114_test` on local_postgres; it can be dropped. Mutation check: with the claim disabled, both the race test and the SQLite claim test fail.
+- CRM, local dev data (read-only probe as admin user 1): /fields returned the org's real labels ("יהדות (דירה)", 8 options; "שפה", 6). Search "Knapp St" returned 20 + truncated. by-lineage matched. Same-value update -> `unchanged` with the same id. "martian" -> 422 value_not_allowed. Apartment row count unchanged.
+- CRM full backend suite (excluding test_models.py, which needs its own Postgres): **838 passed, 7 skipped**. One earlier `-x` run stopped on 1 failure that I could not identify (its output was cut off); it did not come back in the full run.
+- Chat: `tests/test_apartment_chat.py` 24 passed (mock CRM); full chat suite 342/345 (the 3 known retrieval failures). Mutation check: treating a lost answer as "not sent" fails 5 tests.
+- Not done: no end-to-end run of the chat against a CRM, and not seen in a real browser.
