@@ -211,7 +211,7 @@ export default function UserDetailPage() {
         <h2 className="font-semibold">{t("page.shliach_details", "פרטי פעיל")}</h2>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
           <div className="flex flex-col">
-            <dt className="text-xs text-muted-foreground">{t("users.full_name", "שם מלא")}</dt>
+            <dt className="text-xs text-foreground">{t("users.full_name", "שם מלא")}</dt>
             <dd className="text-sm">
               <InlineEdit<string>
                 value={user.full_name}
@@ -227,7 +227,7 @@ export default function UserDetailPage() {
           {/* fixes105: the login username — editable (org-unique, the API
               rejects a taken one with "שם המשתמש כבר תפוס"). */}
           <div className="flex flex-col">
-            <dt className="text-xs text-muted-foreground">{t("auth.username", "שם משתמש")}</dt>
+            <dt className="text-xs text-foreground">{t("auth.username", "שם משתמש")}</dt>
             <dd className="text-sm">
               <InlineEdit<string>
                 value={user.username}
@@ -248,7 +248,7 @@ export default function UserDetailPage() {
             </dd>
           </div>
           <div className="flex flex-col">
-            <dt className="text-xs text-muted-foreground">{t("contacts.email", "אימייל")}</dt>
+            <dt className="text-xs text-foreground">{t("contacts.email", "אימייל")}</dt>
             <dd className="text-sm">
               <InlineEdit<string>
                 value={user.email ?? ""}
@@ -262,7 +262,7 @@ export default function UserDetailPage() {
             </dd>
           </div>
           <div className="flex flex-col">
-            <dt className="text-xs text-muted-foreground">{t("contacts.phone", "טלפון")}</dt>
+            <dt className="text-xs text-foreground">{t("contacts.phone", "טלפון")}</dt>
             <dd className="text-sm">
               <InlineEdit<string>
                 value={user.phone ?? ""}
@@ -278,7 +278,7 @@ export default function UserDetailPage() {
             </dd>
           </div>
           <div className="flex flex-col">
-            <dt className="text-xs text-muted-foreground">{t("users.role_label", "תפקיד")}</dt>
+            <dt className="text-xs text-foreground">{t("users.role_label", "תפקיד")}</dt>
             <dd className="text-sm">
               {isShliachAccount ? (
                 roleLabel
@@ -307,7 +307,7 @@ export default function UserDetailPage() {
               read-only banner above) — no way to actually flip it back from
               this page without the separate shliach-only "recreate" flow. */}
           <div className="flex flex-col">
-            <dt className="text-xs text-muted-foreground">{t("users.login_status", "סטטוס כניסה")}</dt>
+            <dt className="text-xs text-foreground">{t("users.login_status", "סטטוס כניסה")}</dt>
             <dd className="text-sm">
               {/* inline-flex, not flex: a block-level label made the whole
                   column width an invisible "suspend login" click target right
@@ -340,7 +340,7 @@ export default function UserDetailPage() {
             </dd>
           </div>
           <div className="flex flex-col">
-            <dt className="text-xs text-muted-foreground">
+            <dt className="text-xs text-foreground">
               {t("users.password_optional", "סיסמה (לא חובה)")}
             </dt>
             <dd className="text-sm space-y-1">
@@ -372,7 +372,7 @@ export default function UserDetailPage() {
         {user.shliach && (
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 border-t border-border pt-4">
             <div className="flex flex-col sm:col-span-2">
-              <dt className="text-xs text-muted-foreground">
+              <dt className="text-xs text-foreground">
                 {t("contact_shliach.areas", "אזורים באחריות הפעיל")}
               </dt>
               <dd className="text-sm">
@@ -396,7 +396,7 @@ export default function UserDetailPage() {
                 a Task (Users list's "Add task" quick action), not this
                 direct assignment. */}
             <div className="flex flex-col sm:col-span-2">
-              <dt className="text-xs text-muted-foreground">
+              <dt className="text-xs text-foreground">
                 {t("contact_shliach.report_numbers", "מספרי דוח באחריות הפעיל")}
               </dt>
               <dd className="text-sm space-y-1">
@@ -410,7 +410,7 @@ export default function UserDetailPage() {
               </dd>
             </div>
             <div className="flex flex-col sm:col-span-2">
-              <dt className="text-xs text-muted-foreground">{t("contact_shliach.notes", "הערות")}</dt>
+              <dt className="text-xs text-foreground">{t("contact_shliach.notes", "הערות")}</dt>
               <dd className="text-sm">
                 <InlineEdit<string>
                   value={user.shliach.notes ?? ""}
@@ -569,7 +569,7 @@ function SnapRow({
   }
   return (
     <div>
-      <dt className="text-muted-foreground flex items-center justify-between gap-2">
+      <dt className="text-foreground flex items-center justify-between gap-2">
         <span>{label}</span>
         <button
           type="button"

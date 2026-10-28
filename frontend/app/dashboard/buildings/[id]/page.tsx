@@ -135,7 +135,7 @@ export default function BuildingDetailPage() {
             Floors, coordinates and the map stay on the edit page. */}
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <div>
-            <dt className="text-muted-foreground">{t("buildings.area_id", "אזור")}</dt>
+            <dt className="text-foreground">{t("buildings.area_id", "אזור")}</dt>
             <dd className="font-medium flex items-baseline gap-2">
               {area ? (
                 <Link
@@ -172,7 +172,7 @@ export default function BuildingDetailPage() {
             </dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">{t("apartments", "דירות")}</dt>
+            <dt className="text-foreground">{t("apartments", "דירות")}</dt>
             <dd className="font-medium">{apartments.length}</dd>
           </div>
           {/* fixes64 §1: the building's type (building / town_house /
@@ -180,7 +180,7 @@ export default function BuildingDetailPage() {
               but the single-building view had no equivalent. */}
           {building.building_type_id && (
             <div>
-              <dt className="text-muted-foreground">{t("buildings.building_type", "סוג בניין")}</dt>
+              <dt className="text-foreground">{t("buildings.building_type", "סוג בניין")}</dt>
               <dd className="font-medium">
                 {(() => {
                   const bt = buildingTypes.find((x) => x.id === building.building_type_id);
@@ -192,7 +192,7 @@ export default function BuildingDetailPage() {
           {isFieldVisible("buildings.building_name") &&
             (building.building_name || isAdmin) && (
               <div>
-                <dt className="text-muted-foreground">{t("buildings.building_name", "שם בניין")}</dt>
+                <dt className="text-foreground">{t("buildings.building_name", "שם בניין")}</dt>
                 <dd className="font-medium">
                   <InlineEdit<string>
                     value={building.building_name ?? ""}
@@ -213,7 +213,7 @@ export default function BuildingDetailPage() {
               </div>
             )}
           <div className="sm:col-span-2">
-            <dt className="text-muted-foreground">{t("buildings.building_address", "כתובת בניין")}</dt>
+            <dt className="text-foreground">{t("buildings.building_address", "כתובת בניין")}</dt>
             <dd className="font-medium">
               <InlineEdit<string>
                 value={building.building_address ?? ""}
@@ -238,7 +238,7 @@ export default function BuildingDetailPage() {
           </div>
           {(building.floors?.length ?? 0) > 0 && (
             <div className="sm:col-span-2">
-              <dt className="text-muted-foreground">{t("buildings.floors", "קומות")}</dt>
+              <dt className="text-foreground">{t("buildings.floors", "קומות")}</dt>
               <dd className="font-medium">
                 {building.floors!.map((f) => f.name).join(", ")}
               </dd>
@@ -246,7 +246,7 @@ export default function BuildingDetailPage() {
           )}
           {building.latitude != null && building.longitude != null && (
             <div className="sm:col-span-2">
-              <dt className="text-muted-foreground">{t("buildings.coords", "קואורדינטות")}</dt>
+              <dt className="text-foreground">{t("buildings.coords", "קואורדינטות")}</dt>
               <dd className="font-medium" dir="ltr">
                 {formatCoords(building.latitude, building.longitude)}
               </dd>

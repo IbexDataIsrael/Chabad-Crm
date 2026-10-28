@@ -150,15 +150,15 @@ export default function AreaDetailPage() {
         </div>
         <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
           <div>
-            <dt className="text-muted-foreground">{t("areas.area_notes", "הערות")}</dt>
+            <dt className="text-foreground">{t("areas.area_notes", "הערות")}</dt>
             <dd className="font-medium">{area.area_notes || "—"}</dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">{t("buildings", "בניינים")}</dt>
+            <dt className="text-foreground">{t("buildings", "בניינים")}</dt>
             <dd className="font-medium">{buildings.length}</dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">{t("page.shluchim", "פעילים")}</dt>
+            <dt className="text-foreground">{t("page.shluchim", "פעילים")}</dt>
             <dd className="font-medium">{shluchim.length}</dd>
           </div>
         </dl>

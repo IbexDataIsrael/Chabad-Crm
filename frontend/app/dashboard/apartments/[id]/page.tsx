@@ -345,7 +345,7 @@ export default function ApartmentDetailPage() {
           <h1 className="font-display text-4xl">{apartmentTitle(apt)}</h1>
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <div>
-              <dt className="text-muted-foreground">{t("apartments.building_id", "בניין")}</dt>
+              <dt className="text-foreground">{t("apartments.building_id", "בניין")}</dt>
               <dd className="font-medium flex items-baseline gap-2">
                 {building ? (
                   <Link
@@ -590,14 +590,14 @@ export default function ApartmentDetailPage() {
 
               return sortByFieldOrder(entries, (e) => e.key, orderFor).map((e) => (
                 <div key={e.key} className={e.span2 ? "sm:col-span-2" : undefined}>
-                  <dt className="text-muted-foreground">{e.label}</dt>
+                  <dt className="text-foreground">{e.label}</dt>
                   <dd className="font-medium">{e.node}</dd>
                 </div>
               ));
             })()}
             {building?.building_address && (
               <div className="sm:col-span-2">
-                <dt className="text-muted-foreground">{t("buildings.building_address", "כתובת בניין")}</dt>
+                <dt className="text-foreground">{t("buildings.building_address", "כתובת בניין")}</dt>
                 <dd className="font-medium">
                   {/* fixes30 §4: the shluchim display navigates via Maps. */}
                   {isShliach ? (
@@ -745,7 +745,7 @@ function SnapRow({
   }
   return (
     <div>
-      <dt className="text-muted-foreground flex items-center justify-between gap-2">
+      <dt className="text-foreground flex items-center justify-between gap-2">
         <span>{label}</span>
         {field && onRestore && (
           <button

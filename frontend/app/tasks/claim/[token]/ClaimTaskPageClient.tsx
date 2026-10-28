@@ -117,11 +117,11 @@ export function ClaimTaskPageClient() {
       <WaveRule className="mt-2 h-3 w-24" />
       <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
         <div>
-          <dt className="text-muted-foreground">{t("task.report_numbers", "מספרי דוח")}</dt>
+          <dt className="text-foreground">{t("task.report_numbers", "מספרי דוח")}</dt>
           <dd className="mt-0.5 font-medium">{info.report_number_names.join(", ") || "—"}</dd>
         </div>
         <div>
-          <dt className="text-muted-foreground">{t("claim.apartments", "דירות במשימה")}</dt>
+          <dt className="text-foreground">{t("claim.apartments", "דירות במשימה")}</dt>
           <dd className="mt-0.5 font-medium">{info.apartment_count}</dd>
         </div>
       </dl>

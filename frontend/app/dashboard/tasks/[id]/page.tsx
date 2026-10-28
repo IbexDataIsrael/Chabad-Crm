@@ -489,7 +489,7 @@ function BackLink({ label }: { label: string }) {
 function Field({ label, wide = false, children }: { label: string; wide?: boolean; children: ReactNode }) {
   return (
     <div className={`flex flex-col ${wide ? "sm:col-span-2" : ""}`}>
-      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dt className="text-xs text-foreground">{label}</dt>
       <dd className="text-sm">{children}</dd>
     </div>
   );

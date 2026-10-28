@@ -14,6 +14,10 @@ _Read this first if you are a new Kimi session opened in this folder. Delete whe
 - **Environment changes made for the preview**: (1) original repo's `backend/.env` `CORS_ORIGINS` gained `http://localhost:3002` (container was `--force-recreate`d — plain `restart` does NOT re-read env_file); (2) `npm install` was run once inside `minicrm-redesign-frontend` because the prebuilt image's node_modules predates `canvas-confetti`/`qrcode` (those 3 tsc "missing type" errors should now be gone — re-check).
 - Do NOT run `next build` inside `frontend/` while a Docker dev server is running from the same bind-mounted folder — it corrupts the dev server's `.next` chunks and breaks the site.
 
+## This session
+
+- **Detail-page field labels brightened**: `<dt>` labels on apartment/building/area/user/task detail pages + the public claim page used `text-muted-foreground` (dim grey on the dark glass cards — read as near-black); all switched to `text-foreground` (apartments `[id]`, buildings `[id]`, areas `[id]`, users `[id]`, tasks `[id]`, `ClaimTaskPageClient`). Form-label spans (`block text-sm font-medium` in editors) already inherited `text-foreground` — untouched. Verified on :3002 (`.redesign-shots/25-apt-detail-after.png`, `25-building-detail.png`); `docker exec minicrm-redesign-frontend npx tsc --noEmit` clean.
+
 ## Recent work on main (context, not this branch's task)
 
 - **fixes111 — AI helper chat popup** (frontend only, backend intentionally not wired):
