@@ -295,19 +295,25 @@ entities that matter for orienting yourself:
   Instinct create) in one transaction; replays return the original contact.
   `source='assistant'`, `status='draft'`, owned by the confirming user.
 - **Assistant apartment edit** (`backend/app/routers/assistant_apartments.py`,
-  fixes114, used by the separate chat project) — JWT-only, same visibility as
-  the dashboard apartments list (active versions, no drafts, a shliach only
-  their assigned apartments). `GET /api/assistant/apartments/fields` lists
-  the fields the user may edit with the org's active options — filtered by
-  the activist edit locks in `shliach_view_config` (`disable_edit`,
-  `apartment_edit_locked_fields`), which this API also enforces on write.
-  `GET …/search?q=` (address / apartment number / resident, cap 20 +
-  `truncated`), `GET …/by-lineage/{lineage_id}` (current version of a
-  lineage), `POST …/{id}/update` `{field, value}` — this phase only
-  `jewish_status` (single) and `language` (multi). The update claims the
+  fixes114/fixes115, used by the separate chat project) — JWT-only, same
+  visibility as the dashboard apartments list (active versions, no drafts, a
+  shliach only their assigned apartments). `GET /api/assistant/apartments/search?q=`
+  (address / apartment number / resident, cap 20 + `truncated`) and
+  `GET …/by-lineage/{lineage_id}` return each apartment with `editable_fields`
+  (field_key, label, label_en, kind, current_value, options for option
+  fields). Which fields is decided server-side by `app/apartment_edit_rules.py`
+  from the apartment field catalog (`apartment_fields.py`): org field settings
+  hide a field for everyone; a shliach also loses fields hidden by the active
+  campaign, every field under `disable_edit`, the `apartment_edit_locked_fields`
+  (shliach-config lock keys translated to field keys), and never gets
+  apartment number / floor / report number. `POST …/{id}/update`
+  `{field_key, value}` recomputes that set (hidden, locked, unknown or
+  internal = one 403), validates by kind (422 naming the field), claims the
   version with a conditional UPDATE (`id` AND `is_display`; a lost race is
-  409), then writes through `_apply_versioned_update` (editor stamp,
-  to_knock sync); the same value again is `unchanged` with no new version.
+  409), then writes through `_apply_versioned_update` (editor stamp, to_knock
+  sync); the same value again is `unchanged` with no new version. street2 and
+  the route page show a field only when org settings AND the active campaign
+  both show it (fixes115).
 
 ## 6. The activist ("shliach") experience, end to end
 

@@ -79,11 +79,11 @@ def test_concurrent_edits_of_one_version_write_exactly_once(pg, monkeypatch):
     n = len(values)
     barrier = threading.Barrier(n, timeout=20)
     seen = threading.local()
-    real_summaries = assistant_apartments._summaries
+    real_views = assistant_apartments._views
     real_update = assistant_apartments._apply_versioned_update
 
-    def summaries(*args, **kwargs):
-        out = real_summaries(*args, **kwargs)
+    def views(*args, **kwargs):
+        out = real_views(*args, **kwargs)
         if not getattr(seen, "waited", False):  # the read just before the claim
             seen.waited = True
             barrier.wait()
@@ -93,7 +93,7 @@ def test_concurrent_edits_of_one_version_write_exactly_once(pg, monkeypatch):
         time.sleep(0.5)  # the claim's row lock is held here
         return real_update(*args, **kwargs)
 
-    monkeypatch.setattr(assistant_apartments, "_summaries", summaries)
+    monkeypatch.setattr(assistant_apartments, "_views", views)
     monkeypatch.setattr(assistant_apartments, "_apply_versioned_update", slow_update)
 
     results = [None] * n
@@ -101,7 +101,7 @@ def test_concurrent_edits_of_one_version_write_exactly_once(pg, monkeypatch):
     def run(i):
         results[i] = TestClient(app).post(
             f"{URL}/{pg['apartment']}/update",
-            json={"field": "jewish_status", "value": values[i]},
+            json={"field_key": "apartment.Jewish_status", "value": values[i]},
             headers=pg["headers"],
         )
 

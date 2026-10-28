@@ -123,3 +123,62 @@ Questions for you:
 2. Should a shliach also respect the org field settings (street2 ignores them today)?
 3. The fixes114 endpoints (uncommitted) already exist with a different contract (`field` not `field_key`, a separate `/fields` route, 422 for unknown fields). I plan to replace them in place with this contract. The uncommitted fixes114 chat code in crm-assitant will then no longer match the CRM until the chat is updated in a later task. Is that OK, or should I keep the old `/fields` + `field` shape working alongside until then?
 4. Should I also make the dashboard PUT enforce the same rule? It is out of this file's scope, so I left it alone.
+
+---
+
+## Your answers (29 October 2026)
+1. Two main users. Admin edits everything except hidden fields. Activist sees only what the admin marked visible (seasonal fields).
+2. Activists respect org settings too, and street2 must be fixed: org settings are for the whole org.
+3. Replace the fixes114 endpoints with the new contract.
+4. Asked what it meant. Explained: today the hide/lock settings are enforced only by the screens; the server's normal dashboard save still accepts a hidden or locked field if the request is sent directly. The question is whether the dashboard save should refuse them too. Still open; not done.
+
+## Closeout (29 October 2026) - built locally, NOT committed, NOT pushed, waiting for review
+
+Nothing ran against the live CRM and no AI provider was called.
+
+### The rule (`backend/app/apartment_edit_rules.py`, one place, used by every endpoint)
+- Candidates: the apartment field catalog the campaign visibility screen already uses (`apartment_fields.list_apartment_field_keys`: fixed fields + the org's custom picklists + its custom fields; to_knock never). No other field list.
+- Hidden in the org field settings: not listed for anyone (admin included).
+- Activist (shliach) also loses: fields the active campaign hides, everything when "disable editing" is on, and each locked field. The lock list's own names are translated (`resident` -> resident name, `notes` -> notes, and so on).
+- Activist never gets: apartment number (the dashboard save refuses it), floor and report number (street2 never offers them).
+- Staff and campaign manager follow the admin rules. You named only admin and activist, so tell me if they should be stricter.
+- Never listed for anyone: ids, root_id, is_display, guid, editor and timestamps, campaign_id, source/status (draft approval), to_knock (set automatically from Jewish status), building_id (moving buildings is building work, out of scope).
+- An option field with no active options is not listed (nothing to pick).
+
+### Endpoints (`backend/app/routers/assistant_apartments.py`, fixes114 contract replaced)
+- [x] `GET /api/assistant/apartments/search?q=`: dashboard visibility, cap 20 + `truncated`. Each result: apartment_id, lineage_id, building_address, apartment_name, floor, resident_name, editable_fields.
+- [x] editable_fields entries: field_key, label (Hebrew), label_en, kind, current_value (array for multi), options (option fields only: value, label, label_en). Kinds: `single_option`, `multi_option`, `text`, `number`, `date`, `yes_no`. Floor options are the building's floors; report number options are the org's report numbers (value = id).
+- [x] `POST /api/assistant/apartments/{id}/update` `{field_key, value}`: recomputes the set for this user and apartment. Hidden, locked, unknown or internal = 403 "This field cannot be edited here" (same message for all). Shliach on an unassigned apartment = 403, as on the dashboard. Values checked by kind (422 `{status: invalid, invalid_fields: [{field, code[, value]}]}`; codes expected_option, expected_list, value_not_allowed, expected_text, expected_number, expected_date, expected_yes_no, invalid_format). Phone and email use the dashboard's validators. Written through `_apply_versioned_update` (editor stamp, to_knock sync). Response: status (`updated` / `unchanged`), field_key, value (read back), apartment_id (new), previous_apartment_id, lineage_id, apartment (with fresh editable_fields).
+- [x] Conditional claim (`UPDATE ... WHERE id AND is_display`) before the write; loser = 409. A retired id sent directly = 409. Same value again = `unchanged`, no new version.
+- [x] `GET /api/assistant/apartments/by-lineage/{lineage_id}`: same shape and visibility; 404 for missing and not-visible alike.
+- [x] `/fields` route removed (options now come inside editable_fields).
+- Error texts: added "This field cannot be edited here" (Hebrew: "לא ניתן לערוך את השדה הזה כאן"), removed the fixes114 "activists cannot edit this field" text (no longer used).
+- Size: options repeat on each of up to 20 results. With the real org (8 + 6 options plus a few custom fields) that is small. I didn't change the contract.
+
+### street2 fix (answer 2)
+- [x] `frontend/app/dashboard/street2/page.tsx`: a field shows only if the org field settings AND the active campaign both show it (was campaign only).
+- [x] Same one-line fix in `frontend/app/dashboard/route/page.tsx` ("Jewish points BETA"), which is a copy of street2 with the same rule. The old `/dashboard/street` page is untouched (it never used the campaign flags).
+- Not done: not seen in a browser. `tsc --noEmit` shows no new errors; the only errors are the 3 already there (`canvas-confetti`, `qrcode` missing in the container's node_modules).
+
+### Evidence
+- `backend/tests/test_fixes115.py`: 30 tests passed (SQLite). They cover:
+  - fields per user (admin, staff, activist), labels, kinds, values and options
+  - campaign-hidden fields (activist only), org-hidden fields (everyone), locks with the shliach-config keys, and disable_edit
+  - a seasonal picklist (Chanuka): its current value, plus a newly added option showing up with no code change
+  - every kind written through the dashboard path; report number picked by id
+  - unchanged; 403 for hidden, locked, unknown and internal fields; 422 for each kind
+  - 409 plus the lineage read; the simulated claim race; activist on an unassigned apartment
+  - identity in the body; search, drafts, other org and the 20 cap; 401 with no token and with a bad token
+- `tests/test_fixes114.py` was deleted (it tested the old contract; its cases moved into test_fixes115.py).
+- `tests/test_fixes114_postgres.py` (updated to the new body): 1 passed on the throwaway Postgres DB `crm_fixes114_test`. 6 concurrent edits gave exactly one 200 and five 409s, with one active row.
+- Mutation checks:
+  - With the campaign hide flags removed, 2 tests fail.
+  - With the 403 removed (trusting any field_key), 1 test fails.
+  - Code restored both times.
+- Full backend suite (excluding test_models.py): **853 passed, 7 skipped**.
+
+### Unsure / for you
+- The chat side (crm-assitant) still uses the fixes114 contract (`field`, `/fields`), so it will not work against this CRM until the chat is updated. That's a later task, as you said.
+- Staff and campaign manager get the admin rules.
+- Single-option fields cannot be cleared (the value must be one of the options); text, number, date and yes/no can be cleared by sending null.
+- Answer 4 is still open.

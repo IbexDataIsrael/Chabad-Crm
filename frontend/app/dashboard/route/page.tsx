@@ -239,10 +239,12 @@ export default function RoutePage() {
 
   // fixes71 §C.5: ordering stays global (untouched); visibility now comes
   // from the active campaign, not this hook's isFieldVisible.
-  const { orderFor } = useFieldSettings();
+  // fixes115: org field settings AND the active campaign (as in street2).
+  const { orderFor, isFieldVisible } = useFieldSettings();
   // Named activeCampaign, not campaign — that name is already taken by the
   // apartment.campaign_status picklist hook below.
   const { campaign: activeCampaign, isVisible: campaignVisible } = useActiveCampaignFieldVisibility();
+  const fieldShown = (key: string) => isFieldVisible(key) && campaignVisible(key);
 
   // fixes72 §A: buildings completed under the active campaign are persisted
   // server-side and excluded from the list entirely — not just celebrated
@@ -785,7 +787,7 @@ export default function RoutePage() {
     items.filter((a) => a.building_id === buildingId).length;
 
   const doorCaption = (a: ApartmentListItem) =>
-    campaignVisible(FIELD_KEY.name) && a.name
+    fieldShown(FIELD_KEY.name) && a.name
       ? a.name
       : `${t("route.apartment", "דירה")} ${a.apartment_name || "—"}`;
 
@@ -1014,7 +1016,7 @@ export default function RoutePage() {
                   previous default order after the ordered ones. Hidden
                   fields never enter the list. */}
               {orderStreetRows([
-              [FIELD_KEY.name, campaignVisible(FIELD_KEY.name) && (
+              [FIELD_KEY.name, fieldShown(FIELD_KEY.name) && (
                 <EditableRow
                   label={t("apartments.name", "שם דייר")}
                   field="name"
@@ -1037,7 +1039,7 @@ export default function RoutePage() {
                   }
                 />
               )],
-              [FIELD_KEY.phone, campaignVisible(FIELD_KEY.phone) && (
+              [FIELD_KEY.phone, fieldShown(FIELD_KEY.phone) && (
                 <EditableRow
                   label={t("apartments.phone", "טלפון")}
                   field="phone"
@@ -1074,7 +1076,7 @@ export default function RoutePage() {
                   }
                 />
               )],
-              [FIELD_KEY.email, campaignVisible(FIELD_KEY.email) && (
+              [FIELD_KEY.email, fieldShown(FIELD_KEY.email) && (
                 <EditableRow
                   label={t("apartments.email", "אימייל")}
                   field="email"
@@ -1112,7 +1114,7 @@ export default function RoutePage() {
                 />
               )],
 
-              [FIELD_KEY.jewish_status, campaignVisible(FIELD_KEY.jewish_status) && (
+              [FIELD_KEY.jewish_status, fieldShown(FIELD_KEY.jewish_status) && (
                 <PicklistRow
                   label={t("picklist.apartment.Jewish_status", "יהדות")}
                   field="jewish_status"
@@ -1132,7 +1134,7 @@ export default function RoutePage() {
                   onToggleChip={(v) => toggleChip(v, false)}
                 />
               )],
-              [FIELD_KEY.campaign_status, campaignVisible(FIELD_KEY.campaign_status) && (
+              [FIELD_KEY.campaign_status, fieldShown(FIELD_KEY.campaign_status) && (
                 <PicklistRow
                   label={t("picklist.apartment.campaign_status", "סטטוס קמפיין")}
                   field="campaign_status"
@@ -1152,7 +1154,7 @@ export default function RoutePage() {
                   onToggleChip={(v) => toggleChip(v, false)}
                 />
               )],
-              [FIELD_KEY.mezuzah_status, campaignVisible(FIELD_KEY.mezuzah_status) && (
+              [FIELD_KEY.mezuzah_status, fieldShown(FIELD_KEY.mezuzah_status) && (
                 <PicklistRow
                   label={t("picklist.apartment.mezuzah_status", "מזוזה")}
                   field="mezuzah_status"
@@ -1172,7 +1174,7 @@ export default function RoutePage() {
                   onToggleChip={(v) => toggleChip(v, false)}
                 />
               )],
-              [FIELD_KEY.language, campaignVisible(FIELD_KEY.language) && (
+              [FIELD_KEY.language, fieldShown(FIELD_KEY.language) && (
                 <PicklistRow
                   label={t("picklist.apartment.language", "שפה")}
                   field="language"
@@ -1194,7 +1196,7 @@ export default function RoutePage() {
                 />
               )],
 
-              [FIELD_KEY.report_number_id, campaignVisible(FIELD_KEY.report_number_id) && (
+              [FIELD_KEY.report_number_id, fieldShown(FIELD_KEY.report_number_id) && (
                 <div className={styles.row}>
                   <div className={styles.lbl}>{t("apartments.report_number_id", "מספר דוח")}</div>
                   <div className={`${styles.val} ${openApt.report_number_name ? "" : styles.valEmpty}`}>
@@ -1206,7 +1208,7 @@ export default function RoutePage() {
                 </div>
               )],
 
-              [FIELD_KEY.apartment_notes, campaignVisible(FIELD_KEY.apartment_notes) && (
+              [FIELD_KEY.apartment_notes, fieldShown(FIELD_KEY.apartment_notes) && (
                 <EditableRow
                   label={t("apartments.apartment_notes", "הערות")}
                   field="apartment_notes"
@@ -1236,7 +1238,7 @@ export default function RoutePage() {
               ...sortByFieldOrder(
                 [
                   ...customDefs
-                    .filter((d) => campaignVisible(d.field_key))
+                    .filter((d) => fieldShown(d.field_key))
                     .map((d) => ({
                       key: d.field_key,
                       node: (
@@ -1267,7 +1269,7 @@ export default function RoutePage() {
                       ),
                     })),
                   ...customFieldDefs
-                    .filter((d) => campaignVisible(`customfield.apartment.${d.field_key}`))
+                    .filter((d) => fieldShown(`customfield.apartment.${d.field_key}`))
                     .map((d) => {
                       const key = `customfield.apartment.${d.field_key}`;
                       const value = openApt.custom_field_values?.[d.field_key] ?? null;
