@@ -1,0 +1,30 @@
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+RUN node -e 'const p=require("next/package.json"),c=require("next/dist/server/config-shared").defaultConfig; if(p.version!=="14.2.5" || typeof c.experimental?.cpus!=="number") throw Error("Expected installed Next 14.2.5 config schema to support experimental.cpus");'
+
+FROM node:20-alpine AS builder
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_OPTIONS=--max-old-space-size=768
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN node -e 'const fs=require("fs"),crypto=require("crypto"),p="next.config.js",s=fs.readFileSync(p,"utf8"); if(crypto.createHash("sha256").update(s).digest("hex")!=="fb8a90be0a133e05f64c67ae7fac5fd4b77d7218deb07375fe75ed650502e153") throw Error("Unexpected next.config.js source; refusing to patch"); const marker="const nextConfig = {"; if(!s.includes(marker)) throw Error("next.config.js marker missing"); const patched=s.replace(marker, marker+"\n  experimental: { cpus: 1 },"); if(patched===s) throw Error("No next.config.js change"); fs.writeFileSync(p,patched);'
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID
+ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/next.config.js ./next.config.js
+EXPOSE 3000
+CMD ["npm", "run", "start"]

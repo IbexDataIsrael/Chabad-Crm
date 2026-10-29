@@ -1,0 +1,160 @@
+# Test-site auto-deploy. Pushes to a NON-main branch only.
+# It builds nothing unless the test server says this branch is its configured test branch.
+# It never runs on pull_request, so no pull request can read the secret.
+# OFF by default. It does nothing unless the repo variable TEST_DEPLOY_MODE is set:
+#   build-only : builds and checks both images, never opens SSH, never needs a secret.
+#                Only for the branch named in the repo variable TEST_BUILD_ONLY_BRANCH.
+#   deploy     : the full path below (needs the key secrets and the server gate).
+name: deploy-test
+
+on:
+  push:
+    branches-ignore:
+      - main
+
+permissions:
+  contents: read
+
+# One deploy at a time. A newer push waits; it does not cancel a running deploy
+# (cancelling mid-load could leave the test stack half updated).
+concurrency:
+  group: deploy-test
+  cancel-in-progress: false
+
+env:
+  TEST_HOST: 167.233.238.179
+  TEST_USER: zvi
+  TEST_API_URL: https://test.jewishpoints.com
+  # The test branch is NOT set here. The server owns it (test-branch.conf).
+
+jobs:
+  deploy:
+    if: vars.TEST_DEPLOY_MODE == 'build-only' || vars.TEST_DEPLOY_MODE == 'deploy'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      MODE: ${{ vars.TEST_DEPLOY_MODE }}
+    steps:
+      - name: Set up SSH (restricted key)
+        if: env.MODE == 'deploy'
+        env:
+          KEY: ${{ secrets.TEST_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.TEST_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_test
+          chmod 600 ~/.ssh/id_test
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<CFG
+          Host testsrv
+            HostName ${TEST_HOST}
+            User ${TEST_USER}
+            IdentityFile ~/.ssh/id_test
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          CFG
+
+      - name: Build-only mode, no SSH, accept only the named branch
+        id: bo
+        if: env.MODE == 'build-only'
+        env:
+          BO_BRANCH: ${{ vars.TEST_BUILD_ONLY_BRANCH }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$BO_BRANCH" && "$GITHUB_REF_NAME" == "$BO_BRANCH" ]]; then
+            echo "go=yes" >> "$GITHUB_OUTPUT"
+            # placeholder with the real pattern; this image is checked and thrown away, never sent
+            echo "client_id=000000000000-buildonly.apps.googleusercontent.com" >> "$GITHUB_OUTPUT"
+            echo "BUILD_ONLY=1" >> "$GITHUB_ENV"
+          else
+            echo "go=no" >> "$GITHUB_OUTPUT"
+            echo "Build-only: branch is not the named one. Nothing built."
+          fi
+
+      - name: Ask the server if this branch is the test branch
+        id: gate
+        if: env.MODE == 'deploy'
+        run: |
+          set -euo pipefail
+          branch="${GITHUB_REF_NAME}"
+          [[ "$branch" =~ ^[A-Za-z0-9._/-]{1,100}$ ]] || { echo "odd branch name, stopping"; echo "go=no" >> "$GITHUB_OUTPUT"; exit 0; }
+          if reply="$(ssh testsrv "check-branch $branch")"; then
+            set -- $reply
+            echo "go=yes" >> "$GITHUB_OUTPUT"
+            echo "client_id=$2" >> "$GITHUB_OUTPUT"
+          else
+            echo "Branch $branch is not the configured test branch. Nothing built."
+            echo "go=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out the exact commit
+        if: (steps.gate.outputs.go == 'yes' || steps.bo.outputs.go == 'yes')
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Build images for this exact commit
+        if: (steps.gate.outputs.go == 'yes' || steps.bo.outputs.go == 'yes')
+        env:
+          CLIENT_ID: ${{ steps.gate.outputs.client_id }}
+        run: |
+          set -euo pipefail
+          short="${GITHUB_SHA:0:12}"
+          labels=(--label "org.opencontainers.image.revision=${GITHUB_SHA}" --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" --label "minicrm.test.run-id=${GITHUB_RUN_ID}")
+
+          # backend: repo backend code + the one compatibility migration + PINNED packages
+          if grep -q 'PINS-NOT-GROUNDED' deploy/test/test-backend-pins.txt; then
+            echo "Pinned package list not filled in yet. Refusing to build."; exit 1
+          fi
+          cp deploy/test/compat/113b2c4d6e8f_fixes113_assistant_proposals.py backend/alembic/versions/
+          echo "5a4f317322b40c4f216d8af7bbca0b0cb352c91351ea3afbd51f72ffb37881a7  backend/alembic/versions/113b2c4d6e8f_fixes113_assistant_proposals.py" | sha256sum -c -
+          # the repo Dockerfile is not used to build, but its start command must still be the one we copied
+          echo "de8c447be85ab76d13be1f30944ba5767047a362768cbc845ce2253c1e94c745  backend/Dockerfile" | sha256sum -c -
+          cp deploy/test/test-backend-pins.txt backend/test-backend-pins.txt
+          docker build "${labels[@]}" -f deploy/test/Dockerfile.backend.test -t "minicrm-redesign-test-backend:auto-${short}" backend
+          # installed packages must equal the pinned list exactly
+          pyv="$(docker run --rm "minicrm-redesign-test-backend:auto-${short}" python --version)"
+          [[ "$pyv" == "Python 3.12.16" ]] || { echo "unexpected $pyv"; exit 1; }
+          docker run --rm "minicrm-redesign-test-backend:auto-${short}" python -m pip freeze --all | sort > /tmp/frozen.txt
+          grep -v '^#' deploy/test/test-backend-pins.txt | grep -v '^$' | sort > /tmp/pins.txt
+          diff -u /tmp/pins.txt /tmp/frozen.txt || { echo "installed packages differ from the pinned list"; exit 1; }
+          heads="$(docker run --rm "minicrm-redesign-test-backend:auto-${short}" alembic heads | awk '{print $1}')"
+          [[ "$(printf '%s\n' "$heads" | grep -c .)" == "1" ]] || { echo "expected exactly one migration head, got: $heads"; exit 1; }
+          echo "image migration head: $heads (the server re-checks this itself)"
+
+          # frontend: dev-mode Dockerfile in the repo is not used; the test Dockerfile is
+          echo "d36d6abac05c7c086d7c0c3ca10b3654088f78cdef080cf9491b87e84aaea726  deploy/test/Dockerfile.frontend.google" | sha256sum -c -
+          docker build "${labels[@]}" -f deploy/test/Dockerfile.frontend.google \
+            --build-arg NEXT_PUBLIC_API_URL="${TEST_API_URL}" \
+            --build-arg NEXT_PUBLIC_GOOGLE_CLIENT_ID="${CLIENT_ID}" \
+            -t "minicrm-redesign-test-frontend:auto-${short}" frontend
+
+      - name: Pack images and record their hash
+        if: env.MODE == 'deploy' && steps.gate.outputs.go == 'yes'
+        run: |
+          set -euo pipefail
+          short="${GITHUB_SHA:0:12}"
+          docker save "minicrm-redesign-test-backend:auto-${short}" "minicrm-redesign-test-frontend:auto-${short}" | gzip -1 > /tmp/images.tar.gz
+          sha256sum /tmp/images.tar.gz | cut -d' ' -f1 > /tmp/images.sha256
+          echo "archive sha256: $(cat /tmp/images.sha256)"
+          ls -l /tmp/images.tar.gz
+
+      - name: Stop if this commit is no longer the branch head
+        if: env.MODE == 'deploy' && steps.gate.outputs.go == 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          now="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_REF_NAME}" --jq .sha)"
+          if [[ "$now" != "$GITHUB_SHA" ]]; then
+            echo "Branch moved on to $now while building. Skipping this older commit."
+            echo "STALE=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Send to the server and deploy
+        if: env.MODE == 'deploy' && steps.gate.outputs.go == 'yes' && env.STALE != '1'
+        run: |
+          set -euo pipefail
+          ssh testsrv "deploy ${GITHUB_REF_NAME} ${GITHUB_SHA} ${GITHUB_RUN_ID} $(cat /tmp/images.sha256)" < /tmp/images.tar.gz
