@@ -19,6 +19,11 @@ router = APIRouter(prefix="/api/preferences", tags=["preferences"])
 
 _MAX_VALUE_LEN = 10_000  # sanity bound — these are small UI settings
 
+# fixes116: 'locale' is the user's language — the CRM UI and the chat
+# assistant both read it, so only the two supported codes may be stored.
+_LOCALE_KEY = "locale"
+_LOCALES = ("he", "en")
+
 
 class PreferenceIn(BaseModel):
     key: str
@@ -54,6 +59,8 @@ def set_preference(
     key = payload.key.strip()
     if not key or len(key) > 100:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid preference key")
+    if key == _LOCALE_KEY and payload.value not in _LOCALES:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid language")
     encoded = json.dumps(payload.value, ensure_ascii=False)
     if len(encoded) > _MAX_VALUE_LEN:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Preference value too large")

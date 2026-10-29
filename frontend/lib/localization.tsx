@@ -10,12 +10,27 @@ import {
   type ReactNode,
 } from "react";
 
-import { apiFetch, getToken } from "./api";
+import { apiFetch } from "./api";
 import { registerErrorTranslator } from "@/lib/errorText";
 import { useAuth } from "./auth";
 
 export type Lang = "he" | "en";
 const LANG_KEY = "crm_lang";
+// fixes116: set when the toggle is pressed while logged out — an explicit
+// choice made before login, saved to the account once the session resolves.
+// crm_lang alone is only a passive display fallback and is never saved.
+const EXPLICIT_LANG_KEY = "crm_lang_explicit";
+
+function isLang(v: unknown): v is Lang {
+  return v === "he" || v === "en";
+}
+
+function saveLocale(lang: Lang): Promise<unknown> {
+  return apiFetch("/api/preferences", {
+    method: "PUT",
+    body: JSON.stringify({ key: "locale", value: lang }),
+  });
+}
 
 // { technical_name: { he, en } }
 type LocalizationMap = Record<string, { he: string; en: string }>;
@@ -43,17 +58,29 @@ export function LocalizationProvider({ children }: { children: ReactNode }) {
   // Restore the saved language before paint (works pre-login too).
   useEffect(() => {
     const saved = window.localStorage.getItem(LANG_KEY);
-    if (saved === "he" || saved === "en") setLangState(saved);
+    if (isLang(saved)) setLangState(saved);
   }, []);
 
   // fixes17 §1.1: the language preference lives in the DB per user — once a
   // session resolves, the account's stored locale wins over this browser's.
+  // fixes116: unless the user toggled the language before logging in — that
+  // explicit choice wins and is saved. The mark is cleared only once the save
+  // succeeds, so a failed save is retried on the next load.
   useEffect(() => {
     if (!user) return;
+    const explicit = window.sessionStorage.getItem(EXPLICIT_LANG_KEY);
+    if (isLang(explicit)) {
+      setLangState(explicit);
+      window.localStorage.setItem(LANG_KEY, explicit);
+      saveLocale(explicit)
+        .then(() => window.sessionStorage.removeItem(EXPLICIT_LANG_KEY))
+        .catch(() => {});
+      return;
+    }
     apiFetch<Record<string, unknown>>("/api/preferences")
       .then((prefs) => {
         const locale = prefs["locale"];
-        if (locale === "he" || locale === "en") {
+        if (isLang(locale)) {
           setLangState(locale);
           window.localStorage.setItem(LANG_KEY, locale);
         }
@@ -76,17 +103,24 @@ export function LocalizationProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const setLang = useCallback((next: Lang) => {
-    setLangState(next);
-    window.localStorage.setItem(LANG_KEY, next);
-    // fixes17 §1.1: persist the choice on the account (logged-in users).
-    if (getToken()) {
-      apiFetch("/api/preferences", {
-        method: "PUT",
-        body: JSON.stringify({ key: "locale", value: next }),
-      }).catch(() => {});
-    }
-  }, []);
+  // Only called from an explicit switch (LanguageToggle) — never for a
+  // passive fallback, so a browser default is never written to the account.
+  const setLang = useCallback(
+    (next: Lang) => {
+      setLangState(next);
+      window.localStorage.setItem(LANG_KEY, next);
+      if (user) {
+        // fixes17 §1.1: persist the choice on the account. Non-blocking: if
+        // the save fails the screen keeps the chosen language.
+        window.sessionStorage.removeItem(EXPLICIT_LANG_KEY);
+        saveLocale(next).catch(() => {});
+      } else {
+        // fixes116: logged out — remember it was explicit; saved after login.
+        window.sessionStorage.setItem(EXPLICIT_LANG_KEY, next);
+      }
+    },
+    [user],
+  );
 
   const value = useMemo<LocalizationContextValue>(() => {
     const other: Lang = lang === "he" ? "en" : "he";

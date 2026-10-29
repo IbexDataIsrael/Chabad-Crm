@@ -73,6 +73,7 @@ PLAIN_ERRORS: list[tuple[str, str]] = [
     ("Google account has no email", "לחשבון Google אין כתובת אימייל"),
     ("Image too large (max 5MB)", "התמונה גדולה מדי (עד 5MB)"),
     ("Invalid Google token", "ההתחברות עם Google נכשלה"),
+    ("Invalid language", "שפה לא תקינה"),
     ("Invalid or expired verification token", "קישור האימות אינו תקף או שפג תוקפו"),
     ("Invalid preference key", "מפתח העדפה לא תקין"),
     ("Invalid verification token", "קישור האימות אינו תקף"),
