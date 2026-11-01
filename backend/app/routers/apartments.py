@@ -1418,6 +1418,7 @@ def _apply_versioned_update(
     editor: models.User,
     custom_field_changes: Optional[dict] = None,
     language_values: Optional[list[str]] = None,
+    commit: bool = True,
 ) -> models.Apartment:
     """Core of the fixes19 §3 versioning: retire the active row (is_display=False
     + last_edit/editor_id stamp) and insert a new active row carrying `changes`
@@ -1426,7 +1427,8 @@ def _apply_versioned_update(
     Mekurav contact links follow the new row; every existing picklist link and
     custom field value is copied onto the new row first (so unrelated fields
     survive), then the changes are applied on top. Commits and returns the new
-    row."""
+    row; with commit=False only flushes, so the caller can add its own rows to
+    the same transaction (fixes118: the assistant's request_id record)."""
     org_id = active.organization_id
     active.is_display = False
     active.last_edit = datetime.datetime.utcnow()
@@ -1472,6 +1474,9 @@ def _apply_versioned_update(
     jewish_status_key = _APARTMENT_PICKLISTS["jewish_status"]
     if jewish_status_key in picklist_changes:
         _sync_to_knock(db, org_id, new.id, picklist_changes[jewish_status_key])
+    if not commit:
+        db.flush()
+        return new
     db.commit()
     db.refresh(new)
     return new

@@ -78,4 +78,8 @@ def clear_user_references(db: Session, user: models.User, actor: models.User) ->
     db.query(models.AssistantProposal).filter(
         models.AssistantProposal.user_id == user.id
     ).delete(synchronize_session=False)
+    # fixes118: their request_id proofs of write.
+    db.query(models.AssistantRequest).filter(
+        models.AssistantRequest.user_id == user.id
+    ).delete(synchronize_session=False)
     db.flush()

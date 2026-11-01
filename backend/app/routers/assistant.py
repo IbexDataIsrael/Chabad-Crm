@@ -33,7 +33,7 @@ from sqlalchemy.orm import Session
 from app import models
 from app.core.contact_drafts import DRAFT_FIELD_MAX_LENGTH, create_draft_contact
 from app.database import get_db
-from app.deps import forbid_campaign_manager
+from app.deps import forbid_campaign_manager, require_org_user
 from app.routers.contacts import _check_phone_unique
 from app.routers.instinct.common import clean_email, clean_phone
 
@@ -229,6 +229,7 @@ def create_proposal(
     response: Response,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(forbid_campaign_manager),
+    _org_user: models.User = Depends(require_org_user),
 ):
     org_id = current_user.organization_id
     payload, missing, invalid = _normalize(db, org_id, body.fields.model_dump())
@@ -277,6 +278,7 @@ def confirm_proposal(
     # get_current_user reloads the user each request: a deactivated user
     # (401) or a role changed to campaign_manager (403) is refused here.
     current_user: models.User = Depends(forbid_campaign_manager),
+    _org_user: models.User = Depends(require_org_user),
 ):
     org_id = current_user.organization_id
     proposal = _get_proposal(db, proposal_id, current_user)

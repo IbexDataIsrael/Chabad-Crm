@@ -118,3 +118,16 @@ def forbid_campaign_manager(
             detail="Campaign managers cannot access this resource",
         )
     return current_user
+
+
+def require_org_user(
+    current_user: models.User = Depends(get_current_user),
+) -> models.User:
+    """fixes117/fixes118: the chat helper works strictly inside one
+    organization — the platform superadmin is refused."""
+    if current_user.role == "superadmin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not available for the platform superadmin",
+        )
+    return current_user

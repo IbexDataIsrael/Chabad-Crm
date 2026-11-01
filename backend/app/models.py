@@ -1710,3 +1710,32 @@ class AssistantProposal(Base):
     result_contact_id = Column(Integer, nullable=True, unique=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     executed_at = Column(DateTime, nullable=True)
+
+
+class AssistantRequest(Base):
+    """fixes118: the helper's proof of write (idempotency key).
+
+    One row per `request_id` a user sent with a write call (apartment update,
+    later contact update / new visit), stored in the SAME transaction as the
+    write — a row exists only if the write committed. A repeat of the same
+    request_id by the same user replays the stored outcome instead of writing
+    again; with a different request (`request_hash`) it is refused."""
+
+    __tablename__ = "assistant_requests"
+    __table_args__ = (
+        UniqueConstraint("user_id", "request_id", name="uq_assistant_request_user_request"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    organization_id = Column(
+        Integer, ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    request_id = Column(String(64), nullable=False)
+    action = Column(String(40), nullable=False)  # apartment_update
+    request_hash = Column(String(64), nullable=False)  # action + target + body
+    outcome = Column(String(20), nullable=False)  # updated | unchanged
+    # Plain ids, no FK: the record of what happened outlives the records.
+    target_id = Column(Integer, nullable=False)  # the id the request named
+    result_id = Column(Integer, nullable=False)  # the version it produced / found
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
