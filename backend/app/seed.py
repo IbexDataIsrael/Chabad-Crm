@@ -486,6 +486,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("pl", "pl.no_values", "אין ערכים.", "No values."),
     ("pl", "pl.move_up", "הזז למעלה", "Move up"),
     ("pl", "pl.move_down", "הזז למטה", "Move down"),
+    ("pl", "pl.label_required", "יש להזין תווית בעברית", "A Hebrew label is required"),
     ("pl", "pl.deactivate_title", "הסר מהרשימה (השבתה)", "Remove from list (deactivate)"),
     ("pl", "pl.hard_delete_confirm", "למחוק לצמיתות?", "Delete permanently?"),
     ("pl", "pl.hard_delete_in_use", "לא ניתן למחוק לצמיתות — הערך בשימוש על ידי רשומות קיימות. הוא הושבת במקום.", "Can't delete permanently — the value is in use by existing records. It was deactivated instead."),

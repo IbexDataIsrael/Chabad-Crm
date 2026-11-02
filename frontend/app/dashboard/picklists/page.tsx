@@ -11,6 +11,7 @@ import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 import type { CustomFieldDefinition, PicklistField, PicklistValue } from "@/lib/types";
+import { AutoSaveInput } from "@/components/ui/AutoSaveInput";
 import { Badge } from "@/components/ui/badge";
 
 // fixes33 §4 / fixes37: which admin tab a picklist is managed from. Driven
@@ -297,27 +298,13 @@ function DefinitionEditor({
 }) {
   const { t } = useLocalization();
   const confirmDialog = useConfirm();
-  const { success: toastSuccess, error: toastError } = useToast();
-  const [he, setHe] = useState(def.label);
-  const [en, setEn] = useState(def.english_label ?? "");
-
-  // Re-sync when switching lists.
-  useEffect(() => {
-    setHe(def.label);
-    setEn(def.english_label ?? "");
-  }, [def.id, def.label, def.english_label]);
-
-  async function save() {
-    try {
-      await apiFetch(`/api/picklists/definition/${def.id}`, {
-        method: "PUT",
-        body: JSON.stringify({ hebrew_display_name: he, english_display_name: en || null }),
-      });
-      await onChanged();
-      toastSuccess(t("msg.saved", "נשמר בהצלחה"));
-    } catch (err) {
-      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
-    }
+  // Autosave: each name saves on its own when it loses focus (no Save button).
+  async function saveField(body: Record<string, string | null>) {
+    await apiFetch(`/api/picklists/definition/${def.id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+    await onChanged();
   }
 
   async function remove() {
@@ -338,7 +325,6 @@ function DefinitionEditor({
     await onDeleted();
   }
 
-  const input = "rounded-md border border-input px-2 py-1 text-sm";
 
   return (
     <div className="bg-card rounded-xl shadow-sm p-4 flex flex-wrap items-end gap-3">
@@ -349,20 +335,23 @@ function DefinitionEditor({
         <span className="block text-xs text-muted-foreground">
           {t("common.hebrew_label", "עברית")}
         </span>
-        <input dir="rtl" className={input} value={he} onChange={(e) => setHe(e.target.value)} />
+        <AutoSaveInput
+          dir="rtl"
+          required
+          value={def.label}
+          onSave={(v) => saveField({ hebrew_display_name: v })}
+        />
       </label>
       <label className="space-y-1">
         <span className="block text-xs text-muted-foreground">
           {t("common.english_label", "English")}
         </span>
-        <input dir="ltr" className={input} value={en} onChange={(e) => setEn(e.target.value)} />
+        <AutoSaveInput
+          dir="ltr"
+          value={def.english_label}
+          onSave={(v) => saveField({ english_display_name: v })}
+        />
       </label>
-      <button
-        onClick={save}
-        className="rounded-md bg-foreground text-white px-3 py-1.5 text-xs hover:opacity-90"
-      >
-        {t("action.save", "שמור")}
-      </button>
       {def.is_system ? (
         <Badge variant="secondary">{t("pl.system_list", "רשימת מערכת")}</Badge>
       ) : (
@@ -488,30 +477,15 @@ function OptionRow({
   const { t } = useLocalization();
   const confirmDialog = useConfirm();
   const { success: toastSuccess, error: toastError } = useToast();
-  const [label, setLabel] = useState(option.hebrew_label);
-  const [english, setEnglish] = useState(option.english_value ?? "");
-  const [color, setColor] = useState(option.color_hint ?? "");
-  const [saving, setSaving] = useState(false);
   const [inUse, setInUse] = useState<ValueUsage | null>(null);
 
-  async function save() {
-    setSaving(true);
-    try {
-      await apiFetch(`/api/picklists/${option.id}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          hebrew_label: label,
-          english_value: english || null,
-          color_hint: color || null,
-        }),
-      });
-      await onSaved();
-      toastSuccess(t("msg.saved", "נשמר בהצלחה"));
-    } catch (err) {
-      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
-    } finally {
-      setSaving(false);
-    }
+  // Autosave: each box saves on its own when it loses focus (no Save button).
+  async function saveField(body: Record<string, string | null>) {
+    await apiFetch(`/api/picklists/${option.id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+    await onSaved();
   }
 
   // fixes72 §1: a value still used by existing records can't be deleted
@@ -566,7 +540,6 @@ function OptionRow({
     }
   }
 
-  const input = "rounded-md border border-input px-2 py-1 text-sm";
 
   return (
     <>
@@ -598,26 +571,27 @@ function OptionRow({
           </Fragment>
         ))}
       </code>
-      <input
-        className={`${input} flex-1 min-w-[7rem]`}
+      <AutoSaveInput
+        className="flex-1 min-w-[7rem]"
         placeholder={t("common.hebrew_label", "עברית")}
         dir="rtl"
-        value={label}
-        onChange={(e) => setLabel(e.target.value)}
+        required
+        value={option.hebrew_label}
+        onSave={(v) => saveField({ hebrew_label: v })}
       />
-      <input
-        className={`${input} flex-1 min-w-[7rem]`}
+      <AutoSaveInput
+        className="flex-1 min-w-[7rem]"
         placeholder="English"
         dir="ltr"
-        value={english}
-        onChange={(e) => setEnglish(e.target.value)}
+        value={option.english_value}
+        onSave={(v) => saveField({ english_value: v })}
       />
-      <input
-        className={`${input} w-24`}
+      <AutoSaveInput
+        className="w-24"
         placeholder="color"
-        value={color}
-        onChange={(e) => setColor(e.target.value)}
         dir="ltr"
+        value={option.color_hint}
+        onSave={(v) => saveField({ color_hint: v })}
       />
       {!option.is_active && <Badge variant="secondary">{t("cf.disabled", "מושבת")}</Badge>}
       <div className="flex items-center gap-1 ms-auto">
@@ -636,13 +610,6 @@ function OptionRow({
           title={t("pl.move_down", "הזז למטה")}
         >
           ↓
-        </button>
-        <button
-          onClick={save}
-          disabled={saving}
-          className="rounded-md bg-foreground text-white px-3 py-1 text-xs hover:opacity-90 disabled:opacity-50"
-        >
-          {t("action.save", "שמור")}
         </button>
         {option.is_active ? (
           <button
@@ -871,20 +838,13 @@ function CustomFieldRow({
   const { t } = useLocalization();
   const confirmDialog = useConfirm();
   const { success: toastSuccess, error: toastError } = useToast();
-  const [label, setLabel] = useState(def.hebrew_label);
-  const [english, setEnglish] = useState(def.english_label ?? "");
-
-  async function save() {
-    try {
-      await apiFetch(`/api/custom-fields/${def.id}`, {
-        method: "PUT",
-        body: JSON.stringify({ hebrew_label: label, english_label: english || null }),
-      });
-      await onSaved();
-      toastSuccess(t("msg.saved", "נשמר בהצלחה"));
-    } catch (err) {
-      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
-    }
+  // Autosave: each label saves on its own when it loses focus (no Save button).
+  async function saveField(body: Record<string, string | null>) {
+    await apiFetch(`/api/custom-fields/${def.id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+    await onSaved();
   }
 
   async function deactivate() {
@@ -922,7 +882,6 @@ function CustomFieldRow({
     }
   }
 
-  const input = "rounded-md border border-input px-2 py-1 text-sm";
   const typeMeta = CF_TYPE_LABELS[def.field_type];
 
   return (
@@ -935,28 +894,23 @@ function CustomFieldRow({
         {def.field_key}
       </code>
       {typeMeta && <Badge variant="secondary" className="shrink-0">{t(typeMeta.labelKey, typeMeta.fallback)}</Badge>}
-      <input
-        className={`${input} flex-1 min-w-[7rem]`}
+      <AutoSaveInput
+        className="flex-1 min-w-[7rem]"
         placeholder={t("cf.label_placeholder", "תווית בעברית")}
         dir="rtl"
-        value={label}
-        onChange={(e) => setLabel(e.target.value)}
+        required
+        value={def.hebrew_label}
+        onSave={(v) => saveField({ hebrew_label: v })}
       />
-      <input
-        className={`${input} flex-1 min-w-[7rem]`}
+      <AutoSaveInput
+        className="flex-1 min-w-[7rem]"
         placeholder="English"
         dir="ltr"
-        value={english}
-        onChange={(e) => setEnglish(e.target.value)}
+        value={def.english_label}
+        onSave={(v) => saveField({ english_label: v })}
       />
       {!def.is_active && <Badge variant="secondary">{t("cf.disabled", "מושבת")}</Badge>}
       <div className="flex items-center gap-1 ms-auto">
-        <button
-          onClick={save}
-          className="rounded-md bg-foreground text-white px-3 py-1 text-xs hover:opacity-90"
-        >
-          {t("action.save", "שמור")}
-        </button>
         {def.is_active ? (
           <button
             onClick={deactivate}
