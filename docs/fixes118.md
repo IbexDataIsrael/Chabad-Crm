@@ -147,3 +147,12 @@ Decided later the same day: (a) yes/no apartment fields ARE apartment fields, ed
 - [x] Alembic `118a1b2c3d4e` applied to local Postgres `crm_local_dev` (run from the host with a `localhost` URL — the container could not reach `host.docker.internal` at the time). `test_fixes114_postgres.py` + `test_fixes113_postgres.py`: 6 passed on `crm_fixes113_test`. SQLite: `test_fixes115.py` + `test_fixes117.py` 44 passed.
 - [ ] NOT DONE: the CRM web link by lineage id (decision 8) — needs a frontend route; next step.
 - Response field added: `replayed` (false on a normal answer).
+
+---
+## Status (2026-11-02) — decision 8 (link by lineage) DONE locally, NOT committed
+- [x] Every apartment object carries `web_path` = `/dashboard/apartments/lineage/{lineage_id}` (search, combined search, getapartment, update answer).
+- [x] Backend `GET /api/apartments/lineage/{lineage_id}` → `{id}` of the current version (caller's org; 404 otherwise).
+- [x] Frontend `frontend/app/dashboard/apartments/lineage/[lineageId]/page.tsx` → resolves and `router.replace`s to `/dashboard/apartments/{id}`; not found → `apt.lineage_not_found` (seed.py LOCALIZATION row added).
+- [x] Tested: `test_apartment_link_follows_the_lineage` (link stays, resolves to the NEW id after an edit, other org 404); live on local Postgres: lineage 29 → current id 67. `tsc --noEmit` clean.
+- [ ] Not live-driven in a browser: the frontend stack was not running this session — the page itself is only type-checked.
+- The confirm wording "address, apartment <apartment_name>" (decision 8) is helper-side (`crm-assitant`), not built here.

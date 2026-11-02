@@ -197,9 +197,12 @@ def apartment_views(
                 "field_key": s.field_key, "label": s.label, "kind": s.kind,
                 "current_value": current, "options": options[s.field_key],
             })
+        lineage_id = a.root_id or a.id
         out.append({
             "apartment_id": a.id,
-            "lineage_id": a.root_id or a.id,
+            "lineage_id": lineage_id,
+            # fixes118 decision 8: always opens the current version.
+            "web_path": f"/dashboard/apartments/lineage/{lineage_id}",
             "building_address": a.building.building_address if a.building else None,
             "apartment_name": a.apartment_name,
             "floor": a.floor,

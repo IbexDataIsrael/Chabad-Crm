@@ -348,6 +348,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("msg", "msg.select_area", "יש לבחור אזור", "Please select an area"),
     # --- Apartment picker / multi-select ---
     ("apt", "apt.add_failed", "הוספת דירה נכשלה", "Failed to add apartment"),
+    ("apt", "apt.lineage_not_found", "הדירה לא נמצאה", "Apartment not found"),
     ("apt", "apt.no_buildings", "אין בניינים עדיין.", "No buildings yet."),
     ("apt", "apt.to_link_apartment", "כדי לשייך דירה.", "to link an apartment."),
     ("apt", "apt.choose_building", "בחר בניין…", "Choose a building…"),

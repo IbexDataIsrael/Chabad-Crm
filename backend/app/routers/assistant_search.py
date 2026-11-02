@@ -58,6 +58,8 @@ def _people(db: Session, user: models.User, q: str) -> tuple[list[dict], bool]:
         db.query(C)
         .filter(
             C.organization_id == user.organization_id,
+            # Activist contacts are out of the helper (fixes117 round 4).
+            C.contact_type == "mekurav",
             or_(
                 C.name.icontains(q, autoescape=True),
                 C.last_name.icontains(q, autoescape=True),

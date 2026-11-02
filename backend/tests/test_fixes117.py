@@ -24,7 +24,9 @@ def _people_env(env):
     db, org = env["db"], env["org"]
     env["cohen"] = _contact(db, org.id, "Moshe", "Cohen", phone="0501111111",
                             email="moshe@x.com", address="Herzl 10, Tel Aviv").id
-    env["herzl_person"] = _contact(db, org.id, "Herzl", "Ben", contact_type="shliach").id
+    env["herzl_person"] = _contact(db, org.id, "Herzl", "Ben").id
+    # An activist contact: never in the helper (fixes117 round 4).
+    env["herzl_activist"] = _contact(db, org.id, "Herzl", "Activist", contact_type="shliach").id
     env["draft_person"] = _contact(db, org.id, "Dina", "Cohen", status="draft").id
     org_b_id = db.query(models.Organization).filter_by(name="Org B").one().id
     env["cohen_b"] = _contact(db, org_b_id, "Avi", "Cohen").id

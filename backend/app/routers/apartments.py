@@ -1285,6 +1285,30 @@ _VERSIONED_COLUMNS = (
 )
 
 
+@router.get("/lineage/{lineage_id}")
+def apartment_current_of_lineage(
+    lineage_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """fixes118 decision 8: a link by the stable lineage id (an apartment's id
+    changes on every save) — answers the current version's id, which the
+    /dashboard/apartments/lineage/{id} page opens. Same visibility as
+    GET /{apartment_id} for the current version: the caller's org only."""
+    current = (
+        db.query(models.Apartment.id)
+        .filter(
+            models.Apartment.organization_id == current_user.organization_id,
+            models.Apartment.is_display.is_(True),
+            or_(models.Apartment.root_id == lineage_id, models.Apartment.id == lineage_id),
+        )
+        .first()
+    )
+    if current is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Apartment not found")
+    return {"id": current.id}
+
+
 @router.get("/{apartment_id}/history", response_model=list[ApartmentVersionOut])
 def apartment_history(
     apartment_id: int,

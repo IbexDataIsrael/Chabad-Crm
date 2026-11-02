@@ -45,6 +45,7 @@ PLAIN_ERRORS: list[tuple[str, str]] = [
     ("Announcement not found", "ההודעה לא נמצאה"),
     ("Apartment does not belong to this task", "הדירה אינה שייכת למשימה הזו"),
     ("Apartment not found", "הדירה לא נמצאה"),
+    ("Approve the contact first", "יש לאשר את איש הקשר קודם"),
     ("Area not found", "האזור לא נמצא"),
     ("Assign an activist to mark the task as taken", "יש לשייך פעיל כדי לסמן את המשימה כנלקחה"),
     ("Backup not found", "הגיבוי לא נמצא"),

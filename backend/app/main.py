@@ -63,6 +63,7 @@ from app.routers import (
     areas,
     assistant,
     assistant_apartments,
+    assistant_contacts,
     assistant_search,
     auth,
     backups,
@@ -149,6 +150,7 @@ app.include_router(ai_query.router)
 app.include_router(assistant.router)
 app.include_router(assistant_apartments.router)
 app.include_router(assistant_search.router)
+app.include_router(assistant_contacts.router)
 app.include_router(campaigns.router)
 app.include_router(tasks.router)
 app.include_router(street_activity.router)
