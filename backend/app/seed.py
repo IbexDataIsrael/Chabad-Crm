@@ -1194,6 +1194,7 @@ LOCALIZATION: list[tuple[str, str, str, str]] = [
     ("contact", "contact.segment_main", "תצוגה עיקרית של איש קשר", "Main contact view"),
     ("contact", "contact.field_locked", "שדה זה נעול לעריכה עצמית", "This field is locked for self-editing"),
     ("contact", "contact.edit_your_data", "עריכת המידע שלך", "Edit your data"),
+    ("contact", "contact.edit_name", "עריכת שם", "Edit name"),
     # --- fixes53 §7/§9: activist report-completion + system-comment log ---
     ("shliach_msg", "shliach_msg.report_completed_btn", "דיווח על השלמת הדוח", "Report completed"),
     ("shliach_msg", "shliach_msg.system_comment_btn", "הערות על המערכת", "Comments about the system"),

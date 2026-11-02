@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowRight, RotateCcw, Settings2, Trash2 } from "lucide-react";
+import { ArrowRight, Pencil, RotateCcw, Settings2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { ContactView, type ContactPatch } from "@/components/ContactView";
@@ -55,6 +55,9 @@ export default function ContactDetailPage() {
   // enables inline editing (still subject to ContactView's self-edit locks).
   const [selfEditActive, setSelfEditActive] = useState(false);
   const [completionModalOpen, setCompletionModalOpen] = useState(false);
+  const [nameEditing, setNameEditing] = useState(false);
+  const [nameSaving, setNameSaving] = useState(false);
+  const [nameDraft, setNameDraft] = useState({ name: "", last_name: "" });
   const [commentModalOpen, setCommentModalOpen] = useState(false);
 
   useEffect(() => {
@@ -89,6 +92,34 @@ export default function ContactDetailPage() {
         [contact?.email, fresh.email].some((e) => e?.toLowerCase() === myEmail));
     if (isSelf) {
       refreshAuth().catch(() => {});
+    }
+  }
+
+  async function saveName() {
+    const name = nameDraft.name.trim();
+    if (!name) {
+      toastError(t("validation.name_required", "יש להזין שם פרטי"));
+      return;
+    }
+    const patch: ContactPatch = {};
+    if (name !== contact?.name) patch.name = name;
+    if (vis("contacts.last_name")) {
+      const last = nameDraft.last_name.trim() || null;
+      if (last !== (contact?.last_name || null)) patch.last_name = last;
+    }
+    if (Object.keys(patch).length === 0) {
+      setNameEditing(false);
+      return;
+    }
+    setNameSaving(true);
+    try {
+      await patchContact(patch);
+      setNameEditing(false);
+      success(t("msg.saved", "נשמר"));
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
+    } finally {
+      setNameSaving(false);
     }
   }
 
@@ -142,6 +173,10 @@ export default function ContactDetailPage() {
   const selfEditLockedFields = new Set(
     user?.organization?.shliach_view_config?.self_edit_locked_fields ?? [],
   );
+
+  const canEditName =
+    (!isOwnShliachProfile || selfEditActive) &&
+    !(isOwnShliachProfile && (selfEditLockedFields.has("name") || selfEditLockedFields.has("last_name")));
 
   // fixes30 §2b: sanitized effective order + reorder handler.
   const order: SegmentKey[] = [
@@ -396,7 +431,66 @@ export default function ContactDetailPage() {
       )}
 
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-bold">{contactFullName(contact)}</h1>
+        {/* Name editing right on the heading (the card's name boxes were
+            easy to miss). Same rules as the card: off on an activist's own
+            profile until "Edit your data"; respects self-edit locks. */}
+        {nameEditing ? (
+          <form
+            className="flex flex-wrap items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveName();
+            }}
+          >
+            <input
+              autoFocus
+              className="rounded-md border border-input bg-background px-3 py-1.5 text-base"
+              placeholder={t("contacts.name", "שם פרטי")}
+              aria-label={t("contacts.name", "שם פרטי")}
+              value={nameDraft.name}
+              onChange={(e) => setNameDraft({ ...nameDraft, name: e.target.value })}
+            />
+            {vis("contacts.last_name") && (
+              <input
+                className="rounded-md border border-input bg-background px-3 py-1.5 text-base"
+                placeholder={t("contacts.last_name", "שם משפחה")}
+                aria-label={t("contacts.last_name", "שם משפחה")}
+                value={nameDraft.last_name}
+                onChange={(e) => setNameDraft({ ...nameDraft, last_name: e.target.value })}
+              />
+            )}
+            <Button type="submit" size="sm" disabled={nameSaving}>
+              {nameSaving ? t("action.saving", "שומר…") : t("action.save", "שמור")}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={nameSaving}
+              onClick={() => setNameEditing(false)}
+            >
+              {t("action.cancel", "ביטול")}
+            </Button>
+          </form>
+        ) : (
+          <span className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold">{contactFullName(contact)}</h1>
+            {canEditName && (
+              <button
+                type="button"
+                onClick={() => {
+                  setNameDraft({ name: contact.name ?? "", last_name: contact.last_name ?? "" });
+                  setNameEditing(true);
+                }}
+                title={t("contact.edit_name", "עריכת שם")}
+                aria-label={t("contact.edit_name", "עריכת שם")}
+                className="rounded-full border border-border p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            )}
+          </span>
+        )}
         {/* fixes17 §2.1: one-click call / WhatsApp / mail from the profile.
             fixes38 §3.1: each icon now has its own Manage Fields toggle. */}
         <span className="flex items-center gap-2">

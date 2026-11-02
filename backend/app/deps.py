@@ -65,6 +65,19 @@ def require_superadmin(
     return current_user
 
 
+def require_admin_or_superadmin(
+    current_user: models.User = Depends(get_current_user),
+) -> models.User:
+    """The org admin or the platform superadmin. Used for the global
+    translations table, which the superadmin owns."""
+    if current_user.role not in ("admin", "superadmin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required",
+        )
+    return current_user
+
+
 def require_staff_or_admin(
     current_user: models.User = Depends(get_current_user),
 ) -> models.User:

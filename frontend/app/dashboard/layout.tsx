@@ -247,6 +247,9 @@ function DashboardChrome({ children }: { children: ReactNode }) {
         { href: "/dashboard/admin/users", label: t("admin.nav_users", "חיפוש משתמשים") },
         { href: "/dashboard/admin/email-templates", label: t("admin.nav_email_templates", "תבניות מייל") },
         { href: "/dashboard/admin/settings", label: t("admin.system_settings_title", "הגדרות מערכת") },
+        // The translations table is global (every org), so the superadmin
+        // always has it; org admins only when enabled for their org.
+        { href: "/dashboard/localization", label: t("nav.localization", "תרגומים") },
         { href: "/dashboard/admin/logs", label: t("logs.title", "לוגים") },
       ],
     },

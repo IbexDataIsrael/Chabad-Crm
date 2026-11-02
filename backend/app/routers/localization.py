@@ -1,7 +1,7 @@
 """Admin editing of UI localization strings (he/en).
 
 Reads of the resolved labels are public via `/api/metadata/localization`. These
-management endpoints are admin-only. `field_localization` is global (shared across
+management endpoints are for the org admin and the platform superadmin. `field_localization` is global (shared across
 tenants), so edits affect every organization on the deployment.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.database import get_db
-from app.deps import require_admin
+from app.deps import require_admin_or_superadmin
 from app.schemas import LocalizationCreate, LocalizationOut, LocalizationUpdate
 from app.core.errors import api_error
 
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/localization", tags=["localization"])
 @router.get("", response_model=list[LocalizationOut])
 def list_strings(
     db: Session = Depends(get_db),
-    _admin: models.User = Depends(require_admin),
+    _admin: models.User = Depends(require_admin_or_superadmin),
 ):
     return (
         db.query(models.FieldLocalization)
@@ -32,7 +32,7 @@ def list_strings(
 def create_string(
     payload: LocalizationCreate,
     db: Session = Depends(get_db),
-    _admin: models.User = Depends(require_admin),
+    _admin: models.User = Depends(require_admin_or_superadmin),
 ):
     if (
         db.query(models.FieldLocalization)
@@ -55,7 +55,7 @@ def update_string(
     string_id: int,
     payload: LocalizationUpdate,
     db: Session = Depends(get_db),
-    _admin: models.User = Depends(require_admin),
+    _admin: models.User = Depends(require_admin_or_superadmin),
 ):
     row = db.get(models.FieldLocalization, string_id)
     if not row:

@@ -41,17 +41,20 @@ const groupOf = (row: LocalizationRow) =>
   GROUP_BY_PREFIX.get(row.technical_name.split(".")[0]) ?? "general";
 
 export default function LocalizationPage() {
-  const { isAdmin, loading, user } = useAuth();
+  const { isAdmin, isSuperadmin, loading, user } = useAuth();
   // fixes93: off unless the superadmin enabled this page for the org.
-  const pageEnabled = user?.organization?.feature_flags?.localization_page_enabled === true;
+  // The superadmin always has it (the table is shared by every org).
+  const pageEnabled =
+    isSuperadmin || user?.organization?.feature_flags?.localization_page_enabled === true;
+  const canEdit = isAdmin || isSuperadmin;
   const { t } = useLocalization();
   const [rows, setRows] = useState<LocalizationRow[]>([]);
   const [filter, setFilter] = useState("");
 
   useEffect(() => {
-    if (loading || !isAdmin || !pageEnabled) return;
+    if (loading || !canEdit || !pageEnabled) return;
     listLocalization().then(setRows).catch(() => {});
-  }, [loading, isAdmin, pageEnabled]);
+  }, [loading, canEdit, pageEnabled]);
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
@@ -91,7 +94,7 @@ export default function LocalizationPage() {
       </p>
     );
   }
-  if (!isAdmin) {
+  if (!canEdit) {
     return (
       <p className="text-status-darkred">
         {t("page.admins_only", "אין לך הרשאה לעמוד זה (מנהלים בלבד).")}
