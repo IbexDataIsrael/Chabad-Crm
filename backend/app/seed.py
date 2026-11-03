@@ -2645,6 +2645,11 @@ def provision_org(db: Session, organization_id: int) -> None:
     seed_picklist_definitions(db, organization_id)
     seed_visit_mivtzoim_custom_fields(db, organization_id)
     seed_apartment_custom_fields(db, organization_id)
+    # Starter lists + custom fields (snapshot of prod org 1) — once per org,
+    # never re-applied, so the org admin's later edits/deletions stick.
+    from app.org_starter_template import apply_starter_template
+
+    apply_starter_template(db, organization_id)
 
 
 def _seed_sample_data(db: Session, org: models.Organization, admin: models.User) -> None:
@@ -2947,6 +2952,11 @@ def seed_all(db: Session) -> None:
     seed_superadmin(db)
     seed_email_templates(db)
     seed_system_settings(db)
+
+    # Orgs already in use never get the starter template (only new ones do).
+    from app.org_starter_template import mark_existing_orgs
+
+    mark_existing_orgs(db)
 
     # Backfill system picklist *definitions* for EVERY org (idempotent). An org
     # created before a given system picklist existed would otherwise never see it

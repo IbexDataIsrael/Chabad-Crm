@@ -392,7 +392,9 @@ def test_query_mivtzoim_table_lists_active_definitions(client, admin_headers, db
     r = _query(client, admin_headers, "כמה מבצעים יש לנו")
     assert r.status_code == 200
     body = r.json()
-    assert body["row_count"] == 5
+    # Active boolean visit fields: the 5 default Mivtzoim + the starter
+    # template's chinoch / Kesher_Larabi / dvar_torah / mezuzah.
+    assert body["row_count"] == 9
     names_en = {row["name_en"] for row in body["rows"]}
     assert "Tefillin" in names_en
     tefillin_row = next(row for row in body["rows"] if row["name_en"] == "Tefillin")

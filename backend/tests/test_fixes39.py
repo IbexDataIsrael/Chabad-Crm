@@ -102,4 +102,7 @@ class TestProvisionOrgWiring:
 
         provision_org(db_session, org_id)
 
-        assert len(_defs(db_session, org_id)) == len(VISIT_MIVTZOIM_CUSTOM_FIELDS)
+        # The 6 Mivtzoim are there; the starter template (org_starter_template)
+        # adds org 1's other visit fields on top.
+        keys = {d.field_key for d in _defs(db_session, org_id)}
+        assert {k for k, *_ in VISIT_MIVTZOIM_CUSTOM_FIELDS} <= keys
