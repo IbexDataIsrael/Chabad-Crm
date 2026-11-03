@@ -11,6 +11,7 @@ import { useLocalization } from "@/lib/localization";
 import { usePersistentState } from "@/lib/persist";
 import { useToast } from "@/lib/toast";
 import type { CustomFieldDefinition, CustomFieldEntityType, CustomFieldType } from "@/lib/types";
+import { AutoSaveInput } from "@/components/ui/AutoSaveInput";
 import { Badge } from "@/components/ui/badge";
 
 // fixes35 §2: every entity a custom field can attach to, matching
@@ -216,20 +217,13 @@ function DefRow({
   const { t, lang } = useLocalization();
   const confirmDialog = useConfirm();
   const { success, error } = useToast();
-  const [label, setLabel] = useState(def.hebrew_label);
-  const [englishLabel, setEnglishLabel] = useState(def.english_label ?? "");
-
-  async function save() {
-    try {
-      await apiFetch(`/api/custom-fields/${def.id}`, {
-        method: "PUT",
-        body: JSON.stringify({ hebrew_label: label, english_label: englishLabel || null }),
-      });
-      await onChanged();
-      success(t("msg.saved", "נשמר בהצלחה"));
-    } catch (err) {
-      error(err instanceof Error ? err.message : t("msg.save_failed", "שמירה נכשלה"));
-    }
+  // Autosave: each label saves on its own when it loses focus (no Save button).
+  async function saveField(body: Record<string, string | null>) {
+    await apiFetch(`/api/custom-fields/${def.id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+    await onChanged();
   }
 
   async function deactivate() {
@@ -278,7 +272,6 @@ function DefRow({
     }
   }
 
-  const input = "rounded-md border border-input px-2 py-1 text-sm";
   const fieldTypeLabel =
     FIELD_TYPES.find((f) => f.value === def.field_type) &&
     t(
@@ -296,27 +289,23 @@ function DefRow({
         {def.field_key}
       </code>
       <Badge variant="secondary" className="shrink-0">{fieldTypeLabel}</Badge>
-      <input
-        className={`${input} flex-1 min-w-[7rem]`}
+      <AutoSaveInput
+        className="flex-1 min-w-[7rem]"
         placeholder={t("cf.label_placeholder", "תווית בעברית")}
-        value={label}
-        onChange={(e) => setLabel(e.target.value)}
+        dir="rtl"
+        required
+        value={def.hebrew_label}
+        onSave={(v) => saveField({ hebrew_label: v })}
       />
-      <input
-        className={`${input} flex-1 min-w-[7rem]`}
+      <AutoSaveInput
+        className="flex-1 min-w-[7rem]"
         dir="ltr"
         placeholder="English label"
-        value={englishLabel}
-        onChange={(e) => setEnglishLabel(e.target.value)}
+        value={def.english_label}
+        onSave={(v) => saveField({ english_label: v })}
       />
       {!def.is_active && <Badge variant="secondary">{t("cf.disabled", "מושבת")}</Badge>}
       <div className="flex items-center gap-1 ms-auto">
-        <button
-          onClick={save}
-          className="rounded-md bg-foreground text-white px-3 py-1 text-xs hover:opacity-90"
-        >
-          {t("action.save", "שמור")}
-        </button>
         {def.is_active ? (
           <button
             onClick={deactivate}
